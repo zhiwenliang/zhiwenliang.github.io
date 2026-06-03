@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>起点 · Spring 核心机制（IoC / DI / AOP）深度剖析</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+/* index landing extras */
+.hero-meta { display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-top: 10px; }
+.hero-meta span strong { color: var(--ink-soft); font-weight: 500; }
+.path-list { list-style: none; padding: 0; }
+.path-list li { padding: 8px 0 8px 14px; border-left: 2px solid var(--rule); margin: 8px 0; }
+.path-list .who { font-family: var(--mono); font-size: 11px; color: var(--vermilion); text-transform: uppercase; letter-spacing: 0.06em; }
+.toc-cards { display: grid; grid-template-columns: 1fr; gap: 10px; margin: 16px 0; }
+.toc-cards a { display: block; padding: 14px 16px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.toc-cards a:hover { border-color: var(--vermilion); }
+.toc-cards .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+.toc-cards .t { font-weight: 600; font-size: 16px; margin: 2px 0 4px; }
+.toc-cards .d { font-size: 13.5px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html" class="current">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-lifecycle.html">02 生命周期</a><span class="sep">—</span>
+    <a href="03-aop.html">03 AOP</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Spring 核心机制 · 深度剖析</p>
+        <h1>Spring 核心：IoC 容器、依赖注入与 AOP</h1>
+        <p class="recap">把 Spring 从一堆"注解魔法"还原成一台可预测的对象图装配机——看清每个 bean 走的固定生命周期，以及挂在生命周期节点上的扩展点。这是面试要考的那一层。</p>
+        <div class="hero-meta">
+          <span><strong>基线</strong> Spring Framework 6.x / 7.0（核心模型自 3.x 稳定）</span>
+          <span><strong>阅读</strong> 约半天</span>
+          <span><strong>代码</strong> Java 片段，未在本机编译验证</span>
+        </div>
+      </header>
+
+      <h2 id="who"><span class="num">·</span><span>适合谁</span></h2>
+      <p>面向<strong>学过 Spring、想补深度和原理</strong>的工程师——尤其是准备面试、想把"会用注解"升级成"讲得出背后机制"的人。需要具备：</p>
+      <ul>
+        <li>能读写 Java：类、接口、注解、反射的基本概念不陌生。</li>
+        <li>用过 Spring 或 Spring Boot：写过 <code>@Service</code> / <code>@Autowired</code> / <code>@RestController</code>，但不清楚容器启动时到底发生了什么。</li>
+        <li>遇到过"<code>@Transactional</code> 没生效""循环依赖报错""注入了个 null"这类问题，想知道根因而不只是绕过去。</li>
+      </ul>
+
+      <h2 id="not-who"><span class="num">·</span><span>不适合谁</span></h2>
+      <ul>
+        <li><strong>完全没碰过 Java 的人</strong>：先补 Java 语法与反射，再回来。</li>
+        <li><strong>只想快速搭一个能跑的项目</strong>：去看 Spring Boot 的 starter 与自动配置教程，本文不教 Boot，只挖核心容器的内核。</li>
+        <li><strong>想学 Spring MVC / Data / Security</strong>：那些是建在本文这套容器之上的上层模块，本文是地基。读完地基再上去会快很多。</li>
+      </ul>
+
+      <h2 id="outcome"><span class="num">·</span><span>读完之后你能做到什么</span></h2>
+      <p>读完，你能像读过源码的人那样，把任何一个 Spring "魔法"注解（<code>@Autowired</code> / <code>@Transactional</code> / <code>@Async</code>）<strong>还原成"某个 <code>BeanPostProcessor</code> 在 bean 生命周期的哪个固定节点、做了什么"</strong>——这是官方文档只讲"怎么用"、讲不出的那一层。具体可验证的能力：</p>
+      <ul>
+        <li>画出 <code>ApplicationContext.refresh()</code> 的主干步骤，并说清"两类后置处理器"各在什么时机、改的是什么。</li>
+        <li>解释 <code>@Autowired</code> 注入发生在生命周期的哪一步、由哪个组件完成，而不只说"Spring 自动注入"。</li>
+        <li>讲清循环依赖的三级缓存为什么是"三级"而不是两级，以及为什么构造器注入的循环依赖无解。</li>
+        <li>判断一个 <code>@Transactional</code> / <code>@Async</code> 在什么写法下会静默失效，并说出根因（自调用绕过代理）。</li>
+        <li>在"构造器注入 vs 字段注入""Spring AOP vs AspectJ""注解 vs Java 配置"之间，按场景给出有依据的选择。</li>
+      </ul>
+
+      <section class="schema-panel">
+        <p class="label">一句话本质</p>
+        <p><strong>Spring 容器是一台确定性的"对象图装配机"</strong>：每个 bean 都走同一条固定生命周期——<strong>实例化 → 属性填充 → 初始化</strong>——而 <code>@Autowired</code> 注入、AOP 代理、<code>@Transactional</code> 这些"魔法"，本质上全是 <code>BeanPostProcessor</code> 挂在这条生命周期固定节点上的回调。没有魔法，只有扩展点。把"生命周期 + 后置处理器"这条主线吃透，Spring 就从注解魔法变成一台可预测的状态机。</p>
+      </section>
+
+      <div class="callout">
+        <span class="label">现状速览 · 截至 2026-06</span>
+        <p>核心容器模型（IoC/DI、bean 生命周期、proxy-based AOP）<strong>自 Spring 3/4 起十余年稳定</strong>，本教程讲的就是这套内核，长期有效。现代分水岭是 <strong>6.0（2022-11）</strong> 的两个硬变更——<strong>Java 17 基线</strong> 与 <strong>Jakarta 命名空间迁移（<code>javax.*</code> → <code>jakarta.*</code>）</strong>——以及 <strong>AOT 处理 + GraalVM 原生镜像</strong> 对 bean 注册方式的重塑（构建期固化代理、原生镜像下建议 <code>@Configuration(proxyBeanMethods=false)</code>）。<strong>7.0（2025-11 GA）</strong> 延续这套内核，并把重试等弹性能力并入 spring-core。<code>javax.*</code> 与 XML-first 配置已是历史，不应作为当前实践学习。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">先读这条 · 关于"读得顺"的警告</span>
+        <p>这份教程讲的是机制，不是 API 清单。机制类内容最容易制造"懂了"的错觉。盯住这三句心里话——它们出现时，恰恰说明你<strong>还没</strong>学进去：</p>
+        <p>· <strong>「我读得很顺」</strong>——顺，往往是因为面熟，不是因为真的能复述机制。合上页面，能讲出 bean 生命周期的三步吗？</p>
+        <p>· <strong>「我做题很快」</strong>——题答得快，往往是因为碰到的是背过的标准题型；判别层的场景题换个壳，就未必答得动。</p>
+        <p>· <strong>「我没卡壳」</strong>——没卡壳，往往是因为你只是在看字，没在脑子里跑那条装配流程。每章末的自测就是用来戳破这层错觉的，别跳过。</p>
+      </div>
+
+      <h2 id="map"><span class="num">·</span><span>概念地图</span></h2>
+      <p>下面这张图是全教程的骨架。中心是 IoC 容器，朱红色高亮的 <code>BeanPostProcessor</code> 是贯穿后三章的主角——后面所有"魔法"都挂在它身上。</p>
+
+      <figure>
+        <svg viewBox="0 0 776 470" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="以 IoC 容器为中心，辐射 Bean、BeanDefinition、依赖注入、Bean 生命周期、BeanPostProcessor、AOP 代理的概念地图">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="m-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Central node -->
+          <rect x="318" y="210" width="140" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="388" y="234" text-anchor="middle" class="node-label-accent">IoC 容器</text>
+          <text x="388" y="252" text-anchor="middle" class="edge-label">对象图装配机</text>
+
+          <!-- Satellite: BeanDefinition (top-left) -->
+          <rect x="84" y="44" width="148" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="158" y="73" text-anchor="middle" class="node-label">BeanDefinition</text>
+          <!-- Satellite: 依赖注入 DI (top-right) -->
+          <rect x="544" y="44" width="148" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="618" y="66" text-anchor="middle" class="node-label">依赖注入 DI</text>
+          <text x="618" y="83" text-anchor="middle" class="edge-label">构造 / setter / 字段</text>
+          <!-- Satellite: Bean (mid-left) -->
+          <rect x="24" y="216" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="84" y="245" text-anchor="middle" class="node-label">Bean</text>
+          <!-- Satellite: Bean 生命周期 (mid-right) -->
+          <rect x="632" y="216" width="128" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="696" y="238" text-anchor="middle" class="node-label">Bean 生命周期</text>
+          <text x="696" y="255" text-anchor="middle" class="edge-label">实例化→填充→初始化</text>
+          <!-- Satellite: BeanPostProcessor (bottom-left, accent protagonist) -->
+          <rect x="70" y="392" width="178" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="159" y="416" text-anchor="middle" class="node-label-accent">BeanPostProcessor</text>
+          <text x="159" y="433" text-anchor="middle" class="edge-label">生命周期上的扩展点</text>
+          <!-- Satellite: AOP 代理 (bottom-right) -->
+          <rect x="540" y="392" width="148" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="614" y="416" text-anchor="middle" class="node-label">AOP 代理</text>
+          <text x="614" y="433" text-anchor="middle" class="edge-label">JDK / CGLIB</text>
+
+          <!-- Spokes: center to satellites (end on satellite edge/corner) -->
+          <!-- to BeanDefinition (up-left): center top-left corner -> BD bottom-right corner -->
+          <line x1="328" y1="210" x2="232" y2="92" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="272" y="150" text-anchor="middle" class="edge-label">读取配方</text>
+          <!-- to DI (up-right): center top-right -> DI bottom-left corner -->
+          <line x1="448" y1="210" x2="544" y2="92" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="506" y="150" text-anchor="middle" class="edge-label">据此装配</text>
+          <!-- to Bean (left): center left edge -> Bean right edge -->
+          <line x1="318" y1="240" x2="144" y2="240" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="231" y="232" text-anchor="middle" class="edge-label">产出 / 管理</text>
+          <!-- to 生命周期 (right): center right edge -> 生命周期 left edge -->
+          <line x1="458" y1="240" x2="632" y2="240" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="545" y="232" text-anchor="middle" class="edge-label">每个 bean 走</text>
+          <!-- to BPP (down-left): center bottom-left -> BPP top-right corner -->
+          <line x1="328" y1="268" x2="248" y2="392" class="diagram-accent" marker-end="url(#m-acc)"/>
+          <text x="270" y="332" text-anchor="middle" class="edge-label">开放扩展点</text>
+          <!-- to AOP代理 (down-right): center bottom-right -> AOP top-left corner -->
+          <line x1="448" y1="268" x2="540" y2="392" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="508" y="332" text-anchor="middle" class="edge-label">最后一步生成</text>
+          <!-- local edge: BPP -> AOP代理 (bottom horizontal) -->
+          <line x1="248" y1="417" x2="540" y2="417" class="diagram-accent" marker-end="url(#m-acc)"/>
+          <text x="394" y="409" text-anchor="middle" class="branch-label">代理由它生成</text>
+        </svg>
+        <figcaption><span class="fig-num">图 0</span>全教程概念地图：一切以 IoC 容器为中心。<strong>注意</strong>：朱红色的两条边——容器把"扩展点"开放给 <code>BeanPostProcessor</code>，而 AOP 代理又由它生成。这两条朱红线就是 02、03 两章的主线。</figcaption>
+      </figure>
+
+      <h2 id="paths"><span class="num">·</span><span>怎么读这份教程</span></h2>
+      <ul class="path-list">
+        <li><span class="who">只想搞懂原理</span><br>按 01 → 02 → 03 顺序读，02 是核心，别跳。读完做 04 的自测。</li>
+        <li><span class="who">面试急救</span><br>先读 01 把术语对齐，重点啃 02（生命周期 + 三级缓存）和 03（代理 + 自调用失效）——这两章是高频考点。04 的判别题模拟面试追问。</li>
+        <li><span class="who">带读他人代码 / 排查问题</span><br>遇到具体问题（注入了 null、事务没生效）直接跳 03 的失败模式，再回 02 看根因机制。</li>
+      </ul>
+
+      <h2 id="toc"><span class="num">·</span><span>目录</span></h2>
+      <div class="toc-cards">
+        <a href="01-concepts.html"><div class="n">01</div><div class="t">核心概念：容器、Bean、DI、AOP 词汇</div><div class="d">IoC 反转了什么、Bean 与 BeanDefinition、BeanFactory vs ApplicationContext、三种注入方式、作用域，以及 AOP 的切面 / 切点 / 通知 / 织入 / 代理。</div></a>
+        <a href="02-lifecycle.html"><div class="n">02</div><div class="t">原理（上）：容器启动、Bean 生命周期与扩展点</div><div class="d">refresh() 主干流程、生命周期三步、两类后置处理器（BFPP vs BPP）、@Autowired 其实是一个 BPP、循环依赖的三级缓存。</div></a>
+        <a href="03-aop.html"><div class="n">03</div><div class="t">原理（下）：AOP 代理的生成与失效</div><div class="d">JDK 动态代理 vs CGLIB、AOP 代理 = 生命周期最后一步的 BPP、自调用为什么失效、@Configuration full/lite、Spring AOP vs AspectJ。</div></a>
+        <a href="04-self-check.html"><div class="n">04</div><div class="t">自测与判别</div><div class="d">概念 / 原理 / 应用判别三层题库，含跨章场景判别题与一道亲手画图练习。</div></a>
+      </div>
+
+      <h2 id="next"><span class="num">·</span><span>学完之后</span></h2>
+      <ul>
+        <li><strong>Spring Boot 自动配置</strong>：理解了 BFPP/BPP 与条件装配，再看 starter 与 <code>@Conditional</code>，会发现 Boot 只是这套机制的一层约定封装。</li>
+        <li><strong>Spring 事务传播机制</strong>：在 03 章"代理 = AOP"的基础上，深入 <code>@Transactional</code> 的 7 种传播行为与 <code>PlatformTransactionManager</code>。</li>
+        <li><strong>AspectJ 编译期 / 加载期织入</strong>：当 Spring 代理式 AOP 不够用（字段、构造器、自调用）时的进阶方案。</li>
+        <li><strong>AOT 与 GraalVM 原生镜像</strong>：把运行期反射装配搬到构建期——本教程的机制在原生镜像下如何被固化。</li>
+      </ul>
+
+      <footer class="references">
+        <h3>本教程参考</h3>
+        <ul>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans.html">Spring Framework Reference · The IoC Container</a>（官方）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/aop.html">Spring Framework Reference · Aspect Oriented Programming</a>（官方）</li>
+          <li><a href="https://spring.io/blog/2025/11/13/spring-framework-7-0-general-availability/">Spring Framework 7.0 GA</a>（官方博客 · 现状基线）</li>
+          <li><a href="https://github.com/spring-projects/spring-framework">spring-projects/spring-framework</a>（源码 · refresh / doCreateBean / DefaultSingletonBeanRegistry）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="next">
+          <span class="label">第一章 →</span>
+          <span class="title">01 · 核心概念：容器、Bean、DI、AOP 词汇</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#who" data-toc-target="who">适合谁</a></li>
+        <li><a href="#not-who" data-toc-target="not-who">不适合谁</a></li>
+        <li><a href="#outcome" data-toc-target="outcome">能做到什么</a></li>
+        <li><a href="#map" data-toc-target="map">概念地图</a></li>
+        <li><a href="#paths" data-toc-target="paths">怎么读</a></li>
+        <li><a href="#toc" data-toc-target="toc">目录</a></li>
+        <li><a href="#next" data-toc-target="next">学完之后</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+</script>
+
+</body>
+</html>

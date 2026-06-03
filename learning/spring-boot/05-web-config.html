@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web 与配置 · Spring Boot 机制深挖</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-container.html">01 容器</a><span class="sep">—</span>
+    <a href="02-refresh.html">02 启动</a><span class="sep">—</span>
+    <a href="03-autoconfig.html">03 自动配置</a><span class="sep">—</span>
+    <a href="04-aop.html">04 AOP·代理</a><span class="sep">—</span>
+    <a href="05-web-config.html" class="current">05 Web·配置</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现代栈</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Spring Boot · 第 05 章</p>
+        <h1>Web 与配置</h1>
+        <p class="recap">第 2 章的 <code>onRefresh</code> 启动了内嵌 Tomcat——这一章接上：请求进来后怎么走，以及配置怎么从 yml 绑到对象。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>DispatcherServlet 的 <code>doDispatch</code> 流程：HandlerMapping → HandlerAdapter → HttpMessageConverter → 响应</li>
+          <li>Environment 跨有序 PropertySource 解析，命令行 &gt; OS 环境变量 &gt; application-{profile}.yml &gt; application.yml 优先级链</li>
+          <li>@ConfigurationProperties 的 relaxed binding 与 @Value 的精确匹配根本差异；OSIV 默认开启掩盖 N+1 的失败模式</li>
+        </ul>
+      </section>
+
+      <!-- ════════════ 5.1 DispatcherServlet ════════════ -->
+      <h2 id="s51"><span class="num">5.1</span><span>DispatcherServlet 请求生命周期</span></h2>
+
+      <p class="one-liner">DispatcherServlet 是 Spring MVC 的前控制器——每个请求在这里被分派给正确的 Handler，再经消息转换器序列化为响应体。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Servlet 规范只规定了 <code>HttpServlet.service()</code> 的入口，没有定义 URL 路由、参数绑定、返回值序列化。DispatcherServlet 把这些横切能力统一到一个前控制器，业务代码只需声明 <code>@RequestMapping</code>，路由与转换由框架统一处理。</p>
+      </div>
+
+      <p>请求路径从内嵌 Tomcat 的 Connector 开始。Connector 把原始 TCP 流解析为 <code>HttpServletRequest</code>，交给 <code>DispatcherServlet.doDispatch()</code>。</p>
+
+      <p><strong>doDispatch 核心步骤：</strong></p>
+      <ol>
+        <li><strong>getHandler()</strong>：遍历所有注册的 <code>HandlerMapping</code>（最常用的是 <code>RequestMappingHandlerMapping</code>），返回 <code>HandlerExecutionChain</code>（目标 handler + 拦截器链）。</li>
+        <li><strong>getHandlerAdapter()</strong>：根据 handler 类型选择 <code>HandlerAdapter</code>，<code>@RequestMapping</code> 方法对应 <code>RequestMappingHandlerAdapter</code>。</li>
+        <li><strong>HandlerAdapter.handle()</strong>：解析方法参数（<code>@RequestBody</code> 走 <code>HttpMessageConverter</code> 反序列化），调用 controller 方法，对返回值序列化（<code>@ResponseBody</code> 同样走 <code>HttpMessageConverter</code>）。</li>
+        <li><strong>processDispatchResult()</strong>：若有 <code>ModelAndView</code> 则渲染视图（<code>resolveViewName</code>）；若已直接写入响应体则跳过。</li>
+      </ol>
+
+      <!-- 图 5.1：请求数据流 -->
+      <figure>
+        <svg viewBox="0 0 860 130" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="请求从 Tomcat Connector 经过 DispatcherServlet、HandlerMapping、HandlerAdapter、Controller、HttpMessageConverter 到达响应的数据流">
+          <defs>
+            <marker id="a51-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/></marker>
+            <marker id="a51-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/></marker>
+          </defs>
+
+          <!-- Tomcat Connector -->
+          <rect x="10" y="38" width="110" height="54" rx="3" class="diagram-ink node-fill"/>
+          <text x="65" y="61" text-anchor="middle" class="node-label">Tomcat</text>
+          <text x="65" y="78" text-anchor="middle" class="edge-label">Connector</text>
+
+          <!-- arrow 1 -->
+          <line x1="120" y1="65" x2="148" y2="65" class="diagram-ink" marker-end="url(#a51-ink)"/>
+
+          <!-- DispatcherServlet — accent, this chapter's subject -->
+          <rect x="150" y="33" width="136" height="64" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="218" y="56" text-anchor="middle" class="node-label-accent">Dispatcher</text>
+          <text x="218" y="73" text-anchor="middle" class="node-label-accent">Servlet</text>
+          <text x="218" y="89" text-anchor="middle" class="edge-label">doDispatch()</text>
+
+          <!-- arrow 2 -->
+          <line x1="286" y1="65" x2="314" y2="65" class="diagram-ink" marker-end="url(#a51-ink)"/>
+          <text x="300" y="58" text-anchor="middle" class="edge-label">getHandler</text>
+
+          <!-- HandlerMapping -->
+          <rect x="316" y="38" width="120" height="54" rx="3" class="diagram-ink node-fill"/>
+          <text x="376" y="61" text-anchor="middle" class="node-label">Handler</text>
+          <text x="376" y="78" text-anchor="middle" class="node-label">Mapping</text>
+
+          <!-- arrow 3 -->
+          <line x1="436" y1="65" x2="464" y2="65" class="diagram-ink" marker-end="url(#a51-ink)"/>
+          <text x="450" y="58" text-anchor="middle" class="edge-label">getAdapter</text>
+
+          <!-- HandlerAdapter -->
+          <rect x="466" y="38" width="120" height="54" rx="3" class="diagram-ink node-fill"/>
+          <text x="526" y="61" text-anchor="middle" class="node-label">Handler</text>
+          <text x="526" y="78" text-anchor="middle" class="node-label">Adapter</text>
+
+          <!-- arrow 4 -->
+          <line x1="586" y1="65" x2="614" y2="65" class="diagram-ink" marker-end="url(#a51-ink)"/>
+          <text x="600" y="58" text-anchor="middle" class="edge-label">invoke</text>
+
+          <!-- Controller + MessageConverter stacked -->
+          <rect x="616" y="15" width="110" height="40" rx="3" class="diagram-ink node-fill"/>
+          <text x="671" y="40" text-anchor="middle" class="node-label">Controller</text>
+
+          <rect x="616" y="75" width="110" height="40" rx="3" class="diagram-ink node-fill"/>
+          <text x="671" y="91" text-anchor="middle" class="node-label">Message</text>
+          <text x="671" y="107" text-anchor="middle" class="node-label">Converter</text>
+
+          <!-- vertical connector between controller and converter -->
+          <line x1="671" y1="55" x2="671" y2="75" class="diagram-soft"/>
+
+          <!-- arrow 5 to response -->
+          <line x1="726" y1="95" x2="754" y2="95" class="diagram-ink" marker-end="url(#a51-ink)"/>
+
+          <!-- Response -->
+          <rect x="756" y="73" width="90" height="44" rx="3" class="diagram-ink node-fill"/>
+          <text x="801" y="91" text-anchor="middle" class="node-label">HTTP</text>
+          <text x="801" y="108" text-anchor="middle" class="node-label">Response</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>请求数据流：Tomcat Connector 解析原始连接，DispatcherServlet 承接分派，Controller 返回值经 HttpMessageConverter 序列化写入响应。<strong>注意</strong>：HandlerMapping 只做路由查找，HandlerAdapter 才真正调用方法——两者职责不同，经常被混淆。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>HandlerMapping 与 HandlerAdapter 各自负责什么？能否只保留一个？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>HandlerMapping 的职责是"找到谁处理这个请求"（URL → handler 对象）；HandlerAdapter 的职责是"怎么调用这个 handler"（适配不同类型的 handler：@RequestMapping 方法、HttpRequestHandler、Servlet 等）。两者分离是适配器模式——DispatcherServlet 不必关心 handler 的具体调用方式，只需通过 HandlerAdapter 统一调用。去掉任何一个都会破坏这一可扩展性。</p>
+        </details>
+      </div>
+
+      <!-- ════════════ 5.2 内嵌服务器 ════════════ -->
+      <h2 id="s52"><span class="num">5.2</span><span>内嵌服务器（Boot 4.0）</span></h2>
+
+      <p class="one-liner">Boot 4.0 的内嵌 Servlet 容器只剩 Tomcat（默认）和 Jetty；Undertow 已移除；响应式栈用 Netty。</p>
+
+      <p>机制回路指向 <a href="02-refresh.html#s23">第 2 章 §2.3</a>：<code>ServletWebServerApplicationContext</code> 在 <code>onRefresh()</code>（refresh 第 9 阶段）重写父类，调用 <code>createWebServer()</code> 建立 <code>TomcatWebServer</code>；此时 <code>finishBeanFactoryInitialization</code>（第 11 阶段，预实例化业务单例）尚未执行。内嵌服务器的启动早于绝大多数业务 Bean 的实例化。</p>
+
+      <p>切换到 Jetty 只需把 <code>spring-boot-starter-web</code> 中的 Tomcat 依赖排除，再引入 <code>spring-boot-starter-jetty</code>——自动配置的 <code>JettyAutoConfiguration</code> 在 <code>WebServerFactoryCustomizer</code> 接口下发现 Jetty 工厂并接管。</p>
+
+      <div class="callout warning">
+        <span class="label">Undertow 已移除</span>
+        <p>Spring Boot 4.0 起彻底删除 Undertow 支持（<code>spring-boot-starter-undertow</code> 不再存在）。从 3.x 升级时，依赖 Undertow 的项目必须迁移到 Tomcat 或 Jetty，否则启动失败。</p>
+      </div>
+
+      <!-- ════════════ 5.3 Environment 优先级 ════════════ -->
+      <h2 id="s53"><span class="num">5.3</span><span>Environment 与 PropertySource 优先级</span></h2>
+
+      <p class="one-liner">Environment 是 profiles + properties 的抽象，内部维护一个有序的 PropertySource 列表——先命中的 PropertySource 赢。</p>
+
+      <p><code>ConfigurableEnvironment</code> 在 <a href="02-refresh.html#s21">run() 的 prepareEnvironment 阶段</a>构建，由 <code>ConfigDataEnvironmentPostProcessor</code> 加载外部化配置文件并按优先级插入到 PropertySource 链。查询属性时，Environment 按顺序遍历链，第一个包含该 key 的 PropertySource 获胜——后续来源不再被查询。</p>
+
+      <p><strong>优先级（从高到低）：</strong></p>
+      <ol>
+        <li>命令行参数（<code>--server.port=9090</code>）</li>
+        <li><code>SPRING_APPLICATION_JSON</code>（嵌入 JSON 的环境变量或系统属性）</li>
+        <li>OS 环境变量（如 <code>SERVER_PORT</code>）</li>
+        <li><code>application-{profile}.yml</code>（激活的 profile 特定文件）</li>
+        <li><code>application.yml</code>（默认配置文件）</li>
+        <li><code>@PropertySource</code> 注解导入的文件</li>
+        <li>SpringApplication 默认属性</li>
+      </ol>
+
+      <!-- 图 5.2：PropertySource 优先级栈 -->
+      <figure>
+        <svg viewBox="0 0 540 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PropertySource 优先级栈，从顶部最高优先级到底部最低优先级">
+          <defs>
+            <marker id="a52-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/></marker>
+          </defs>
+
+          <!-- Title -->
+          <text x="270" y="20" text-anchor="middle" class="edge-label">PropertySource 优先级（高→低）</text>
+
+          <!-- Priority arrow on left -->
+          <line x1="44" y1="295" x2="44" y2="45" class="diagram-ink" marker-end="url(#a52-ink)"/>
+          <text x="26" y="175" text-anchor="middle" class="edge-label" transform="rotate(-90 26 175)">优先级</text>
+
+          <!-- Layer 1: 命令行 (highest, accent) -->
+          <rect x="60" y="35" width="460" height="38" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="290" y="50" text-anchor="middle" class="node-label-accent">命令行参数</text>
+          <text x="290" y="65" text-anchor="middle" class="edge-label">--key=value  最高优先</text>
+
+          <!-- Layer 2: SPRING_APPLICATION_JSON -->
+          <rect x="60" y="83" width="460" height="38" rx="3" class="diagram-ink node-fill"/>
+          <text x="290" y="98" text-anchor="middle" class="node-label">SPRING_APPLICATION_JSON</text>
+          <text x="290" y="113" text-anchor="middle" class="edge-label">嵌入 JSON 的环境变量/系统属性</text>
+
+          <!-- Layer 3: OS 环境变量 -->
+          <rect x="60" y="131" width="460" height="38" rx="3" class="diagram-ink node-fill"/>
+          <text x="290" y="146" text-anchor="middle" class="node-label">OS 环境变量</text>
+          <text x="290" y="161" text-anchor="middle" class="edge-label">SERVER_PORT · MY_APP_PORT 等</text>
+
+          <!-- Layer 4: application-{profile}.yml -->
+          <rect x="60" y="179" width="460" height="38" rx="3" class="diagram-ink node-fill"/>
+          <text x="290" y="194" text-anchor="middle" class="node-label">application-{profile}.yml</text>
+          <text x="290" y="209" text-anchor="middle" class="edge-label">激活 profile 的特定文件</text>
+
+          <!-- Layer 5: application.yml -->
+          <rect x="60" y="227" width="460" height="38" rx="3" class="diagram-ink node-fill"/>
+          <text x="290" y="242" text-anchor="middle" class="node-label">application.yml</text>
+          <text x="290" y="257" text-anchor="middle" class="edge-label">默认配置文件</text>
+
+          <!-- Layer 6: @PropertySource -->
+          <rect x="60" y="275" width="460" height="38" rx="3" class="diagram-soft node-fill"/>
+          <text x="290" y="290" text-anchor="middle" class="node-label">@PropertySource 文件 · 默认属性</text>
+          <text x="290" y="307" text-anchor="middle" class="edge-label">最低优先  先命中即生效</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>PropertySource 优先级栈：Environment 从顶部向下查找，首次命中即返回。<strong>注意</strong>：profile 特定文件（application-prod.yml）优先于通用 application.yml——这意味着 profile 文件里的值覆盖通用文件，而非追加。</figcaption>
+      </figure>
+
+      <!-- ════════════ 5.4 @ConfigurationProperties ════════════ -->
+      <h2 id="s54"><span class="num">5.4</span><span>@ConfigurationProperties 绑定与 relaxed binding</span></h2>
+
+      <p class="one-liner">ConfigurationPropertiesBindingPostProcessor 用 Binder 把前缀下的所有属性绑到 POJO，支持 relaxed binding；@Value 是逐字段 SpEL 求值，无 relaxed binding。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要 relaxed binding</span>
+        <p>环境变量只能用大写字母和下划线（如 <code>MY_APP_MAX_CONNECTIONS</code>），而 Java 属性命名惯例是驼峰或短横线（<code>myApp.maxConnections</code>）。Binder 的 relaxed binding 把这两套命名归一：<code>my-app.max-connections</code>、<code>MY_APP_MAX_CONNECTIONS</code>、<code>myApp.maxConnections</code> 指向同一字段。</p>
+      </div>
+
+      <p><strong>Binder 的归一规则：</strong>把属性名统一转为 <em>canonical form</em>（小写 + 短横线），再匹配 POJO 字段。<code>MY_APP_PORT</code> → <code>my-app.port</code>，与 <code>@ConfigurationProperties(prefix="my.app")</code> 的 <code>port</code> 字段匹配成功。</p>
+
+      <p><code>@Value("${my.app.port}")</code> 则是精确字符串匹配——它直接查询 Environment，Key 必须完全等于 <code>my.app.port</code>，OS 环境变量 <code>MY_APP_PORT</code> 在 Environment 里以原始大写 key 存储，查询 <code>my.app.port</code> 时找不到，绑定失败（返回默认值或抛出 <code>IllegalArgumentException</code>）。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">MyAppProperties.java</span><span class="lang">Java</span><button class="copy" data-copy-target="c-props">复制</button></div>
+<pre id="c-props"><code class="language-java">@ConfigurationProperties(prefix = "my.app")
+@Validated
+public class MyAppProperties {
+
+    /** relaxed binding: my.app.port / MY_APP_PORT / myApp.port 都能绑到这里 */
+    @Min(1) @Max(65535)
+    private int port = 8080;
+
+    @NotBlank
+    private String name;
+
+    @DurationUnit(ChronoUnit.SECONDS)
+    private Duration timeout = Duration.ofSeconds(30);
+
+    // getters &amp; setters (或用 record — Boot 4.0 支持)
+    public int getPort() { return port; }
+    public void setPort(int port) { this.port = port; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public Duration getTimeout() { return timeout; }
+    public void setTimeout(Duration timeout) { this.timeout = timeout; }
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">AppConfig.java</span><span class="lang">Java</span><button class="copy" data-copy-target="c-enableprops">复制</button></div>
+<pre id="c-enableprops"><code class="language-java">@SpringBootApplication
+@EnableConfigurationProperties(MyAppProperties.class)  // 或在类上直接加 @Component
+public class App {
+    public static void main(String[] args) {
+        SpringApplication.run(App.class, args);
+    }
+}</code></pre>
+      </div>
+
+      <p>Boot 4.0 中 <code>jakarta.validation.*</code>（如 <code>@NotBlank</code>、<code>@Min</code>）替代旧 <code>javax.validation.*</code>，需引入 <code>spring-boot-starter-validation</code>。校验失败在容器启动时即报 <code>BindValidationException</code>，而非首次注入时才发现。</p>
+
+      <table class="compare-table">
+        <caption>@Value vs @ConfigurationProperties 对比</caption>
+        <thead>
+          <tr><th>维度</th><th>@Value</th><th>@ConfigurationProperties</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>绑定范围</td>
+            <td>单个属性</td>
+            <td>同一前缀下所有属性 → POJO</td>
+          </tr>
+          <tr class="selected">
+            <td>Relaxed binding</td>
+            <td>无——精确匹配 key 字符串</td>
+            <td>有——MY_APP_PORT = my-app.port = myApp.port</td>
+          </tr>
+          <tr>
+            <td>JSR-380 校验</td>
+            <td>不支持</td>
+            <td>支持（加 @Validated）</td>
+          </tr>
+          <tr>
+            <td>SpEL</td>
+            <td>支持（#{bean.method()}）</td>
+            <td>不支持</td>
+          </tr>
+          <tr>
+            <td>类型转换</td>
+            <td>有限（Spring ConversionService）</td>
+            <td>丰富（Duration、DataSize、枚举等）</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>偶尔注入一个值、需要 SpEL</td>
+            <td>多属性结构化绑定、外部配置分组</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ════════════ 5.5 OSIV ════════════ -->
+      <h2 id="s55"><span class="num">5.5</span><span>OSIV 陷阱</span></h2>
+
+      <p class="one-liner">Open Session in View 默认把 Hibernate EntityManager session 开到整个 HTTP 请求周期——代价是掩盖 N+1 并在 WARN 日志里静默失败。</p>
+
+      <p>OSIV（<code>spring.jpa.open-in-view=true</code>）由 <code>OpenEntityManagerInViewInterceptor</code>（或 <code>OpenEntityManagerInViewFilter</code>）实现：在请求进入时绑定 EntityManager 到当前线程，在响应返回后关闭。由于 session 在 controller 和视图层都处于打开状态，lazy 关联（<code>@OneToMany(fetch=LAZY)</code>）被访问时能透明触发额外 SELECT——**不会**抛 <code>LazyInitializationException</code>。</p>
+
+      <p>失败模式的隐蔽性在于：当 controller 返回包含懒关联的实体列表，Jackson 序列化过程中逐个访问每条记录的关联集合，每次触发一条 SELECT——100 条记录产生 100 条额外查询。这一行为在 OSIV 开启时完全静默，只有在慢查询日志或 Hibernate statistics 里才能观察到。</p>
+
+      <div class="callout warning">
+        <span class="label">OSIV 失败模式</span>
+        <p>Boot 启动日志会打印 <code>WARN spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning.</code>——大多数工程师忽略该警告。关闭 OSIV（<code>open-in-view=false</code>）后，若 Service 层事务外访问 lazy 关联会立即抛 <code>LazyInitializationException</code>，强制修复数据获取策略。</p>
+      </div>
+
+      <p><strong>修复路径：</strong>关闭 <code>open-in-view=false</code>，在 Service 层使用 <code>JOIN FETCH</code> JPQL、<code>@EntityGraph</code>、或 DTO 投影显式抓取所需关联，让数据获取意图在代码里可见。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">application.yml</span><span class="lang">YAML</span><button class="copy" data-copy-target="c-osiv">复制</button></div>
+<pre id="c-osiv"><code class="language-yaml">spring:
+  jpa:
+    open-in-view: false   # 关闭 OSIV，强制显式抓取
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mydb</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">OrderRepository.java</span><span class="lang">Java</span><button class="copy" data-copy-target="c-entitygraph">复制</button></div>
+<pre id="c-entitygraph"><code class="language-java">public interface OrderRepository extends JpaRepository&lt;Order, Long&gt; {
+
+    // JOIN FETCH 显式抓取 items，避免 N+1
+    @Query("SELECT o FROM Order o JOIN FETCH o.items WHERE o.userId = :userId")
+    List&lt;Order&gt; findWithItemsByUserId(@Param("userId") Long userId);
+
+    // 或用 @EntityGraph 声明式指定
+    @EntityGraph(attributePaths = {"items", "items.product"})
+    List&lt;Order&gt; findByUserId(Long userId);
+}</code></pre>
+      </div>
+
+      <!-- ════════════ Self-check ════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来再展开对照。</p>
+        <ol>
+          <li>一个请求从 Tomcat 到 controller 方法执行，经过哪几个核心组件？每个组件的职责一句话。</li>
+          <li>命令行参数 <code>--server.port=9090</code> 和 <code>application.yml</code> 里的 <code>server.port: 8080</code>，最终生效哪个？为什么（机制，不是"因为命令行优先"）？</li>
+          <li>为什么环境变量 <code>MY_APP_PORT</code> 能绑到 <code>@ConfigurationProperties</code> 的 <code>port</code> 字段，却绑不到 <code>@Value("${my.app.port}")</code>？</li>
+          <li>OSIV 默认开启的代价是什么？关闭后会出现什么问题，如何修复？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>Tomcat Connector（解析 TCP → HttpServletRequest）→ DispatcherServlet.doDispatch（前控制器，协调后续）→ HandlerMapping（URL 路由，找到 handler）→ HandlerAdapter（调用 handler，含参数绑定与返回值处理）→ HttpMessageConverter（@RequestBody 反序列化 / @ResponseBody 序列化）→ 写入 HttpServletResponse。</li>
+            <li>命令行参数对应的 PropertySource 位于 Environment 有序列表的最高位，Environment 按顺序遍历时在命令行 PropertySource 处已找到 <code>server.port</code>，不再继续查询 application.yml 对应的 PropertySource，故 9090 生效。</li>
+            <li><code>@ConfigurationProperties</code> 使用 Binder，Binder 将属性 key 统一转为 canonical form（小写 + 短横线）再匹配字段：<code>MY_APP_PORT</code> → <code>my-app.port</code>，与 prefix <code>my.app</code> + 字段 <code>port</code> 拼合后匹配。<code>@Value</code> 是精确 key 查询，在 Environment 里查找字符串 <code>my.app.port</code>，而环境变量以原始大写 key 存储，查不到，故绑定失败。</li>
+            <li>OSIV 将 Hibernate EntityManager session 开放到整个请求周期，序列化层透明触发 lazy 关联的额外 SELECT，造成 N+1 且完全静默。关闭 OSIV 后，Service 事务提交后再访问 lazy 关联会抛 <code>LazyInitializationException</code>；修复：在 Service 层用 <code>JOIN FETCH</code> 或 <code>@EntityGraph</code> 显式抓取所需关联。</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ════════════ Challenge ════════════ -->
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>同一 key 在三处配置——谁赢？</h3>
+        <p>同一个属性 <code>my.app.port</code> 在 <code>application.yml</code>、激活的 <code>application-prod.yml</code>、以及 OS 环境变量 <code>MY_APP_PORT</code> 里都有值。生产环境（prod profile 激活）启动时，最终生效的是哪个？列出原因链，不能只说"因为优先级"。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>从 Environment 的 PropertySource 链顺序入手：OS 环境变量（位于第 3 层）vs application-prod.yml（第 4 层）vs application.yml（第 5 层）。Environment 从第 1 层开始遍历，先命中者获胜——OS 环境变量排在所有文件来源之上。再思考 relaxed binding：<code>MY_APP_PORT</code> 在 Environment 里以大写 key 存在，<code>@Value("${my.app.port}")</code> 能查到它吗？<code>@ConfigurationProperties</code> 呢？</p>
+        </details>
+      </div>
+
+      <!-- ════════════ References ════════════ -->
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.spring.io/spring-boot/reference/features/external-config.html">Spring Boot Externalized Configuration</a>（官方文档，PropertySource 优先级的权威来源）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-servlet.html">DispatcherServlet — Spring Framework Reference</a>（doDispatch 流程与 HandlerAdapter 设计）</li>
+          <li><a href="https://vladmihalcea.com/the-open-session-in-view-anti-pattern/">The Open Session in View Anti-Pattern</a>（Vlad Mihalcea，OSIV N+1 失败模式的深度分析）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="04-aop.html" class="prev"><span class="label">← 上一章</span><span class="title">04 · AOP 与代理</span></a>
+        <a href="06-frontier.html" class="next"><span class="label">下一章 →</span><span class="title">06 · 现代栈与前沿</span></a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s51" data-toc-target="s51">5.1 DispatcherServlet</a></li>
+        <li><a href="#s52" data-toc-target="s52">5.2 内嵌服务器</a></li>
+        <li><a href="#s53" data-toc-target="s53">5.3 Environment 优先级</a></li>
+        <li><a href="#s54" data-toc-target="s54">5.4 @ConfigurationProperties</a></li>
+        <li><a href="#s55" data-toc-target="s55">5.5 OSIV 陷阱</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ Self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

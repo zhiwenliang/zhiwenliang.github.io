@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>容器与 Bean · Spring Boot 机制深挖</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-container.html" class="current">01 容器</a><span class="sep">—</span>
+    <a href="02-refresh.html">02 启动</a><span class="sep">—</span>
+    <a href="03-autoconfig.html">03 自动配置</a><span class="sep">—</span>
+    <a href="04-aop.html">04 AOP·代理</a><span class="sep">—</span>
+    <a href="05-web-config.html">05 Web·配置</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现代栈</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Spring Boot · 第 01 章</p>
+        <h1>容器与 Bean</h1>
+        <p class="recap">起点页给了 <code>refresh()</code> 流水线的全景——这一章先定格其中的静态零件：容器里到底有什么。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>容器 = ApplicationContext，本质是单例池 + BeanDefinition 元数据 + 后置处理器列表</li>
+          <li>BeanDefinition（蓝图）≠ Bean（实例）——蓝图先于实例存在，才能被 BFPP 改写</li>
+          <li>两类后置处理器各司其职：BFPP 改蓝图、BPP 改实例，这一刀切开 Spring 大部分机制</li>
+        </ul>
+      </section>
+
+      <!-- ── 1.1 IoC 容器 ── -->
+      <h2 id="s11"><span class="num">1.1</span><span>IoC 容器 = ApplicationContext</span></h2>
+
+      <p class="one-liner">容器是管理对象创建与装配的运行时。</p>
+
+      <p>容器并不神秘。剥开注解语法糖，内部结构是三件东西：</p>
+      <ul>
+        <li><strong>单例池</strong>——<code>Map&lt;String, Object&gt; singletonObjects</code>，存放已实例化的单例 Bean；</li>
+        <li><strong>BeanDefinition 元数据</strong>——描述"怎么造这个 Bean"的蓝图集合；</li>
+        <li><strong>后置处理器列表</strong>——两类处理器（BeanFactoryPostProcessor 和 BeanPostProcessor）的有序队列，负责在蓝图阶段和实例阶段介入。</li>
+      </ul>
+
+      <p><code>BeanFactory</code> 是最基础的 DI 接口，只提供 <code>getBean()</code> 和注册/查询 BeanDefinition。<code>ApplicationContext</code> 继承 <code>BeanFactory</code>，并在其上叠加了五项能力：AOP 代理集成、应用事件发布/监听、i18n 消息资源、自动组件扫描、以及 <code>Environment</code> 抽象（统一管理 profiles 和属性源）。</p>
+
+      <div class="rationale">
+        <span class="label">为什么直接用 ApplicationContext 而非 BeanFactory</span>
+        <p>BeanFactory 在首次调用 <code>getBean()</code> 时才触发 BPP 注册，无法保证 BPP 在所有 Bean 实例化之前到位。ApplicationContext 在 refresh 阶段主动注册全部后置处理器，确保顺序正确。直接使用 BeanFactory 会导致代理、校验、事件等功能静默失效。</p>
+      </div>
+
+      <p>下面的示意代码展示注解只是配置容器的语法糖——<code>AnnotationConfigApplicationContext</code> 可以在不扫描任何包的情况下手动注册 BeanDefinition：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">ContainerDemo.java</span><span class="lang">Java</span><button class="copy" data-copy-target="c-container-demo">复制</button></div>
+<pre id="c-container-demo"><code class="language-java">import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+class AppConfig {
+    @Bean  // 注解只是让容器知道"有这个蓝图"，Bean 本身仍由容器实例化
+    public OrderService orderService() {
+        return new OrderService();
+    }
+}
+
+public class ContainerDemo {
+    public static void main(String[] args) {
+        // 手动建容器，无需 Spring Boot — 验证容器本质
+        var ctx = new AnnotationConfigApplicationContext(AppConfig.class);
+
+        // getBean() 触发：若单例池已有则直接返回，否则按蓝图实例化后放入单例池
+        OrderService svc = ctx.getBean(OrderService.class);
+        System.out.println(svc == ctx.getBean(OrderService.class)); // true — 同一对象
+
+        ctx.close();
+    }
+}</code></pre>
+      </div>
+
+      <!-- 图 1.1 -->
+      <figure>
+        <svg viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BeanFactory 与 ApplicationContext 分层关系图">
+          <defs>
+            <marker id="a11-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a11-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- BeanFactory 内核 -->
+          <rect x="180" y="170" width="320" height="110" rx="3" class="diagram-ink node-fill"/>
+          <text x="340" y="195" text-anchor="middle" class="node-label">BeanFactory</text>
+          <text x="340" y="213" text-anchor="middle" class="edge-label">最基础 DI 接口</text>
+          <!-- 内核三列 -->
+          <rect x="196" y="224" width="86" height="42" rx="2" class="diagram-soft node-fill"/>
+          <text x="239" y="242" text-anchor="middle" class="edge-label">单例池</text>
+          <text x="239" y="257" text-anchor="middle" class="edge-label">singletonObjects</text>
+
+          <rect x="297" y="224" width="86" height="42" rx="2" class="diagram-soft node-fill"/>
+          <text x="340" y="242" text-anchor="middle" class="edge-label">BeanDefinition</text>
+          <text x="340" y="257" text-anchor="middle" class="edge-label">元数据</text>
+
+          <rect x="398" y="224" width="86" height="42" rx="2" class="diagram-soft node-fill"/>
+          <text x="441" y="242" text-anchor="middle" class="edge-label">后置处理器</text>
+          <text x="441" y="257" text-anchor="middle" class="edge-label">列表</text>
+
+          <!-- ApplicationContext 外壳 -->
+          <rect x="80" y="40" width="520" height="100" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="340" y="65" text-anchor="middle" class="node-label-accent">ApplicationContext</text>
+          <text x="340" y="83" text-anchor="middle" class="edge-label">继承 BeanFactory，叠加五项能力</text>
+
+          <!-- 五项能力 -->
+          <text x="108" y="108" text-anchor="middle" class="edge-label">AOP 集成</text>
+          <text x="208" y="108" text-anchor="middle" class="edge-label">事件发布</text>
+          <text x="308" y="108" text-anchor="middle" class="edge-label">i18n 消息</text>
+          <text x="408" y="108" text-anchor="middle" class="edge-label">组件扫描</text>
+          <text x="538" y="108" text-anchor="middle" class="edge-label">Environment</text>
+
+          <!-- 继承箭头 -->
+          <line x1="340" y1="140" x2="340" y2="168" class="diagram-ink" marker-end="url(#a11-ink)"/>
+          <text x="356" y="157" class="edge-label">继承</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>BeanFactory 是内核，ApplicationContext 是外壳。<strong>注意</strong>：直接持有 BeanFactory 引用会绕过外壳注册的后置处理器，导致代理等功能静默失效。</figcaption>
+      </figure>
+
+      <!-- ── 1.2 BeanDefinition vs Bean ── -->
+      <h2 id="s12"><span class="num">1.2</span><span>BeanDefinition（蓝图）vs Bean（实例）</span></h2>
+
+      <p class="one-liner">BeanDefinition 是"怎么造这个 Bean"的元数据，不是 Bean 本身。</p>
+
+      <p>一个 BeanDefinition 持有的信息包括：目标 class、scope（singleton/prototype…）、构造参数、属性值、是否懒加载（<code>lazyInit</code>）、初始化方法名（<code>initMethodName</code>）、销毁方法名（<code>destroyMethodName</code>）。容器在 refresh 的前半段把所有 BeanDefinition 收齐，<strong>蓝图先于实例存在</strong>——这是 BeanFactoryPostProcessor 能够介入的前提：此时还没有任何 Bean 实例，BFPP 可以自由读写蓝图中的任何字段。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p><code>${server.port}</code> 这种占位符替换，发生在改蓝图阶段还是改实例阶段？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>改蓝图阶段。<code>PropertySourcesPlaceholderConfigurer</code> 是 <code>BeanFactoryPostProcessor</code>，在所有 Bean 实例化之前把 BeanDefinition 里的字符串占位符替换成真实值。如果放到实例阶段才替换，<code>@Value</code> 注入时拿到的就是未解析的字面量 <code>${server.port}</code>，而非端口数字。</p>
+        </details>
+      </div>
+
+      <!-- 图 1.2 -->
+      <figure>
+        <svg viewBox="0 0 680 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="蓝图阶段与实例阶段两阶段分界图">
+          <defs>
+            <marker id="a12-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a12-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Phase 1: 蓝图阶段 -->
+          <rect x="30" y="60" width="260" height="130" rx="3" class="diagram-ink node-fill"/>
+          <text x="160" y="88" text-anchor="middle" class="node-label">元数据阶段</text>
+          <text x="160" y="106" text-anchor="middle" class="edge-label">扫描 / 解析 / 收集 BeanDefinition</text>
+
+          <rect x="50" y="118" width="220" height="58" rx="2" class="diagram-soft node-fill"/>
+          <text x="160" y="140" text-anchor="middle" class="edge-label">BeanDefinition</text>
+          <text x="160" y="155" text-anchor="middle" class="edge-label">class · scope · initMethod · lazy</text>
+          <text x="160" y="169" text-anchor="middle" class="edge-label">constructorArgs · propertyValues</text>
+
+          <!-- BFPP 标注 -->
+          <text x="160" y="210" text-anchor="middle" class="branch-label">← BFPP 在此改蓝图 →</text>
+
+          <!-- 分界线 -->
+          <line x1="340" y1="40" x2="340" y2="200" class="diagram-accent" stroke-dasharray="6 3"/>
+          <text x="340" y="30" text-anchor="middle" class="branch-label">实例化分界</text>
+
+          <!-- Phase 2: 实例化阶段 -->
+          <rect x="390" y="60" width="260" height="130" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="520" y="88" text-anchor="middle" class="node-label-accent">实例化阶段</text>
+          <text x="520" y="106" text-anchor="middle" class="edge-label">按蓝图构造 → 注入 → 初始化</text>
+
+          <rect x="410" y="118" width="220" height="58" rx="2" class="diagram-soft node-fill"/>
+          <text x="520" y="140" text-anchor="middle" class="edge-label">Bean 实例</text>
+          <text x="520" y="155" text-anchor="middle" class="edge-label">存入 singletonObjects</text>
+          <text x="520" y="169" text-anchor="middle" class="edge-label">（单例池）</text>
+
+          <!-- BPP 标注 -->
+          <text x="520" y="210" text-anchor="middle" class="branch-label">← BPP 在此改实例 →</text>
+
+          <!-- 箭头：蓝图 → 实例 -->
+          <line x1="290" y1="125" x2="388" y2="125" class="diagram-ink" marker-end="url(#a12-ink)"/>
+          <text x="339" y="118" text-anchor="middle" class="edge-label">按蓝图</text>
+          <text x="339" y="131" text-anchor="middle" class="edge-label">实例化</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>蓝图阶段与实例化阶段以一条分界线隔开。<strong>注意</strong>：BeanFactoryPostProcessor 只在分界线左侧生效；一旦进入实例化阶段，蓝图不再被修改。</figcaption>
+      </figure>
+
+      <!-- ── 1.3 两类后置处理器 ── -->
+      <h2 id="s13"><span class="num">1.3</span><span>两类后置处理器（本教程第一刀）</span></h2>
+
+      <p>区分 <strong>BeanFactoryPostProcessor（BFPP）</strong>和 <strong>BeanPostProcessor（BPP）</strong>是理解 Spring 机制的第一刀。两者作用在不同的对象、不同的时机：</p>
+
+      <table class="compare-table">
+        <caption>BFPP vs BPP 对比</caption>
+        <thead>
+          <tr>
+            <th>维度</th>
+            <th>BeanFactoryPostProcessor（BFPP）</th>
+            <th>BeanPostProcessor（BPP）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>作用对象</td>
+            <td>BeanDefinition（蓝图）</td>
+            <td>Bean 实例</td>
+          </tr>
+          <tr>
+            <td>触发时机</td>
+            <td>所有 Bean 实例化之前（refresh 第 5 阶段）</td>
+            <td>每个 Bean 实例化 + 依赖注入完成后（init 前后）</td>
+          </tr>
+          <tr>
+            <td>回调方法</td>
+            <td><code>postProcessBeanFactory(ConfigurableListableBeanFactory)</code></td>
+            <td><code>postProcessBeforeInitialization(Object, String)</code><br><code>postProcessAfterInitialization(Object, String)</code></td>
+          </tr>
+          <tr class="selected">
+            <td>典型实现</td>
+            <td><code>ConfigurationClassPostProcessor</code>（解析 @Configuration/@Bean/@Import，加载全部 BeanDefinition，含自动配置）<br><code>PropertySourcesPlaceholderConfigurer</code>（占位符替换）</td>
+            <td><code>AutowiredAnnotationBeanPostProcessor</code>（处理 @Autowired）<br><code>AbstractAutoProxyCreator</code>（换代理，见<a href="04-aop.html">第 4 章</a>）</td>
+          </tr>
+          <tr>
+            <td>注入自身时机</td>
+            <td>容器直接调用，不经过普通 Bean 生命周期</td>
+            <td>必须先被实例化后才能拦截其他 Bean</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><code>ConfigurationClassPostProcessor</code> 是最关键的 BFPP：它解析 <code>@Configuration</code> 类及其 <code>@Bean</code>、<code>@Import</code>、<code>@ComponentScan</code>，把应用中所有 BeanDefinition（包括自动配置产生的）全部加载进容器。自动配置的发现机制（<code>AutoConfigurationImportSelector</code> 读 <code>.imports</code> 文件）在这一步触发，详见 <a href="03-autoconfig.html">第 3 章</a>。</p>
+
+      <!-- 图 1.3 -->
+      <figure>
+        <svg viewBox="0 0 680 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BFPP 与 BPP 在时间轴上的分布图">
+          <defs>
+            <marker id="a13-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a13-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 时间轴主线 -->
+          <line x1="40" y1="100" x2="640" y2="100" class="diagram-ink" marker-end="url(#a13-ink)"/>
+          <text x="648" y="104" class="edge-label">时间</text>
+
+          <!-- BFPP 阶段 -->
+          <rect x="50" y="55" width="220" height="50" rx="3" class="diagram-ink node-fill"/>
+          <text x="160" y="76" text-anchor="middle" class="node-label">BFPP 阶段</text>
+          <text x="160" y="93" text-anchor="middle" class="edge-label">改蓝图 / 加载 BeanDefinition</text>
+
+          <!-- BFPP 示例 -->
+          <text x="60" y="130" class="edge-label">ConfigurationClassPostProcessor</text>
+          <text x="60" y="145" class="edge-label">PropertySourcesPlaceholderConfigurer</text>
+
+          <!-- 分界竖线 -->
+          <line x1="300" y1="40" x2="300" y2="160" class="diagram-accent" stroke-dasharray="5 3"/>
+          <text x="300" y="33" text-anchor="middle" class="branch-label">实例化开始</text>
+
+          <!-- BPP 阶段 -->
+          <rect x="330" y="55" width="190" height="50" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="425" y="76" text-anchor="middle" class="node-label-accent">BPP 阶段</text>
+          <text x="425" y="93" text-anchor="middle" class="edge-label">改实例 / 包代理</text>
+
+          <!-- BPP 示例 -->
+          <text x="340" y="130" class="edge-label">AutowiredAnnotationBeanPostProcessor</text>
+          <text x="340" y="145" class="edge-label">AbstractAutoProxyCreator</text>
+
+          <!-- 刻度点 -->
+          <circle cx="160" cy="100" r="4" fill="#0A0A0A"/>
+          <circle cx="425" cy="100" r="4" fill="#B73B2F"/>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>BFPP 在左（蓝图阶段），BPP 在右（实例阶段）。<strong>注意</strong>：BFPP 必须在 BPP 注册之前执行，才能确保 ConfigurationClassPostProcessor 加载完所有 BeanDefinition 后，BPP 才开始接管实例。</figcaption>
+      </figure>
+
+      <!-- ── 1.4 Bean 生命周期 + 三级缓存 ── -->
+      <h2 id="s14"><span class="num">1.4</span><span>Bean 生命周期 + 三级缓存与循环依赖</span></h2>
+
+      <p>单例 Bean 的完整生命周期按以下顺序推进：</p>
+      <ol>
+        <li><strong>实例化</strong>——调用构造函数，对象分配内存（此时属性尚未注入）；</li>
+        <li><strong>属性注入</strong>——<code>AutowiredAnnotationBeanPostProcessor</code> 填充 <code>@Autowired</code> 依赖；</li>
+        <li><strong>Aware 回调</strong>——<code>BeanNameAware</code>、<code>BeanFactoryAware</code>、<code>ApplicationContextAware</code> 等；</li>
+        <li><strong>BPP before</strong>——<code>postProcessBeforeInitialization()</code>；</li>
+        <li><strong>初始化</strong>——<code>@PostConstruct</code>（JSR-250，jakarta 包）→ <code>InitializingBean.afterPropertiesSet()</code> → <code>initMethod</code>；</li>
+        <li><strong>BPP after</strong>——<code>postProcessAfterInitialization()</code>（代理在此替换原对象）；</li>
+        <li><strong>就绪</strong>——放入单例池，供 <code>getBean()</code> 返回；</li>
+        <li><strong>销毁</strong>——容器关闭时：<code>@PreDestroy</code> → <code>DisposableBean.destroy()</code> → <code>destroyMethod</code>。</li>
+      </ol>
+
+      <h3>三级缓存与循环依赖</h3>
+
+      <p>Spring 用三级缓存让 <strong>field/setter 注入</strong>的循环依赖能够成立：</p>
+      <ul>
+        <li><code>singletonObjects</code>——成品 Bean（完全初始化）；</li>
+        <li><code>earlySingletonObjects</code>——早期引用（已实例化但尚未注入完毕）；</li>
+        <li><code>singletonFactories</code>——工厂对象，按需产出早期引用（用于 AOP 场景，把半成品的代理暴露出去）。</li>
+      </ul>
+
+      <p>循环依赖成立的过程：A 开始实例化 → 把 A 的工厂放入 <code>singletonFactories</code> → 注入 B → B 开始实例化 → 注入 A 时命中 <code>singletonFactories</code>，取出 A 的早期引用放入 <code>earlySingletonObjects</code> → B 完成初始化 → A 拿到 B 完成注入 → A 完成初始化 → A 进入 <code>singletonObjects</code>。整个过程不需要 A 已经完全就绪，只需要 A 的早期引用（内存地址）已固定。</p>
+
+      <p><strong>构造器注入的环解不了</strong>：造 A 的构造函数需要 B 已存在，造 B 的构造函数需要 A 已存在——此时 A 连实例都还没有，无早期引用可暴露，Spring 直接抛出 <code>BeanCurrentlyInCreationException</code>。</p>
+
+      <p>Spring Boot 2.6+ 默认 <code>spring.main.allow-circular-references=false</code>，在启动时主动检测并拒绝所有循环依赖（包括 field/setter 注入的环），把隐式依赖变成显式构建错误。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 构造器循环依赖</span>
+        <p><strong>症状</strong>：启动即抛 <code>BeanCurrentlyInCreationException: Error creating bean with name 'A'</code>，堆栈里 A 和 B 互相出现。</p>
+        <p><strong>根因</strong>：构造器注入的循环让容器无法产生任何一方的早期引用，三级缓存机制无法介入。</p>
+        <p><strong>修复</strong>：① 重构：提取公共依赖到第三个 Bean，打破环；② 将其中一侧改为 setter 注入（需评估是否合理）；③ 在其中一侧加 <code>@Lazy</code>，让容器注入一个延迟代理而非真实实例（代理在首次调用时才触发实例化）。首选重构，<code>@Lazy</code> 是逃生舱，不是设计。</p>
+      </div>
+
+      <!-- 图 1.4 -->
+      <figure>
+        <svg viewBox="0 0 680 310" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bean 生命周期序列与三级缓存示意图">
+          <defs>
+            <marker id="a14-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a14-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 生命周期竖向流程 (左侧) -->
+          <text x="145" y="22" text-anchor="middle" class="node-label">Bean 生命周期</text>
+
+          <!-- 步骤框 -->
+          <rect x="30" y="32" width="230" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="145" y="52" text-anchor="middle" class="node-label">① 实例化（构造函数）</text>
+
+          <line x1="145" y1="62" x2="145" y2="74" class="diagram-ink" marker-end="url(#a14-ink)"/>
+          <rect x="30" y="74" width="230" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="145" y="94" text-anchor="middle" class="node-label">② 属性注入（@Autowired）</text>
+
+          <line x1="145" y1="104" x2="145" y2="116" class="diagram-ink" marker-end="url(#a14-ink)"/>
+          <rect x="30" y="116" width="230" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="145" y="136" text-anchor="middle" class="node-label">③ Aware 回调</text>
+
+          <line x1="145" y1="146" x2="145" y2="158" class="diagram-ink" marker-end="url(#a14-ink)"/>
+          <rect x="30" y="158" width="230" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="145" y="178" text-anchor="middle" class="node-label">④ BPP before</text>
+
+          <line x1="145" y1="188" x2="145" y2="200" class="diagram-ink" marker-end="url(#a14-ink)"/>
+          <rect x="18" y="200" width="254" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="145" y="215" text-anchor="middle" class="node-label">⑤ 初始化</text>
+          <text x="145" y="228" text-anchor="middle" class="edge-label">@PostConstruct / afterPropertiesSet</text>
+
+          <line x1="145" y1="234" x2="145" y2="246" class="diagram-ink" marker-end="url(#a14-ink)"/>
+          <rect x="30" y="246" width="230" height="30" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="145" y="265" text-anchor="middle" class="node-label-accent">⑥ BPP after（代理替换）</text>
+
+          <line x1="145" y1="276" x2="145" y2="288" class="diagram-ink" marker-end="url(#a14-ink)"/>
+          <rect x="30" y="288" width="230" height="18" rx="3" class="diagram-ink node-fill"/>
+          <text x="145" y="301" text-anchor="middle" class="edge-label">⑦ 就绪 → singletonObjects</text>
+
+          <!-- 三级缓存（右侧） -->
+          <text x="510" y="22" text-anchor="middle" class="node-label">三级缓存</text>
+
+          <rect x="370" y="32" width="280" height="50" rx="3" class="diagram-soft node-fill"/>
+          <text x="510" y="52" text-anchor="middle" class="edge-label">L1: singletonObjects</text>
+          <text x="510" y="67" text-anchor="middle" class="edge-label">成品 Bean（完全初始化）</text>
+
+          <rect x="370" y="96" width="280" height="50" rx="3" class="diagram-soft node-fill"/>
+          <text x="510" y="116" text-anchor="middle" class="edge-label">L2: earlySingletonObjects</text>
+          <text x="510" y="131" text-anchor="middle" class="edge-label">早期引用（已实例化，未初始化完）</text>
+
+          <rect x="370" y="160" width="280" height="50" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="510" y="180" text-anchor="middle" class="node-label-accent">L3: singletonFactories</text>
+          <text x="510" y="195" text-anchor="middle" class="edge-label">工厂 → 按需产出早期引用</text>
+
+          <!-- 循环依赖说明 -->
+          <rect x="370" y="226" width="280" height="80" rx="3" class="diagram-ink node-fill"/>
+          <text x="510" y="246" text-anchor="middle" class="edge-label">field/setter 环：A→B→A</text>
+          <text x="510" y="262" text-anchor="middle" class="edge-label">A 实例化后先入 L3</text>
+          <text x="510" y="278" text-anchor="middle" class="edge-label">B 注入 A 时从 L3 取早期引用</text>
+          <text x="510" y="294" text-anchor="middle" class="edge-label">构造器环：L3 无法介入 → 报错</text>
+
+          <!-- 连接线 -->
+          <line x1="260" y1="47" x2="368" y2="47" class="diagram-soft" marker-end="url(#a14-ink)"/>
+          <line x1="260" y1="111" x2="368" y2="121" class="diagram-soft" marker-end="url(#a14-ink)"/>
+          <line x1="260" y1="153" x2="368" y2="175" class="diagram-soft" marker-end="url(#a14-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 1.4</span>左侧是 Bean 生命周期顺序，右侧是三级缓存结构。<strong>注意</strong>：代理替换发生在第 6 步 BPP after，容器注册给单例池的是代理对象，不是原始实例。</figcaption>
+      </figure>
+
+      <p>初始化回调（<code>@PostConstruct</code>）来自 Jakarta EE，Spring Boot 4.0 / Jakarta EE 11 下使用 <code>jakarta.annotation.PostConstruct</code>，不再是旧的 <code>javax.annotation.PostConstruct</code>。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">CacheWarmupService.java</span><span class="lang">Java</span><button class="copy" data-copy-target="c-lifecycle">复制</button></div>
+<pre id="c-lifecycle"><code class="language-java">import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.BeanNameAware;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CacheWarmupService implements BeanNameAware {
+
+    private String beanName;
+
+    // ③ Aware 回调 — 容器注入 Bean 名称
+    @Override
+    public void setBeanName(String name) {
+        this.beanName = name;
+    }
+
+    // ⑤ 初始化回调 — 此时依赖已注入完毕
+    @PostConstruct
+    public void warmup() {
+        // 容器保证：走到这里时所有 @Autowired 字段已就绪
+        System.out.println(beanName + " warmup done");
+    }
+
+    // ⑧ 销毁回调 — 容器关闭时触发
+    @PreDestroy
+    public void cleanup() {
+        System.out.println(beanName + " cleanup");
+    }
+}</code></pre>
+      </div>
+
+      <!-- ── Self-check ── -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来再展开对照。</p>
+        <ol>
+          <li>BeanFactory 与 ApplicationContext 的区别是什么？哪些功能在 BeanFactory 上不存在？</li>
+          <li>BeanDefinition 和 Bean 的区别用一句话说清楚——为什么蓝图必须先于实例存在？</li>
+          <li>为什么构造器注入的循环依赖解不了、而 field 注入却能？请从三级缓存机制角度解释。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><strong>BeanFactory</strong> 是最基础的 DI 接口，提供 <code>getBean()</code> 和 BeanDefinition 注册/查询，不含 AOP 集成、事件发布、i18n、自动扫描、<code>Environment</code>。<strong>ApplicationContext</strong> 继承 BeanFactory，叠加上述五项能力，并在 refresh 时主动注册全部 BPP，确保实例化顺序正确。直接持有 BeanFactory 引用会导致代理等功能静默失效。</li>
+            <li>BeanDefinition 是描述"如何造这个 Bean"的元数据（class、scope、initMethod 等），不是 Bean 实例本身。蓝图必须先存在，才能在实例化前被 BeanFactoryPostProcessor 读写（如 <code>PropertySourcesPlaceholderConfigurer</code> 替换占位符）；若蓝图与实例同时产生，BFPP 介入时机就丢了。</li>
+            <li>三级缓存的关键是 <code>singletonFactories</code>：A 实例化后（但未注入完毕）会将自己的工厂对象放入 L3，供其他 Bean 提前获取 A 的早期引用（内存地址已固定）。构造器注入的环：A 的构造函数还需要 B，此时 A 连 <code>new</code> 都还没执行完，无法往 L3 里放任何工厂——B 找 A 时 L3 里没有，循环无法解开，容器抛出 <code>BeanCurrentlyInCreationException</code>。</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ── 进阶挑战 ── -->
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>写一个 BeanFactoryPostProcessor，强制所有 BeanDefinition 的 lazy-init 为 false</h3>
+        <p>实现一个 <code>BeanFactoryPostProcessor</code>，在容器启动时遍历所有已注册的 BeanDefinition，把 <code>lazyInit</code> 强制设为 <code>false</code>。该实现哪个接口？为什么这件事必须是 BFPP 而不能是 BPP？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p><code>lazyInit</code> 是 BeanDefinition 上的字段，属于蓝图属性。BPP 工作时实例已经在按原有 lazy 标记决定是否预实例化——蓝图不再被读取。因此只有在蓝图阶段（BFPP）才来得及修改。实现 <code>BeanFactoryPostProcessor.postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory)</code>，通过 <code>beanFactory.getBeanDefinitionNames()</code> 遍历，对每个 <code>beanFactory.getBeanDefinition(name)</code> 调用 <code>setLazyInit(false)</code>。</p>
+        </details>
+      </div>
+
+      <!-- ── 参考 ── -->
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/introduction.html">Spring Framework · The IoC Container</a>（官方文档，含 BeanFactory vs ApplicationContext 对比）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/factory-extension.html">Spring Framework · Customizing Beans Using BeanPostProcessor / BeanFactoryPostProcessor</a>（BeanPostProcessor 和 BeanFactoryPostProcessor Javadoc 与示例）</li>
+          <li><a href="https://www.baeldung.com/circular-dependencies-in-spring">Baeldung · Circular Dependencies in Spring</a>（循环依赖根因、三级缓存机制、修复方案）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev"><span class="label">← 上一章</span><span class="title">00 · 起点</span></a>
+        <a href="02-refresh.html" class="next"><span class="label">下一章 →</span><span class="title">02 · 启动流水线</span></a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 IoC 容器</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 蓝图 vs 实例</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 两类后置处理器</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 生命周期 + 三级缓存</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">Self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

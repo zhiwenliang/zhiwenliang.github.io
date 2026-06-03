@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 AOP 代理的生成与失效 · Spring 核心机制深度剖析</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-lifecycle.html">02 生命周期</a><span class="sep">—</span>
+    <a href="03-aop.html" class="current">03 AOP</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>原理（下）：AOP 代理的生成与失效</h1>
+        <p class="recap">上一章把脊梁立了起来：AOP 代理在 bean 生命周期最后一步（postProcessAfterInitialization）由一个 BPP 生成。这一章顺着这个挂载点往下挖——代理具体怎么造出来、为什么在某些写法下会静默失效。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>AOP 自动代理创建器就是 02 章那个"最后一步的 BPP"，它把 bean 换成代理</li>
+          <li>两种造代理的办法：JDK 动态代理（要接口）vs CGLIB（造子类），各自的选择条件和限制</li>
+          <li>自调用失效的根因——内部 <code>this.method()</code> 走原始引用，不过代理</li>
+          <li><code>@Configuration</code> 自己也被 CGLIB 代理，这解释了 <code>@Bean</code> 方法互调为何返回同一单例</li>
+          <li>Spring AOP 与 AspectJ 的分界：什么时候代理式不够用，必须上字节码织入</li>
+        </ul>
+      </section>
+
+      <!-- ========================= 3.1 auto proxy = BPP ========================= -->
+      <h2 id="s1"><span class="num">3.1</span><span>自动代理创建器：02 章那个"最后一步的 BPP"</span></h2>
+
+      <p>Spring 不会凭空给 bean 加代理。干这件事的是一个具体的组件——<code>AnnotationAwareAspectJAutoProxyCreator</code>，<strong>它本身就是一个 <code>BeanPostProcessor</code></strong>。它在每个 bean 走到生命周期第 ③d 步（<code>postProcessAfterInitialization</code>）时被回调，检查这个 bean 是否命中了某个切面的切点；命中就返回一个代理，没命中就原样返回。把图 2.2 的第 ③d 步放大，就是这张图：</p>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="初始化后的原始 bean 进入自动代理创建器这个 BPP，判断是否命中切点，命中返回代理对象，不命中原样返回">
+          <defs>
+            <marker id="p-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="p-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- original bean -->
+          <rect x="24" y="92" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="99" y="116" text-anchor="middle" class="node-label">初始化后的</text>
+          <text x="99" y="136" text-anchor="middle" class="node-label">原始 bean</text>
+          <!-- the BPP -->
+          <rect x="232" y="78" width="220" height="88" rx="8" class="diagram-accent node-fill-accent"/>
+          <text x="342" y="104" text-anchor="middle" class="node-label-accent">自动代理创建器</text>
+          <text x="342" y="124" text-anchor="middle" class="edge-label">一个 BeanPostProcessor</text>
+          <text x="342" y="144" text-anchor="middle" class="edge-label">postProcessAfterInitialization</text>
+          <line x1="174" y1="122" x2="232" y2="122" class="diagram-ink" marker-end="url(#p-ink)"/>
+          <!-- branch: hit pointcut? -->
+          <line x1="452" y1="104" x2="540" y2="64" class="diagram-accent" marker-end="url(#p-acc)"/>
+          <text x="498" y="74" text-anchor="middle" class="branch-label">命中切点</text>
+          <line x1="452" y1="140" x2="540" y2="180" class="diagram-ink" marker-end="url(#p-ink)"/>
+          <text x="498" y="172" text-anchor="middle" class="edge-label">未命中</text>
+          <!-- proxy out -->
+          <rect x="540" y="40" width="160" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="620" y="62" text-anchor="middle" class="node-label-accent">代理对象</text>
+          <text x="620" y="80" text-anchor="middle" class="edge-label">包住原始 bean</text>
+          <!-- original out -->
+          <rect x="540" y="158" width="160" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="620" y="180" text-anchor="middle" class="node-label">原始 bean</text>
+          <text x="620" y="198" text-anchor="middle" class="edge-label">原样返回</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>自动代理创建器就是一个 BPP，在生命周期最后一步决定 bean 出口。<strong>注意</strong>：返回值会替换容器里的 bean——所以容器和别的 bean 拿到的，从此是代理，不再是原始对象。"AOP 怎么接进来的"全部秘密就在这个返回值。</figcaption>
+      </figure>
+
+      <!-- ========================= 3.2 JDK vs CGLIB ========================= -->
+      <h2 id="s2"><span class="num">3.2</span><span>代理怎么造：JDK 动态代理 vs CGLIB</span></h2>
+
+      <p class="one-liner">JDK 动态代理给"有接口的目标"造一个实现同接口的代理；CGLIB 给"没接口的目标"造一个继承它的子类。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要两种</span>
+        <p>代理必须和目标"长得一样"，调用方才能无感替换。Java 提供两条造"长得一样的对象"的路：实现同一个接口，或继承同一个类。目标有接口就走前者（JDK 自带），没接口就只能走后者（CGLIB 生成子类）。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左侧 JDK 动态代理实现目标接口并持有 InvocationHandler，右侧 CGLIB 生成目标的子类覆盖方法">
+          <defs>
+            <marker id="j-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+          <!-- left: JDK -->
+          <text x="180" y="28" text-anchor="middle" class="edge-label" font-weight="700">JDK 动态代理</text>
+          <text x="180" y="46" text-anchor="middle" class="edge-label">条件：目标实现了接口</text>
+          <rect x="110" y="60" width="140" height="40" rx="6" class="diagram-soft node-fill"/>
+          <text x="180" y="85" text-anchor="middle" class="edge-label">接口 PaymentGateway</text>
+          <rect x="40" y="150" width="130" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="105" y="172" text-anchor="middle" class="node-label-accent">$Proxy（代理）</text>
+          <text x="105" y="189" text-anchor="middle" class="edge-label">implements 接口</text>
+          <rect x="195" y="150" width="130" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="260" y="172" text-anchor="middle" class="node-label">目标 Target</text>
+          <text x="260" y="189" text-anchor="middle" class="edge-label">implements 接口</text>
+          <line x1="105" y1="150" x2="150" y2="100" class="diagram-soft" marker-end="url(#j-ink)"/>
+          <line x1="260" y1="150" x2="215" y2="100" class="diagram-soft" marker-end="url(#j-ink)"/>
+          <line x1="170" y1="174" x2="195" y2="174" class="diagram-ink" marker-end="url(#j-ink)"/>
+          <text x="183" y="232" text-anchor="middle" class="edge-label">代理持有目标</text>
+          <text x="183" y="250" text-anchor="middle" class="edge-label">经 InvocationHandler 转发</text>
+          <!-- divider -->
+          <line x1="360" y1="20" x2="360" y2="290" class="diagram-soft"/>
+          <!-- right: CGLIB -->
+          <text x="540" y="28" text-anchor="middle" class="edge-label" font-weight="700">CGLIB</text>
+          <text x="540" y="46" text-anchor="middle" class="edge-label">条件：无接口 / 强制 proxyTargetClass</text>
+          <rect x="470" y="90" width="150" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="545" y="112" text-anchor="middle" class="node-label">目标 Target（类）</text>
+          <text x="545" y="129" text-anchor="middle" class="edge-label">无需接口</text>
+          <rect x="470" y="200" width="150" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="545" y="222" text-anchor="middle" class="node-label-accent">CGLIB 子类（代理）</text>
+          <text x="545" y="239" text-anchor="middle" class="edge-label">extends 目标，覆盖方法</text>
+          <line x1="545" y1="200" x2="545" y2="138" class="diagram-ink" marker-end="url(#j-ink)"/>
+          <text x="612" y="172" text-anchor="middle" class="edge-label">继承</text>
+          <text x="545" y="278" text-anchor="middle" class="edge-label" fill="#B73B2F">final 方法 / 类无法覆盖 → 失效</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>两种造代理的路：JDK 靠"实现同接口"，CGLIB 靠"继承目标"。<strong>注意</strong>：CGLIB 靠覆盖方法实现增强，所以 <code>final</code> 方法、<code>final</code> 类它代理不了——这是后面一个失败模式的根因。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）</strong>：JDK 动态代理在运行期用 <code>java.lang.reflect.Proxy</code> 生成一个实现了目标接口的类，方法调用统一进入 <code>InvocationHandler.invoke</code>，由它决定"先跑通知、再转发给目标"。CGLIB 则用字节码生成一个目标类的子类，覆盖每个非 final 方法插入增强。选择规则：Spring Framework 默认"有接口走 JDK、没接口走 CGLIB"；但 <strong>Spring Boot 自 2.0 起默认强制 CGLIB</strong>（<code>proxyTargetClass=true</code>），因为按接口代理时，注入点若写成实现类而非接口会注入失败，统一用 CGLIB 更稳。</p>
+
+      <table class="compare-table">
+        <caption>表 3.1 · JDK 动态代理 vs CGLIB</caption>
+        <thead><tr><th>维度</th><th>JDK 动态代理</th><th>CGLIB</th></tr></thead>
+        <tbody>
+          <tr><td>前提</td><td>目标必须实现接口</td><td>无需接口</td></tr>
+          <tr><td>原理</td><td>生成实现同接口的代理类</td><td>生成目标的子类</td></tr>
+          <tr><td>限制</td><td>只能代理接口里声明的方法</td><td>无法代理 <code>final</code> 类 / 方法、<code>private</code> 方法</td></tr>
+          <tr><td>默认</td><td>Spring Framework 有接口时默认</td><td>Spring Boot 2.0+ 默认强制</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ========================= 3.3 self-invocation ========================= -->
+      <h2 id="s3"><span class="num">3.3</span><span>自调用失效：最经典的"事务没生效"</span></h2>
+
+      <p class="one-liner">增强只在"从外部经过代理引用"的调用上触发；对象内部 <code>this.method()</code> 走原始引用，绕过代理，通知不触发。</p>
+
+      <p>01 章表 1.1 的加粗结论，在这里兑现。代理增强的前提是"调用先经过代理对象"。一个 bean 的方法 A 里直接调用本类的方法 B（<code>this.methodB()</code>），这个调用走的是<strong>原始对象的引用</strong>（<code>this</code> 永远指向原始目标，不是代理），根本没经过代理那一层，于是 B 上的 <code>@Transactional</code> / <code>@Async</code> / <code>@Cacheable</code> 通知统统不触发。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="外部调用经过代理触发通知再进入目标方法 A，但目标内部 this 调用方法 B 直接走原始引用绕过代理，通知不触发">
+          <defs>
+            <marker id="s-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="s-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- caller -->
+          <rect x="24" y="150" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="84" y="178" text-anchor="middle" class="node-label">外部调用者</text>
+          <!-- proxy box -->
+          <rect x="190" y="46" width="420" height="222" rx="8" class="diagram-accent"/>
+          <text x="206" y="70" class="node-label-accent">代理 Proxy</text>
+          <text x="206" y="88" class="edge-label">从这里进，通知才触发</text>
+          <!-- target box -->
+          <rect x="250" y="108" width="320" height="140" rx="6" class="diagram-ink node-fill"/>
+          <text x="410" y="130" text-anchor="middle" class="node-label">目标 Target · OrderService</text>
+          <rect x="275" y="146" width="260" height="38" rx="5" class="diagram-soft node-fill"/>
+          <text x="405" y="169" text-anchor="middle" class="edge-label">methodA()（外部入口）</text>
+          <rect x="275" y="198" width="260" height="38" rx="5" class="diagram-soft node-fill"/>
+          <text x="405" y="221" text-anchor="middle" class="edge-label">methodB() @Transactional</text>
+          <!-- arrow A: caller -> methodA (crosses proxy wall) -->
+          <line x1="144" y1="165" x2="275" y2="165" class="diagram-ink" marker-end="url(#s-ink)"/>
+          <text x="232" y="156" text-anchor="middle" class="branch-label">① 通知触发✓</text>
+          <!-- arrow B: methodA -> methodB internal (this) -->
+          <line x1="340" y1="184" x2="340" y2="198" class="diagram-ink" marker-end="url(#s-ink)"/>
+          <text x="470" y="194" text-anchor="middle" class="edge-label">② this.methodB()</text>
+          <!-- bottom note -->
+          <text x="350" y="300" text-anchor="middle" class="branch-label">② 同类内部 this 调用：走原始引用、不过代理 → 通知不触发 ✗</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>同一对象，两条调用路径命运不同。<strong>注意</strong>：① 从外部进，必经代理那道墙，通知触发；② 在 <code>methodA</code> 内部调 <code>this.methodB()</code>，调用从没离开过目标对象、碰不到代理墙，<code>@Transactional</code> 形同虚设。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">自调用失效的典型现场</span><span class="lang">Java</span><button class="copy" data-copy-target="c-self">复制</button></div>
+<pre id="c-self"><code class="language-java">@Service
+public class OrderService {
+
+    public void placeOrder(Order o) {
+        // 从外部被调用：placeOrder 经过代理 —— 但它自己没有 @Transactional
+        this.saveWithTx(o);   // ← this 调用：直达原始对象，绕过代理
+    }
+
+    @Transactional
+    public void saveWithTx(Order o) {
+        // 期望这里开启事务；可经 this 调进来时，事务通知不触发，事务不存在
+    }
+}</code></pre>
+      </div>
+
+      <p><strong>三种修法</strong>（都在"让调用重新经过代理"上做文章）：把 <code>saveWithTx</code> 拆到另一个 bean 去调用；让 bean 自己注入自己（注入的是代理），用 <code>self.saveWithTx(o)</code>；或用 <code>AopContext.currentProxy()</code> 取当前代理再调。本质都是绕开 <code>this</code>。</p>
+
+      <h3>同一根因的一串失败模式</h3>
+      <p>"自调用绕过代理"不是孤例，它是一整族失败模式的共同根因。把它们摆在一起，根因一眼看穿：</p>
+
+      <table class="compare-table">
+        <caption>表 3.2 · 代理机制带来的失败模式族</caption>
+        <thead><tr><th>失败模式</th><th>症状</th><th>根因（回到机制）</th></tr></thead>
+        <tbody>
+          <tr><td><code>@Transactional</code> 自调用</td><td>事务不回滚、不生效</td><td>this 调用绕过代理（本节）</td></tr>
+          <tr><td><code>@Async</code> 自调用</td><td>同步执行在当前线程，没异步</td><td>同上，通知在代理上</td></tr>
+          <tr><td><code>final</code> 方法上加注解</td><td>注解静默无效</td><td>CGLIB 无法覆盖 final 方法（3.2）</td></tr>
+          <tr><td>在 <code>@PostConstruct</code> 里调本类事务方法</td><td>事务不生效</td><td>代理在初始化后才生成，此刻 this 是裸对象（2.2）</td></tr>
+          <tr><td>单例里注入的 prototype 不刷新</td><td>每次拿到同一个</td><td>注入只在单例创建时发生一次（1.5）</td></tr>
+        </tbody>
+      </table>
+
+      <p>这张表把前三章串成一条因果链——表里每个"根因"都指回某一节的机制。这正是把 Spring 当状态机看的回报：失败模式不用背，从机制能推出来。</p>
+
+      <!-- ========================= 3.4 @Configuration full vs lite ========================= -->
+      <h2 id="s4"><span class="num">3.4</span><span>@Configuration 自己也是代理：full vs lite</span></h2>
+
+      <p class="one-liner">@Configuration 类被 CGLIB 增强，使其 @Bean 方法之间互相调用时仍返回容器里的同一个单例。</p>
+
+      <p>一个常被忽略的事实：<code>@Configuration</code> 类<strong>自己</strong>也会被 CGLIB 代理。原因是 <code>@Bean</code> 方法之间会互相调用——如果不拦截，一个 <code>@Bean</code> 方法里调用另一个 <code>@Bean</code> 方法，就是一次普通 Java 方法调用，会<strong>再造一个新对象</strong>，破坏单例。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">full 模式才保证单例</span><span class="lang">Java</span><button class="copy" data-copy-target="c-cfg">复制</button></div>
+<pre id="c-cfg"><code class="language-java">@Configuration                  // full 模式：类被 CGLIB 增强
+public class AppConfig {
+    @Bean public PaymentGateway gateway() { return new StripeGateway(repo()); }
+    @Bean public InventoryRepository repo() { return new MySqlInventoryRepository(); }
+    // gateway() 里调用 repo()：被代理拦截，返回容器里那个单例 repo，不是新对象
+}</code></pre>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.3 · full 模式 vs lite 模式</caption>
+        <thead><tr><th>场景</th><th>@Bean 方法互调的结果</th><th>是否保证单例</th></tr></thead>
+        <tbody>
+          <tr class="selected"><td><code>@Configuration</code>（full，类被 CGLIB 增强）</td><td>被代理拦截，返回同一单例</td><td>是</td></tr>
+          <tr><td><code>@Component</code> 里放 @Bean 方法（lite，不增强）</td><td>普通方法调用，造出新对象</td><td>否 —— 静默重复创建</td></tr>
+          <tr><td><code>@Configuration(proxyBeanMethods=false)</code></td><td>不增强（省启动开销），不拦截互调</td><td>否（前提是不依赖互调）</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>把上面的 <code>@Configuration</code> 换成 <code>@Component</code>，其它不动，容器里会有几个 <code>InventoryRepository</code>？这种错误启动时会报错吗？</p>
+        <details>
+          <summary>先答，再展开</summary>
+          <p>两个：一个是 <code>repo()</code> 作为 <code>@Bean</code> 注册的单例，另一个是 <code>gateway()</code> 内部调 <code>repo()</code> 时普通 Java 调用 new 出来的。<strong>不会报错</strong>——这是最阴险的地方，单例保证被静默破坏，要到运行时发现"两个仓储状态不一致"才暴露。<code>proxyBeanMethods=false</code> 是有意关掉增强（原生镜像 / 启动优化场景），前提是你确认没有 @Bean 互调依赖。</p>
+        </details>
+      </div>
+
+      <!-- ========================= 3.5 Spring AOP vs AspectJ ========================= -->
+      <h2 id="s5"><span class="num">3.5</span><span>判别：Spring AOP 还是 AspectJ？</span></h2>
+
+      <p>Spring 代理式 AOP 的所有限制（只能方法、只对 bean、自调用失效），都源于"运行期靠代理织入"这一个选择。完整的 <strong>AspectJ</strong> 走另一条路——编译期或类加载期直接改字节码织入，因此没有这些限制。这是本章的判别点。</p>
+
+      <table class="compare-table">
+        <caption>表 3.4 · Spring AOP vs AspectJ（备选方案）</caption>
+        <thead><tr><th>维度</th><th>Spring AOP（代理式）</th><th>AspectJ（字节码织入）</th></tr></thead>
+        <tbody>
+          <tr><td>织入时机</td><td>运行期生成代理</td><td>编译期 / 类加载期改字节码</td></tr>
+          <tr><td>连接点</td><td>只有方法执行</td><td>方法、字段、构造器、静态块</td></tr>
+          <tr><td>作用对象</td><td>只有 Spring 容器里的 bean</td><td>任意对象（含 new 出来的）</td></tr>
+          <tr><td>自调用</td><td>失效（绕过代理）</td><td>生效（直接织入字节码）</td></tr>
+          <tr><td>接入成本</td><td>零额外工具，框架内置</td><td>需织入器 / 编译期插件</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>判别准则</strong>：默认用 Spring AOP——日志、事务、缓存这类"作用在 bean 的公开方法上"的横切，它完全够用且零成本。<strong>只有当需求落在它的盲区</strong>——要拦字段读写或构造器、要增强非 bean 的普通对象、要让自调用也生效——才升级到 AspectJ，接受它的额外工具链成本。能用代理解决就别上字节码织入。</p>
+
+      <!-- ========================= self-check ========================= -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程作答。第 3、5 题是把前几章机制连起来推结论，正是面试追问的样子。</p>
+        <ol>
+          <li>负责生成 AOP 代理的组件是什么类型？它在 bean 生命周期的哪一步工作？</li>
+          <li>JDK 动态代理和 CGLIB 各自的前提条件是什么？CGLIB 代理不了什么？</li>
+          <li>用"调用是否经过代理"这一条，解释为什么 <code>this.methodB()</code> 上的 <code>@Transactional</code> 不生效。</li>
+          <li>为什么 <code>@Configuration</code> 类自己要被 CGLIB 增强？不增强（换成 <code>@Component</code>）会静默发生什么？</li>
+          <li>什么样的需求会逼你从 Spring AOP 切换到 AspectJ？举两个 Spring AOP 的盲区。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>它是一个 BeanPostProcessor（<code>AnnotationAwareAspectJAutoProxyCreator</code>），在初始化最后一步 <code>postProcessAfterInitialization</code> 工作。</li>
+            <li>JDK 要求目标实现接口、生成实现同接口的代理；CGLIB 无需接口、生成目标子类。CGLIB 代理不了 <code>final</code> 类 / <code>final</code> 方法 / <code>private</code> 方法（无法覆盖）。</li>
+            <li>增强逻辑在代理对象上，只有"经过代理引用"的调用才触发。<code>this</code> 指向原始目标对象，<code>this.methodB()</code> 不经过代理，所以事务通知不触发。</li>
+            <li><code>@Bean</code> 方法会互相调用，CGLIB 增强拦截这些互调、返回容器里的同一单例。换成 <code>@Component</code>（lite）后互调变成普通 new，静默造出重复对象、破坏单例，且不报错。</li>
+            <li>需要拦截方法之外的连接点（字段、构造器）、需要增强非 bean 对象、需要自调用也生效。盲区例如：字段访问拦截、自调用增强。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一个"循环依赖 + AOP"同时出现的现场</h3>
+        <p>A、B 互为字段依赖，且 A 被一个切面增强。结合 2.4 的三级缓存和本章的"代理在初始化末尾才生成"，推断：B 在填充阶段拿到的 A，是原始对象还是代理？容器靠什么保证 B 拿到的 A 和最终容器里的 A 是同一个？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>B 在填充时从三级缓存取出 A 的工厂，工厂此刻就<strong>提前</strong>生成 A 的代理（而不是等到 A 自己初始化末尾），把这个代理作为早期引用给 B。于是 B 拿到的就是代理；A 后续初始化末尾会复用这个已生成的代理，不再重复包装。三级缓存那个"工厂延迟决定要不要代理"的设计，就是为这个一致性服务的——你刚好把 02 和 03 接上了。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/aop/proxying.html">Spring Reference · Proxying Mechanisms（JDK vs CGLIB）</a>（官方）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/aop/proxying.html#aop-understanding-aop-proxies">Spring Reference · 自调用与 AOP 代理</a>（官方）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/java/basic-concepts.html">Spring Reference · @Bean 与 @Configuration（full vs lite）</a>（官方）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/aop/choosing.html">Spring Reference · Choosing AOP（Spring AOP vs AspectJ）</a>（官方）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-lifecycle.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 容器启动与 Bean 生命周期</span>
+        </a>
+        <a href="04-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 自测与判别</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">3.1 自动代理创建器</a></li>
+        <li><a href="#s2" data-toc-target="s2">3.2 JDK vs CGLIB</a></li>
+        <li><a href="#s3" data-toc-target="s3">3.3 自调用失效</a></li>
+        <li><a href="#s4" data-toc-target="s4">3.4 @Configuration 代理</a></li>
+        <li><a href="#s5" data-toc-target="s5">3.5 Spring AOP vs AspectJ</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

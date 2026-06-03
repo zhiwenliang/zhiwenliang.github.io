@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>现代栈与前沿 · Spring Boot 机制深挖</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-container.html">01 容器</a><span class="sep">—</span>
+    <a href="02-refresh.html">02 启动</a><span class="sep">—</span>
+    <a href="03-autoconfig.html">03 自动配置</a><span class="sep">—</span>
+    <a href="04-aop.html">04 AOP·代理</a><span class="sep">—</span>
+    <a href="05-web-config.html">05 Web·配置</a><span class="sep">—</span>
+    <a href="06-frontier.html" class="current">06 现代栈</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Spring Boot · 第 06 章</p>
+        <h1>06 · 现代栈与前沿</h1>
+        <p class="recap">前五章是自 Spring 3 起稳定的核心机制——这一章是截至 2026-06 仍在动的部分：Boot 4.0 的破坏性变更、虚拟线程与瓶颈转移、三条快启动路线、Spring AI 的落地位置，以及与 Quarkus/Micronaut 的选型轴。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>Boot 4.0（2025-11 GA，4.0.6 / 2026-04）破坏性变更清单：Jakarta EE 11、Jackson 3、Undertow 移除、Java 17 起步</li>
+          <li>虚拟线程开启后瓶颈从 Tomcat 线程池（默认 200）<strong>转移</strong>到 HikariCP 连接池（默认 10）——两者缺一不可</li>
+          <li>三条快启动路线（CDS / GraalVM Native / Java 25 AOT cache）各买什么、各有什么约束；Spring AI 是同一套自动配置模型的延伸；Spring vs Quarkus/Micronaut 的决策轴</li>
+        </ul>
+      </section>
+
+      <!-- ── 6.1 Boot 4.0 ── -->
+      <h2 id="s61"><span class="num">6.1</span><span>Boot 4.0 改了什么（2025-11 GA，4.0.6 / 2026-04）</span></h2>
+
+      <p>Boot 4.0 于 2025-11 发布 GA，当前最新稳定版为 <strong>4.0.6（2026-04）</strong>。底层依赖升至 Spring Framework 7 + Jakarta EE 11——所有包名从 <code>javax.*</code> 改为 <code>jakarta.*</code>，这是自 Boot 3.0 以来的第二次命名空间迁移。</p>
+
+      <p>主要破坏性变更：Jackson 3 成为默认序列化库（Jackson 2 的 <code>DeserializationFeature</code> 等 API 有不兼容变动）；内嵌服务器中 <strong>Undertow 已移除</strong>，选项只剩 Tomcat（默认）和 Jetty，响应式栈仍用 Netty；Spock 测试框架支持移除；Java 17 是最低运行时（构建链路用到 Java 25 特性）。</p>
+
+      <p>并行维护的 <strong>3.5.x</strong> 仍在接收补丁（长期维护分支）；<strong>4.1.0-RC1（2026-04）</strong> 已发布，GA 在即，带入 Java 25 AOT cache 支持（见 6.4 节）。</p>
+
+      <table class="compare-table">
+        <caption>3.x → 4.0 关键迁移点（2025-11）</caption>
+        <thead>
+          <tr><th>维度</th><th>Boot 3.x 做法</th><th>Boot 4.0 要求</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>包命名空间</td>
+            <td><code>javax.*</code>（Boot 3 已迁到 jakarta，但部分旧依赖混用）</td>
+            <td>全量 <code>jakarta.*</code>，Jakarta EE 11 API</td>
+          </tr>
+          <tr>
+            <td>JSON 库</td>
+            <td>Jackson 2.x</td>
+            <td>Jackson 3.x 默认；API 有不兼容变动（<code>DeserializationFeature</code> 等）</td>
+          </tr>
+          <tr class="selected">
+            <td>内嵌服务器</td>
+            <td>Tomcat / Jetty / Undertow</td>
+            <td>Undertow 已移除；仅 Tomcat / Jetty（响应式用 Netty）</td>
+          </tr>
+          <tr>
+            <td>HTTP 客户端</td>
+            <td><code>RestTemplate</code>（维护模式）</td>
+            <td>推荐 <code>RestClient</code>（同步）/ <code>WebClient</code>（响应式）</td>
+          </tr>
+          <tr>
+            <td>Java 基线</td>
+            <td>Java 17（Boot 3.0）/ Java 21（Boot 3.2）</td>
+            <td>运行时 Java 17 起步，构建 Java 25</td>
+          </tr>
+          <tr>
+            <td>自动配置注册</td>
+            <td><code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>（2.7 起）</td>
+            <td>同上，未变</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">迁移陷阱</span>
+        <p>把 Boot 3.x 项目升到 4.0 时，<code>javax.*</code> 依赖（包括老版本 Hibernate、Servlet 容器的传递依赖）若未随之升级，编译期会报大量 <code>package javax.* does not exist</code>。先用 <code>./mvnw dependency:tree | grep javax</code> 扫出残留，再逐一升版本或换替代库。</p>
+      </div>
+
+      <!-- ── 6.2 可观测性 ── -->
+      <h2 id="s62"><span class="num">6.2</span><span>可观测性：Micrometer 取代 Sleuth（3.0 起稳定）</span></h2>
+
+      <p class="one-liner">可观测性的统一入口是 Micrometer Observation API——它把 metrics 和 traces 收归同一个埋点模型。</p>
+
+      <p><strong>Spring Cloud Sleuth 已于 2022-12 进入 attic（归档），未移植到 Boot 3+</strong>。Boot 3.0 起，分布式追踪由 <code>Micrometer Tracing</code> 承接，底层可对接 Zipkin、Jaeger、OTLP 等后端。Trace context 默认遵循 W3C Trace Context 规范，traceId 为 128-bit。</p>
+
+      <p>埋点方式：直接使用 <code>ObservationRegistry</code> 或注解 <code>@Observed</code>（Boot 3.2+ 自动为 Spring MVC 控制器、Spring Data 方法、Kafka listener 等织入 observation）。Actuator 的 <code>/actuator/metrics</code> 和 <code>/actuator/httptrace</code>（Boot 4.0 已更名为 <code>/actuator/httpexchanges</code>）继续可用。</p>
+
+      <div class="callout warning">
+        <span class="label">常见错误</span>
+        <p>代码里 import 了 <code>org.springframework.cloud.sleuth.*</code> 或 pom 里留有 <code>spring-cloud-starter-sleuth</code>——这些依赖在 Boot 3+ 不存在对应版本，会导致依赖解析失败。替换为 <code>spring-boot-starter-actuator</code> + <code>io.micrometer:micrometer-tracing-bridge-brave</code>（或 otel）。</p>
+      </div>
+
+      <!-- ── 6.3 虚拟线程 ── -->
+      <h2 id="s63"><span class="num">6.3</span><span>虚拟线程（3.2 起）与瓶颈转移</span></h2>
+
+      <p class="one-liner">开启虚拟线程后，服务器线程数不再是吞吐上限——新瓶颈是 HikariCP 的连接池大小。</p>
+
+      <p>Java 21 正式发布虚拟线程（Project Loom GA）。Boot 3.2（2023-11）随即引入一行配置支持：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">application.yml</span><span class="lang">YAML</span><button class="copy" data-copy-target="c-vt01">复制</button></div>
+<pre id="c-vt01"><code class="language-yaml">spring:
+  threads:
+    virtual:
+      enabled: true   # Java 21+；Tomcat 改用虚拟线程派发请求</code></pre>
+      </div>
+
+      <p>效果：Tomcat 的请求派发线程由平台线程换成虚拟线程。虚拟线程是 JVM 层面轻量级调度单元，阻塞 I/O 时不占用 OS 线程，因此 <code>server.tomcat.threads.max</code>（默认 200）这个上限几乎不再成为瓶颈——系统可以并发数千个请求，每个请求阻塞等待数据库时不耗 OS 线程。</p>
+
+      <p><strong>但瓶颈立刻转移到 HikariCP。</strong> HikariCP 默认连接池大小为 10。当 5000 个虚拟线程同时发起数据库调用时，999 个在 HikariCP 的等待队列里排队，超时抛出 <code>Connection is not available, request timed out after 30000ms</code>。</p>
+
+      <p>正确做法：开虚拟线程的同时按预期并发量调大连接池。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">application.yml</span><span class="lang">YAML</span><button class="copy" data-copy-target="c-vt02">复制</button></div>
+<pre id="c-vt02"><code class="language-yaml">spring:
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    hikari:
+      maximum-pool-size: 50   # 按实际 DB 并发承载量设置，非越大越好</code></pre>
+      </div>
+
+      <div class="rationale">
+        <span class="label">为什么连接池不能无限放大</span>
+        <p>数据库服务器的连接数有上限（PostgreSQL 默认 100，MySQL 默认 151）。连接池超出 DB 服务器上限只会把排队从 HikariCP 挪到 DB 端，问题不减反增。调参前先确认 DB 侧的 <code>max_connections</code>。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个服务已经开了 <code>spring.threads.virtual.enabled=true</code>，但没有数据库操作——只做纯 CPU 计算或调用外部 HTTP 接口。此时 HikariCP 瓶颈还成立吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>不成立。HikariCP 瓶颈只在有 JDBC 阻塞调用时才出现。纯 HTTP 出站（WebClient / RestClient）由各自的连接池管理；纯 CPU 计算的瓶颈是 CPU 核数——虚拟线程对 CPU 密集型服务几乎没有收益，反而可能因调度开销轻微下降。</p>
+        </details>
+      </div>
+
+      <!-- Figure 6.1 — 平台线程 vs 虚拟线程瓶颈对比 -->
+      <figure>
+        <svg viewBox="0 0 780 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="平台线程模型与虚拟线程模型的瓶颈对比">
+          <defs>
+            <marker id="a61-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a61-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- LEFT PANEL: 平台线程模型 -->
+          <!-- Panel background -->
+          <rect x="10" y="10" width="360" height="300" rx="4" class="diagram-soft node-fill"/>
+          <text x="190" y="34" text-anchor="middle" class="node-label" font-weight="600">平台线程模型</text>
+
+          <!-- Tomcat box — accent (bottleneck) -->
+          <rect x="50" y="55" width="260" height="52" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="180" y="78" text-anchor="middle" class="node-label-accent">Tomcat 线程池</text>
+          <text x="180" y="95" text-anchor="middle" class="edge-label">threads.max = 200（默认）</text>
+
+          <!-- Arrow down -->
+          <line x1="180" y1="107" x2="180" y2="135" class="diagram-ink" marker-end="url(#a61-ink)"/>
+          <text x="192" y="124" class="edge-label">超过 200 并发</text>
+
+          <!-- Blocked label -->
+          <rect x="80" y="140" width="200" height="40" rx="3" class="diagram-ink node-fill"/>
+          <text x="180" y="158" text-anchor="middle" class="node-label">请求排队 / 503</text>
+          <text x="180" y="174" text-anchor="middle" class="edge-label">线程耗尽即拒绝</text>
+
+          <!-- Arrow down -->
+          <line x1="180" y1="180" x2="180" y2="208" class="diagram-soft" marker-end="url(#a61-ink)"/>
+
+          <!-- HikariCP box — normal -->
+          <rect x="80" y="212" width="200" height="40" rx="3" class="diagram-ink node-fill"/>
+          <text x="180" y="230" text-anchor="middle" class="node-label">HikariCP 连接池</text>
+          <text x="180" y="246" text-anchor="middle" class="edge-label">pool-size = 10（默认）</text>
+
+          <!-- Arrow down -->
+          <line x1="180" y1="252" x2="180" y2="278" class="diagram-soft" marker-end="url(#a61-ink)"/>
+
+          <!-- DB -->
+          <rect x="120" y="282" width="120" height="22" rx="3" class="diagram-soft node-fill"/>
+          <text x="180" y="297" text-anchor="middle" class="edge-label">Database</text>
+
+          <!-- Bottleneck label -->
+          <text x="330" y="81" text-anchor="end" class="branch-label">← 瓶颈</text>
+
+          <!-- RIGHT PANEL: 虚拟线程模型 -->
+          <rect x="410" y="10" width="360" height="300" rx="4" class="diagram-soft node-fill"/>
+          <text x="590" y="34" text-anchor="middle" class="node-label" font-weight="600">虚拟线程模型</text>
+
+          <!-- Tomcat box — normal (no longer bottleneck) -->
+          <rect x="450" y="55" width="260" height="52" rx="3" class="diagram-ink node-fill"/>
+          <text x="580" y="78" text-anchor="middle" class="node-label">Tomcat 虚拟线程</text>
+          <text x="580" y="95" text-anchor="middle" class="edge-label">数千并发，OS 线程不阻塞</text>
+
+          <!-- Arrow down -->
+          <line x1="580" y1="107" x2="580" y2="135" class="diagram-ink" marker-end="url(#a61-ink)"/>
+          <text x="592" y="124" class="edge-label">线程不再是上限</text>
+
+          <!-- Passthrough — normal -->
+          <rect x="480" y="140" width="200" height="40" rx="3" class="diagram-ink node-fill"/>
+          <text x="580" y="158" text-anchor="middle" class="node-label">请求顺畅派发</text>
+          <text x="580" y="174" text-anchor="middle" class="edge-label">I/O 阻塞不耗 OS 线程</text>
+
+          <!-- Arrow down -->
+          <line x1="580" y1="180" x2="580" y2="208" class="diagram-ink" marker-end="url(#a61-ink)"/>
+
+          <!-- HikariCP box — accent (new bottleneck) -->
+          <rect x="450" y="212" width="260" height="40" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="580" y="230" text-anchor="middle" class="node-label-accent">HikariCP 连接池</text>
+          <text x="580" y="246" text-anchor="middle" class="edge-label">pool-size = 10（默认）← 新瓶颈</text>
+
+          <!-- Arrow down -->
+          <line x1="580" y1="252" x2="580" y2="278" class="diagram-ink" marker-end="url(#a61-ink)"/>
+
+          <!-- DB -->
+          <rect x="520" y="282" width="120" height="22" rx="3" class="diagram-soft node-fill"/>
+          <text x="580" y="297" text-anchor="middle" class="edge-label">Database</text>
+
+          <!-- Bottleneck label -->
+          <text x="680" y="232" text-anchor="start" class="branch-label">← 瓶颈转移</text>
+        </svg>
+        <figcaption>
+          <span class="fig-num">图 6.1</span>平台线程模型（左）与虚拟线程模型（右）的瓶颈位置。<strong>注意</strong>：开启虚拟线程后 Tomcat 线程池不再是上限，但 HikariCP 默认 10 连接立刻成为新瓶颈，必须同步调大。
+        </figcaption>
+      </figure>
+
+      <!-- ── 6.4 三条快启动路线 ── -->
+      <h2 id="s64"><span class="num">6.4</span><span>三条快启动路线</span></h2>
+
+      <p>降低启动时间与内存占用有三条正交路线，各有不同的成本结构（2026-06 现状）：</p>
+
+      <h3>CDS（Class Data Sharing，Boot 3.3+）</h3>
+      <p>JVM 的 CDS 把已解析的类元数据持久化到共享归档文件，下次启动直接 mmap 进内存，跳过类加载与字节码校验。Boot 3.3（2024-05）通过 <code>spring-boot:process-aot</code> + JVM flag 自动化 CDS 归档生成。启动时间缩短约 20–40%，无"闭世界"约束，对反射友好。代价：归档文件与应用版本绑定，每次升级 jar 需重新生成；容器镜像须固定 JVM 版本。</p>
+
+      <h3>GraalVM 原生镜像（stable since Boot 3.0，2022-11）</h3>
+      <p>GraalVM 的 <code>native-image</code> 工具在构建期做<strong>闭世界分析</strong>（closed-world analysis）：把可达代码、反射元数据、资源清单全部静态分析并编译进单一可执行文件。结果：启动 50–100ms（JVM 同等应用 2–8s），RSS 减半。</p>
+
+      <p>代价是"闭世界"约束：<strong>运行时反射需要 AOT hints</strong>。Boot 的 <code>RuntimeHintsRegistrar</code> 和 <code>@RegisterReflectionForBinding</code> 用于声明反射需求；Boot 自身及主流 starter 已内置 hints，但自定义代码（尤其是动态类加载、第三方库的非注册反射）需手动补充，否则 native 镜像运行时抛 <code>MissingReflectionDataException</code>。验证手段：<code>native:test</code> goal 在 native 镜像内跑测试套件。</p>
+
+      <div class="callout insight">
+        <span class="label">与第三章的联系</span>
+        <p>原生镜像并不改变自动配置的<strong>逻辑</strong>——<code>@Conditional</code> 仍然决定哪些 <code>@Bean</code> 注册（见<a href="03-autoconfig.html#s34">第 3 章 6.4 节</a>）。区别在于：JVM 模式下条件在运行时求值，原生镜像模式下条件在构建期由 AOT 处理器求值并"烘焙"进镜像，运行时不再重新计算。这意味着 <code>@ConditionalOnProperty</code> 若依赖运行时环境变量，需要确认 AOT 处理器能正确处理它。</p>
+      </div>
+
+      <h3>Java 25 AOT cache（Boot 4.1，2026-04 RC1）</h3>
+      <p>Java 25 引入应用层 AOT 缓存（JEP 483），把 JIT 编译后的代码缓存到磁盘，下次启动直接加载已编译代码，跳过 JIT 热身阶段。Boot 4.1.0-RC1（2026-04）已对接此特性。与 GraalVM native 相比，无闭世界约束，仍是标准 JVM，但热身阶段缩短显著。GA 时间待定。</p>
+
+      <!-- Figure 6.2 — 三条快启动路线对比 -->
+      <figure>
+        <svg viewBox="0 0 760 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="三条快启动路线对比图">
+          <defs>
+            <marker id="a62-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a62-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Column headers -->
+          <text x="130" y="28" text-anchor="middle" class="node-label" font-weight="600">CDS</text>
+          <text x="130" y="44" text-anchor="middle" class="edge-label">Boot 3.3 / 2024-05</text>
+
+          <text x="380" y="28" text-anchor="middle" class="node-label-accent" font-weight="700">GraalVM Native</text>
+          <text x="380" y="44" text-anchor="middle" class="edge-label">Boot 3.0 stable / 2022-11</text>
+
+          <text x="630" y="28" text-anchor="middle" class="node-label" font-weight="600">Java 25 AOT cache</text>
+          <text x="630" y="44" text-anchor="middle" class="edge-label">Boot 4.1-RC1 / 2026-04</text>
+
+          <!-- Divider lines -->
+          <line x1="255" y1="15" x2="255" y2="245" class="diagram-soft"/>
+          <line x1="510" y1="15" x2="510" y2="245" class="diagram-soft"/>
+
+          <!-- Row: 启动时间 -->
+          <text x="10" y="80" class="edge-label" font-weight="600">启动时间</text>
+          <rect x="50" y="62" width="160" height="36" rx="3" class="diagram-ink node-fill"/>
+          <text x="130" y="78" text-anchor="middle" class="node-label">快 20–40%</text>
+          <text x="130" y="92" text-anchor="middle" class="edge-label">vs 基准 JVM</text>
+
+          <rect x="300" y="62" width="160" height="36" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="78" text-anchor="middle" class="node-label-accent">50–100ms 启动</text>
+          <text x="380" y="92" text-anchor="middle" class="edge-label">vs JVM 2–8s</text>
+
+          <rect x="550" y="62" width="160" height="36" rx="3" class="diagram-ink node-fill"/>
+          <text x="630" y="78" text-anchor="middle" class="node-label">跳过 JIT 热身</text>
+          <text x="630" y="92" text-anchor="middle" class="edge-label">GA 性能待测</text>
+
+          <!-- Row: 内存 -->
+          <text x="10" y="132" class="edge-label" font-weight="600">内存 RSS</text>
+          <rect x="50" y="114" width="160" height="36" rx="3" class="diagram-ink node-fill"/>
+          <text x="130" y="130" text-anchor="middle" class="node-label">改善有限</text>
+          <text x="130" y="146" text-anchor="middle" class="edge-label">仍是完整 JVM heap</text>
+
+          <rect x="300" y="114" width="160" height="36" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="130" text-anchor="middle" class="node-label-accent">减半</text>
+          <text x="380" y="146" text-anchor="middle" class="edge-label">无 JIT、小 heap</text>
+
+          <rect x="550" y="114" width="160" height="36" rx="3" class="diagram-ink node-fill"/>
+          <text x="630" y="130" text-anchor="middle" class="node-label">同 JVM</text>
+          <text x="630" y="146" text-anchor="middle" class="edge-label">标准 JVM 运行</text>
+
+          <!-- Row: 约束 -->
+          <text x="10" y="184" class="edge-label" font-weight="600">主要约束</text>
+          <rect x="50" y="166" width="160" height="50" rx="3" class="diagram-ink node-fill"/>
+          <text x="130" y="182" text-anchor="middle" class="node-label">归档与 jar 绑定</text>
+          <text x="130" y="198" text-anchor="middle" class="edge-label">升级须重新生成</text>
+          <text x="130" y="212" text-anchor="middle" class="edge-label">无闭世界限制</text>
+
+          <rect x="300" y="166" width="160" height="50" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="182" text-anchor="middle" class="node-label-accent">闭世界分析</text>
+          <text x="380" y="198" text-anchor="middle" class="edge-label">反射需 AOT hints</text>
+          <text x="380" y="212" text-anchor="middle" class="edge-label">构建时间长</text>
+
+          <rect x="550" y="166" width="160" height="50" rx="3" class="diagram-ink node-fill"/>
+          <text x="630" y="182" text-anchor="middle" class="node-label">Java 25 依赖</text>
+          <text x="630" y="198" text-anchor="middle" class="edge-label">Boot 4.1 尚未 GA</text>
+          <text x="630" y="212" text-anchor="middle" class="edge-label">无闭世界限制</text>
+        </svg>
+        <figcaption>
+          <span class="fig-num">图 6.2</span>三条快启动路线的核心指标对比（2026-06）。<strong>注意</strong>：GraalVM 原生镜像提供最大的启动与内存收益，但闭世界约束是开发期必须提前应对的成本；CDS 是最低风险的渐进方案。
+        </figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>三条快启动路线对比（2026-06）</caption>
+        <thead>
+          <tr><th>路线</th><th>启动时间</th><th>RSS</th><th>主要约束</th><th>Boot 版本</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CDS 类数据共享</td>
+            <td>快 20–40%</td>
+            <td>改善有限</td>
+            <td>归档与 jar 版本绑定，升级须重建</td>
+            <td>3.3+（2024-05）</td>
+          </tr>
+          <tr class="selected">
+            <td>GraalVM 原生镜像</td>
+            <td>50–100ms</td>
+            <td>减半</td>
+            <td>闭世界；反射需 AOT hints；构建慢</td>
+            <td>3.0 stable（2022-11）</td>
+          </tr>
+          <tr>
+            <td>Java 25 AOT cache</td>
+            <td>跳过 JIT 热身</td>
+            <td>同 JVM</td>
+            <td>需要 Java 25；Boot 4.1 尚未 GA</td>
+            <td>4.1.0-RC1（2026-04）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ── 6.5 Spring AI ── -->
+      <h2 id="s65"><span class="num">6.5</span><span>Spring AI（1.0 GA 2025-05，1.1 GA 2025-11）</span></h2>
+
+      <p class="one-liner">Spring AI 是同一套自动配置模型的延伸——starter + @Conditional + 自动装配的 <code>ChatClient</code>，没有引入新的容器机制。</p>
+
+      <p>Spring AI 1.0 于 2025-05 发布 GA；1.1 于 2025-11 发布 GA，新增 MCP（Model Context Protocol）集成。核心 API：</p>
+
+      <ul>
+        <li><strong><code>ChatClient</code></strong>（1.0 重命名自 <code>ChatModel</code>）：统一跨 20+ 模型提供商（OpenAI、Anthropic、Google Gemini、Ollama 等）的对话接口，通过 <code>spring-ai-{provider}-spring-boot-starter</code> 引入对应实现</li>
+        <li><strong><code>EmbeddingModel</code></strong>：文本向量化；<strong><code>VectorStore</code></strong>：向量相似度检索（对接 pgvector、Chroma、Redis、Qdrant 等）</li>
+        <li><strong>工具/函数调用</strong>：通过 <code>@Tool</code> 注解将 Spring Bean 方法暴露给模型</li>
+        <li><strong><code>QuestionAnswerAdvisor</code></strong>（RAG 检索增强生成）：内置 Advisor 链，自动把向量检索结果注入 prompt context</li>
+        <li><strong>MCP 集成（1.1）</strong>：<code>spring-ai-mcp-spring-boot-starter</code>，把 Spring 应用作为 MCP Server 或 MCP Client 暴露/消费工具</li>
+      </ul>
+
+      <p>它的自动配置完全遵循第 3 章的机制：<code>ChatClientAutoConfiguration</code> 带 <code>@ConditionalOnClass(ChatModel.class)</code>，只在对应 provider starter 在 classpath 上时激活；用户自定义 <code>ChatClient.Builder</code> Bean 会触发 <code>@ConditionalOnMissingBean</code> back-off（见<a href="03-autoconfig.html#s35">第 3 章 3.5 节</a>）。</p>
+
+      <p>如果对 MCP 协议的 wire-level 机制感兴趣，可参考同系列教程：<a href="../mcp/index.html">MCP 协议深挖</a>；RAG 的向量检索与召回机制参见：<a href="../rag/index.html">RAG 系统设计</a>。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">pom.xml（Spring AI 1.1 依赖示意）</span><span class="lang">XML</span><button class="copy" data-copy-target="c-ai01">复制</button></div>
+<pre id="c-ai01"><code class="language-xml">&lt;!-- Spring AI 1.1 BOM (GA 2025-11) --&gt;
+&lt;dependencyManagement&gt;
+  &lt;dependencies&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.springframework.ai&lt;/groupId&gt;
+      &lt;artifactId&gt;spring-ai-bom&lt;/artifactId&gt;
+      &lt;version&gt;1.1.0&lt;/version&gt;
+      &lt;type&gt;pom&lt;/type&gt;
+      &lt;scope&gt;import&lt;/scope&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/dependencyManagement&gt;
+
+&lt;dependencies&gt;
+  &lt;!-- OpenAI provider --&gt;
+  &lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.ai&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-ai-openai-spring-boot-starter&lt;/artifactId&gt;
+  &lt;/dependency&gt;
+  &lt;!-- MCP integration (1.1+) --&gt;
+  &lt;dependency&gt;
+    &lt;groupId&gt;org.springframework.ai&lt;/groupId&gt;
+    &lt;artifactId&gt;spring-ai-mcp-spring-boot-starter&lt;/artifactId&gt;
+  &lt;/dependency&gt;
+&lt;/dependencies&gt;</code></pre>
+      </div>
+
+      <!-- ── 6.6 选型轴 ── -->
+      <h2 id="s66"><span class="num">6.6</span><span>选型轴：Spring vs Quarkus / Micronaut</span></h2>
+
+      <p>三个框架在 DI 机制上的根本差异（2026-06）：</p>
+
+      <table class="compare-table">
+        <caption>Spring Boot 4.0 vs Quarkus 3.x vs Micronaut 4.x — DI 机制对比</caption>
+        <thead>
+          <tr><th>维度</th><th>Spring Boot</th><th>Quarkus</th><th>Micronaut</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>DI 机制</td>
+            <td>运行时反射（+ AOT 补足）</td>
+            <td>构建期 ArC（CDI 子集）</td>
+            <td>编译期注解处理器生成代码</td>
+          </tr>
+          <tr>
+            <td>原生镜像友好度</td>
+            <td>中（需 AOT hints）</td>
+            <td>高（天生为 native 设计）</td>
+            <td>高（无运行时反射）</td>
+          </tr>
+          <tr>
+            <td>启动速度（JVM 模式）</td>
+            <td>中（2–8s）</td>
+            <td>快</td>
+            <td>快</td>
+          </tr>
+          <tr class="selected">
+            <td>生态广度</td>
+            <td>最广（starter 生态、Spring Data/Security/AI 等）</td>
+            <td>中</td>
+            <td>中</td>
+          </tr>
+          <tr>
+            <td>注解模型兼容性</td>
+            <td>Spring 全家桶原生</td>
+            <td>兼容部分 Spring 注解（Quarkus Spring extensions）</td>
+            <td>部分兼容 Spring 注解</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Spring 的 AOT + 原生镜像路线（Boot 3.0+）缩小了启动差距，但构建时间与闭世界调试成本仍高于 Quarkus/Micronaut。<strong>决策轴</strong>：</p>
+
+      <ul>
+        <li><strong>已有大量 Spring 代码或生态依赖</strong>（Spring Data、Spring Security、Spring AI）→ Boot + CDS 或 Boot + Native</li>
+        <li><strong>全新项目、Serverless / FaaS、对启动时间极敏感、团队愿意接受编译期约束</strong> → Quarkus 或 Micronaut</li>
+        <li><strong>需要 GraalVM native 但又不想处理反射 hints</strong> → Quarkus（其 ArC 容器天生无运行时反射）</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">机制联系（为第 7 章判别题铺垫）</span>
+        <p>Spring 的运行时反射优势体现在：<code>ConfigurationClassPostProcessor</code> 在 <code>invokeBeanFactoryPostProcessors</code> 阶段动态扫描 <code>@Configuration</code>（见<a href="02-refresh.html#s22">第 2 章 2.2 节</a>）；Quarkus 的等价扫描发生在 Maven/Gradle 构建阶段，产物已确定——失去了运行时动态注册 BeanDefinition 的能力，换来启动速度与 native 友好性。</p>
+      </div>
+
+      <!-- ── Self-check ── -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来再展开对照。</p>
+        <ol>
+          <li>Spring Cloud Sleuth 被什么取代？归档时间是哪年哪月？为什么 Boot 3+ 项目不能再引入 Sleuth？</li>
+          <li>开启 <code>spring.threads.virtual.enabled=true</code> 后，系统的新瓶颈在哪里？如果不处理会出现什么报错？</li>
+          <li>GraalVM 原生镜像的"闭世界"约束意味着什么？开发时需要额外做什么才能让自定义反射代码在 native 镜像中正确运行？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>Sleuth 被 <strong>Micrometer Tracing</strong> 取代。Sleuth 于 <strong>2022-12</strong> 进入 attic（归档）并明确不移植到 Boot 3+。Boot 3+ 项目引入 <code>spring-cloud-starter-sleuth</code> 会因无对应版本而依赖解析失败，且概念层面 Micrometer Observation API 已完全覆盖其功能。</li>
+            <li>新瓶颈是 <strong>HikariCP 连接池</strong>（默认 <code>maximum-pool-size=10</code>）。当虚拟线程数远超连接池大小时，JDBC 调用在 HikariCP 等待队列超时，抛出 <code>Connection is not available, request timed out after 30000ms</code>。解决方法：按 DB 承载量同步调大 <code>spring.datasource.hikari.maximum-pool-size</code>。</li>
+            <li>"闭世界"意味着 <code>native-image</code> 构建器在构建期静态分析所有可达类型——运行时无法加载构建期未分析到的类、也无法使用未注册的反射调用。开发时需要通过 <code>RuntimeHintsRegistrar</code> 或 <code>@RegisterReflectionForBinding</code> 显式声明反射需求，或使用 <code>-agentlib:native-image-agent</code> 运行时代理自动收集 hints；并通过 <code>mvn native:test</code> 在 native 镜像内验证测试通过。</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ── Challenge ── -->
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>虚拟线程 + 调大连接池 vs GraalVM 原生镜像：决策轴是什么？</h3>
+        <p>一个 IO 密集型服务（大量数据库查询 + 外部 HTTP 调用），需要在高并发下保持低延迟，同时对冷启动时间有要求（容器扩容必须在 2s 内就绪）。给定以下两个方案：① Boot 4.0 + 虚拟线程 + HikariCP 调大到 50；② Boot 3.x + GraalVM 原生镜像 + 平台线程。决策轴是什么？哪些信息影响最终选择？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>核心决策轴不是"哪个更快"，而是<strong>约束侧</strong>：① 团队是否有能力维护 AOT hints（第三方库的反射调用是否都有现成 hints？）；② DB 侧 <code>max_connections</code> 能允许多大的连接池，这决定虚拟线程方案的上限；③ 2s 冷启动要求——JVM + CDS 约 600ms~1.5s，GraalVM native 约 50–100ms，虚拟线程 JVM 模式能否满足取决于 JVM 启动基线。另一个维度：是否需要 GraalVM native 的内存优势（Serverless 按内存计费时 native 有明显成本收益）。先量再选，不要凭感觉。</p>
+        </details>
+      </div>
+
+      <!-- ── References ── -->
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://spring.io/blog/2025/11/21/spring-boot-4-0-0-available-now">Spring Boot 4.0.0 发布博客</a>（官方，2025-11-21）</li>
+          <li><a href="https://spring.io/blog/2025/11/20/spring-ai-1-1-ga">Spring AI 1.1 GA 博客</a>（官方，2025-11）</li>
+          <li><a href="https://micrometer.io/docs/tracing">Micrometer Tracing 文档</a>（官方，含 Sleuth 迁移指南）</li>
+        </ul>
+      </footer>
+
+      <!-- ── Chapter nav ── -->
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-web-config.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · Web 与配置</span>
+        </a>
+        <a href="07-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">07 · 自测题库</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s61" data-toc-target="s61">6.1 Boot 4.0 变更</a></li>
+        <li><a href="#s62" data-toc-target="s62">6.2 可观测性</a></li>
+        <li><a href="#s63" data-toc-target="s63">6.3 虚拟线程</a></li>
+        <li><a href="#s64" data-toc-target="s64">6.4 三条快启动</a></li>
+        <li><a href="#s65" data-toc-target="s65">6.5 Spring AI</a></li>
+        <li><a href="#s66" data-toc-target="s66">6.6 选型轴</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ Self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

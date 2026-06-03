@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自动配置 · Spring Boot 机制深挖</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-container.html">01 容器</a><span class="sep">—</span>
+    <a href="02-refresh.html">02 启动</a><span class="sep">—</span>
+    <a href="03-autoconfig.html" class="current">03 自动配置</a><span class="sep">—</span>
+    <a href="04-aop.html">04 AOP·代理</a><span class="sep">—</span>
+    <a href="05-web-config.html">05 Web·配置</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现代栈</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Spring Boot · 第 03 章</p>
+        <h1>自动配置——"Boot"之所以是 Boot</h1>
+        <p class="recap">上一章的 <code>refresh()</code> 在 <code>invokeBeanFactoryPostProcessors</code> 阶段加载所有 BeanDefinition——这一章下探：其中那批"自动配置"的 BeanDefinition 是怎么被发现和筛选的。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>starter = 精选传递依赖（不含自动配置代码），与自动配置类是配套的两半</li>
+          <li><code>@SpringBootApplication</code> = 三注解；<code>AutoConfigurationImportSelector</code> 是 <code>DeferredImportSelector</code>，最后执行</li>
+          <li>自动配置类登记在 <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>，经 <code>@ConditionalOnXxx</code> 逐层筛选</li>
+          <li>"用户优先"= 排序 + <code>ConfigurationCondition</code> 在 <code>REGISTER_BEAN</code> 阶段求值，不是魔法</li>
+        </ul>
+      </section>
+
+      <!-- ── 3.1 ─────────────────────────────────────────────── -->
+      <h2 id="s31"><span class="num">3.1</span><span>starter 是什么</span></h2>
+
+      <p class="one-liner">starter 是一组精选的传递依赖描述符，把一个功能切片需要的 jar 一次拉齐。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>引入一个功能往往涉及多个 jar 版本协调（HTTP 客户端 + 序列化库 + 连接池……），版本矩阵靠工程师手动维护容易踩漏。starter 把选型决策固化成一个坐标，工程师声明意图、Boot 承担版本协调。</p>
+      </div>
+
+      <p>以 <code>spring-boot-starter-web</code> 为例：它拉入 <code>spring-webmvc</code>、内嵌 Tomcat、Jackson 等，classpath 上有了这些类，自动配置里的 <code>@ConditionalOnClass</code> 才能命中相应的装配逻辑。<strong>starter 和自动配置是配套的两半</strong>：starter 负责把类放到 classpath，自动配置据此决策是否装配。</p>
+
+      <p>starter 本身通常只有一个 <code>pom.xml</code>，不含任何 Java 代码——装配代码在 <code>spring-boot-autoconfigure</code> 里，与 starter 分离正是为了让工程师能在不用 starter 的情况下单独声明依赖，而自动配置仍然生效。</p>
+
+      <!-- ── 3.2 ─────────────────────────────────────────────── -->
+      <h2 id="s32"><span class="num">3.2</span><span>@SpringBootApplication 展开</span></h2>
+
+      <p><code>@SpringBootApplication</code> 是三个注解的组合别名，展开后等价于：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">等价写法（示意）</span><span class="lang">Java</span><button class="copy" data-copy-target="c-three-anno">复制</button></div>
+<pre id="c-three-anno"><code class="language-java">// @SpringBootApplication 等价于同时标注以下三个注解：
+@SpringBootConfiguration      // @Configuration 的别名，声明主类为配置类
+@EnableAutoConfiguration      // 触发自动配置发现流程（见 3.3）
+@ComponentScan                // 以主类所在包为根包扫描组件
+public class MyApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(MyApplication.class, args);
+    }
+}</code></pre>
+      </div>
+
+      <p><code>@ComponentScan</code> 的扫描根包是主类所在包——这是"主类要放在最外层包"的根本原因：若主类嵌套在子包中，同级或上层的 <code>@Component</code> 就不在扫描范围内。</p>
+
+      <p><code>@EnableAutoConfiguration</code> 通过 <code>@Import(AutoConfigurationImportSelector.class)</code> 挂载导入选择器，这是整个自动配置发现机制的入口，第 3.3 节将沿这条链深入。</p>
+
+      <!-- ── 3.3 ─────────────────────────────────────────────── -->
+      <h2 id="s33"><span class="num">3.3</span><span>自动配置如何被发现（机制核心）</span></h2>
+
+      <p><code>AutoConfigurationImportSelector</code> 实现的是 <code>DeferredImportSelector</code>，而非普通 <code>ImportSelector</code>。<strong>这一细节至关重要</strong>：<code>ConfigurationClassPostProcessor</code>（第 1 章的 BFPP）在处理所有 <code>@Configuration</code> 类时，会把 <code>DeferredImportSelector</code> 的调用推迟到<em>当前轮次所有普通配置类都处理完之后</em>才执行——这正是"用户配置先注册、自动配置后处理"的机制起点（3.5 节进一步展开）。</p>
+
+      <p><code>AutoConfigurationImportSelector.getCandidateConfigurations()</code> 内部调用 <code>ImportCandidates.load(AutoConfiguration.class, classLoader)</code>，从 classpath 上所有 jar 的以下文件中读取候选类名：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</span><span class="lang">Properties</span><button class="copy" data-copy-target="c-imports-file">复制</button></div>
+<pre id="c-imports-file"><code class="language-properties"># Spring Boot 4.0.x — 自动配置类注册文件
+# 2.7 起取代旧的 spring.factories 中的 EnableAutoConfiguration 键
+# 每行一个全限定类名
+org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration
+org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+# ... 共约 140+ 行</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">注意文件分工</span>
+        <p><code>.imports</code> 文件仅存放<strong>自动配置类</strong>（标注了 <code>@AutoConfiguration</code> 的类）。<code>spring.factories</code> 文件仍然使用，但负责其他扩展点：<code>EnvironmentPostProcessor</code>（如加载 <code>application.yml</code> 的 <code>ConfigDataEnvironmentPostProcessor</code>）、<code>FailureAnalyzer</code>、<code>AutoConfigurationImportFilter</code> 等。两个文件职责不交叉，不要混淆。</p>
+      </div>
+
+      <!-- 图 3.1 — 发现链 -->
+      <figure>
+        <svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="自动配置发现链：从 @EnableAutoConfiguration 到候选自动配置类">
+          <defs>
+            <marker id="a31-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a31-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 节点 1: @EnableAutoConfiguration -->
+          <rect x="10" y="72" width="148" height="56" rx="3" class="diagram-ink node-fill"/>
+          <text x="84" y="97" text-anchor="middle" class="node-label">@EnableAuto</text>
+          <text x="84" y="114" text-anchor="middle" class="node-label">Configuration</text>
+
+          <!-- 箭头 1→2 -->
+          <line x1="158" y1="100" x2="196" y2="100" class="diagram-ink" marker-end="url(#a31-ink)"/>
+          <text x="177" y="93" text-anchor="middle" class="edge-label">@Import</text>
+
+          <!-- 节点 2: AutoConfigurationImportSelector (DeferredImportSelector) — accent -->
+          <rect x="198" y="64" width="172" height="72" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="284" y="89" text-anchor="middle" class="node-label-accent">AutoConfiguration</text>
+          <text x="284" y="106" text-anchor="middle" class="node-label-accent">ImportSelector</text>
+          <text x="284" y="123" text-anchor="middle" class="edge-label">DeferredImportSelector</text>
+
+          <!-- 箭头 2→3 -->
+          <line x1="370" y1="100" x2="408" y2="100" class="diagram-ink" marker-end="url(#a31-ink)"/>
+          <text x="389" y="93" text-anchor="middle" class="edge-label">读取</text>
+
+          <!-- 节点 3: .imports 文件 -->
+          <rect x="410" y="68" width="168" height="64" rx="3" class="diagram-ink node-fill"/>
+          <text x="494" y="93" text-anchor="middle" class="node-label">AutoConfiguration</text>
+          <text x="494" y="110" text-anchor="middle" class="node-label">.imports 文件</text>
+          <text x="494" y="124" text-anchor="middle" class="edge-label">每行一个全限定类名</text>
+
+          <!-- 箭头 3→4 -->
+          <line x1="578" y1="100" x2="614" y2="100" class="diagram-ink" marker-end="url(#a31-ink)"/>
+          <text x="596" y="93" text-anchor="middle" class="edge-label">返回</text>
+
+          <!-- 节点 4: 候选自动配置类 -->
+          <rect x="616" y="72" width="94" height="56" rx="3" class="diagram-ink node-fill"/>
+          <text x="663" y="97" text-anchor="middle" class="node-label">候选自动</text>
+          <text x="663" y="114" text-anchor="middle" class="node-label">配置类列表</text>
+        </svg>
+        <figcaption>
+          <span class="fig-num">图 3.1</span>自动配置发现链：<code>@EnableAutoConfiguration</code> 挂载 <code>AutoConfigurationImportSelector</code>，后者读取 <code>.imports</code> 文件返回候选类名列表。<strong>注意</strong>：<code>AutoConfigurationImportSelector</code> 是 <code>DeferredImportSelector</code>，整个调用链在同轮次所有普通 <code>@Configuration</code> 处理完毕后才触发。
+        </figcaption>
+      </figure>
+
+      <!-- ── 3.4 ─────────────────────────────────────────────── -->
+      <h2 id="s34"><span class="num">3.4</span><span>@Conditional 筛选</span></h2>
+
+      <p>候选类名列表在真正解析之前还要经过两轮筛选：</p>
+
+      <p><strong>第一轮（快速剪枝）</strong>：<code>AutoConfigurationImportFilter</code> 对候选列表做 classpath 级快速扫描。其中 <code>OnClassCondition</code>、<code>OnBeanCondition</code>、<code>OnWebApplicationCondition</code> 三个实现会检查 <code>.imports</code> 文件同目录的 <code>ConditionalOnClass.index</code> 等 AOT 索引文件，把 classpath 上明显缺失依赖的候选类一次性排除，避免后续解析大量必然不命中的配置类。</p>
+
+      <p><strong>第二轮（逐类求值）</strong>：通过过滤的候选类被 <code>ConfigurationClassPostProcessor</code> 正式解析，此时注解上的 <code>@ConditionalOnClass</code>、<code>@ConditionalOnMissingBean</code>、<code>@ConditionalOnProperty</code> 等按 <code>Condition</code> 接口逐个求值，不满足的类整体跳过。</p>
+
+      <p>以下是一个简化的自动配置类结构，模仿 <code>DataSourceAutoConfiguration</code> 的风格：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">MyDataSourceAutoConfiguration.java</span><span class="lang">Java</span><button class="copy" data-copy-target="c-ds-autoconfig">复制</button></div>
+<pre id="c-ds-autoconfig"><code class="language-java">package com.example.autoconfigure;
+
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.context.annotation.Bean;
+import javax.sql.DataSource;
+
+@AutoConfiguration                          // 声明为自动配置类（包含 @Configuration）
+@ConditionalOnClass(DataSource.class)       // classpath 上有 DataSource 才生效
+public class MyDataSourceAutoConfiguration {
+
+    @Bean
+    @ConditionalOnMissingBean               // 用户已定义 DataSource Bean 时退让
+    public DataSource dataSource() {
+        // 示意：返回一个默认 DataSource 实现
+        return buildDefaultDataSource();
+    }
+
+    private DataSource buildDefaultDataSource() {
+        // ...
+        return null;
+    }
+}</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>如果工程师在 <code>@SpringBootApplication</code> 主类旁边写了一个 <code>@Bean DataSource myDs()</code>，上面这个自动配置的 <code>dataSource()</code> 方法还会被调用吗？为什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>不会被调用。<code>@ConditionalOnMissingBean</code> 由 <code>OnBeanCondition</code> 求值，而 <code>OnBeanCondition</code> 是 <code>ConfigurationCondition</code>，在 <code>REGISTER_BEAN</code> 阶段执行。此时用户的 <code>DataSource</code> BeanDefinition 已经注册（因为用户配置先于自动配置被处理），条件求值结果为"bean 已存在"，整个 <code>dataSource()</code> 方法的 BeanDefinition 被跳过。这是 3.5 节的核心机制——背后靠的是排序，而非运行时检测。</p>
+        </details>
+      </div>
+
+      <h3>常用 @ConditionalOnXxx 对照</h3>
+
+      <table class="compare-table">
+        <caption>@ConditionalOnXxx 速查</caption>
+        <thead>
+          <tr>
+            <th>注解</th>
+            <th>检查目标</th>
+            <th>典型用途</th>
+            <th>命中条件</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td><code>@ConditionalOnMissingBean</code></td>
+            <td>BeanDefinition 注册表</td>
+            <td>用户覆盖默认 Bean</td>
+            <td>指定类型/名称的 Bean 尚未注册</td>
+          </tr>
+          <tr>
+            <td><code>@ConditionalOnClass</code></td>
+            <td>classpath</td>
+            <td>依赖 jar 存在才装配</td>
+            <td>指定类可被 classloader 加载</td>
+          </tr>
+          <tr>
+            <td><code>@ConditionalOnMissingClass</code></td>
+            <td>classpath</td>
+            <td>排除某依赖时的回退</td>
+            <td>指定类<em>不</em>可被加载</td>
+          </tr>
+          <tr>
+            <td><code>@ConditionalOnProperty</code></td>
+            <td><code>Environment</code> 属性</td>
+            <td>配置开关控制装配</td>
+            <td>属性存在且值符合预期（默认 <code>havingValue</code> 检查非 <code>"false"</code>）</td>
+          </tr>
+          <tr>
+            <td><code>@ConditionalOnWebApplication</code></td>
+            <td>应用类型</td>
+            <td>仅在 Web 环境生效</td>
+            <td>上下文是 <code>WebApplicationContext</code>（Servlet 或 Reactive）</td>
+          </tr>
+          <tr>
+            <td><code>@ConditionalOnBean</code></td>
+            <td>BeanDefinition 注册表</td>
+            <td>依赖另一个 Bean 存在才装配</td>
+            <td>指定类型/名称的 Bean 已注册</td>
+          </tr>
+          <tr>
+            <td><code>@ConditionalOnSingleCandidate</code></td>
+            <td>BeanDefinition 注册表</td>
+            <td>唯一候选或 Primary Bean</td>
+            <td>指定类型恰好一个 Bean，或有 <code>@Primary</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ── 3.5 ─────────────────────────────────────────────── -->
+      <h2 id="s35"><span class="num">3.5</span><span>用户优先 = 排序（揭穿机制）</span></h2>
+
+      <p>"用户 Bean 总赢"并非 <code>@ConditionalOnMissingBean</code> 拥有什么特殊的"用户优先"语义——背后是严格的时序保证，可以分解为两个关键事实：</p>
+
+      <p><strong>事实一：自动配置类被 <code>AutoConfigurationSorter</code> 排到最后解析。</strong> <code>DeferredImportSelector</code> 的回调在同一轮 <code>ConfigurationClassPostProcessor</code> 处理中最后执行，这保证工程师写的 <code>@Configuration</code> 类（及其 <code>@Bean</code> 方法）对应的 BeanDefinition 先于任何自动配置类注册进容器。</p>
+
+      <p><strong>事实二：<code>OnBeanCondition</code> 是 <code>ConfigurationCondition</code>，在 <code>REGISTER_BEAN</code> 阶段求值。</strong> <code>@Conditional</code> 有两个求值时机：<code>PARSE_CONFIGURATION</code>（解析 <code>@Configuration</code> 结构时）和 <code>REGISTER_BEAN</code>（向容器注册 BeanDefinition 时）。<code>OnBeanCondition</code> 选择 <code>REGISTER_BEAN</code> 阶段，此时用户的 BeanDefinition 已在注册表中。自动配置类的 <code>@Bean @ConditionalOnMissingBean</code> 方法在求值时看到"该类型已有注册"，条件不成立，直接跳过。</p>
+
+      <p>这两个事实叠加，产生了"用户 Bean 赢"的效果——不是魔法，是 <strong>排序 + 条件求值时机</strong> 的精确配合。</p>
+
+      <!-- 图 3.2 — 解析顺序时间轴 -->
+      <figure>
+        <svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="自动配置解析顺序时间轴：用户配置先注册，自动配置后退让">
+          <defs>
+            <marker id="a32-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a32-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 时间轴主线 -->
+          <line x1="40" y1="130" x2="680" y2="130" class="diagram-ink" marker-end="url(#a32-ink)"/>
+          <text x="690" y="134" class="edge-label">时间</text>
+
+          <!-- 阶段标注线 -->
+          <line x1="120" y1="118" x2="120" y2="142" class="diagram-ink"/>
+          <line x1="320" y1="118" x2="320" y2="142" class="diagram-ink"/>
+          <line x1="510" y1="118" x2="510" y2="142" class="diagram-ink"/>
+          <line x1="640" y1="118" x2="640" y2="142" class="diagram-ink"/>
+
+          <!-- 阶段 1: 用户 @Configuration 解析 -->
+          <rect x="44" y="60" width="152" height="56" rx="3" class="diagram-ink node-fill"/>
+          <text x="120" y="85" text-anchor="middle" class="node-label">用户 @Configuration</text>
+          <text x="120" y="102" text-anchor="middle" class="node-label">解析 + 注册 BeanDef</text>
+          <!-- 向下箭头到轴 -->
+          <line x1="120" y1="116" x2="120" y2="128" class="diagram-ink" marker-end="url(#a32-ink)"/>
+
+          <!-- 阶段 2: DeferredImportSelector 触发 -->
+          <rect x="230" y="60" width="180" height="56" rx="3" class="diagram-soft node-fill"/>
+          <text x="320" y="85" text-anchor="middle" class="node-label">DeferredImportSelector</text>
+          <text x="320" y="102" text-anchor="middle" class="node-label">触发，读 .imports</text>
+          <line x1="320" y1="116" x2="320" y2="128" class="diagram-ink" marker-end="url(#a32-ink)"/>
+
+          <!-- 阶段 3: OnBeanCondition REGISTER_BEAN 求值 — accent -->
+          <rect x="414" y="52" width="192" height="72" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="510" y="77" text-anchor="middle" class="node-label-accent">OnBeanCondition 求值</text>
+          <text x="510" y="94" text-anchor="middle" class="node-label-accent">（REGISTER_BEAN 阶段）</text>
+          <text x="510" y="111" text-anchor="middle" class="edge-label">看到用户 BeanDef → 退让</text>
+          <line x1="510" y1="124" x2="510" y2="128" class="diagram-accent" marker-end="url(#a32-acc)"/>
+
+          <!-- 阶段 4: 自动配置 Bean 跳过 -->
+          <rect x="572" y="60" width="100" height="56" rx="3" class="diagram-soft node-fill"/>
+          <text x="622" y="85" text-anchor="middle" class="node-label">自动配置</text>
+          <text x="622" y="102" text-anchor="middle" class="node-label">@Bean 跳过</text>
+          <line x1="640" y1="116" x2="640" y2="128" class="diagram-ink" marker-end="url(#a32-ink)"/>
+
+          <!-- 底部标注 -->
+          <text x="120" y="160" text-anchor="middle" class="edge-label">① 先注册</text>
+          <text x="320" y="160" text-anchor="middle" class="edge-label">② 最后执行</text>
+          <text x="510" y="160" text-anchor="middle" class="branch-label">③ 关键时机</text>
+          <text x="640" y="160" text-anchor="middle" class="edge-label">④ back off</text>
+
+          <!-- 说明文字 -->
+          <text x="40" y="200" class="node-label">两个关键点：</text>
+          <text x="40" y="220" class="edge-label">① DeferredImportSelector 保证自动配置在用户配置之后处理</text>
+          <text x="40" y="238" class="edge-label">② OnBeanCondition 在 REGISTER_BEAN 阶段求值，此时用户 BeanDefinition 已在注册表中</text>
+        </svg>
+        <figcaption>
+          <span class="fig-num">图 3.2</span>解析顺序时间轴：用户配置先注册 BeanDefinition → <code>DeferredImportSelector</code> 最后触发读取自动配置候选 → <code>OnBeanCondition</code> 在 <code>REGISTER_BEAN</code> 阶段求值时看到用户 Bean → 自动配置 <code>@Bean</code> 退让。<strong>注意</strong>：<code>OnBeanCondition</code> 是 <code>ConfigurationCondition</code>，选择 <code>REGISTER_BEAN</code> 阶段正是这一切成立的技术基础。
+        </figcaption>
+      </figure>
+
+      <!-- 图 3.3 — 完整筛选漏斗 -->
+      <figure>
+        <svg viewBox="0 0 624 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="自动配置候选类从原始列表到最终装配的筛选漏斗">
+          <defs>
+            <marker id="a33-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a33-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 层 1: 原始候选（宽） -->
+          <rect x="160" y="10" width="280" height="48" rx="3" class="diagram-ink node-fill"/>
+          <text x="300" y="31" text-anchor="middle" class="node-label">.imports 原始候选列表</text>
+          <text x="300" y="49" text-anchor="middle" class="edge-label">140+ 全限定类名</text>
+
+          <!-- 向下箭头 -->
+          <line x1="300" y1="58" x2="300" y2="82" class="diagram-ink" marker-end="url(#a33-ink)"/>
+          <text x="400" y="74" class="edge-label">AutoConfigurationImportFilter</text>
+
+          <!-- 层 2: ImportFilter 快剪 -->
+          <rect x="180" y="84" width="240" height="48" rx="3" class="diagram-soft node-fill"/>
+          <text x="300" y="105" text-anchor="middle" class="node-label">ImportFilter 快速剪枝</text>
+          <text x="300" y="122" text-anchor="middle" class="edge-label">OnClassCondition / OnWebApp</text>
+
+          <!-- 向下箭头 -->
+          <line x1="300" y1="132" x2="300" y2="156" class="diagram-ink" marker-end="url(#a33-ink)"/>
+          <text x="400" y="148" class="edge-label">ConfigurationClassPostProcessor</text>
+
+          <!-- 层 3: @Conditional 逐类求值 — accent -->
+          <rect x="196" y="158" width="208" height="56" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="300" y="179" text-anchor="middle" class="node-label-accent">@ConditionalOnXxx 逐类求值</text>
+          <text x="300" y="196" text-anchor="middle" class="node-label-accent">（含 REGISTER_BEAN 阶段）</text>
+          <text x="300" y="210" text-anchor="middle" class="edge-label">OnBeanCondition 在此退让</text>
+
+          <!-- 向下箭头 -->
+          <line x1="300" y1="214" x2="300" y2="238" class="diagram-ink" marker-end="url(#a33-ink)"/>
+
+          <!-- 层 4: 最终装配 -->
+          <rect x="216" y="240" width="168" height="48" rx="3" class="diagram-ink node-fill"/>
+          <text x="300" y="261" text-anchor="middle" class="node-label">最终装配的 Bean</text>
+          <text x="300" y="278" text-anchor="middle" class="edge-label">注册进单例池</text>
+        </svg>
+        <figcaption>
+          <span class="fig-num">图 3.3</span>候选自动配置类的筛选漏斗：原始列表 → <code>ImportFilter</code> classpath 快剪 → <code>@ConditionalOnXxx</code> 逐类求值（含 <code>REGISTER_BEAN</code> 阶段的 <code>OnBeanCondition</code>） → 最终装配。<strong>注意</strong>：漏斗最窄处（朱红）是本章核心——<code>OnBeanCondition</code> 在 <code>REGISTER_BEAN</code> 阶段的退让行为决定了"用户优先"的实现方式。
+        </figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 两个自动配置之间的顺序</span>
+        <p>"用户优先"依赖 <code>DeferredImportSelector</code> 把<em>用户配置</em>排在前、<em>所有</em>自动配置排在后。但两个自动配置类彼此之间的相对顺序<strong>未定义</strong>——若自动配置 A 的 <code>@ConditionalOnMissingBean</code> 依赖先看到自动配置 B 注册的 Bean，结果取决于字典序或加载顺序，行为不稳定。</p>
+        <p>正确的做法是在自动配置类上显式声明顺序依赖：</p>
+        <ul>
+          <li><code>@AutoConfigureBefore(BAutoConfiguration.class)</code>——让当前类在 B 之前处理</li>
+          <li><code>@AutoConfigureAfter(BAutoConfiguration.class)</code>——让当前类在 B 之后处理</li>
+          <li><code>@AutoConfigureOrder(Ordered.LOWEST_PRECEDENCE)</code>——数字越大越晚</li>
+        </ul>
+        <p>这三个注解由 <code>AutoConfigurationSorter</code> 在排序阶段读取，不影响用户配置与自动配置的主顺序，只调整自动配置内部的相对次序。</p>
+      </div>
+
+      <!-- ── self-check ─────────────────────────────────────── -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来再展开对照。</p>
+        <ol>
+          <li><code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code> 取代了 <code>spring.factories</code> 的哪部分？<code>spring.factories</code> 现在还在用吗？</li>
+          <li><code>@ConditionalOnMissingBean</code> 为什么能让用户定义的 Bean 覆盖自动配置的默认 Bean？请回答到机制层面（不能只说"因为它检查 bean 存不存在"）。</li>
+          <li>两个自动配置类 A 和 B，A 里有 <code>@Bean @ConditionalOnMissingBean</code> 依赖先看到 B 注册的某个 Bean 才能退让——如果不做任何额外声明，这个行为可靠吗？如何修复？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><code>.imports</code> 文件只取代了旧 <code>spring.factories</code> 中 <code>org.springframework.boot.autoconfigure.EnableAutoConfiguration</code> 键对应的自动配置类列表（2.7 起迁移，Boot 3.x 两者兼容，Boot 4.0 仅读 <code>.imports</code>）。<code>spring.factories</code> 仍用于注册 <code>EnvironmentPostProcessor</code>、<code>FailureAnalyzer</code>、<code>AutoConfigurationImportFilter</code> 等扩展点，两个文件职责不交叉。</li>
+            <li>原因是两个相互配合的机制：① <code>AutoConfigurationImportSelector</code> 是 <code>DeferredImportSelector</code>，在 <code>ConfigurationClassPostProcessor</code> 同轮次中<em>最后</em>被处理，确保用户 <code>@Configuration</code> 的 BeanDefinition 先于所有自动配置类注册进容器；② <code>OnBeanCondition</code> 实现了 <code>ConfigurationCondition</code>，选择在 <code>REGISTER_BEAN</code> 阶段求值——此时 BeanDefinition 注册表中已有用户的 Bean，条件求值结果为"目标类型已存在"，自动配置的 <code>@Bean</code> 方法直接跳过。两者缺一不可。</li>
+            <li>不可靠。两个自动配置类之间的相对顺序默认未定义，取决于 classpath 扫描顺序或类名字典序，行为在不同环境可能不同。修复方法：在 A 上标注 <code>@AutoConfigureAfter(BAutoConfiguration.class)</code>，让 <code>AutoConfigurationSorter</code> 保证 B 先处理、B 的 BeanDefinition 注册后 A 才求值 <code>@ConditionalOnMissingBean</code>。</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ── 进阶挑战 ───────────────────────────────────────── -->
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>实现一个自定义 starter 的自动配置</h3>
+        <p>为一个名为 <code>my-metrics</code> 的功能写自动配置，要求：工程师设置 <code>my.metrics.enabled=false</code> 可以完全关掉该功能；若工程师自己定义了同类型的 Bean，自动配置退让；该自动配置类必须在 <code>MeterRegistryAutoConfiguration</code> 之后处理（依赖 Micrometer 的 <code>MeterRegistry</code> 已装配）。</p>
+        <p>需要在自动配置类上叠哪几个注解、在哪个文件中登记这个类，以及 starter 的 <code>pom.xml</code> 要声明哪个依赖？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>注解组合：<code>@AutoConfiguration</code>（包含 <code>@Configuration</code>，且会被 <code>ImportCandidates</code> 扫到）+ <code>@ConditionalOnProperty(prefix="my.metrics", name="enabled", matchIfMissing=true)</code>（缺省视为开启）+ <code>@ConditionalOnClass(MeterRegistry.class)</code>（有 Micrometer 才生效）+ <code>@AutoConfigureAfter(MeterRegistryAutoConfiguration.class)</code>（顺序保证）；Bean 方法加 <code>@ConditionalOnMissingBean</code> 实现退让。登记位置：在 starter 的 jar 里创建 <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code>，写入该类的全限定名。starter 的 <code>pom.xml</code> 通过 <code>optional</code> 或 <code>provided</code> 范围声明对 <code>spring-boot-autoconfigure</code> 的依赖（避免传递给用户工程）。</p>
+        </details>
+      </div>
+
+      <!-- ── 参考 ─────────────────────────────────────────── -->
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.spring.io/spring-boot/reference/using/auto-configuration.html">Spring Boot 官方文档 · Auto-configuration</a>（含 <code>.imports</code> 注册、排除机制）</li>
+          <li><a href="https://docs.spring.io/spring-boot/reference/features/developing-auto-configuration.html">Spring Boot 官方文档 · Creating Your Own Auto-configuration</a>（含 <code>@AutoConfigureBefore/After</code>、条件注解详解）</li>
+          <li><a href="https://github.com/spring-projects/spring-boot/blob/main/spring-boot-project/spring-boot-autoconfigure/src/main/java/org/springframework/boot/autoconfigure/AutoConfigurationImportSelector.java">AutoConfigurationImportSelector 源码（GitHub）</a>（<code>DeferredImportSelector</code> 实现、<code>getCandidateConfigurations()</code> 入口）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-refresh.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 启动流水线</span>
+        </a>
+        <a href="04-aop.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · AOP 与代理</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 starter 是什么</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 @SpringBootApplication 展开</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 自动配置如何被发现</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 @Conditional 筛选</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 用户优先 = 排序</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

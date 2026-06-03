@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 容器启动与 Bean 生命周期 · Spring 核心机制深度剖析</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-lifecycle.html" class="current">02 生命周期</a><span class="sep">—</span>
+    <a href="03-aop.html">03 AOP</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>原理（上）：容器启动、Bean 生命周期与扩展点</h1>
+        <p class="recap">上一章钉下了词汇，并埋了一根线——注入有"时机差异"。这一章把那根线拉直：看清每个 bean 走的固定生命周期，以及 <code>@Autowired</code> 注入到底发生在哪一步、由谁完成。这是全教程的核心。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li><code>refresh()</code> 把"收配方"和"造实例"分成两段，两类后置处理器各自插在哪一段</li>
+          <li>Bean 生命周期三步：实例化 → 属性填充 → 初始化，每一步开放了什么扩展点</li>
+          <li><code>@Autowired</code> 不是容器内置魔法，而是一个 <code>BeanPostProcessor</code> 在属性填充阶段干的活</li>
+          <li>BeanFactoryPostProcessor 改配方、BeanPostProcessor 改实例——区分这两者是第一道分水岭</li>
+          <li>循环依赖的三级缓存为什么是"三级"，以及第三级为谁而设</li>
+        </ul>
+      </section>
+
+      <!-- ========================= 2.1 refresh ========================= -->
+      <h2 id="s1"><span class="num">2.1</span><span>refresh()：容器启动的总指挥</span></h2>
+
+      <p>调用 <code>new AnnotationConfigApplicationContext(AppConfig.class)</code> 时，真正干活的是一个叫 <code>refresh()</code> 的模板方法（定义在 <code>AbstractApplicationContext</code>）。它是一串<strong>固定顺序</strong>的步骤，整个容器的启动都在这串步骤里发生。先看全景，再逐步拆。</p>
+
+      <figure>
+        <svg viewBox="0 0 560 660" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="refresh 方法的固定顺序步骤：准备、载入 BeanDefinition、配置内核、运行 BFPP、注册 BPP、其他初始化、急切造单例、完成刷新">
+          <defs>
+            <marker id="r-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+          <!-- 8 vertical steps -->
+          <!-- step1 -->
+          <rect x="90" y="24" width="380" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="106" y="46" class="edge-label" font-weight="700">1 · prepareRefresh</text>
+          <text x="106" y="64" class="edge-label">准备：设状态、校验必填属性</text>
+          <!-- step2 -->
+          <rect x="90" y="100" width="380" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="106" y="122" class="edge-label" font-weight="700">2 · obtainFreshBeanFactory</text>
+          <text x="106" y="140" class="edge-label">载入所有 BeanDefinition（配方就位，无实例）</text>
+          <!-- step3 -->
+          <rect x="90" y="176" width="380" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="106" y="198" class="edge-label" font-weight="700">3 · prepareBeanFactory</text>
+          <text x="106" y="216" class="edge-label">配置内核：类加载器、SpEL、内置 Aware</text>
+          <!-- step4 accent -->
+          <rect x="90" y="252" width="380" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="106" y="274" class="branch-label">4 · invokeBeanFactoryPostProcessors</text>
+          <text x="106" y="292" class="edge-label">BFPP 运行：改写配方、解析 @Configuration</text>
+          <!-- step5 accent -->
+          <rect x="90" y="328" width="380" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="106" y="350" class="branch-label">5 · registerBeanPostProcessors</text>
+          <text x="106" y="368" class="edge-label">仅注册 BPP（登记排序，尚未运行）</text>
+          <!-- step6 -->
+          <rect x="90" y="404" width="380" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="106" y="426" class="edge-label" font-weight="700">6 · 初始化事件 / 消息源 / 监听器</text>
+          <text x="106" y="444" class="edge-label">onRefresh（Boot 在此启嵌入式容器）</text>
+          <!-- step7 accent -->
+          <rect x="90" y="480" width="380" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="106" y="502" class="branch-label">7 · finishBeanFactoryInitialization</text>
+          <text x="106" y="520" class="edge-label">急切造所有单例 → doCreateBean，BPP 在此运行</text>
+          <!-- step8 -->
+          <rect x="90" y="556" width="380" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="106" y="578" class="edge-label" font-weight="700">8 · finishRefresh</text>
+          <text x="106" y="596" class="edge-label">发布 ContextRefreshedEvent，容器就绪</text>
+          <!-- arrows -->
+          <line x1="280" y1="74" x2="280" y2="100" class="diagram-ink" marker-end="url(#r-ink)"/>
+          <line x1="280" y1="150" x2="280" y2="176" class="diagram-ink" marker-end="url(#r-ink)"/>
+          <line x1="280" y1="226" x2="280" y2="252" class="diagram-ink" marker-end="url(#r-ink)"/>
+          <line x1="280" y1="302" x2="280" y2="328" class="diagram-ink" marker-end="url(#r-ink)"/>
+          <line x1="280" y1="378" x2="280" y2="404" class="diagram-ink" marker-end="url(#r-ink)"/>
+          <line x1="280" y1="454" x2="280" y2="480" class="diagram-ink" marker-end="url(#r-ink)"/>
+          <line x1="280" y1="530" x2="280" y2="556" class="diagram-ink" marker-end="url(#r-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>refresh() 的固定步骤。<strong>注意</strong>：朱红三步——第 4 步 BFPP 改配方、第 5 步只登记 BPP 不运行、第 7 步才真正造 bean 并让 BPP 上场。"改配方"和"改实例"被一道实例化分界线（第 4 与第 7 步之间）隔开。</figcaption>
+      </figure>
+
+      <p><strong>这套固定顺序解决什么</strong>：如果造 bean 的过程没有明确的阶段划分，"想在所有 bean 造好前改一批配方""想在每个 bean 初始化后包一层代理"这类需求就无处安放。<code>refresh()</code> 把启动切成有序阶段，每个阶段暴露一个确定的插入点——扩展点之所以能"准时"生效，靠的就是这套顺序。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 没有固定阶段会怎样（痛点 → 设计回应）</caption>
+        <thead><tr><th>没有阶段划分时的痛点</th><th>refresh() 的回应</th><th>代价</th></tr></thead>
+        <tbody>
+          <tr><td>想在造实例前统一改配置（占位符 <code>${}</code>）却找不到时机</td><td>第 4 步 BFPP 专门处理"实例化前改配方"</td><td>启动多一遍对全部 BeanDefinition 的遍历</td></tr>
+          <tr><td>想给每个 bean 初始化后加增强（代理）却没有挂载点</td><td>第 7 步造每个 bean 时回调已注册的 BPP</td><td>每个 bean 创建都要过一遍 BPP 链</td></tr>
+          <tr><td>配置错误要等到运行时第一次用才暴露</td><td>第 7 步急切造单例，错误启动期就炸</td><td>启动变慢、内存上来得早</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>带来的代价</strong>：<code>refresh()</code> 默认单线程顺序执行，bean 越多启动越慢；急切实例化把"运行期才发现的错误"提前到启动期（对线上服务是好事，对本地反复重启是负担）。Spring 6.2 起允许部分 bean <code>@Bean(bootstrap = BACKGROUND)</code> 后台并行初始化，正是为缓解大应用启动慢——但这打破了"容器单线程顺序建 bean"的旧心智模型，是近年的一个变化点。</p>
+
+      <!-- ========================= 2.2 lifecycle ========================= -->
+      <h2 id="s2"><span class="num">2.2</span><span>Bean 生命周期三步：@Autowired 其实是一个 BPP</span></h2>
+
+      <p class="one-liner">每个 bean 都走同一条流水线：实例化（造原始对象）→ 属性填充（注入依赖）→ 初始化（回调 + 增强）。</p>
+
+      <p>图 2.1 第 7 步"造每个 bean"，放大看就是 <code>doCreateBean</code> 里的三步流水线。这三步是<strong>本教程的脊梁</strong>——把它刻进脑子，后面所有"魔法"都能在这条线上找到自己的位置。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 540" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Bean 生命周期三步：实例化、属性填充（@Autowired 在此）、初始化（含 Aware、BPP 前置、init 回调、BPP 后置 AOP 代理），最后成为成品 bean">
+          <defs>
+            <marker id="l-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="l-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- step1 实例化 -->
+          <rect x="120" y="24" width="300" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="270" y="44" text-anchor="middle" class="node-label">① 实例化</text>
+          <text x="270" y="61" text-anchor="middle" class="edge-label">createBeanInstance · 构造器造原始对象</text>
+          <line x1="270" y1="70" x2="270" y2="100" class="diagram-ink" marker-end="url(#l-ink)"/>
+          <!-- step2 属性填充 + accent annotation -->
+          <rect x="120" y="100" width="300" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="270" y="120" text-anchor="middle" class="node-label">② 属性填充</text>
+          <text x="270" y="137" text-anchor="middle" class="edge-label">populateBean · 注入依赖</text>
+          <rect x="440" y="100" width="262" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="571" y="120" text-anchor="middle" class="branch-label">@Autowired 注入在这一步</text>
+          <text x="571" y="137" text-anchor="middle" class="edge-label">AutowiredAnnotationBeanPostProcessor</text>
+          <line x1="440" y1="123" x2="420" y2="123" class="diagram-accent" marker-end="url(#l-acc)"/>
+          <line x1="270" y1="146" x2="270" y2="176" class="diagram-ink" marker-end="url(#l-ink)"/>
+          <!-- step3 初始化 container -->
+          <rect x="90" y="176" width="372" height="250" rx="8" class="diagram-ink node-fill"/>
+          <text x="106" y="198" class="node-label">③ 初始化 initializeBean</text>
+          <!-- sub a -->
+          <rect x="110" y="210" width="332" height="36" rx="5" class="diagram-soft node-fill"/>
+          <text x="276" y="232" text-anchor="middle" class="edge-label">a. Aware 回调（BeanNameAware 等）</text>
+          <line x1="276" y1="246" x2="276" y2="258" class="diagram-ink" marker-end="url(#l-ink)"/>
+          <!-- sub b -->
+          <rect x="110" y="258" width="332" height="36" rx="5" class="diagram-soft node-fill"/>
+          <text x="276" y="280" text-anchor="middle" class="edge-label">b. BPP · postProcessBeforeInitialization</text>
+          <line x1="276" y1="294" x2="276" y2="306" class="diagram-ink" marker-end="url(#l-ink)"/>
+          <!-- sub c -->
+          <rect x="110" y="306" width="332" height="36" rx="5" class="diagram-soft node-fill"/>
+          <text x="276" y="328" text-anchor="middle" class="edge-label">c. init 回调（@PostConstruct / afterPropertiesSet）</text>
+          <line x1="276" y1="342" x2="276" y2="354" class="diagram-ink" marker-end="url(#l-ink)"/>
+          <!-- sub d accent -->
+          <rect x="110" y="354" width="332" height="52" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="276" y="375" text-anchor="middle" class="branch-label">d. BPP · postProcessAfterInitialization</text>
+          <text x="276" y="394" text-anchor="middle" class="edge-label">→ AOP 代理在此生成（03 章）</text>
+          <line x1="270" y1="426" x2="270" y2="456" class="diagram-ink" marker-end="url(#l-ink)"/>
+          <!-- final -->
+          <rect x="120" y="456" width="300" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="270" y="476" text-anchor="middle" class="node-label">成品 bean</text>
+          <text x="270" y="493" text-anchor="middle" class="edge-label">放入单例缓存，对外提供</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>Bean 生命周期三步——本教程的脊梁。<strong>注意</strong>：两处朱红都是 BeanPostProcessor 的工作——<code>@Autowired</code> 在第 ② 步注入、AOP 代理在第 ③d 步生成。所谓"魔法"，本质是 BPP 挂在固定节点上的回调。</figcaption>
+      </figure>
+
+      <p><strong>逐步解读（机制，不是 API）</strong>：</p>
+      <ul>
+        <li><strong>① 实例化</strong>：<code>createBeanInstance</code> 调构造器造出一个"原始对象"——此时字段还是空的（构造器注入的依赖此刻已就绪，因为它们是构造器参数）。</li>
+        <li><strong>② 属性填充</strong>：<code>populateBean</code> 把依赖设进字段。<code>@Autowired</code> 的解析就发生在这里，执行者是一个名叫 <code>AutowiredAnnotationBeanPostProcessor</code> 的后置处理器。<strong>注意这句话的份量</strong>：<code>@Autowired</code> 不是容器写死的内置逻辑，而是一个可插拔的 BPP——理论上你能自己写一个等价的处理器。</li>
+        <li><strong>③ 初始化</strong>：先回调各种 <code>Aware</code> 接口（把容器自身能力交给 bean），再跑 BPP 的前置回调，然后是初始化方法（<code>@PostConstruct</code> / <code>InitializingBean.afterPropertiesSet</code>），最后跑 BPP 的后置回调。<strong>AOP 代理就在最后这一步（<code>postProcessAfterInitialization</code>）生成</strong>——这是 03 章的入口。</li>
+      </ul>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>既然 AOP 代理在第 ③d 步（初始化之后）才生成，那么在第 ③c 步的 <code>@PostConstruct</code> 方法里，<code>this</code> 是被代理过的对象，还是未代理的原始对象？这对"在 <code>@PostConstruct</code> 里调用本类的 <code>@Transactional</code> 方法"意味着什么？</p>
+        <details>
+          <summary>停 10 秒，再展开</summary>
+          <p>是<strong>未代理的原始对象</strong>。代理在 <code>@PostConstruct</code> 之后才生成，所以初始化方法里的 <code>this</code> 永远是裸对象。后果：在 <code>@PostConstruct</code> 里调用本类带 <code>@Transactional</code> 的方法，既是自调用、对象又还没被代理，事务<strong>必然不生效</strong>。这是双重保险的失效——03 章会把自调用讲透。</p>
+        </details>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 一句话锁住脊梁</span>
+        <p>把图 2.2 记成一句话：<strong>"实例化造壳、填充塞依赖、初始化做增强；@Autowired 在填充、AOP 在初始化末尾，二者都是 BPP。"</strong> 面试被问到任何"X 注解怎么生效"，都先回到这条线上定位它在哪一步、由哪个处理器做。</p>
+      </div>
+
+      <!-- ========================= 2.3 BFPP vs BPP ========================= -->
+      <h2 id="s3"><span class="num">2.3</span><span>两类后置处理器：改配方的 BFPP vs 改实例的 BPP</span></h2>
+
+      <p class="one-liner">BeanFactoryPostProcessor 在实例化前改"配方"（BeanDefinition）；BeanPostProcessor 在创建中改"实例"（bean 对象）。</p>
+
+      <p>这是新手最常混淆的一对，名字只差三个字母，工作对象和时机却完全不同。把它们的时机摆到一条线上看：</p>
+
+      <figure>
+        <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="时间线：实例化分界线左侧 BFPP 作用于 BeanDefinition 配方，右侧 BPP 作用于每个 bean 实例">
+          <defs>
+            <marker id="t-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+          <!-- timeline -->
+          <line x1="40" y1="150" x2="660" y2="150" class="diagram-ink" marker-end="url(#t-ink)"/>
+          <text x="650" y="174" text-anchor="end" class="edge-label">启动时间 →</text>
+          <!-- divider: 实例化分界线 -->
+          <line x1="350" y1="60" x2="350" y2="180" class="diagram-accent"/>
+          <text x="350" y="50" text-anchor="middle" class="branch-label">实例化分界线</text>
+          <!-- left zone -->
+          <rect x="60" y="78" width="250" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="185" y="100" text-anchor="middle" class="node-label">BeanFactoryPostProcessor</text>
+          <text x="185" y="118" text-anchor="middle" class="edge-label">改配方 · 作用于 BeanDefinition</text>
+          <line x1="185" y1="134" x2="185" y2="150" class="diagram-ink"/>
+          <text x="185" y="206" text-anchor="middle" class="edge-label">实例化之前 · 全部配方就位</text>
+          <text x="185" y="224" text-anchor="middle" class="edge-label">例：占位符替换、@Configuration 解析</text>
+          <!-- right zone -->
+          <rect x="392" y="78" width="250" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="517" y="100" text-anchor="middle" class="node-label-accent">BeanPostProcessor</text>
+          <text x="517" y="118" text-anchor="middle" class="edge-label">改实例 · 作用于 bean 对象</text>
+          <line x1="517" y1="134" x2="517" y2="150" class="diagram-accent"/>
+          <text x="517" y="206" text-anchor="middle" class="edge-label">每个 bean 创建中 · 实例已存在</text>
+          <text x="517" y="224" text-anchor="middle" class="edge-label">例：@Autowired 注入、AOP 代理</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>两类处理器以"实例化分界线"分隔。<strong>注意</strong>：分界线左边还没有任何 bean 实例，BFPP 只能碰元数据；右边实例已存在，BPP 才能动对象本身。记混的根源就是忽略了这条线。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">两类处理器的接口长相</span><span class="lang">Java</span><button class="copy" data-copy-target="c-pp">复制</button></div>
+<pre id="c-pp"><code class="language-java">// BFPP：拿到的是整个 BeanFactory，可遍历、改写 BeanDefinition（配方）
+public interface BeanFactoryPostProcessor {
+    void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory);
+}
+
+// BPP：拿到的是一个个已实例化的 bean，可包装、替换它（实例）
+public interface BeanPostProcessor {
+    Object postProcessBeforeInitialization(Object bean, String beanName);
+    Object postProcessAfterInitialization(Object bean, String beanName); // 返回值会替换原 bean —— AOP 在此返回代理
+}</code></pre>
+      </div>
+
+      <p>看 <code>postProcessAfterInitialization</code> 的返回值——它<strong>会替换掉容器里的那个 bean</strong>。03 章的 AOP 自动代理创建器正是在这里返回一个代理对象，把原始 bean 偷偷换成代理。这一个返回值，就是"AOP 是怎么接进来的"的全部秘密。</p>
+
+      <table class="compare-table">
+        <caption>表 2.2 · BFPP vs BPP</caption>
+        <thead><tr><th>维度</th><th>BeanFactoryPostProcessor</th><th>BeanPostProcessor</th></tr></thead>
+        <tbody>
+          <tr><td>作用对象</td><td>BeanDefinition（配方 / 元数据）</td><td>bean 实例（对象）</td></tr>
+          <tr><td>时机</td><td>实例化之前（refresh 第 4 步）</td><td>每个 bean 创建中（第 7 步）</td></tr>
+          <tr><td>能做什么</td><td>改 scope、改属性值、加/删 BeanDefinition</td><td>注入、包装成代理、改字段</td></tr>
+          <tr><td>典型实现</td><td>PropertySourcesPlaceholderConfigurer、ConfigurationClassPostProcessor</td><td>AutowiredAnnotationBeanPostProcessor、AOP 自动代理创建器</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>带来的代价</strong>：BPP 对<strong>每一个</strong> bean 的创建都会被回调，链路上挂太多 BPP 会拖慢启动；而且实现 BPP 的 bean 必须比普通 bean 更早创建（容器要先有处理器才能处理别人），这导致一个隐蔽陷阱——<strong>一个实现了 BPP 的 bean，因为被实例化得太早（负责注入的那个 BPP 还没轮到它），它自己身上的 <code>@Autowired</code> 会被跳过</strong>。这个陷阱 03 章会再点。</p>
+
+      <!-- ========================= 2.4 circular dep ========================= -->
+      <h2 id="s4"><span class="num">2.4</span><span>循环依赖与三级缓存：第三级为谁而设</span></h2>
+
+      <p class="one-liner">三级缓存让"还没造完的单例"能被提前暴露引用，从而解开 setter/字段注入的循环依赖。</p>
+
+      <p>回到 01 章埋的线：A 依赖 B、B 依赖 A。用字段注入，容器怎么不卡死？答案是它在每个 bean"造了壳、还没填完"时，就把一个引用提前挂出去。这套机制有三层缓存（都在 <code>DefaultSingletonBeanRegistry</code> 里）：</p>
+
+      <figure>
+        <svg viewBox="0 0 700 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三级缓存：singletonObjects 成品、earlySingletonObjects 早期引用、singletonFactories 工厂，引用从第三级升级到第二级再到第一级">
+          <defs>
+            <marker id="c-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="c-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- three shelves -->
+          <rect x="40" y="40" width="380" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="56" y="62" class="edge-label" font-weight="700">① singletonObjects（一级）</text>
+          <text x="56" y="80" class="edge-label">成品 bean · 完全可用</text>
+          <rect x="40" y="120" width="380" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="56" y="142" class="edge-label" font-weight="700">② earlySingletonObjects（二级）</text>
+          <text x="56" y="160" class="edge-label">早期引用 · 半成品（含早期代理）</text>
+          <rect x="40" y="200" width="380" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="56" y="222" class="branch-label">③ singletonFactories（三级）</text>
+          <text x="56" y="240" class="edge-label">工厂 · 调用后产出早期引用</text>
+          <!-- promotion arrows on the right of shelves -->
+          <line x1="300" y1="200" x2="300" y2="170" class="diagram-accent" marker-end="url(#c-acc)"/>
+          <text x="360" y="190" text-anchor="middle" class="edge-label">取用即升级</text>
+          <line x1="300" y1="120" x2="300" y2="90" class="diagram-ink" marker-end="url(#c-ink)"/>
+          <text x="360" y="110" text-anchor="middle" class="edge-label">造完即升级</text>
+          <!-- right: A<->B cycle -->
+          <rect x="500" y="60" width="150" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="575" y="87" text-anchor="middle" class="node-label">Bean A</text>
+          <rect x="500" y="190" width="150" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="575" y="217" text-anchor="middle" class="node-label">Bean B</text>
+          <line x1="540" y1="104" x2="540" y2="190" class="diagram-ink" marker-end="url(#c-ink)"/>
+          <text x="505" y="150" text-anchor="middle" class="edge-label">需要 B</text>
+          <line x1="610" y1="190" x2="610" y2="104" class="diagram-ink" marker-end="url(#c-ink)"/>
+          <text x="648" y="150" text-anchor="middle" class="edge-label">需要 A</text>
+          <text x="575" y="270" text-anchor="middle" class="edge-label">字段 / setter 注入：可解</text>
+          <text x="575" y="290" text-anchor="middle" class="edge-label" fill="#B73B2F">构造器注入：无解</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.4</span>三级缓存与引用升级方向（三级 → 二级 → 一级）。<strong>注意</strong>：第三级存的不是对象，是<strong>工厂</strong>——只有循环真的发生、有人来取时才调用它产出早期引用。这个"延迟"正是第三级存在的唯一理由。</figcaption>
+      </figure>
+
+      <h3>为什么是"三级"而不是两级</h3>
+      <p>一个自然的疑问：要解循环依赖，似乎"一个存成品、一个存半成品"两级就够了。第三级（工厂）为什么必须存在？答案只有一个词：<strong>AOP 代理</strong>。</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · 两级缓存 vs 三级缓存（备选方案）</caption>
+        <thead><tr><th>方案</th><th>能解普通循环依赖吗</th><th>遇到 AOP 代理时</th></tr></thead>
+        <tbody>
+          <tr><td>两级（成品 + 半成品对象）</td><td>能</td><td>提前暴露的是<strong>原始对象</strong>，但 B 最终拿到的应是 A 的<strong>代理</strong>——两者不一致，B 持有了错的引用</td></tr>
+          <tr class="selected"><td>三级（成品 + 半成品 + 工厂）</td><td>能</td><td>工厂被调用时才决定"要不要包代理"，保证早期暴露的引用和最终引用是<strong>同一个</strong></td></tr>
+        </tbody>
+      </table>
+
+      <p>关键在于：<strong>第三级存的是一个"工厂"而不是一个现成对象</strong>。只有当循环真的发生、B 真的来取 A 时，工厂才被调用，那一刻才决定"A 需不需要被 AOP 代理"。如果不需要代理，早期引用就是原始对象；如果需要，早期引用就是提前生成的代理。这样无论是否有代理，B 拿到的引用都和容器里最终的 A <strong>始终是同一个</strong>。没有 AOP，两级确实够用——第三级是为"AOP 早期代理的正确性"专门加的。</p>
+
+      <p><strong>为什么构造器注入无解</strong>：三级缓存能起作用，前提是"对象已经实例化（壳造好了），只是还没填完属性"。而构造器注入的依赖是<strong>构造器参数</strong>——对象在拿到依赖之前根本造不出壳，无法被提前暴露到任何缓存。所以 A、B 互为构造器依赖时，谁都到不了"能被暴露"的状态，启动期直接抛 <code>BeanCurrentlyInCreationException</code>。这不是配置开关能关掉的，是机制的硬限制。</p>
+
+      <!-- ========================= 2.5 综合 ========================= -->
+      <h2 id="s5"><span class="num">2.5</span><span>跨概念综合：跟一个 bean 走完全程</span></h2>
+
+      <p>把本章四节串起来，用 01 章的 <code>OrderService</code>（字段注入 <code>PaymentGateway</code>，且假设 <code>PaymentGateway</code> 又依赖 <code>OrderService</code> 形成循环，<code>OrderService</code> 还被一个日志切面增强）走一遍：</p>
+
+      <ol>
+        <li>refresh 第 4 步：BFPP 解析 <code>@Configuration</code>、把占位符配置就位（<strong>2.1 + 2.3</strong>）。</li>
+        <li>refresh 第 7 步开始急切造单例，轮到 <code>OrderService</code>。</li>
+        <li><strong>实例化</strong>：构造器造出 <code>OrderService</code> 原始壳；随即把它的"工厂"放进三级缓存（<strong>2.2 + 2.4</strong>）。</li>
+        <li><strong>属性填充</strong>：要注入 <code>PaymentGateway</code>，于是去造它；<code>PaymentGateway</code> 填充时反过来要 <code>OrderService</code>，从三级缓存取出工厂、产出 <code>OrderService</code> 的早期引用（因为有切面，这个早期引用是<strong>代理</strong>），升级到二级缓存（<strong>2.4</strong>）。</li>
+        <li><code>PaymentGateway</code> 拿到这个代理引用、造完进一级缓存；回到 <code>OrderService</code> 继续填充完成。</li>
+        <li><strong>初始化</strong>：跑 <code>@PostConstruct</code>，最后 BPP 后置回调确认/生成代理，<code>OrderService</code> 成品（代理）进一级缓存（<strong>2.2</strong>）。</li>
+      </ol>
+
+      <p>整条链上没有一处"魔法"——每一步都是某个固定阶段里、某个后置处理器或缓存动作的结果。这就是把 Spring 当状态机看的样子。</p>
+
+      <!-- ========================= self-check ========================= -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来。第 4 题是跨机制综合题，是本章的重点。</p>
+        <ol>
+          <li>refresh() 里 BFPP 和 BPP 分别在第几步登场？"注册 BPP"和"运行 BPP"是同一步吗？</li>
+          <li>Bean 生命周期三步分别叫什么？<code>@Autowired</code> 注入和 AOP 代理各发生在哪一步？</li>
+          <li>用一句话区分 BeanFactoryPostProcessor 和 BeanPostProcessor 的工作对象。</li>
+          <li>（综合）已知 AOP 代理在初始化末尾生成、三级缓存第三级存的是工厂——把这两点连起来，解释为什么"有循环依赖且被 AOP 增强"的 bean 必须靠三级（而非两级）缓存才能拿到一致的引用。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>BFPP 在第 4 步运行；BPP 在第 5 步只"注册"（登记+排序，不运行），到第 7 步造每个 bean 时才"运行"。注册和运行不是同一步。</li>
+            <li>实例化 → 属性填充 → 初始化。<code>@Autowired</code> 在属性填充（populateBean），AOP 代理在初始化最后一步（postProcessAfterInitialization）。</li>
+            <li>BFPP 改的是 BeanDefinition（配方、实例化前）；BPP 改的是 bean 实例（对象、创建中）。</li>
+            <li>被增强的 bean，其最终引用是代理而非原始对象。若循环时提前暴露的是原始对象（两级方案），依赖方会持有和容器最终版本不一致的引用。三级缓存把"暴露什么"延迟到工厂被调用那一刻，那时才决定是否生成代理，从而保证提前暴露的引用与最终引用是同一个代理对象。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>预判一个"注入了 null"的现场</h3>
+        <p>有人写了一个实现 <code>BeanPostProcessor</code> 的类，同时在它里面 <code>@Autowired</code> 了一个 <code>DataSource</code>，运行时发现这个 <code>DataSource</code> 是 null。结合 2.3 节"BPP 必须更早创建"的代价，解释为什么。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>负责处理 <code>@Autowired</code> 的也是一个 BPP。要让所有 BPP 能工作，容器必须先把 BPP 们都创建出来——于是这个自定义 BPP 被实例化得非常早，早到"负责注入的那个 BPP"还没准备好对它生效，它的 <code>@Autowired</code> 就被跳过了。修法：用构造器注入，或在用到时通过容器懒查。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/factory-nature.html">Spring Reference · Customizing the Nature of a Bean（生命周期回调）</a>（官方）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/factory-extension.html">Spring Reference · Container Extension Points（BPP / BFPP）</a>（官方）</li>
+          <li><a href="https://github.com/spring-projects/spring-framework/blob/main/spring-beans/src/main/java/org/springframework/beans/factory/support/DefaultSingletonBeanRegistry.java">源码 · DefaultSingletonBeanRegistry（三级缓存）</a>（GitHub）</li>
+          <li><a href="https://github.com/spring-projects/spring-framework/blob/main/spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java">源码 · AbstractApplicationContext.refresh()</a>（GitHub）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+        <a href="03-aop.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · AOP 代理的生成与失效</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">2.1 refresh() 流程</a></li>
+        <li><a href="#s2" data-toc-target="s2">2.2 生命周期三步</a></li>
+        <li><a href="#s3" data-toc-target="s3">2.3 BFPP vs BPP</a></li>
+        <li><a href="#s4" data-toc-target="s4">2.4 三级缓存</a></li>
+        <li><a href="#s5" data-toc-target="s5">2.5 跨概念综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

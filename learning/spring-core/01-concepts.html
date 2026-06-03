@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 核心概念 · Spring 核心机制深度剖析</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html" class="current">01 概念</a><span class="sep">—</span>
+    <a href="02-lifecycle.html">02 生命周期</a><span class="sep">—</span>
+    <a href="03-aop.html">03 AOP</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>核心概念：容器、Bean、DI、AOP 词汇</h1>
+        <p class="recap">起点给了一句话本质：容器是对象图装配机。这一章把装配机用到的词汇逐个钉死——后两章讲机制时不再停下来解释术语，所以这里的每个定义都要落到地。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>IoC「反转」的到底是哪一项控制权，反转给了谁</li>
+          <li>Bean 是实例、BeanDefinition 是配方——两者分属不同阶段</li>
+          <li>BeanFactory 与 ApplicationContext 的"惰性 vs 急切"分界</li>
+          <li>三种注入方式背后的"时机差异"，这是后面循环依赖的伏笔</li>
+          <li>AOP 六个术语之间的关系，以及"连接点只有方法执行"这一 Spring 特有约束</li>
+        </ul>
+      </section>
+
+      <p>全章用一个贯穿的场景来钉概念：一个下单服务 <code>OrderService</code>，依赖一个支付网关 <code>PaymentGateway</code> 和一个库存仓储 <code>InventoryRepository</code>。每个概念都回到这个场景，看它在装配这三者时扮演什么角色。</p>
+
+      <!-- ========================= 概念 1：IoC ========================= -->
+      <h2 id="s1"><span class="num">1.1</span><span>IoC / 控制反转：反转了"获得依赖"的控制权</span></h2>
+
+      <p class="one-liner">IoC：对象不再自己创建和查找依赖，而是被动接受外部（容器）塞进来的依赖。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>没有容器时，<code>OrderService</code> 要用支付网关，就得自己 <code>new PaymentGateway(...)</code>。一旦支付网关换实现（从支付宝换成 Stripe）、或它本身又依赖一串配置，<code>OrderService</code> 就被迫知道这些细节。控制权（"用哪个实现、怎么造出来"）攥在使用者手里，耦合就此产生。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：「反转」反转的是<strong>获得依赖的控制权</strong>——从"对象主动 <code>new</code> 或主动查找"反转成"容器在启动时通过反射造好实例、再把依赖推送进来"。依赖注入（DI）是这个反转的<strong>具体落地手段</strong>。所以一句被反复问到的面试题——"IoC 和 DI 是不是一回事"——答案是：<strong>同一件事的两个视角</strong>。IoC 是"控制权反转"这个结果，DI 是"靠注入来实现反转"这个手段。代价也实打实：启动期要反射扫描和实例化、运行期多一层间接、异常栈里会冒出容器和代理的类名。</p>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>像点外卖 vs 自己买菜做饭：自己做，你要控制采购、火候、摆盘（自己 <code>new</code> 一切）；点外卖，你只声明"要一份宫保鸡丁"，平台负责备齐食材并送到（容器装配）。<strong>类比失效处</strong>：外卖每次现做，而容器里的单例 bean 默认只做一次、长期复用——这恰恰是 1.5 节作用域要处理的问题。</p>
+      </div>
+
+      <h3>场景走查：装配 OrderService 的两种世界</h3>
+      <div class="code-block">
+        <div class="header"><span class="filename">没有容器：控制权在使用者手里</span><span class="lang">Java</span><button class="copy" data-copy-target="c-noioc">复制</button></div>
+<pre id="c-noioc"><code class="language-java">// OrderService 被迫知道"怎么造"它的每一个依赖
+public class OrderService {
+    private final PaymentGateway gateway;
+    private final InventoryRepository inventory;
+
+    public OrderService() {
+        // 自己 new：换实现要改这里，依赖的依赖也得自己拼
+        this.gateway   = new StripeGateway(new HttpClient(), "sk_live_xxx");
+        this.inventory = new MySqlInventoryRepository(new DataSource("jdbc:..."));
+    }
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">有容器（IoC）：只声明依赖，容器来装配</span><span class="lang">Java</span><button class="copy" data-copy-target="c-ioc">复制</button></div>
+<pre id="c-ioc"><code class="language-java">@Service
+public class OrderService {
+    private final PaymentGateway gateway;
+    private final InventoryRepository inventory;
+
+    // 只声明"我需要这两样"，怎么造、用哪个实现，交给容器
+    public OrderService(PaymentGateway gateway, InventoryRepository inventory) {
+        this.gateway   = gateway;
+        this.inventory = inventory;
+    }
+}</code></pre>
+      </div>
+
+      <p>逐步对照（代码 → 概念）：</p>
+      <ul>
+        <li>第一段构造器里的 <code>new StripeGateway(...)</code>：<code>OrderService</code> 掌握"获得依赖"的控制权——这是<strong>没有反转</strong>的世界。</li>
+        <li>第二段构造器只接收 <code>PaymentGateway</code> 参数、不关心怎么来：控制权<strong>已反转</strong>给容器。这一步就是 DI（具体说是构造器注入，1.4 节细讲）。</li>
+        <li><code>@Service</code> 是一个声明："把这个类登记成一个 bean，纳入容器管理"——下一节讲 bean。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="对比没有容器时对象自己 new 依赖，与有容器时容器把依赖注入对象的控制方向">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="m-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- left panel: no container -->
+          <text x="158" y="28" text-anchor="middle" class="edge-label" font-weight="700">没有容器</text>
+          <rect x="88" y="44" width="140" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="158" y="72" text-anchor="middle" class="node-label">OrderService</text>
+          <rect x="24" y="200" width="120" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="84" y="227" text-anchor="middle" class="node-label">Gateway</text>
+          <rect x="172" y="200" width="130" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="237" y="227" text-anchor="middle" class="node-label">Inventory</text>
+          <line x1="128" y1="90" x2="84" y2="200" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="188" y1="90" x2="237" y2="200" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="96" y="150" text-anchor="middle" class="edge-label">new</text>
+          <text x="232" y="150" text-anchor="middle" class="edge-label">new</text>
+          <text x="158" y="278" text-anchor="middle" class="edge-label">控制权向下：自己造依赖</text>
+
+          <!-- divider -->
+          <line x1="360" y1="36" x2="360" y2="256" class="diagram-soft"/>
+
+          <!-- right panel: with container -->
+          <text x="560" y="28" text-anchor="middle" class="edge-label" font-weight="700" fill="#B73B2F">有容器（IoC）</text>
+          <rect x="470" y="44" width="180" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="560" y="72" text-anchor="middle" class="node-label-accent">IoC 容器</text>
+          <rect x="490" y="200" width="140" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="560" y="227" text-anchor="middle" class="node-label">OrderService</text>
+          <line x1="560" y1="90" x2="560" y2="200" class="diagram-accent" marker-end="url(#m-acc)"/>
+          <text x="560" y="150" text-anchor="middle" class="edge-label">注入 Gateway / Inventory</text>
+          <text x="560" y="278" text-anchor="middle" class="edge-label" fill="#B73B2F">控制权反转：容器推送依赖</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>IoC 反转的是"获得依赖"的控制方向。<strong>注意</strong>：箭头方向变了——左边 <code>OrderService</code> 指向它造的依赖；右边容器指向 <code>OrderService</code>，依赖是被"推"进去的。</figcaption>
+      </figure>
+
+      <p><strong>与下一个概念的关系</strong>：容器要"把依赖推进来"，前提是它得先知道有哪些对象要管、各自怎么造。这份"清单 + 配方"就是 bean 与 BeanDefinition。</p>
+
+      <!-- ========================= 概念 2：Bean / BeanDefinition ========================= -->
+      <h2 id="s2"><span class="num">1.2</span><span>Bean 与 BeanDefinition：实例 vs 配方</span></h2>
+
+      <p class="one-liner">Bean 是容器管理的对象实例；BeanDefinition 是描述"如何造这个 bean"的元数据配方。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>容器不能凭空造对象。它需要一份结构化描述：这个 bean 是哪个类、单例还是多例、构造参数是什么、要注入哪些属性、初始化和销毁时调用哪个方法。把"描述"和"实例"分成两个阶段，容器才能在<strong>造对象之前</strong>先修改描述（比如把配置占位符 <code>${db.url}</code> 替换成真实值）。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<code>BeanDefinition</code> 是一个<strong>可被修改的对象</strong>，登记在 <code>BeanFactory</code> 内部的一张 map 里（<code>beanDefinitionMap</code>）。容器启动时分两段走：先把所有 <code>BeanDefinition</code> 收齐（解析 <code>@Component</code> 扫描、<code>@Bean</code> 方法、XML），<strong>这时一个 bean 实例都还没造</strong>；之后才按配方逐个实例化。正因为有这个"配方先就位、实例后创建"的间隙，才有了 02 章的关键扩展点——在实例化前批量改写配方（占位符替换、<code>@Configuration</code> 解析都在这里发生）。</p>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p><code>BeanDefinition</code> 像菜谱，bean 像照菜谱做出来的那盘菜。同一份菜谱（单例定义）默认只做一盘、大家共享。<strong>类比失效处</strong>：菜谱是死的，而 <code>BeanDefinition</code> 在开火前还能被改（改食材、改份量）——这正是它和静态配置的本质区别。</p>
+      </div>
+
+      <p><strong>与下一个概念的关系</strong>：这些 <code>BeanDefinition</code> 收在哪、bean 实例缓存在哪？答案是容器本身。但"容器"有两个层次的接口，分界很重要。</p>
+
+      <!-- ========================= 概念 3：BeanFactory vs ApplicationContext ========================= -->
+      <h2 id="s3"><span class="num">1.3</span><span>BeanFactory vs ApplicationContext：惰性内核 vs 急切全家桶</span></h2>
+
+      <p class="one-liner">BeanFactory 是容器的最小内核（惰性按需造 bean）；ApplicationContext 是它的超集，启动时急切造好所有单例并附带企业级能力。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>只有 <code>getBean</code> 这一个能力，框架跑不起来——它还需要发布事件、做国际化、加载资源，以及自动发现并注册那些"扩展点"组件。把最小内核（<code>BeanFactory</code>）和企业级超集（<code>ApplicationContext</code>）分层，既保留了底层灵活性，又让应用代码默认拿到功能完整的那个。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<code>ApplicationContext</code> 在接口上 <code>extends BeanFactory</code>，实现上<strong>内部组合了一个 <code>DefaultListableBeanFactory</code></strong> 来做真正的 bean 管理，自己在外面加了事件多播、消息源、资源加载，以及关键的一条——<strong>自动探测并注册容器里所有的 <code>BeanPostProcessor</code> 和 <code>BeanFactoryPostProcessor</code></strong>（裸用 <code>BeanFactory</code> 这些得手动注册）。还有一个常被忽略的硬区别：<code>BeanFactory.getBean</code> 是<strong>惰性</strong>的，用到时才造；而 <code>ApplicationContext</code> 在启动的 <code>refresh()</code> 末尾会<strong>急切实例化所有非 lazy 单例</strong>。这条决定了一件事——<strong>配置错误在启动期就炸，而不是等到第一次请求才炸</strong>，这对线上服务是好事。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ApplicationContext 作为外层超集包裹 BeanFactory 内核，并附加事件、国际化、资源、后置处理器自动注册等能力">
+          <!-- outer ApplicationContext -->
+          <rect x="40" y="40" width="560" height="244" rx="8" class="diagram-accent" stroke-width="2"/>
+          <text x="60" y="66" class="node-label-accent">ApplicationContext（急切 · 全家桶）</text>
+          <!-- inner BeanFactory core -->
+          <rect x="70" y="92" width="220" height="160" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="120" text-anchor="middle" class="node-label">BeanFactory 内核</text>
+          <text x="180" y="150" text-anchor="middle" class="edge-label">getBean（惰性）</text>
+          <text x="180" y="172" text-anchor="middle" class="edge-label">BeanDefinition map</text>
+          <text x="180" y="194" text-anchor="middle" class="edge-label">单例缓存</text>
+          <text x="180" y="216" text-anchor="middle" class="edge-label">依赖解析</text>
+          <!-- extras on the right -->
+          <rect x="320" y="92" width="250" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="445" y="114" text-anchor="middle" class="edge-label">事件发布 / 监听（events）</text>
+          <rect x="320" y="134" width="250" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="445" y="156" text-anchor="middle" class="edge-label">国际化 i18n / 资源加载</text>
+          <rect x="320" y="176" width="250" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="445" y="198" text-anchor="middle" class="branch-label">自动注册 BPP / BFPP</text>
+          <rect x="320" y="218" width="250" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="445" y="240" text-anchor="middle" class="edge-label">启动末尾急切造所有单例</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>ApplicationContext = BeanFactory 内核 + 企业级外壳。<strong>注意</strong>：朱红那条"自动注册 BPP/BFPP"——它让后置处理器无需手动登记就生效，正是 02、03 章一切"魔法"能自动发生的前提。</figcaption>
+      </figure>
+
+      <p><strong>与下一个概念的关系</strong>：容器把依赖"推进" bean 的动作，落到代码上有三种写法，它们的差别不只是风格——而是<strong>注入发生的时机</strong>不同。</p>
+
+      <!-- ========================= 概念 4：DI 三种方式 ========================= -->
+      <h2 id="s4"><span class="num">1.4</span><span>依赖注入的三种方式：构造器 / setter / 字段</span></h2>
+
+      <p class="one-liner">同一个依赖可以从构造器参数、setter 方法、或直接打在字段上注入——区别在注入发生的时机和带来的约束。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>三种方式不是等价的口味选择。它们决定了：依赖是不是必填、对象能不能做成不可变（<code>final</code>）、不靠容器能不能单元测试、以及——最关键的——<strong>循环依赖能不能被容器解开</strong>。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：时机是分水岭。<strong>构造器注入</strong>在容器调用构造器<strong>创建实例那一刻</strong>就必须把依赖准备好——没有依赖，对象根本造不出来。<strong>setter / 字段注入</strong>发生在"实例已经造出来之后"的属性填充阶段。这个时机差，直接导致 02 章的一个硬结论：<strong>构造器注入的循环依赖无解</strong>（A 的构造需要 B、B 的构造需要 A，谁都先造不出来），而 setter/字段注入的循环依赖能靠三级缓存绕开。字段注入还有个隐藏代价：依赖被藏在类内部，不 <code>new</code> 不暴露，使得单元测试必须靠反射或容器才能塞进 mock。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">三种注入写法（同一个 OrderService）</span><span class="lang">Java</span><button class="copy" data-copy-target="c-di">复制</button></div>
+<pre id="c-di"><code class="language-java">// ① 构造器注入：创建实例时就要依赖；可用 final，依赖必填、可测
+@Service
+public class OrderService {
+    private final PaymentGateway gateway;
+    public OrderService(PaymentGateway gateway) { this.gateway = gateway; }
+}
+
+// ② setter 注入：实例造好后调用 setter 填入；适合可选 / 可重配的依赖
+@Service
+public class OrderService {
+    private PaymentGateway gateway;
+    @Autowired public void setGateway(PaymentGateway g) { this.gateway = g; }
+}
+
+// ③ 字段注入：实例造好后用反射直接写字段；最省字，但最难测、最易藏循环依赖
+@Service
+public class OrderService {
+    @Autowired private PaymentGateway gateway;
+}</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>如果 <code>OrderService</code> 构造器需要 <code>PaymentGateway</code>，而 <code>PaymentGateway</code> 构造器又需要 <code>OrderService</code>（互相依赖），用<strong>构造器注入</strong>，容器启动时会发生什么？换成<strong>字段注入</strong>呢？</p>
+        <details>
+          <summary>停 10 秒，再展开</summary>
+          <p>构造器注入：容器造 <code>OrderService</code> 要先有 <code>PaymentGateway</code>，造 <code>PaymentGateway</code> 又要先有 <code>OrderService</code>——死锁，启动期抛 <code>BeanCurrentlyInCreationException</code>。字段注入：两者都能先"半成品"造出来（实例存在、字段暂空），再互相填字段，能解开。</p>
+          <p>这背后是"实例化"和"属性填充"两个阶段的先后——03 之前的 02 章会用三级缓存把这件事讲透。这里先记住<strong>时机差异</strong>这根线。</p>
+        </details>
+      </div>
+
+      <p>官方与社区现在的默认推荐是<strong>构造器注入</strong>：依赖必填、对象可做成不可变、不依赖容器就能 <code>new</code> 出来测试，而且循环依赖会在启动期就暴露成错误，而不是潜伏到运行期变成一个诡异的 null。三者的完整权衡对比放在 03 章，那里有判别表。</p>
+
+      <p><strong>与下一个概念的关系</strong>：注入进来的依赖，是每次都新造一个，还是全局共享一个？这由 bean 的作用域决定。</p>
+
+      <!-- ========================= 概念 5：作用域 ========================= -->
+      <h2 id="s5"><span class="num">1.5</span><span>Bean 作用域：singleton 与 prototype</span></h2>
+
+      <p class="one-liner">作用域决定容器为一个 BeanDefinition 造几个实例、活多久：singleton 全局一个，prototype 每次取都新造。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>无状态的服务（<code>OrderService</code>）共享一个实例最省资源；有状态的对象（一个购物车、一次会话）则需要各用各的。作用域就是这个"造几个、谁共享"的策略开关。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<code>singleton</code>（默认）在容器里只造一次，造好缓存在 <code>singletonObjects</code> 这张 map 里，之后每次 <code>getBean</code> 都返回同一个引用，销毁由容器管。<code>prototype</code> 每次 <code>getBean</code> 都走一遍创建流程返回新实例，而且<strong>容器造完就撒手</strong>——不缓存、不负责调用它的销毁方法。深一层的陷阱在这：把一个 prototype 注入到一个 singleton 的字段里，注入<strong>只发生在 singleton 创建的那一次</strong>，于是这个 prototype 实际上被"焊死"成了单例，它"每次都新建"的承诺在这种注入下<strong>静默失效</strong>。web 环境还有 <code>request</code> / <code>session</code> 等作用域，本质是"绑定到某个上下文生命周期"的扩展。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 <code>@Scope("prototype")</code> 的 <code>ShoppingCart</code> 被 <code>@Autowired</code> 进一个单例的 <code>OrderService</code> 字段。请求来了一百次，产生了几个 <code>ShoppingCart</code> 实例？</p>
+        <details>
+          <summary>先答，再展开</summary>
+          <p>只有 1 个。字段注入在 <code>OrderService</code>（单例）创建时发生一次，那一次拿到一个 <code>ShoppingCart</code> 就被长期持有，后面一百次请求复用的都是它。要让每次拿到新的，得用 <code>ObjectProvider&lt;ShoppingCart&gt;</code>、<code>@Lookup</code> 方法或作用域代理——这条在 03 章的失败模式里会再出现。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一个概念的关系</strong>：以上都是"容器怎么管对象"。还有一类需求是"在不改对象代码的前提下，给一批方法统一加行为（日志、事务、限流）"——这是 AOP 要解决的，它有自己的一套词汇。</p>
+
+      <!-- ========================= 概念 6：AOP 术语 ========================= -->
+      <h2 id="s6"><span class="num">1.6</span><span>AOP 术语：切面、切点、通知、连接点、织入、代理</span></h2>
+
+      <p class="one-liner">AOP 把"散落在很多方法里的横切逻辑"（日志、事务）抽出来集中定义，再在运行期织入目标方法周围。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"每个 service 方法前后打日志、包事务"这类逻辑，如果手写，会散落进几百个方法里，改一处要改几百处。AOP 让这类<strong>横切关注点</strong>在一个地方定义、统一作用到一批方法上。</p>
+      </div>
+
+      <p>六个术语必须一次对齐，后面 03 章直接用：</p>
+      <table class="compare-table">
+        <caption>表 1.1 · AOP 六术语</caption>
+        <thead><tr><th>术语</th><th>是什么</th><th>在 Spring 里的具体形态</th></tr></thead>
+        <tbody>
+          <tr><td>连接点 Join point</td><td>程序执行中可以插入行为的点</td><td><strong>Spring 里只有一种：方法的执行</strong></td></tr>
+          <tr><td>切点 Pointcut</td><td>一个谓词，匹配出"哪些连接点"</td><td>表达式，如 <code>execution(* com..*Service.*(..))</code></td></tr>
+          <tr><td>通知 Advice</td><td>在匹配的连接点上要执行的动作</td><td>before / after / around / after-returning / after-throwing</td></tr>
+          <tr><td>切面 Aspect</td><td>切点 + 通知 的模块化封装</td><td>一个 <code>@Aspect</code> 类</td></tr>
+          <tr><td>织入 Weaving</td><td>把切面接到目标对象上的过程</td><td><strong>Spring 在运行期用代理织入</strong></td></tr>
+          <tr><td>目标 / 代理</td><td>被增强的原对象 / 包了一层的对象</td><td>JDK 动态代理 或 CGLIB 子类</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>底层机制（比文档深一层）</strong>：注意表里加粗的两条 Spring 特有约束。第一，<strong>Spring 的连接点只有"方法执行"</strong>——它不像完整的 AspectJ 那样能拦字段读写、构造器调用。第二，<strong>织入发生在运行期，靠生成一个代理对象完成</strong>：容器把通知逻辑包进一个代理，外部对目标方法的调用先经过代理、再转给原对象。这两条合起来推出一个 03 章的核心结论——既然增强只在"<strong>从外部经过代理引用</strong>"的调用上生效，那么对象内部的 <code>this.method()</code> 自调用走的是原始引用、<strong>绕过了代理，通知不触发</strong>。<code>@Transactional</code> 在同类自调用下静默失效，根因就在这里。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="切面由切点和通知组成，通过织入作用到目标对象，产生代理，代理拦截方法执行这个连接点">
+          <defs>
+            <marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- Aspect groups pointcut + advice -->
+          <rect x="30" y="40" width="220" height="120" rx="8" class="diagram-ink node-fill"/>
+          <text x="140" y="62" text-anchor="middle" class="node-label">切面 Aspect</text>
+          <rect x="48" y="78" width="184" height="32" rx="5" class="diagram-soft node-fill"/>
+          <text x="140" y="99" text-anchor="middle" class="edge-label">切点 Pointcut（匹配哪些方法）</text>
+          <rect x="48" y="116" width="184" height="32" rx="5" class="diagram-soft node-fill"/>
+          <text x="140" y="137" text-anchor="middle" class="edge-label">通知 Advice（做什么）</text>
+          <!-- weaving arrow to proxy -->
+          <line x1="250" y1="100" x2="404" y2="100" class="diagram-accent" marker-end="url(#a-acc)"/>
+          <text x="327" y="90" text-anchor="middle" class="branch-label">织入 Weaving</text>
+          <text x="327" y="118" text-anchor="middle" class="edge-label">运行期 · 生成代理</text>
+          <!-- proxy wraps target -->
+          <rect x="406" y="44" width="264" height="130" rx="8" class="diagram-accent node-fill-accent"/>
+          <text x="538" y="66" text-anchor="middle" class="node-label-accent">代理 Proxy</text>
+          <rect x="430" y="84" width="216" height="74" rx="6" class="diagram-ink node-fill"/>
+          <text x="538" y="112" text-anchor="middle" class="node-label">目标对象 Target</text>
+          <text x="538" y="136" text-anchor="middle" class="edge-label">原始 OrderService</text>
+          <!-- external call hits join point through proxy -->
+          <line x1="538" y1="240" x2="538" y2="176" class="diagram-ink" marker-end="url(#a-ink)"/>
+          <rect x="430" y="244" width="216" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="538" y="266" text-anchor="middle" class="node-label">外部调用</text>
+          <text x="538" y="283" text-anchor="middle" class="edge-label">连接点 = 方法执行</text>
+          <text x="538" y="210" text-anchor="middle" class="edge-label">先过代理</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>AOP 六术语的关系链：切面（切点+通知）→ 织入 → 代理包住目标。<strong>注意</strong>：外部调用必须"先过代理"通知才生效——记住这条，03 章的自调用失效就是它的反面。</figcaption>
+      </figure>
+
+      <!-- ========================= self-check ========================= -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>用一句话说清 IoC 和 DI 的关系：它们是两个不同的机制，还是同一件事的两个视角？</li>
+          <li>BeanDefinition 和 bean 实例分属容器启动的哪两个阶段？这个间隙让容器能做什么？</li>
+          <li>ApplicationContext 相比裸 BeanFactory，多出的哪一项能力，是后面"注解自动生效"的前提？</li>
+          <li>为什么构造器注入的循环依赖无解，而字段注入的能解？答到"时机"层面。</li>
+          <li>Spring AOP 的"连接点"只有哪一种？这个约束如何引出 <code>this.method()</code> 自调用不被增强？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>同一件事的两个视角：IoC 是"获得依赖的控制权从对象反转到容器"这个结果，DI（注入）是实现这个反转的手段。</li>
+            <li>第一阶段收齐所有 BeanDefinition（还没造实例），第二阶段按配方造实例。间隙让容器能在实例化前批量改写配方——占位符替换、<code>@Configuration</code> 解析都在此发生。</li>
+            <li>自动探测并注册容器里所有 BeanPostProcessor / BeanFactoryPostProcessor。没有它，<code>@Autowired</code>、AOP 这些都不会自动生效。</li>
+            <li>构造器注入要在"创建实例"那一刻就拿到依赖，循环时谁都造不出来；字段/setter 注入在"实例已存在"后才填属性，可以先各造半成品再互填。根因是实例化与属性填充的先后时机。</li>
+            <li>只有"方法执行"。因为增强靠代理、只在"外部经过代理引用"的调用上生效，对象内部 <code>this.method()</code> 走原始引用绕过代理，通知不触发。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>不看 02 章，先推一下"两阶段"的后果</h3>
+        <p>已知容器"先收齐配方、再造实例"。假设你想写一段逻辑：把所有名字以 <code>Legacy</code> 开头的 bean 的作用域，从 singleton 偷偷改成 prototype。你觉得这段逻辑应该挂在"收齐配方之后、造实例之前"，还是"造完实例之后"？为什么？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>作用域是配方（BeanDefinition）上的属性，一旦实例造出来就晚了。所以要挂在"配方已就位、实例未创建"的那个间隙——这正是 02 章 <code>BeanFactoryPostProcessor</code> 的工作时机。你刚刚自己推出了它存在的理由。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/definition.html">Spring Reference · Bean Overview（BeanDefinition / 作用域）</a>（官方）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html">Spring Reference · Dependency Injection（构造器 vs setter）</a>（官方）</li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/aop/introduction-defn.html">Spring Reference · AOP Concepts（六术语定义）</a>（官方）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev">
+          <span class="label">← 起点</span>
+          <span class="title">00 · 起点与概念地图</span>
+        </a>
+        <a href="02-lifecycle.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 容器启动、Bean 生命周期与扩展点</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">1.1 IoC 控制反转</a></li>
+        <li><a href="#s2" data-toc-target="s2">1.2 Bean / BeanDefinition</a></li>
+        <li><a href="#s3" data-toc-target="s3">1.3 两种容器接口</a></li>
+        <li><a href="#s4" data-toc-target="s4">1.4 三种注入方式</a></li>
+        <li><a href="#s5" data-toc-target="s5">1.5 Bean 作用域</a></li>
+        <li><a href="#s6" data-toc-target="s6">1.6 AOP 术语</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

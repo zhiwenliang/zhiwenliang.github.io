@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07 · 自测题库 · Spring Boot 机制深挖</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG utility classes
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+
+/* ============================================================
+   Chapter 07 — extra styles for tier labels and question cards
+   ============================================================ */
+.tier-section {
+  margin: 28px 0 8px;
+}
+.tier-label {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 2px;
+  margin-bottom: 12px;
+}
+.tier-label.concept  { background: var(--bg-soft); color: var(--ink-soft); border: 1px solid var(--rule); }
+.tier-label.principle { background: var(--bg-soft); color: var(--ink); border: 1px solid var(--ink-faint); }
+.tier-label.application { background: var(--vermilion-soft); color: var(--vermilion); border: 1px solid var(--vermilion); }
+
+.q-list { list-style: none; padding: 0; margin: 0 0 8px; counter-reset: qnum; }
+.q-list li {
+  counter-increment: qnum;
+  padding: 10px 14px 10px 42px;
+  margin: 6px 0;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: var(--bg);
+  position: relative;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.q-list li::before {
+  content: counter(qnum);
+  position: absolute;
+  left: 12px;
+  top: 11px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  width: 20px;
+  text-align: right;
+}
+.q-list li .q-chapters {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--vermilion);
+  background: var(--vermilion-soft);
+  border: 1px solid rgba(183,59,47,0.18);
+  border-radius: 2px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.04em;
+}
+.q-list li .hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+/* Answer section inside the end <details> */
+.answer-tier { margin: 16px 0 8px; }
+.answer-tier h3 {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 700;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.answer-list { list-style: none; padding: 0; margin: 0; counter-reset: anum; }
+.answer-list li {
+  counter-increment: anum;
+  padding: 10px 14px 10px 42px;
+  margin: 6px 0;
+  border-left: 2px solid var(--rule);
+  position: relative;
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+.answer-list li::before {
+  content: counter(anum);
+  position: absolute;
+  left: 12px;
+  top: 11px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-faint);
+  width: 20px;
+  text-align: right;
+}
+.answer-list li strong { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-container.html">01 容器</a><span class="sep">—</span>
+    <a href="02-refresh.html">02 启动</a><span class="sep">—</span>
+    <a href="03-autoconfig.html">03 自动配置</a><span class="sep">—</span>
+    <a href="04-aop.html">04 AOP·代理</a><span class="sep">—</span>
+    <a href="05-web-config.html">05 Web·配置</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现代栈</a><span class="sep">—</span>
+    <a href="07-self-check.html" class="current">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Spring Boot · 第 07 章</p>
+        <h1>07 · 自测题库</h1>
+        <p class="recap">前六章建立了从容器到现代栈的机制链——这一章用强制回忆和跨章判别检验它是否真的进了你的 schema。总题 18 道，三层梯度。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>概念层（对应 01–02）：容器静态结构与 refresh 时序的精确记忆</li>
+          <li>原理层（对应 03–05）：自动配置、代理、属性绑定的机制推导</li>
+          <li>应用判别层（跨章）：真实故障场景下的多章联动诊断</li>
+        </ul>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════
+           § 图 7.1 难度梯度金字塔
+           ═══════════════════════════════════════════════════ -->
+      <section id="s71">
+        <h2 id="pyramid"><span class="num">§</span><span>难度梯度金字塔</span></h2>
+        <p>三个层次分别测试不同深度的理解：最底层只需准确记忆静态概念，中间层要求推导因果机制，顶层要求在真实故障场景中同时调动多章知识。</p>
+
+        <figure>
+          <svg viewBox="0 0 548 310" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="难度梯度金字塔：底层概念层对应 01-02 章，中层原理层对应 03-05 章，顶层应用判别层跨章">
+            <defs>
+              <marker id="a71-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/></marker>
+              <marker id="a71-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/></marker>
+            </defs>
+
+            <!-- Bottom tier: 概念层 -->
+            <polygon points="60,270 460,270 380,190 140,190" class="diagram-ink node-fill"/>
+            <text x="260" y="235" text-anchor="middle" class="node-label">概念层</text>
+            <text x="260" y="252" text-anchor="middle" class="edge-label">ch 01 · 02 — 容器结构 · refresh 时序</text>
+
+            <!-- Middle tier: 原理层 -->
+            <polygon points="140,190 380,190 320,118 200,118" class="diagram-ink node-fill"/>
+            <text x="260" y="155" text-anchor="middle" class="node-label">原理层</text>
+            <text x="260" y="172" text-anchor="middle" class="edge-label">ch 03 · 04 · 05 — 自动配置 · 代理 · 配置绑定</text>
+
+            <!-- Top tier: 应用判别层 (accent) -->
+            <polygon points="200,118 320,118 260,44 260,44" class="diagram-accent node-fill-accent"/>
+            <text x="260" y="88" text-anchor="middle" class="node-label-accent">应用判别层</text>
+            <text x="260" y="105" text-anchor="middle" class="edge-label">跨章场景 · 需调动多章</text>
+
+            <!-- Right-side annotation arrows -->
+            <!-- 概念层 annotation -->
+            <line x1="462" y1="230" x2="490" y2="230" class="diagram-soft"/>
+            <text x="493" y="226" class="edge-label" text-anchor="start">6 题</text>
+            <text x="493" y="239" class="edge-label" text-anchor="start">回忆精度</text>
+
+            <!-- 原理层 annotation -->
+            <line x1="382" y1="155" x2="490" y2="155" class="diagram-soft"/>
+            <text x="493" y="151" class="edge-label" text-anchor="start">7 题</text>
+            <text x="493" y="164" class="edge-label" text-anchor="start">因果推导</text>
+
+            <!-- 应用判别层 annotation (accent) -->
+            <line x1="322" y1="81" x2="490" y2="81" class="diagram-soft"/>
+            <text x="493" y="77" class="branch-label" text-anchor="start">5 题</text>
+            <text x="493" y="90" class="edge-label" text-anchor="start">多章联动</text>
+          </svg>
+          <figcaption>
+            <span class="fig-num">图 7.1</span>三层梯度金字塔：越往上，单道题激活的章节越多。<strong>注意</strong>：应用判别层的每道题都需要同时调动两章以上的机制——回答时写出"哪一章的哪个机制"是关键。
+          </figcaption>
+        </figure>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════
+           概念层题目（对应 01–02）
+           ═══════════════════════════════════════════════════ -->
+      <section id="s-concept">
+        <h2 id="concept-tier"><span class="num">7.1</span><span>概念层题目</span></h2>
+        <p>对应 <a href="01-container.html">第 01 章</a>（容器静态结构）和 <a href="02-refresh.html">第 02 章</a>（refresh 时序）。合上教程，凭记忆作答——答案统一在文末展开。</p>
+
+        <div class="tier-section">
+          <span class="tier-label concept">概念层 · ch 01–02</span>
+          <ol class="q-list">
+            <li>
+              <code>BeanFactory</code> 和 <code>ApplicationContext</code> 都能 <code>getBean()</code>，二者有什么本质区别？列出 <code>ApplicationContext</code> 在 <code>BeanFactory</code> 基础上额外提供的至少三项能力。
+              <span class="hint">提示：参考 <a href="01-container.html#s11">01 章 §1.1</a></span>
+            </li>
+            <li>
+              <code>BeanDefinition</code> 和 Bean 实例的区别用一句话概括。为什么蓝图必须先于实例存在，这个设计解锁了什么能力？
+              <span class="hint">提示：参考 <a href="01-container.html#s12">01 章 §1.2</a></span>
+            </li>
+            <li>
+              <code>BeanFactoryPostProcessor</code>（BFPP）和 <code>BeanPostProcessor</code>（BPP）分别作用于什么对象、在容器生命周期的哪个阶段触发？用一句话说明"第一刀"的分界。
+              <span class="hint">提示：参考 <a href="01-container.html#s13">01 章 §1.3</a></span>
+            </li>
+            <li>
+              为什么构造器注入的循环依赖必然抛出 <code>BeanCurrentlyInCreationException</code>，而 field 注入的循环依赖在 Spring 默认配置下却能解开？三级缓存的哪一级是关键？
+              <span class="hint">提示：参考 <a href="01-container.html#s14">01 章 §1.4</a></span>
+            </li>
+            <li>
+              <code>refresh()</code> 中，<code>invokeBeanFactoryPostProcessors</code>、<code>registerBeanPostProcessors</code>、<code>finishBeanFactoryInitialization</code> 三个阶段的执行顺序是什么？为什么必须是这个顺序？
+              <span class="hint">提示：参考 <a href="02-refresh.html#s22">02 章 §2.2</a></span>
+            </li>
+            <li>
+              内嵌 Tomcat 在 <code>refresh()</code> 的哪个阶段启动？该阶段是在单例预实例化（<code>finishBeanFactoryInitialization</code>）之前还是之后？
+              <span class="hint">提示：参考 <a href="02-refresh.html#s23">02 章 §2.3</a></span>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════
+           原理层题目（对应 03–05）
+           ═══════════════════════════════════════════════════ -->
+      <section id="s-principle">
+        <h2 id="principle-tier"><span class="num">7.2</span><span>原理层题目</span></h2>
+        <p>对应 <a href="03-autoconfig.html">第 03 章</a>（自动配置）、<a href="04-aop.html">第 04 章</a>（AOP 代理）、<a href="05-web-config.html">第 05 章</a>（Web 与配置绑定）。这一层要求推导机制，而非只复述结论。</p>
+
+        <div class="tier-section">
+          <span class="tier-label principle">原理层 · ch 03–05</span>
+          <ol class="q-list">
+            <li>
+              <code>META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports</code> 文件取代了旧的 <code>spring.factories</code> 中的哪一部分？旧文件里仍然留有哪些内容没有搬走？
+              <span class="hint">提示：参考 <a href="03-autoconfig.html#s33">03 章 §3.3</a></span>
+            </li>
+            <li>
+              <code>@ConditionalOnMissingBean</code> 为什么能让用户的 <code>@Bean</code> 总是"赢过"自动配置的默认 Bean？请从解析顺序的角度解释，而不只是说"它检查 Bean 存不存在"。
+              <span class="hint">提示：参考 <a href="03-autoconfig.html#s35">03 章 §3.5</a></span>
+            </li>
+            <li>
+              两个自动配置类之间的相对执行顺序，靠什么机制来保证？如果不声明顺序关系，<code>@ConditionalOnMissingBean</code> 的结果会出现什么问题？
+              <span class="hint">提示：参考 <a href="03-autoconfig.html#s35">03 章 §3.5</a></span>
+            </li>
+            <li>
+              Spring Boot 4.0 默认使用 CGLIB 代理而非 JDK 动态代理，这个行为由哪个配置项控制？CGLIB 无法代理 <code>final</code> 方法的根本原因是什么？
+              <span class="hint">提示：参考 <a href="04-aop.html#s42">04 章 §4.2</a></span>
+            </li>
+            <li>
+              同一个类内部的方法 <code>a()</code> 调用同类 <code>b()</code>（加了 <code>@Transactional</code>），事务不生效。请追溯到"代理不在调用栈"这一根因，并给出两种不改变调用方的修复方案。
+              <span class="hint">提示：参考 <a href="04-aop.html#s44">04 章 §4.4</a></span>
+            </li>
+            <li>
+              <code>Environment</code> 中 PropertySource 的优先级链是什么顺序？命令行参数、OS 环境变量、<code>application-prod.yml</code>（prod profile 激活）、<code>application.yml</code>，按生效优先级从高到低排列。
+              <span class="hint">提示：参考 <a href="05-web-config.html#s53">05 章 §5.3</a></span>
+            </li>
+            <li>
+              环境变量 <code>MY_APP_PORT=9090</code> 为什么能绑定到 <code>@ConfigurationProperties(prefix="my.app")</code> 的 <code>port</code> 字段，却绑定不到 <code>@Value("${my.app.port}")</code>？请说出 relaxed binding 的工作位置。
+              <span class="hint">提示：参考 <a href="05-web-config.html#s54">05 章 §5.4</a></span>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════
+           应用判别层题目（跨章 ≥5）
+           ═══════════════════════════════════════════════════ -->
+      <section id="s-application">
+        <h2 id="application-tier"><span class="num">7.3</span><span>应用判别层题目（跨章场景）</span></h2>
+        <p>每道题对应一个真实故障或选型场景。题目标注了所涉及的章节——作答时，须点名是"哪一章的哪个机制"造成了这个现象，以及如何系统性地排除。</p>
+
+        <div class="tier-section">
+          <span class="tier-label application">应用判别层 · 跨章</span>
+          <ol class="q-list">
+            <li>
+              一个 <code>@Service</code> 上标了 <code>@Transactional</code>，但数据库回滚并没有发生。请给出三种可能的根因，并说明对应的排查步骤：
+              <strong>（a）</strong>自调用（self-invocation）失效；
+              <strong>（b）</strong>方法是 <code>private</code>；
+              <strong>（c）</strong>缺少 <code>@EnableTransactionManagement</code>（或 Boot 4.0 下相关自动配置未生效）。
+              三种场景的诊断方式有何不同？
+              <span class="q-chapters">ch 04 + ch 01</span>
+              <span class="hint">提示：从"代理是否在调用栈"和"BPP 是否被正确注册"两个维度切入。</span>
+            </li>
+            <li>
+              应用启动时抛出 <code>BeanCurrentlyInCreationException</code>。如何定位是哪两个 Bean 构成了构造器循环依赖环？有哪三种修法，各自的适用场景和代价是什么？Spring Boot 4.0 中为什么不能靠调整 <code>spring.main.allow-circular-references=true</code> 来永久解决？
+              <span class="q-chapters">ch 01 + ch 02</span>
+              <span class="hint">提示：参考 <a href="01-container.html#s14">01 章 §1.4</a> 三级缓存说明和构造器注入的例外。</span>
+            </li>
+            <li>
+              引入了一个第三方 starter，但预期中的默认 Bean 没有注入成功。请设计一个系统性的排查思路：
+              <strong>（a）</strong>如何用 Actuator 的 <code>/actuator/conditions</code>（原 <code>autoconfig</code>）端点判断是 <code>@ConditionalOnClass</code> 没命中（classpath 缺少依赖）还是被用户 <code>@Bean</code> 顶掉？
+              <strong>（b）</strong>如果 conditions 报告显示"matched"但 Bean 仍不存在，还有哪些其他可能？
+              <span class="q-chapters">ch 03</span>
+              <span class="hint">提示：参考 <a href="03-autoconfig.html#s34">03 章 §3.4</a> 条件筛选流程。</span>
+            </li>
+            <li>
+              运维在容器中通过环境变量 <code>APP_DB_URL=jdbc:postgresql://host/db</code> 传入数据库地址，但应用读到的是 <code>null</code>。排查发现代码里用的是 <code>@Value("${app.db.url}")</code>。请解释失败的机制原因，并给出两种修复方案，说明各自的原理。如果改用 <code>@ConfigurationProperties</code>，对应的字段命名应该是什么形式？
+              <span class="q-chapters">ch 05</span>
+              <span class="hint">提示：参考 <a href="05-web-config.html#s54">05 章 §5.4</a> relaxed binding 与 @Value 的对比。</span>
+            </li>
+            <li>
+              一个 IO 密集型高并发服务（大量数据库查询 + 外部 HTTP 调用）正在评估三种调优方案：<strong>（A）</strong>开启虚拟线程（<code>spring.threads.virtual.enabled=true</code>）并扩大 HikariCP 连接池；<strong>（B）</strong>编译为 GraalVM 原生镜像；<strong>（C）</strong>保持平台线程但调大 <code>server.tomcat.threads.max</code>。请从吞吐量瓶颈、启动时间、运维复杂度、框架生态约束四个维度对比三个方案，并给出你的选型建议及前提条件。
+              <span class="q-chapters">ch 06</span>
+              <span class="hint">提示：参考 <a href="06-frontier.html#s63">06 章 §6.3</a> 虚拟线程与瓶颈转移，以及 §6.4 三条快启动路线。</span>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════
+           读者绘图提示 callout
+           ═══════════════════════════════════════════════════ -->
+      <section id="s-drawing">
+        <h2 id="drawing-prompt"><span class="num">7.4</span><span>默写练习</span></h2>
+
+        <div class="callout example">
+          <span class="label">读者绘图提示</span>
+          <p>合上教程，在纸上默写 <code>refresh()</code> 流水线：三条轨道（改蓝图轨 / 加工实例轨 / onRefresh 启 Tomcat 轨）加上三个关键阶段的先后顺序。</p>
+          <p>画完之后翻回 <a href="02-refresh.html#fig22">第 02 章图 2.2</a> 对照——重点检查：<strong>你有没有把"Tomcat 在 onRefresh 阶段启动，早于 finishBeanFactoryInitialization 单例预实例化"画对？</strong>这是 refresh 时序里最容易画错的反直觉点。</p>
+          <p>如果画对了，再追问自己：为什么 Tomcat 要在单例还没全部造完时就开始监听端口——这个设计决定意味着什么？</p>
+        </div>
+
+        <div class="predict">
+          <span class="question-label">想一想</span>
+          <p>如果把内嵌 Tomcat 的启动挪到 <code>finishBeanFactoryInitialization</code> 之后（即所有单例已就绪），会对应用有什么影响？</p>
+          <details><summary>展开答案（先停 10 秒）</summary>
+            <p>好处是：Tomcat 开始接流量时所有单例都已就绪，不存在"Bean 还没好但请求已进来"的窗口期。代价是：现有的 <code>ApplicationRunner</code>/<code>CommandLineRunner</code> 扩展点以及 <code>SmartInitializingSingleton</code> 机制会被打乱，而且 <code>refresh()</code> 完成前 <code>SpringApplication</code> 不会返回——这意味着一旦某个单例初始化极慢，端口要等很久才监听，Kubernetes 等就绪探针超时的风险增大。Spring 的设计是让 Tomcat 先占端口、最后再调 <code>webServer.start()</code>（在 <code>finishRefresh</code> 阶段）才真正接受外部流量——<code>onRefresh</code> 时只是 <code>createWebServer</code>，并非立即对外开放。</p>
+          </details>
+        </div>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════
+           所有答案 — 单一 <details> 在文末
+           ═══════════════════════════════════════════════════ -->
+      <section class="self-check" id="all-answers">
+        <h2><span class="num">§</span><span>全部答案</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先完成所有题目再展开——顺序与题目保持一致，按三层分组。</p>
+
+        <details id="answers-details">
+          <summary>展开全部答案（18 题，按层分组）</summary>
+
+          <!-- 概念层答案 -->
+          <div class="answer-tier">
+            <h3>概念层答案（题 1–6）</h3>
+            <ol class="answer-list">
+              <li>
+                <strong>BeanFactory vs ApplicationContext：</strong><code>BeanFactory</code> 是最基础的 DI 接口，只提供 <code>getBean()</code>、<code>containsBean()</code> 等原始 Bean 获取能力。<code>ApplicationContext</code> 继承 <code>BeanFactory</code>，额外提供：①AOP 集成（自动注册 <code>BeanPostProcessor</code>）；②事件发布/订阅（<code>ApplicationEventPublisher</code>）；③国际化（<code>MessageSource</code>）；④<code>Environment</code> 与 profile 支持；⑤自动扫描（<code>@ComponentScan</code>）。日常使用的 <code>AnnotationConfigServletWebServerApplicationContext</code> 是后者的子类。
+              </li>
+              <li>
+                <strong>BeanDefinition vs Bean：</strong><code>BeanDefinition</code> 是"怎么造这个 Bean 的元数据"——包含类名、scope、构造参数、属性、是否懒加载、init/destroy 回调，不是 Bean 本身。蓝图先于实例存在，使得 <code>BeanFactoryPostProcessor</code> 能在实例化前读写这些元数据（例如替换占位符、修改 lazy-init），是整个"可插拔机制"的基础。
+              </li>
+              <li>
+                <strong>两类后置处理器的分界：</strong>BFPP（<code>BeanFactoryPostProcessor</code>）作用于<strong>蓝图（BeanDefinition）</strong>，在所有 Bean 实例化前触发；BPP（<code>BeanPostProcessor</code>）作用于<strong>实例</strong>，在每个 Bean 初始化前后触发。一句话分界：<em>改蓝图用 BFPP，改实例用 BPP。</em>
+              </li>
+              <li>
+                <strong>构造器循环依赖为何解不了：</strong>创建 Bean A 需要先完整创建 Bean B（构造器参数），而创建 Bean B 又需要先完整创建 Bean A——这是死锁。三级缓存中关键的是第三级 <code>singletonFactories</code>：field/setter 注入时，容器在 Bean 实例化后、属性注入前就把"早期引用工厂"放入第三级缓存，对方可以先拿到这个半成品；构造器注入无法在进入构造器之前暴露任何引用，死锁无法打破，直接抛 <code>BeanCurrentlyInCreationException</code>。Boot 2.6+ 默认 <code>allow-circular-references=false</code>，field 注入的环也不再被允许。
+              </li>
+              <li>
+                <strong>三阶段顺序及原因：</strong><code>invokeBeanFactoryPostProcessors</code>（阶段 5）→ <code>registerBeanPostProcessors</code>（阶段 6）→ <code>finishBeanFactoryInitialization</code>（阶段 11）。必须如此是因为：BFPP 要先把所有 BeanDefinition 收集并改写完（包括自动配置的 BeanDefinition 都在此加载）；BPP 必须在单例实例化前就注册好，否则实例化时没有 BPP 监听，代理就来不及包（<code>AbstractAutoProxyCreator</code> 是 BPP，必须在阶段 6 就位）。
+              </li>
+              <li>
+                <strong>内嵌 Tomcat 启动阶段：</strong>在 <code>onRefresh</code>（阶段 9），<code>ServletWebServerApplicationContext</code> 重写该方法，调用 <code>createWebServer()</code> 初始化 Tomcat 并绑定端口。这早于 <code>finishBeanFactoryInitialization</code>（阶段 11）的单例预实例化——Tomcat 端口先占，业务单例后造。真正开始接受外部流量是在 <code>finishRefresh</code>（阶段 12）调用 <code>webServer.start()</code> 之后。
+              </li>
+            </ol>
+          </div>
+
+          <!-- 原理层答案 -->
+          <div class="answer-tier">
+            <h3>原理层答案（题 7–13）</h3>
+            <ol class="answer-list">
+              <li>
+                <strong>.imports 文件取代的部分：</strong>只取代了 <code>spring.factories</code> 中 <code>org.springframework.boot.autoconfigure.EnableAutoConfiguration</code> 键下的自动配置类列表（从 Boot 2.7 起）。<code>spring.factories</code> 中仍保留：<code>EnvironmentPostProcessor</code>、<code>ApplicationContextInitializer</code>、<code>AutoConfigurationImportFilter</code>、<code>FailureAnalyzer</code>、<code>SpringApplicationRunListener</code> 等条目——这些没有搬走。
+              </li>
+              <li>
+                <strong>用户 Bean 为何总赢（排序角度）：</strong><code>AutoConfigurationImportSelector</code> 是 <code>DeferredImportSelector</code>，延迟到用户所有 <code>@Configuration</code> 解析之后才执行。<code>AutoConfigurationSorter</code> 把自动配置类排在最后。当 <code>@ConditionalOnMissingBean</code>（它是 <code>ConfigurationCondition</code>，在 <code>REGISTER_BEAN</code> 阶段求值）执行时，用户的 BeanDefinition 已经在注册表里——条件判断到"Bean 已存在"，自动配置的 <code>@Bean</code> 直接 back off。这不是魔法，是排序让用户先注册的必然结果。
+              </li>
+              <li>
+                <strong>自动配置类间相对顺序：</strong>靠 <code>@AutoConfigureBefore</code> / <code>@AutoConfigureAfter</code> / <code>@AutoConfigureOrder</code> 声明。如果两个自动配置类之间没有声明顺序，<code>AutoConfigurationSorter</code> 不能保证二者的相对位置，<code>@ConditionalOnMissingBean</code> 的结果取决于哪个先解析，行为不稳定——这是多个自动配置模块互相依赖时的常见陷阱。
+              </li>
+              <li>
+                <strong>Boot 默认 CGLIB 的控制项：</strong><code>AopAutoConfiguration</code> 把 <code>spring.aop.proxy-target-class</code> 默认设为 <code>true</code>，<code>DefaultAopProxyFactory</code> 据此选 CGLIB（<code>ObjenesisCglibAopProxy</code>）。CGLIB 无法代理 <code>final</code> 方法的根本原因：CGLIB 通过在运行时生成目标类的子类来拦截方法，<code>final</code> 方法不能被子类重写，因此代理子类无法覆盖它——拦截链无法插入，advice 不生效。
+              </li>
+              <li>
+                <strong>self-invocation 根因与修复：</strong>根因：<code>this.b()</code> 直接调用原始对象，代理对象不在调用栈中，<code>TransactionInterceptor</code> 无法触发。修复方案：①把 <code>b()</code> 拆到另一个 Bean，通过外部注入调用（最干净）；②在同类中自注入（<code>@Autowired private ThisBean self;</code>，再调 <code>self.b()</code>），注入的是代理；③改用 AspectJ 编译期/类加载期织入（不依赖代理，直接改字节码）。
+              </li>
+              <li>
+                <strong>PropertySource 优先级（从高到低）：</strong>命令行参数（<code>--key=value</code>）→ <code>SPRING_APPLICATION_JSON</code>（环境变量/系统属性中的 JSON）→ OS 环境变量 → <code>application-prod.yml</code>（profile-specific）→ <code>application.yml</code>（base）→ <code>@PropertySource</code> → 默认属性。先命中即生效，故命令行参数最高、<code>@PropertySource</code> 最低（仅高于默认属性）。
+              </li>
+              <li>
+                <strong>relaxed binding 的位置：</strong><code>@ConfigurationProperties</code> 由 <code>ConfigurationPropertiesBindingPostProcessor</code>（BPP）驱动，内部用 <code>Binder</code> 处理属性绑定，<code>Binder</code> 在解析属性名时应用 relaxed binding 规则（kebab-case / snake_case / SCREAMING_SNAKE_CASE / camelCase 归一），因此 <code>MY_APP_PORT</code> 能匹配到 <code>port</code> 字段。<code>@Value</code> 是由 <code>AutowiredAnnotationBeanPostProcessor</code> 处理的 SpEL/属性占位符，直接做精确字符串匹配，不经过 <code>Binder</code>，不支持 relaxed binding，所以 <code>${my.app.port}</code> 找不到 <code>MY_APP_PORT</code>。
+              </li>
+            </ol>
+          </div>
+
+          <!-- 应用判别层答案 -->
+          <div class="answer-tier">
+            <h3>应用判别层答案（题 14–18）</h3>
+            <ol class="answer-list">
+              <li>
+                <strong>@Transactional 不回滚的三种根因诊断：</strong>
+                <strong>（a）self-invocation：</strong>在日志/调试器里确认调用链是否经过代理（例如打印 <code>this.getClass().getName()</code>，如果是 <code>$$EnhancerBySpringCGLIB</code> 子类说明是代理调用；如果是原始类名说明绕过了代理）。修复：将方法拆到另一个 Bean，或自注入调代理。
+                <strong>（b）private 方法：</strong>CGLIB 生成子类时无法重写 <code>private</code> 方法，<code>AbstractAutoProxyCreator</code>（BPP，ch 01）不会对其生成拦截器。IDE 静态分析即可发现，改为 <code>public</code> 或 <code>protected</code>。
+                <strong>（c）缺 @EnableTransactionManagement：</strong>这意味着 <code>TransactionManagementConfigurationSelector</code> 未导入，<code>InfrastructureAdvisorAutoProxyCreator</code>（BPP）未注册，代理根本没有事务 advice。Boot 4.0 下 <code>TransactionAutoConfiguration</code> 自动配置了它，但若用户 exclude 了该自动配置类或没有 <code>PlatformTransactionManager</code> Bean，条件不满足，同样不生效。检查方式：<code>/actuator/conditions</code> 查看 <code>TransactionAutoConfiguration</code> 的 condition 评估结果。
+              </li>
+              <li>
+                <strong>BeanCurrentlyInCreationException 的定位与修复：</strong>
+                定位：异常栈中包含"Requested bean is currently in creation: Is there an unresolvable circular reference?"，通常会列出 Bean 名称。Spring Boot 4.0（默认 <code>allow-circular-references=false</code>）会在启动阶段更早地检测并报告循环链。开启 <code>--debug</code> 或查看 BeanDefinition 的构造器参数，能追溯两个 Bean 互相依赖的参数注入路径。
+                三种修法：①<strong>重构</strong>（最优）——提取公共依赖到第三个 Bean，打破环；②<strong>setter/field 注入替换构造器注入</strong>——只需把其中一条依赖边从构造器改为 <code>@Autowired</code> field，三级缓存可解，但破坏不可变性设计；③<strong><code>@Lazy</code> 延迟注入</strong>——在其中一个构造器参数上标 <code>@Lazy</code>，注入的是代理占位符，代理在首次调用时才真正解析目标 Bean，代价是增加了运行时查找开销。
+                为什么不能靠 <code>allow-circular-references=true</code>：构造器循环依赖即使打开这个选项也无法被三级缓存解开（构造器注入在进入构造器时就需要完整实例），该选项只能豁免 field/setter 注入的环。
+              </li>
+              <li>
+                <strong>starter 默认 Bean 不出现的排查：</strong>
+                <strong>（a）</strong>访问 <code>/actuator/conditions</code>（需要在 <code>management.endpoints.web.exposure.include</code> 中暴露），找到对应的自动配置类。若"notMatched"段显示 <code>OnClassCondition</code> 失败，说明 classpath 缺少依赖，检查 <code>pom.xml</code> 是否引入了正确的 starter jar；若"notMatched"段显示 <code>OnBeanCondition</code> 失败（"@ConditionalOnMissingBean … found beans …"），说明用户已有同类型 Bean，是预期的 back-off 行为。
+                <strong>（b）</strong>其他可能：<code>@ConditionalOnProperty</code> 所要求的属性未设置或值不匹配；自动配置类因 <code>@AutoConfigureAfter</code> 依赖的前置配置失败而跳过；自动配置类被用户在 <code>@SpringBootApplication(exclude=…)</code> 或 <code>spring.autoconfigure.exclude</code> 中手动排除。
+              </li>
+              <li>
+                <strong>环境变量不绑上的根因与修复：</strong>
+                <code>@Value("${app.db.url}")</code> 做精确字符串匹配，查找的是属性键 <code>app.db.url</code>（点分小写），而 OS 环境变量 <code>APP_DB_URL</code>（下划线大写）经 relaxed binding 转换后等价于 <code>app.db.url</code>，但 <code>@Value</code> 不经过 <code>Binder</code>，直接在 <code>Environment</code> 的 PropertySource 链中精确匹配——匹配不到。
+                修复方案①：改用 <code>@ConfigurationProperties(prefix="app.db")</code> + POJO，字段名 <code>url</code>，<code>Binder</code> 会应用 relaxed binding 匹配 <code>APP_DB_URL</code>。
+                修复方案②：保留 <code>@Value</code>，但将环境变量改名为 <code>APP_DB_URL</code> → <code>app.db.url</code>（在 Docker/K8s 中设置属性格式的环境变量），即把点分小写形式直接作为环境变量键。
+                <code>@ConfigurationProperties</code> 对应的字段命名应为 camelCase <code>dbUrl</code> 或 kebab-case <code>db-url</code>（在 POJO 字段上），<code>Binder</code> 均能正确匹配。
+              </li>
+              <li>
+                <strong>IO 密集型高并发服务选型对比：</strong>
+                <strong>方案 A（虚拟线程 + 扩大连接池）：</strong>吞吐量瓶颈从线程数转移到 HikariCP 连接数（默认 10），需要将 <code>spring.datasource.hikari.maximum-pool-size</code> 调大（通常调至 DB 服务器能承受的最大连接数）；启动时间与 JVM 启动相同；运维复杂度低；需要 Java 21+；框架生态无需改变。<strong>最适合已有 Spring 体系、Java 21+ 的 IO 密集型服务。</strong>
+                <strong>方案 B（GraalVM 原生镜像）：</strong>吞吐量与 JVM 相当（稳态无优势）；启动极快（50–100ms）、RSS 减半；运维复杂度高（闭世界要求所有反射/动态代理提前声明 AOT hint，三方库兼容性须验证）；CI 编译时间长。<strong>适合追求快速冷启动的 FaaS/Serverless 场景，而非高并发长运行服务的主要选型理由。</strong>
+                <strong>方案 C（平台线程调大 threads.max）：</strong>每个线程消耗约 1MB 栈，调至 1000+ 会带来显著内存压力，且线程上下文切换在高并发 IO 等待场景下效率低。这是虚拟线程出现前的老方法，现在不推荐。
+                <strong>建议：</strong>IO 密集 + 高并发 + 长运行 → 选方案 A，同步调大连接池；若部署场景有冷启动 SLA（如云函数）→ 可叠加方案 B，但需评估 AOT 适配成本。
+              </li>
+            </ol>
+          </div>
+
+        </details>
+      </section>
+
+      <!-- ═══════════════════════════════════════════════════
+           References
+           ═══════════════════════════════════════════════════ -->
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="01-container.html">01 · 容器与 Bean（静态结构）</a>——概念层题目的底层源</li>
+          <li><a href="02-refresh.html">02 · 启动流水线（动态时序）</a>——refresh 时序与 Tomcat 启动阶段</li>
+          <li><a href="03-autoconfig.html">03 · 自动配置</a>——ImportSelector、.imports 文件、@Conditional 筛选</li>
+          <li><a href="04-aop.html">04 · AOP 与代理</a>——CGLIB vs JDK、self-invocation 失效机制</li>
+          <li><a href="05-web-config.html">05 · Web 与配置</a>——PropertySource 优先级、relaxed binding、OSIV</li>
+          <li><a href="06-frontier.html">06 · 现代栈与前沿</a>——虚拟线程瓶颈转移、GraalVM 原生镜像约束</li>
+          <li><a href="https://docs.spring.io/spring-boot/reference/features/external-config.html" target="_blank" rel="noopener">Spring Boot 4.0 Externalized Configuration 官方文档</a></li>
+          <li><a href="https://docs.spring.io/spring-framework/reference/core/beans/context-introduction.html" target="_blank" rel="noopener">Spring Framework — ApplicationContext 参考文档</a></li>
+          <li><a href="https://docs.spring.io/spring-boot/reference/actuator/conditions-evaluation-report.html" target="_blank" rel="noopener">Conditions Evaluation Report（Actuator）</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="06-frontier.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">06 · 现代栈与前沿</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到起点 →</span>
+          <span class="title">00 · Spring Boot 机制深挖</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#pyramid" data-toc-target="pyramid">§ 难度金字塔</a></li>
+        <li><a href="#concept-tier" data-toc-target="concept-tier">7.1 概念层 (ch 01–02)</a></li>
+        <li><a href="#principle-tier" data-toc-target="principle-tier">7.2 原理层 (ch 03–05)</a></li>
+        <li><a href="#application-tier" data-toc-target="application-tier">7.3 应用判别层</a></li>
+        <li><a href="#drawing-prompt" data-toc-target="drawing-prompt">7.4 默写练习</a></li>
+        <li><a href="#all-answers" data-toc-target="all-answers">§ 全部答案</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
