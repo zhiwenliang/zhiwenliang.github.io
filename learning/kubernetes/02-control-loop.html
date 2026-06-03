@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update <title>
+    3. Update the .learning-path breadcrumb (mark current chapter with .current)
+    4. Fill in <article> with chapter content using the reusable HTML
+       snippets defined in references/tutorial_template.md
+    5. Update sticky TOC links (aside.toc-sidebar > ul) to match in-article anchors
+    6. Update prev/next nav at bottom
+
+  Class names you'll use (full reference in tutorial_template.md):
+    .learning-path   .chapter-opener (now uses .chapter-label, not .numeral)
+    .schema-panel   .one-liner   .rationale   .annotations
+    .code-block (with .header > .filename .lang .copy)
+    .callout (.warning .tip .example .insight — only .warning shows accent)
+    .compare-table (tr.selected)
+    figure > svg > figcaption (figcaption > .fig-num)
+    .predict   details > summary
+    .self-check   .challenge   .references   .chapter-nav
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>控制循环：让对象“活起来”的引擎 · Kubernetes 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 对象模型</a><span class="sep">—</span>
+    <a href="02-control-loop.html" class="current">02 控制循环</a><span class="sep">—</span>
+    <a href="03-scheduling.html">03 调度与资源</a><span class="sep">—</span>
+    <a href="04-networking.html">04 网络模型</a><span class="sep">—</span>
+    <a href="05-storage-state.html">05 存储与状态</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现状与前沿</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>控制循环：让对象“活起来”的引擎</h1>
+        <p class="recap">上一章把 K8s 的对象词汇表建立起来——每个对象都是 spec（期望）+ status（实际）。这一章解释这些静态记录如何被持续驱动：控制循环。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>声明式 vs 命令式：你交的是期望状态，不是操作步骤</li>
+          <li>level-triggered（电平触发）为什么比 edge-triggered（边沿触发）更抗故障</li>
+          <li>reconcile 循环：observe → diff → act 的三步</li>
+          <li>控制平面五大组件如何协作</li>
+          <li>一条 kubectl apply 从命令到 Pod 运行的完整路径</li>
+        </ul>
+      </section>
+
+      <p>第 1 章末尾埋了一个问题：把一份 <code>replicas: 3</code> 的 Deployment 写进集群，没有任何人继续操作，Pod 却被创建、被维持、删掉一个还会自动补回。这份静态的 spec 凭什么会“动”？答案是一组永不停止的<strong>控制循环</strong>。本章的全部内容可以压成一句话：<strong>Kubernetes 是一组 level-triggered 控制循环——你声明 spec（期望），控制器持续观测 status（实际）并把实际推向期望。</strong>自愈、被改回去的 <code>kubectl edit</code>、改了配置却不生效，这些现象一旦看见循环，就都不再是“魔法”。</p>
+
+      <h2 id="s21"><span class="num">2.1</span><span>声明式 vs 命令式：交期望，不交步骤</span></h2>
+      <p class="one-liner">命令式是“跑 X、再跑 Y、再启动 Z”；声明式是存一份期望 spec，让系统自己想办法达到。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>命令式脚本把“当前状态”这个隐含前提钉死在每一行里：第 3 行假定第 2 行成功了。脚本在中途崩溃，集群就停在一个谁也说不清的中间态——已经建了一半的资源、改了一半的配置。要恢复，得先搞清楚“现在到哪了”，而这恰恰是最难的事。声明式把这个难题反过来：不描述路径，只描述目的地。</p>
+      </div>
+
+      <p>命令式的世界里，你对系统说的是<strong>动词序列</strong>：创建这个、更新那个、删除另一个。每条指令都依赖前一条的结果，整个序列没有幂等性——重跑一遍要么报“已存在”而失败，要么重复创建。一旦执行到第 k 步崩溃，系统落在第 1…k 步之间某个无法命名的状态，没有任何记录告诉你“目标本来是什么”。</p>
+
+      <p>声明式的世界里，你提交的是<strong>一个名词</strong>：期望的最终状态长什么样。<code>kubectl apply -f deploy.yaml</code> 不执行任何动作，它只做一件事——把这份 spec 作为“意图”记录下来。达成意图是系统自己的事，而且系统可以反复尝试：这一轮没达到，下一轮接着推，因为目标始终明确地写在那里。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">imperative-vs-declarative.sh</span>
+          <span class="lang">shell</span>
+          <button class="copy" data-copy-target="c-imp">复制</button>
+        </div>
+<pre id="c-imp"><code class="language-bash"># 命令式：一串动词，崩在第 2 行就停在未知状态
+docker run -d --name web-1 nginx
+docker run -d --name web-2 nginx
+docker run -d --name web-3 nginx   # 若这行失败：现在是 2 个还是 3 个？无人知晓
+
+# 声明式：一个名词（期望），系统自己想办法达到并维持
+kubectl apply -f deploy.yaml        # spec: replicas: 3 —— 只记录意图，不执行步骤</code></pre>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">底层机制 · 比文档深一层</span>
+        <p><code>apply</code> 的“意图”不是一句空话，它被结构化地存了下来。api-server 会把你提交的字段记进对象的 <code>metadata.annotations</code>（<code>kubectl.kubernetes.io/last-applied-configuration</code>），下次 <code>apply</code> 时做三方合并（上次意图、本次意图、集群现状），算出该改哪些字段。<strong>所以 spec 不是一次性命令，而是一份会被反复读取的、关于“你想要什么”的持久声明。</strong>这正是下一节循环能持续工作的前提——目标永远在线可读。</p>
+      </div>
+
+      <h2 id="s22"><span class="num">2.2</span><span>level-triggered vs edge-triggered：抗故障的支点</span></h2>
+      <p class="one-liner">edge-triggered 对“事件”做反应；level-triggered 对“当前完整状态”做反应。后者是 Kubernetes 全部容错能力的支点。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>分布式系统里，组件崩溃、消息丢失、网络抖动不是异常而是常态。如果系统的正确性依赖“每个事件都被恰好处理一次”，那么任何一次丢事件都会让实际状态与期望状态永久发散，且无法自行修复。Borg 与 Omega 的教训凝结成一条设计原则：系统必须是对“部分失败”的反应式设计——这就是选 level 而非 edge 的根本原因。</p>
+      </div>
+
+      <p><strong>edge-triggered（边沿触发）</strong>：系统监听“变化事件”——“副本数从 3 改成了 5”——并对这个 delta 做出动作（多起 2 个）。它处理的是<em>增量</em>。问题在于：如果接收方在事件到达时正好崩溃，或者事件在传输中丢失，那么这次“+2”就<strong>永久丢失</strong>了。没有人会再提起它，因为它只是一个转瞬即逝的边沿。系统从此停在 3 个副本，而期望是 5 个，且永远不会自己纠正。</p>
+
+      <p><strong>level-triggered（电平触发）</strong>：系统不关心“发生了什么变化”，每次被唤醒时都<strong>重新读取完整的实际状态</strong>（现在有几个副本）并与期望状态（应该有几个）做完整比对，差多少补多少。它处理的是<em>当前的绝对值</em>，不是增量。无论它是被一个 watch 事件唤醒、被定时器唤醒、还是刚从崩溃中重启——动作都一样：读全量、比对、收敛。因此丢事件、组件重启、抖动，都只意味着“这一轮没动作或晚一轮动作”，下一轮照样自愈。</p>
+
+      <table class="compare-table">
+        <caption>edge-triggered vs level-triggered</caption>
+        <thead>
+          <tr><th style="width:24%"></th><th>edge-triggered（边沿）</th><th>level-triggered（电平）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>处理对象</td>
+            <td>变化事件 / 增量（delta）</td>
+            <td>当前完整状态 / 绝对值</td>
+          </tr>
+          <tr>
+            <td>丢失一个事件</td>
+            <td>那次变更永久丢失，状态发散且不自愈</td>
+            <td>无所谓——下一轮重读全量，照样收敛</td>
+          </tr>
+          <tr class="selected">
+            <td>崩溃后重启</td>
+            <td>错过期间的所有事件全部丢失</td>
+            <td>重启后重读一次全量即追平，毫无影响</td>
+          </tr>
+          <tr>
+            <td>代价</td>
+            <td>实现简单、动作少</td>
+            <td>每轮都要重读并比对全量状态，开销更大</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="边沿触发丢失一次加二事件后永久停在3个副本；电平触发每轮重读全量总能从3收敛到5">
+          <defs>
+            <marker id="lt-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="lt-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- top row: edge-triggered -->
+          <text x="20" y="48" class="edge-label" font-weight="700">EDGE</text>
+          <rect x="90" y="26" width="150" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="165" y="48" text-anchor="middle" class="node-label">实际 = 3</text>
+          <text x="165" y="65" text-anchor="middle" class="edge-label">期望 = 5</text>
+
+          <line x1="240" y1="49" x2="330" y2="49" class="diagram-soft" marker-end="url(#lt-ink)"/>
+          <text x="285" y="38" text-anchor="middle" class="branch-label">+2 事件丢失</text>
+
+          <rect x="330" y="26" width="150" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="405" y="48" text-anchor="middle" class="node-label">实际 = 3</text>
+          <text x="405" y="65" text-anchor="middle" class="edge-label">期望 = 5</text>
+
+          <text x="560" y="53" text-anchor="middle" class="branch-label">永久停在 3 · 不自愈</text>
+
+          <!-- bottom row: level-triggered -->
+          <text x="20" y="178" class="edge-label" font-weight="700">LEVEL</text>
+          <rect x="90" y="156" width="150" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="165" y="178" text-anchor="middle" class="node-label">实际 = 3</text>
+          <text x="165" y="195" text-anchor="middle" class="edge-label">期望 = 5</text>
+
+          <line x1="240" y1="179" x2="330" y2="179" class="diagram-accent" marker-end="url(#lt-ver)"/>
+          <text x="285" y="168" text-anchor="middle" class="edge-label">重读全量</text>
+
+          <rect x="330" y="156" width="150" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="405" y="178" text-anchor="middle" class="node-label">实际 = 5</text>
+          <text x="405" y="195" text-anchor="middle" class="edge-label">期望 = 5</text>
+
+          <text x="560" y="183" text-anchor="middle" class="branch-label">每轮收敛 · 抗丢失</text>
+
+          <line x1="480" y1="179" x2="500" y2="179" class="diagram-accent" marker-end="url(#lt-ver)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>同样丢掉一次“+2”，两种模型的命运。<strong>注意</strong>：edge 把丢失的增量当成永久损失；level 根本不看“增量”，它每轮重读“实际 3、期望 5”，于是不管谁来唤醒它都会补到 5。容错不是额外加的重试逻辑，而是“只看绝对值”这个选择的免费副产品。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 level-triggered 控制器在监听 api-server 时漏掉了一个“某 Pod 被删除”的 watch 事件。这个删除会被永久忽略吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>不会。控制器下一轮 reconcile 时重读全量：它列出该 Deployment 当前实际拥有的 Pod，发现数量比期望少一个，于是新建一个补齐。漏掉的那个事件从未被“处理”，但结果完全正确——因为控制器从不依赖事件本身，只依赖它重读到的绝对状态。watch 事件在这里只是一个“该醒醒了”的提醒，丢了顶多晚一轮，正确性不受影响。</p>
+        </details>
+      </div>
+
+      <h2 id="s23"><span class="num">2.3</span><span>reconcile 循环：observe → diff → act</span></h2>
+      <p class="one-liner">每个控制器都在跑同一个三步循环：观测实际、与期望比对、改变世界——然后回到观测，永不停止。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>上一节确立了“只看绝对值”的原则，这一节是它的具体形态。把 level-triggered 落成代码，就是一个三步闭环。理解这三步，才能解释为什么控制器“看起来什么都没做”却在持续工作，以及为什么它<strong>常常永远到不了稳态——而这是正常的</strong>。</p>
+      </div>
+
+      <p><strong>observe（观测）</strong>：读取当前实际状态。注意控制器<strong>不直接打 etcd，也不每轮都去问 api-server</strong>——那样会把控制平面压垮。它通过 <strong>informer</strong> 读一份<strong>本地缓存</strong>。informer 的工作方式是 <strong>list-then-watch</strong>：启动时先 <code>list</code> 一次拉全量建立缓存，之后用 <code>watch</code> 持续接收增量更新维护这份缓存；每个对象带 <code>resourceVersion</code>，informer 据此去重、保证不漏不重地推进缓存版本。于是“读实际状态”几乎是本地内存操作。</p>
+
+      <p><strong>diff（比对）</strong>：把 spec（期望）与 status（实际）做比对，算出差异。差异的形态各异——“少 2 个 Pod”“某个字段不一致”“多了一个该删的对象”。</p>
+
+      <p><strong>act（行动）</strong>：针对差异，通过 <strong>api-server</strong> 改变世界——创建、更新或删除对象。注意控制器自己<strong>不直接动 etcd</strong>，它把意图写给 api-server，由 api-server 落库。动作完成后，循环立刻回到 observe。</p>
+
+      <figure>
+        <svg viewBox="0 0 560 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="observe到diff到act再回到observe的环形循环，标注永不停止">
+          <defs>
+            <marker id="rc-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- three nodes on a triangle -->
+          <rect x="200" y="24" width="160" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="280" y="48" text-anchor="middle" class="node-label">observe 观测</text>
+          <text x="280" y="68" text-anchor="middle" class="edge-label">informer 本地缓存</text>
+
+          <rect x="372" y="244" width="160" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="452" y="268" text-anchor="middle" class="node-label">diff 比对</text>
+          <text x="452" y="288" text-anchor="middle" class="edge-label">spec vs status</text>
+
+          <rect x="28" y="244" width="160" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="108" y="268" text-anchor="middle" class="node-label">act 行动</text>
+          <text x="108" y="288" text-anchor="middle" class="edge-label">经 api-server 改世界</text>
+
+          <!-- arrows around the ring, clockwise: observe -> diff -> act -> observe -->
+          <path d="M 360 66 Q 470 130 460 242" class="diagram-accent" fill="none" marker-end="url(#rc-ver)"/>
+          <path d="M 372 280 L 190 280" class="diagram-accent" fill="none" marker-end="url(#rc-ver)"/>
+          <path d="M 100 242 Q 90 130 200 66" class="diagram-accent" fill="none" marker-end="url(#rc-ver)"/>
+
+          <!-- center caption -->
+          <text x="280" y="172" text-anchor="middle" class="node-label-accent">永不停止</text>
+          <text x="280" y="192" text-anchor="middle" class="edge-label">不是“收到事件才动”</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>reconcile 循环的三步闭环。<strong>注意</strong>：它不是“收到事件 → 处理事件”的单次响应，而是不断重新比对期望与实际——这就是 level-triggered 在代码层面的样子。循环常常永远到不了稳态（spec 一直在变、外部一直在扰动），那不是 bug，是它的常态。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">底层机制 · informer 为什么存在</span>
+        <p>假如每个控制器每轮都直接 <code>list</code> 一次 etcd，几十个控制器 × 高频循环会把 etcd 打爆。informer 把“读”这一侧彻底本地化：全集群对某类对象的 watch 由共享 informer 复用一条连接，缓存在内存里，控制器读缓存而非读后端。<code>resourceVersion</code> 是这套机制的游标——watch 中断后可以从上次的版本号续上，不必重新拉全量。<strong>“读很便宜”是 reconcile 能跑得这么频繁的物理基础。</strong></p>
+      </div>
+
+      <h2 id="s24"><span class="num">2.4</span><span>控制平面架构：谁碰 etcd，谁只 watch</span></h2>
+      <p class="one-liner">etcd 是唯一事实来源；api-server 是唯一直接读写 etcd 的组件；其余所有组件都只 watch api-server。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前三节讲的是“一个”控制器怎么工作。真实集群里有几十个控制器、一个调度器、每个节点一个 kubelet 同时在跑。要让它们协同而不互相踩踏，靠的不是一个中央指挥官，而是一条铁律：所有状态都经由 api-server 进出 etcd，组件之间不直接 RPC 编排。理解这条边界，是看懂下一节那条完整路径的前提。</p>
+      </div>
+
+      <p>控制平面五大组件，各司其职：</p>
+      <ul>
+        <li><strong>etcd</strong>——唯一事实来源。一个强一致的分布式 KV 存储，集群里所有对象的 spec 与 status 最终都落在这里。它只管存，不懂业务。</li>
+        <li><strong>api-server</strong>——<strong>唯一直接读写 etcd 的组件</strong>。所有其他组件、所有 <code>kubectl</code>，都只能通过它间接访问状态。它对外是一套 REST API，对内是 etcd 的唯一守门人。一次写请求要穿过它的处理链：<strong>认证（你是谁）→ 鉴权（你能不能做）→ mutating admission（按策略改写对象，如注入 sidecar）→ schema 校验（字段合不合法）→ validating admission（按策略放行或拒绝）→ 持久化到 etcd</strong>。</li>
+        <li><strong>controller-manager</strong>——把几十个 reconcile 循环（Deployment 控制器、ReplicaSet 控制器、Node 控制器……）打包跑在一个进程里，每个都 watch api-server。</li>
+        <li><strong>scheduler</strong>——一个特殊的控制器。它专门 watch “还没有 <code>nodeName</code> 的 Pod”，为每个这样的 Pod 选一个合适的 Node，然后把选择结果写回去（设置 <code>nodeName</code>，即 binding）。它<strong>只决策、不启动容器</strong>。</li>
+        <li><strong>kubelet</strong>——每个 Node 上各一个。它 watch “<code>nodeName</code> 等于自己的 Pod”，把这些 Pod 通过 <strong>CRI</strong>（容器运行时接口）真正跑起来，并把容器的实际 status 回报给 api-server。</li>
+      </ul>
+      <p>此外每个节点还有 <strong>kube-proxy</strong>，负责把 Service 的抽象编排成节点上的网络转发规则（细节留到第 4 章）。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="etcd在顶端，api-server是唯一连etcd的组件，controller-manager、scheduler、节点上的kubelet都用watch边指向api-server而不指etcd">
+          <defs>
+            <marker id="cp-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="cp-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- etcd at top -->
+          <rect x="280" y="24" width="160" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="48" text-anchor="middle" class="node-label">etcd</text>
+          <text x="360" y="67" text-anchor="middle" class="edge-label">唯一事实来源</text>
+
+          <!-- api-server: only one touching etcd; accent -->
+          <rect x="270" y="150" width="180" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="174" text-anchor="middle" class="node-label-accent">api-server</text>
+          <text x="360" y="194" text-anchor="middle" class="edge-label">唯一读写 etcd</text>
+
+          <!-- the only edge to etcd, accent, bidirectional -->
+          <line x1="360" y1="150" x2="360" y2="80" class="diagram-accent" marker-start="url(#cp-ver)" marker-end="url(#cp-ver)"/>
+          <text x="404" y="118" text-anchor="middle" class="branch-label">唯一写入边</text>
+
+          <!-- controller-manager bottom-left -->
+          <rect x="30" y="300" width="190" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="125" y="324" text-anchor="middle" class="node-label">controller-manager</text>
+          <text x="125" y="344" text-anchor="middle" class="edge-label">跑各种 reconcile 循环</text>
+
+          <!-- scheduler bottom-center -->
+          <rect x="265" y="300" width="190" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="324" text-anchor="middle" class="node-label">scheduler</text>
+          <text x="360" y="344" text-anchor="middle" class="edge-label">选 Node · 写 nodeName</text>
+
+          <!-- Node block bottom-right: kubelet + kube-proxy inside a dashed boundary -->
+          <rect x="500" y="284" width="200" height="92" rx="6" class="diagram-soft"/>
+          <text x="600" y="300" text-anchor="middle" class="edge-label" font-weight="700">Node</text>
+          <rect x="516" y="308" width="168" height="26" rx="4" class="diagram-ink node-fill"/>
+          <text x="600" y="325" text-anchor="middle" class="node-label">kubelet</text>
+          <rect x="516" y="342" width="168" height="26" rx="4" class="diagram-ink node-fill"/>
+          <text x="600" y="359" text-anchor="middle" class="node-label">kube-proxy</text>
+
+          <!-- watch edges: all point to api-server, none to etcd -->
+          <line x1="125" y1="300" x2="290" y2="210" class="diagram-ink" marker-end="url(#cp-ink)"/>
+          <text x="186" y="268" text-anchor="middle" class="edge-label">watch</text>
+
+          <line x1="360" y1="300" x2="360" y2="210" class="diagram-ink" marker-end="url(#cp-ink)"/>
+          <text x="392" y="258" text-anchor="middle" class="edge-label">watch</text>
+
+          <line x1="540" y1="308" x2="432" y2="210" class="diagram-ink" marker-end="url(#cp-ink)"/>
+          <text x="512" y="262" text-anchor="middle" class="edge-label">watch</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>控制平面的拓扑。<strong>注意</strong>：只有 api-server 那条边碰 etcd（accent 标出）；controller-manager、scheduler、kubelet 全部把箭头指向 api-server 而<strong>不指 etcd</strong>，组件之间也<strong>不直接 RPC 编排</strong>。整个系统靠“都 watch 同一个 api-server”来协同，没有中央指挥官。</figcaption>
+      </figure>
+
+      <h2 id="s25"><span class="num">2.5</span><span>跟踪一条 kubectl apply</span></h2>
+      <p class="one-liner">没有任何组件“指挥”全局；一条 apply 的落地，是若干个各自 watch + reconcile 的循环依次被触发的结果。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>把前四节拼成一条完整路径，是本章的收口。读完这一节，“声明 spec、组件各自收敛”就从抽象原则变成你能在脑中逐帧播放的具体过程——而这恰恰是排障时最值钱的能力：知道一个 Pod 卡在哪一帧，就知道该看哪个组件。</p>
+      </div>
+
+      <p>提交 <code>kubectl apply -f deploy.yaml</code>（其中 <code>spec.replicas: 3</code>），发生的事按顺序是：</p>
+      <ol>
+        <li><strong>kubectl → api-server</strong>：kubectl 把 YAML 转成 JSON，向 api-server 发一个 POST。api-server 跑完处理链——认证、鉴权、mutating admission、schema 校验、validating admission——然后把这个 Deployment 对象<strong>写入 etcd</strong>。此刻集群里只多了一条记录，还没有任何容器。</li>
+        <li><strong>Deployment 控制器</strong>：它一直 watch Deployment。看到这个新对象后 reconcile：期望有一个对应的 ReplicaSet，实际没有，于是<strong>创建一个 ReplicaSet</strong>（同样是写给 api-server，落 etcd）。</li>
+        <li><strong>ReplicaSet 控制器</strong>：它 watch ReplicaSet。看到新 ReplicaSet 期望 3 个副本、实际 0 个，于是<strong>创建 3 个 Pod 对象</strong>。这些 Pod 此刻是 <code>Pending</code> 状态，<strong>没有 <code>nodeName</code></strong>——还没被调度。</li>
+        <li><strong>scheduler</strong>：它 watch “没有 <code>nodeName</code> 的 Pod”。看到这 3 个待调度 Pod，为每个挑一个合适的 Node，把选择结果<strong>写回 Pod 的 <code>nodeName</code> 字段</strong>（binding）。scheduler 到此收工——它从不启动容器。</li>
+        <li><strong>目标节点的 kubelet</strong>：每个节点的 kubelet 都 watch “<code>nodeName</code> 等于自己的 Pod”。被分到 Pod 的那个节点的 kubelet 看到“这是属于自己的 Pod”，于是<strong>拉镜像 → 经 CRI 起容器</strong>，然后把容器跑起来后的实际 status <strong>回报给 api-server</strong>。</li>
+      </ol>
+      <p><strong>关键在于：从头到尾没有一个组件“指挥”全局。</strong>Deployment 控制器不知道 scheduler 存在，scheduler 不知道 kubelet 存在。每个组件只盯着 api-server 里与自己相关的那部分状态，做自己的 reconcile，把结果写回去——这个写回，又成了下一个组件的输入。协同是涌现出来的，不是编排出来的。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 430" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="kubectl apply 时序图：kubectl写入api-server落etcd，控制器依次创建ReplicaSet和Pod，scheduler写nodeName，kubelet起容器并回报status">
+          <defs>
+            <marker id="sq-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="sq-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 5 lifelines (<=6) -->
+          <!-- x positions: kubectl 70, api-server 230, controllers 390, scheduler 540, kubelet 660 -->
+          <text x="70"  y="28" text-anchor="middle" class="node-label">kubectl</text>
+          <text x="230" y="28" text-anchor="middle" class="node-label-accent">api-server</text>
+          <text x="390" y="28" text-anchor="middle" class="node-label">controllers</text>
+          <text x="540" y="28" text-anchor="middle" class="node-label">scheduler</text>
+          <text x="660" y="28" text-anchor="middle" class="node-label">kubelet</text>
+
+          <line x1="70"  y1="40" x2="70"  y2="410" class="diagram-soft"/>
+          <line x1="230" y1="40" x2="230" y2="410" class="diagram-accent"/>
+          <line x1="390" y1="40" x2="390" y2="410" class="diagram-soft"/>
+          <line x1="540" y1="40" x2="540" y2="410" class="diagram-soft"/>
+          <line x1="660" y1="40" x2="660" y2="410" class="diagram-soft"/>
+
+          <!-- etcd note attached to api-server -->
+          <rect x="186" y="70" width="88" height="24" rx="4" class="diagram-ink node-fill"/>
+          <text x="230" y="87" text-anchor="middle" class="edge-label">写 etcd</text>
+
+          <!-- 1. kubectl POST -> api-server -->
+          <line x1="70" y1="118" x2="228" y2="118" class="diagram-ink" marker-end="url(#sq-ink)"/>
+          <text x="150" y="110" text-anchor="middle" class="edge-label">① POST Deployment</text>
+
+          <!-- 2. api-server -> controllers (watch) ; controllers create ReplicaSet (write back) -->
+          <line x1="232" y1="158" x2="388" y2="158" class="diagram-ink" marker-end="url(#sq-ink)"/>
+          <text x="310" y="150" text-anchor="middle" class="edge-label">② watch 到 Deployment</text>
+          <line x1="388" y1="190" x2="232" y2="190" class="diagram-accent" marker-end="url(#sq-ver)"/>
+          <text x="310" y="182" text-anchor="middle" class="branch-label">创建 ReplicaSet</text>
+
+          <!-- 3. controllers create Pods (Pending, no nodeName) -->
+          <line x1="388" y1="226" x2="232" y2="226" class="diagram-accent" marker-end="url(#sq-ver)"/>
+          <text x="310" y="218" text-anchor="middle" class="branch-label">③ 创建 3 个 Pod</text>
+          <text x="310" y="242" text-anchor="middle" class="edge-label">Pending · 无 nodeName</text>
+
+          <!-- 4. api-server -> scheduler ; scheduler writes nodeName -->
+          <line x1="232" y1="278" x2="538" y2="278" class="diagram-ink" marker-end="url(#sq-ink)"/>
+          <text x="400" y="270" text-anchor="middle" class="edge-label">④ watch 到未调度 Pod</text>
+          <line x1="538" y1="310" x2="232" y2="310" class="diagram-accent" marker-end="url(#sq-ver)"/>
+          <text x="400" y="302" text-anchor="middle" class="branch-label">写 nodeName（binding）</text>
+
+          <!-- 5. api-server -> kubelet ; kubelet reports status -->
+          <line x1="232" y1="350" x2="658" y2="350" class="diagram-ink" marker-end="url(#sq-ink)"/>
+          <text x="450" y="342" text-anchor="middle" class="edge-label">⑤ watch 到属于自己的 Pod</text>
+          <line x1="658" y1="386" x2="232" y2="386" class="diagram-accent" marker-end="url(#sq-ver)"/>
+          <text x="450" y="378" text-anchor="middle" class="branch-label">拉镜像 · CRI 起容器 · 回报 status</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.4</span>一条 apply 的时序。<strong>注意</strong>：Pod 先以 <code>Pending</code> 存在（第 ③ 步，无 <code>nodeName</code>），之后才被 scheduler 赋予 <code>nodeName</code>（第 ④ 步）——“创建”和“调度”是两个独立步骤、由两个互不相识的组件完成。所有箭头都进出 api-server 那条 accent 生命线，组件之间没有任何直接连线。</figcaption>
+      </figure>
+
+      <h2 id="s26"><span class="num">2.6</span><span>探针：循环如何“观测健康”</span></h2>
+      <p class="one-liner">探针（probe）是 kubelet 这一层 reconcile 的“观测”输入——它让循环不只看“容器在不在”，还看“容器健不健康、能不能收流量”。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>到这里循环只观测到“进程是否存活”这一粗粒度信号。但进程活着不等于工作正常（死锁、还没加载完）。探针给循环更细的观测维度，让“把实际推向期望”这件事能精确到“重启它”还是“先别给它发流量”。本节只建立机制，第 3、4 章会用到。</p>
+      </div>
+
+      <p>三种探针对应三种不同的“健康”问题，触发三种不同的动作：</p>
+      <ul>
+        <li><strong>liveness（存活）</strong>：探测失败 → kubelet 判定容器“坏了”，<strong>重启该容器</strong>。用于检测死锁这类“活着但卡死”的状态。</li>
+        <li><strong>readiness（就绪）</strong>：探测失败 → <strong>把该 Pod 的 IP 从 Service 端点列表里摘掉</strong>，<strong>但不重启</strong>。用于“暂时不能收流量、但本身没坏”的状态（如正在加载缓存、依赖暂时不可用）。摘掉后流量不再进来，恢复后再加回。</li>
+        <li><strong>startup（启动）</strong>：在容器<strong>慢启动期间</strong>先顶着——startup 探针没成功之前，liveness 和 readiness 都暂缓，避免“启动还没完就被 liveness 判死、反复重启”。一旦 startup 成功，交棒给另外两个。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">失败模式 · 重启风暴</span>
+        <p>把外部依赖（如数据库）的可用性塞进 <strong>liveness</strong> 探针，是一个会放大故障的陷阱。一旦数据库抖动，所有副本的 liveness 同时失败 → kubelet 同时重启<strong>整队</strong>容器 → 重启期间依赖仍未恢复 → 再次失败、再次重启 → 雪崩。容器自身明明没坏，却被一次外部抖动打趴全队。<strong>外部依赖的检查应放在 readiness</strong>：依赖不可用时把 Pod 从 Service 摘掉、停止收流量即可，容器无需重启，依赖恢复后自动加回——故障被隔离，而不是被放大。</p>
+      </div>
+
+      <h2 id="s27"><span class="num">2.7</span><span>回看第 1 章：自愈不是魔法，是循环</span></h2>
+      <p>带着 reconcile 模型，重新解释第 1 章那个现象：<strong>你手动 <code>kubectl delete pod</code> 删掉一个由 ReplicaSet 管理的 Pod，几秒后一个新 Pod 自己冒了出来。</strong>这不是有谁在“监视你的删除操作并报复”，而是——你的删除让 etcd 里该 ReplicaSet 实际拥有的 Pod 从 3 个变成 2 个；ReplicaSet 控制器下一轮 reconcile 时 observe 到“实际 = 2”，diff 出“实际 &lt; 期望（3）”，于是 act：新建一个 Pod 补齐。<strong>自愈 = 一个永不停止的 level-triggered 循环，碰巧把你的删除当成了一次需要纠正的偏差。</strong></p>
+
+      <p>同样地，<strong>为什么 <code>kubectl edit</code> 改的东西会被改回去？</strong>如果你改的是 status 或某个由控制器拥有的派生字段，控制器下一轮 reconcile 会发现它与 spec 推导出的期望不符，于是把它覆盖回去——你改的是“实际”，而循环只认 spec 这个“期望”。<strong>为什么改了配置却不滚动更新？</strong>因为很多配置（如挂载的 ConfigMap 内容）不在触发 reconcile 的 spec 字段里——spec 没变，循环就认为“实际已达期望”，不会重建 Pod，配置自然不生效。每一个“反直觉”，都在循环可见之后变成“当然如此”。</p>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来，再展开对照。</p>
+        <ol>
+          <li>用一句话说出 reconcile 循环的三步，并指出哪一步会“改变世界”、它是通过谁去改的。</li>
+          <li>为什么 level-triggered 的控制器能容忍丢失的 watch 事件？（跨机制题：把 2.2 的原则和 2.3 的循环连起来答。）</li>
+          <li>控制平面里哪个组件直接读写 etcd？scheduler 在一条 apply 路径里到底做了什么、没做什么？</li>
+          <li>（设计题）某团队把“能否连上 Redis”写进了 liveness 探针。Redis 抖动了一下，结果整个服务的所有副本同时反复重启、迟迟不恢复。解释成因，并说出正确的探针选择。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>observe（经 informer 本地缓存读实际）→ diff（spec 与 status 比对）→ act（改变世界）。只有 act 改变世界，且它不直接动 etcd，而是把意图写给 api-server，由 api-server 落库。</li>
+            <li>因为 level-triggered 控制器从不依赖“事件”，它每轮重读<strong>完整的实际状态</strong>并与期望比对、差多少补多少。丢掉的事件只是少了一次“该醒醒了”的提醒，下一轮重读全量时仍会发现实际与期望的差距并纠正——正确性绑在“绝对值比对”上，不绑在“事件被处理”上。</li>
+            <li>只有 api-server 直接读写 etcd，其余组件都只 watch api-server。scheduler 只为没有 <code>nodeName</code> 的 Pod 选一个 Node 并把 <code>nodeName</code> 写回（binding）；它<strong>不</strong>拉镜像、<strong>不</strong>启动容器——起容器是目标节点 kubelet 的事。</li>
+            <li>liveness 失败会触发 kubelet 重启容器。把外部依赖塞进 liveness，等于让一次依赖抖动同时判“死”所有副本、同时重启整队；重启期间依赖仍未恢复，于是反复重启形成雪崩，而容器自身并没坏。正确做法是放进 <strong>readiness</strong>：依赖不可用时把 Pod 从 Service 端点摘掉、停收流量即可，不重启，依赖恢复后自动加回，故障被隔离而非放大。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="callout tip">
+        <span class="label">动手画一遍</span>
+        <p>不看教程，在纸上把图 2.4 的时序默画出来：五条生命线、五步箭头。画完翻回去对照——你把“Pod 变成 Pending”画在了 scheduler 写 <code>nodeName</code> 之前还是之后？这一前一后的顺序，正是“创建”与“调度”是两件事的核心。</p>
+      </div>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>两次 apply 打架，最终几个副本？</h3>
+        <p>你先用 <code>kubectl edit</code> 把某 Deployment 的 <code>replicas</code> 改成 5；几分钟后，同事用一份旧的 YAML（里面写着 <code>replicas: 3</code>）对同一个 Deployment 重新 <code>kubectl apply</code>。最终集群里跑着几个副本？为什么？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键问：reconcile 循环认的是“最近一次写进 spec 的值”，而不是“谁先谁后的意图”。同事的 apply 是<strong>后发生</strong>的写操作，它把 <code>spec.replicas</code> 覆盖成了 3（apply 的三方合并会用最新提交的字段值）。于是 ReplicaSet 控制器下一轮 reconcile observe 到“实际 = 5、期望（spec）= 3”，diff 出“多了 2 个”，act：删掉 2 个，收敛到 <strong>3</strong>。你的“5”没有任何持久痕迹能让循环记住——<strong>spec 是唯一事实，循环永远收敛到最近一次写入 spec 的那个值。</strong>这也解释了为什么“谁最后 apply，谁说了算”是 K8s 协作里一条要命的隐性规则。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/architecture/">kubernetes.io · Cluster Architecture</a>（官方·架构）</li>
+          <li><a href="https://queue.acm.org/detail.cfm?id=2898444">Borg, Omega, and Kubernetes</a>（ACM Queue·level-triggered 的设计动机）</li>
+          <li><a href="https://speakerdeck.com/thockin/edge-vs-level-triggered-logic">Tim Hockin · Edge vs Level Triggered Logic</a>（边沿 vs 电平的出处）</li>
+          <li><a href="https://github.com/kubernetes/design-proposals-archive/blob/main/architecture/declarative-application-management.md">Declarative Application Management</a>（设计文档·声明式模型）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 对象模型</span>
+        </a>
+        <a href="03-scheduling.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 调度与资源</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 声明式 vs 命令式</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 level vs edge</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 reconcile 三步</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 控制平面架构</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 跟踪 kubectl apply</a></li>
+        <li><a href="#s26" data-toc-target="s26">2.6 探针与健康</a></li>
+        <li><a href="#s27" data-toc-target="s27">2.7 回看自愈</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

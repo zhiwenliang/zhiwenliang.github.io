@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 陷阱 · Effect TS</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span><a href="01-concepts.html">01 概念</a><span class="sep">—</span><a href="02-principles.html">02 原理</a><span class="sep">—</span><a href="03-practice.html">03 实操</a><span class="sep">—</span><a href="04-pitfalls.html" class="current">04 陷阱</a><span class="sep">—</span><a href="05-capstone.html">05 综合</a><span class="sep">—</span><a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+  <header class="chapter-opener">
+    <p class="chapter-label">Chapter 04</p>
+    <h1>陷阱：10 个真实失败模式</h1>
+    <p class="recap">前三章建立了概念、机制、实操。这一章是反面教材——新手最常撞上的 10 个失败模式，按命中时间排序。每个都给症状、根因（回到 02 章的机制），和正反代码对照。看完你能在写错时认出"这是哪一类问题"。</p>
+  </header>
+
+  <section class="schema-panel">
+    <p class="label">本章你将建立的 schema</p>
+    <ul>
+      <li>把模糊的"它不工作"翻译成具体失败模式 + 根因机制</li>
+      <li>四类陷阱：惰性、错误通道、依赖注入、并发——各自的典型症状</li>
+      <li>诚实的边界：什么时候<strong>不</strong>该用 Effect</li>
+    </ul>
+  </section>
+
+  <h2 id="taxonomy"><span class="num">4.0</span><span>陷阱地图</span></h2>
+  <p>10 个陷阱归四类，每一类都能追溯到 02 章的某个机制。撞上某个症状时，先定位它属于哪一类，再回到对应机制看根因——比死记 10 条快。</p>
+
+  <figure>
+    <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="四类陷阱各自追溯到 02 章的根因机制">
+      <defs>
+        <marker id="a40" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+        </marker>
+      </defs>
+
+      <rect x="20" y="40" width="150" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+      <text x="95" y="66" text-anchor="middle" class="node-label-accent">惰性陷阱</text>
+      <text x="95" y="85" text-anchor="middle" class="edge-label">P1 · P2 · P3</text>
+
+      <rect x="190" y="40" width="150" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+      <text x="265" y="66" text-anchor="middle" class="node-label-accent">错误通道</text>
+      <text x="265" y="85" text-anchor="middle" class="edge-label">P4 · P5</text>
+
+      <rect x="360" y="40" width="150" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+      <text x="435" y="66" text-anchor="middle" class="node-label-accent">依赖注入</text>
+      <text x="435" y="85" text-anchor="middle" class="edge-label">P6 · P7</text>
+
+      <rect x="530" y="40" width="170" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+      <text x="615" y="66" text-anchor="middle" class="node-label-accent">并发陷阱</text>
+      <text x="615" y="85" text-anchor="middle" class="edge-label">P8 · P9 · P10</text>
+
+      <line x1="95" y1="98" x2="95" y2="160" stroke="#525252" stroke-width="1.4" marker-end="url(#a40)"/>
+      <line x1="265" y1="98" x2="265" y2="160" stroke="#525252" stroke-width="1.4" marker-end="url(#a40)"/>
+      <line x1="435" y1="98" x2="435" y2="160" stroke="#525252" stroke-width="1.4" marker-end="url(#a40)"/>
+      <line x1="615" y1="98" x2="615" y2="160" stroke="#525252" stroke-width="1.4" marker-end="url(#a40)"/>
+
+      <rect x="20" y="162" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+      <text x="95" y="184" text-anchor="middle" class="node-label">根因</text>
+      <text x="95" y="202" text-anchor="middle" class="edge-label">§2.1 惰性</text>
+      <rect x="190" y="162" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+      <text x="265" y="184" text-anchor="middle" class="node-label">根因</text>
+      <text x="265" y="202" text-anchor="middle" class="edge-label">§2.2 失败/缺陷</text>
+      <rect x="360" y="162" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+      <text x="435" y="184" text-anchor="middle" class="node-label">根因</text>
+      <text x="435" y="202" text-anchor="middle" class="edge-label">§2.3 Layer</text>
+      <rect x="530" y="162" width="170" height="50" rx="6" class="diagram-ink node-fill"/>
+      <text x="615" y="184" text-anchor="middle" class="node-label">根因</text>
+      <text x="615" y="202" text-anchor="middle" class="edge-label">§2.4 / 2.5 fiber</text>
+    </svg>
+    <figcaption><span class="fig-num">图 4.0</span>每类陷阱都挂在一个机制下。<strong>注意</strong>：调试 Effect 的高效路径不是背陷阱，而是"症状 → 归类 → 回到那个机制看根因"——这也是为什么 02 章要先于本章。</figcaption>
+  </figure>
+
+  <h2 id="p-lazy"><span class="num">4.1</span><span>惰性陷阱（P1–P3）</span></h2>
+
+  <h3>P1 · 定义了 effect，却什么都没发生</h3>
+  <p><strong>症状</strong>：写了 <code>Effect.log("hi")</code> 或一段抓取逻辑，运行程序，控制台一片空白，副作用没发生。<br>
+  <strong>根因</strong>：effect 是惰性的值（§2.1），定义不等于执行。没有 <code>run*</code>，它永远不跑。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p1.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-401">复制</button></div>
+<pre id="c-401"><code class="language-typescript">// ❌ 什么都不会打印 —— effect 只是个值
+const logHi = Effect.log("hi")
+
+// ✅ 交给 runtime 才执行
+Effect.runSync(Effect.log("hi"))</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：记住"effect = 值"。程序里应当只有<strong>极少数</strong> <code>run*</code>（理想是最外层一个）；其余全是返回 effect、由上层组合的纯函数。</p>
+
+  <h3>P2 · 在 <code>Effect.gen</code> 里混用 <code>async/await</code></h3>
+  <p><strong>症状</strong>：把 <code>fetch</code> 直接 <code>await</code> 进生成器，类型乱成一团，或运行行为脱离 Effect 的控制（错误不进 E、不可中断）。<br>
+  <strong>根因</strong>：<code>gen</code> 用 <code>yield*</code> 组合 effect（§2.1 + 01.5）；<code>await</code> 会即时执行并把错误变回未类型化的抛出，绕过整套机制。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p2.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-402">复制</button></div>
+<pre id="c-402"><code class="language-typescript">// ❌ async generator + await —— 脱离 Effect 世界
+Effect.gen(async function* () {
+  const r = await fetch(url)        // 错：await 不该出现在这里
+})
+
+// ✅ 用 tryPromise 把 Promise 包成 effect，再 yield*
+Effect.gen(function* () {
+  const r = yield* Effect.tryPromise({
+    try: () =&gt; fetch(url),
+    catch: (e) =&gt; new HttpError({ status: 0 }),
+  })
+})</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：<code>gen</code> 的函数永远是普通 <code>function*</code>，不是 <code>async function*</code>；遇到 Promise 一律 <code>tryPromise</code> 包成 effect 再 <code>yield*</code>。</p>
+
+  <h3>P3 · 看到 <code>yield* _(...)</code> 适配器</h3>
+  <p><strong>症状</strong>：照着某篇博客写 <code>Effect.gen(function* (_) { yield* _(eff) })</code>，编译报错或行为怪异。<br>
+  <strong>根因</strong>：那个 <code>_</code> 适配器是旧语法，<strong>3.0（2024-04）起已移除</strong>（§现状速览）。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p3.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-403">复制</button></div>
+<pre id="c-403"><code class="language-typescript">// ❌ 旧版适配器（已移除）
+Effect.gen(function* (_) {
+  const x = yield* _(Effect.succeed(1))
+})
+
+// ✅ 直接 yield*（需 TS 5.5+）
+Effect.gen(function* () {
+  const x = yield* Effect.succeed(1)
+})</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：看到 <code>_</code> 适配器就知道资料早于 2024-04，整篇都要按现版本核对。</p>
+
+  <h2 id="p-error"><span class="num">4.2</span><span>错误通道陷阱（P4–P5）</span></h2>
+
+  <h3>P4 · <code>throw</code> 进了 <code>Effect.sync</code>，<code>catchAll</code> 抓不到</h3>
+  <p><strong>症状</strong>：明明写了 <code>catchAll</code>，程序还是以未处理错误崩溃。<br>
+  <strong>根因</strong>：<code>Effect.sync</code> 假定不抛；真抛出的异常变成<strong>缺陷</strong>（§2.2），不在 E 通道，而 <code>catchAll</code> 只管 E 通道。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p4.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-404">复制</button></div>
+<pre id="c-404"><code class="language-typescript">// ❌ JSON.parse 抛出 → 缺陷 → catchAll 漏掉
+const bad = Effect.sync(() =&gt; JSON.parse(raw)).pipe(
+  Effect.catchAll(() =&gt; Effect.succeed(null)),
+)
+
+// ✅ 用 try，把异常转进 E 通道，再按标签恢复
+const good = Effect.try({
+  try: () =&gt; JSON.parse(raw),
+  catch: () =&gt; new ParseError({ raw }),
+}).pipe(Effect.catchTag("ParseError", () =&gt; Effect.succeed(null)))</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：会抛的同步代码一律 <code>Effect.try</code>（不是 <code>sync</code>）；只有确信不抛才用 <code>sync</code>。要兜底缺陷用 <code>catchAllCause</code>。</p>
+
+  <h3>P5 · <code>catchAll</code> 一把抓，悄悄吞错</h3>
+  <p><strong>症状</strong>：线上出问题但日志干净，错误被静默成了 fallback。<br>
+  <strong>根因</strong>：<code>catchAll</code> 把整个 E 通道 collapse 成 <code>never</code>（§2.2 的减法），包括你没预料到的错误——它们被一并吞掉。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p5.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-405">复制</button></div>
+<pre id="c-405"><code class="language-typescript">// ❌ 吞掉一切，真问题被掩盖
+risky.pipe(Effect.catchAll(() =&gt; Effect.succeed(fallback)))
+
+// ✅ 只处理你认识的标签，其余继续浮现在类型里
+risky.pipe(Effect.catchTag("HttpError", recover))</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：优先 <code>catchTag</code>/<code>catchTags</code> 精确处理；<code>catchAll</code> 留给真正的最后兜底，且要记日志。</p>
+
+  <h2 id="p-di"><span class="num">4.3</span><span>依赖注入陷阱（P6–P7）</span></h2>
+
+  <h3>P6 · <code>runPromise</code> 处类型报错：Service 不能赋给 never</h3>
+  <p><strong>症状</strong>：<code>Type 'HttpClient' is not assignable to type 'never'</code>，新手以为是 bug。<br>
+  <strong>根因</strong>：这是<strong>特性</strong>（§2.3）。R 通道还挂着没提供的服务，编译器拒绝运行一个依赖未满足的 effect。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p6.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-406">复制</button></div>
+<pre id="c-406"><code class="language-typescript">// ❌ R 还挂着 HttpClient
+Effect.runPromise(fetchWeather("x"))
+
+// ✅ 先 provide，把 R 消成 never
+Effect.runPromise(
+  fetchWeather("x").pipe(Effect.provide(HttpClientLive)),
+)</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：把报错读成"你还差一个依赖没接"。照着 R 通道列出的服务，逐个 <code>provide</code> 对应 Layer。</p>
+
+  <h3>P7 · 同一个 layer 提供两次，得到两个实例</h3>
+  <p><strong>症状</strong>："单例"服务却有两份状态（两个连接池、两份缓存）。<br>
+  <strong>根因</strong>：Layer 按<strong>引用相等</strong>记忆化（§2.3）。把工厂 <code>makeLayer()</code> 调两次产生两个不同引用 = 两次构建。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p7.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-407">复制</button></div>
+<pre id="c-407"><code class="language-typescript">// ❌ 每次调用工厂都是新引用 → 两个连接池
+const makeDb = () =&gt; Layer.effect(Db, openPool)
+a.pipe(Effect.provide(makeDb()))   // 实例 1
+b.pipe(Effect.provide(makeDb()))   // 实例 2（不同引用）
+
+// ✅ 建一次、共享同一引用 → 记忆化为同一实例
+const DbLive = Layer.effect(Db, openPool)
+a.pipe(Effect.provide(DbLive))
+b.pipe(Effect.provide(DbLive))</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：Layer 定义成模块级 <code>const</code>，到处共享同一个引用；只在确实想要新实例时用 <code>Layer.fresh</code>。</p>
+
+  <h2 id="p-conc"><span class="num">4.4</span><span>并发陷阱（P8–P10）</span></h2>
+
+  <h3>P8 · <code>Effect.all</code> 默认顺序执行，比预期慢</h3>
+  <p><strong>症状</strong>：以为像 <code>Promise.all</code> 那样并行，结果 5 个请求串行跑了 5 倍时间。<br>
+  <strong>根因</strong>：<code>Effect.all</code> 默认 <strong>sequential</strong>（§2.4），这是有意的安全默认——并发度要你显式声明。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p8.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-408">复制</button></div>
+<pre id="c-408"><code class="language-typescript">// ❌ 默认串行
+Effect.all([a, b, c])
+
+// ✅ 显式声明并发度
+Effect.all([a, b, c], { concurrency: "unbounded" }) // 或具体数字，如 5</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：写 <code>Effect.all</code> 时永远想一下并发度。<code>"unbounded"</code> 会一拥而上打爆下游——对数据库/外部 API 用<strong>具体数字</strong>限流。</p>
+
+  <h3>P9 · 失败或中断时资源泄漏</h3>
+  <p><strong>症状</strong>：偶发的连接耗尽、文件句柄泄漏，通常在出错或超时路径上。<br>
+  <strong>根因</strong>：手动 open/close，中间失败或 fiber 被中断（§2.5）时 close 没跑。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p9.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-409">复制</button></div>
+<pre id="c-409"><code class="language-typescript">// ❌ useConn 失败或被中断 → closeConn 漏掉
+Effect.gen(function* () {
+  const conn = yield* openConn
+  yield* useConn(conn)     // 这里炸了
+  yield* closeConn(conn)   // 不会执行 → 泄漏
+})
+
+// ✅ acquireRelease：release 注册为 finalizer，成功/失败/中断都跑
+Effect.acquireRelease(openConn, (conn) =&gt; closeConn(conn)).pipe(
+  Effect.flatMap(useConn),
+  Effect.scoped,
+)</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：任何"获取-使用-释放"的资源都用 <code>acquireRelease</code> + <code>scoped</code>，永不手动 close。</p>
+
+  <h3>P10 · <code>Effect.all</code> 默认 fail-fast，一个失败炸全批</h3>
+  <p><strong>症状</strong>：批量任务里一个失败，整批中止，其余结果全丢。<br>
+  <strong>根因</strong>：<code>Effect.all</code> 默认 fail-fast——任一失败就短路并中断其余（§2.2 + §2.5）。想隔离失败得把每项先变成值。</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">p10.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-410">复制</button></div>
+<pre id="c-410"><code class="language-typescript">// ❌ 任一失败 → 整体失败 + 中断其余
+Effect.all(tasks)
+
+// ✅ 每项先 exit 成值，失败被隔离，整批永远成功，逐项查 Exit
+Effect.all(tasks.map((t) =&gt; Effect.exit(t)))</code></pre>
+  </div>
+  <p><strong>如何避免</strong>：先问"一个失败该不该影响其他"。该隔离就 <code>Effect.exit</code> 每项（如 03 章调度器）；该全有或全无才用裸 <code>Effect.all</code>。</p>
+
+  <h2 id="when-not"><span class="num">4.5</span><span>何时不要用 Effect（诚实回答）</span></h2>
+  <p>Effect 不是免费的。它的回报在复杂度上限高的系统里才显著，小场景里学习曲线不划算。</p>
+  <table class="compare-table">
+    <caption>表 4.1 · 用 / 不用的判断</caption>
+    <thead><tr><th>场景</th><th>建议</th><th>理由</th></tr></thead>
+    <tbody>
+      <tr><td>一次性脚本、简单胶水</td><td>别用</td><td>Promise + try/catch 足够，引入 Effect 不划算</td></tr>
+      <tr><td>团队无人懂、且不打算投入学习</td><td>别用</td><td>全员看不懂的代码是负债，不是资产</td></tr>
+      <tr><td>想逐函数渐进引入</td><td>慎用</td><td>Effect 偏"全有或全无"；只要 <code>Result</code> 用 neverthrow 更轻</td></tr>
+      <tr class="selected"><td>复杂并发编排 / 强错误保证后端 / 长生命周期 Agent</td><td>值得</td><td>类型化错误、结构化并发、可测试性的回报随复杂度放大</td></tr>
+    </tbody>
+  </table>
+
+  <section class="self-check" id="self-check">
+    <h2><span class="num">§</span><span>本章 self-check</span></h2>
+    <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程作答，再展开对照。</p>
+    <ol>
+      <li>P1（什么都没发生）和 P8（比预期慢）表面无关，但都源自同一个"反直觉默认"。各是什么默认？</li>
+      <li>P4 和 P5 都和 <code>catch</code> 有关，但根因相反。分别是什么？</li>
+      <li>P7 的"两个实例"，要改成单例，最小改动是什么？</li>
+    </ol>
+    <details>
+      <summary>答案（先做完再展开）</summary>
+      <ol>
+        <li>P1：effect 惰性，定义不执行（要 run）。P8：<code>Effect.all</code> 默认串行（要显式 concurrency）。两者都是"Effect 的默认和 Promise 直觉相反"。</li>
+        <li>P4：异常变成<strong>缺陷</strong>没进 E 通道，<code>catchAll</code> 抓不到（该用 <code>try</code>）。P5：<code>catchAll</code> 抓得<strong>太多</strong>，把没料到的错误也吞了（该用 <code>catchTag</code>）。一个漏抓、一个滥抓。</li>
+        <li>把 <code>makeDb()</code> 工厂调用换成一个模块级 <code>const DbLive = ...</code>，两处都 provide 这同一个引用——记忆化即生效。</li>
+      </ol>
+    </details>
+  </section>
+
+  <div class="challenge">
+    <span class="label">进阶挑战 · 刚好够不着</span>
+    <h3>造一个会泄漏的最小例子，再修好</h3>
+    <p>写一段代码：<code>acquire</code> 打开资源后，在 <code>use</code> 阶段被一个 <code>Effect.timeout</code> 中断。先用手动 open/close 复现"中断时不释放"，再用 <code>acquireRelease</code> 修好，用日志证明两种写法下 release 是否运行。</p>
+    <details>
+      <summary>提示（卡住再展开）</summary>
+      <p>让 <code>use</code> 阶段 <code>Effect.sleep("5 seconds")</code>，外面套 <code>Effect.timeout("1 second")</code>。手动版在 sleep 处被中断，<code>closeConn</code> 那行根本到不了。<code>acquireRelease</code> 版把 close 注册成 finalizer，中断时 runtime 仍会跑它（回看 §2.5 的 <code>interrupt-finalizer.ts</code>）。用 <code>Console.log</code> 在 release 里打印来对照。</p>
+    </details>
+  </div>
+
+  <footer class="references">
+    <h3>本章参考</h3>
+    <ul>
+      <li><a href="https://effect.website/docs/additional-resources/myths/">Myths About Effect</a>（官方，澄清误解）</li>
+      <li><a href="https://effect.website/docs/error-management/unexpected-errors/">Unexpected Errors（缺陷）</a> · <a href="https://effect.website/docs/resource-management/scope/">Scope / 资源管理</a>（官方）</li>
+      <li><a href="https://effect.website/docs/requirements-management/layer-memoization/">Layer Memoization</a>（官方）</li>
+    </ul>
+  </footer>
+
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a href="03-practice.html" class="prev"><span class="label">← 上一章</span><span class="title">03 · 实操</span></a>
+    <a href="05-capstone.html" class="next"><span class="label">下一章 →</span><span class="title">05 · 综合：Agent 工具调度器</span></a>
+  </nav>
+
+</article>
+
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#taxonomy" data-toc-target="taxonomy">陷阱地图</a></li>
+        <li><a href="#p-lazy" data-toc-target="p-lazy">惰性陷阱</a></li>
+        <li><a href="#p-error" data-toc-target="p-error">错误通道陷阱</a></li>
+        <li><a href="#p-di" data-toc-target="p-di">依赖注入陷阱</a></li>
+        <li><a href="#p-conc" data-toc-target="p-conc">并发陷阱</a></li>
+        <li><a href="#when-not" data-toc-target="when-not">何时不要用</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

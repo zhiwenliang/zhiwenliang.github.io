@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  多 Agent 协作模式 教程 · 01 概念 01-concepts.html
+  极简单色 + 单一朱红强调（design system v2）
+  scaffold: 复制 langchain/index.html 的 <head>（含完整 <style>）与底部 <script>
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>核心概念 · 多 Agent 协作模式 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径"><a href="index.html">00 起点</a><span class="sep">—</span><a href="01-concepts.html" class="current">01 概念</a><span class="sep">—</span><a href="02-principles.html">02 原理</a><span class="sep">—</span><a href="03-practice.html">03 实操</a><span class="sep">—</span><a href="04-pitfalls.html">04 失败模式</a><span class="sep">—</span><a href="05-capstone.html">05 综合</a><span class="sep">—</span><a href="06-self-check.html">06 自测</a></nav>
+
+  <div class="page">
+    <article>
+
+      <!-- ════════════════════════════════════════════════════════
+           头部 + recap
+           ════════════════════════════════════════════════════════ -->
+      <header class="chapter-opener">
+        <p class="chapter-label">01 · 核心概念</p>
+        <h1>核心概念：拓扑 × 协调 × 通信</h1>
+        <p class="recap">上一章 index 给了三轴的心智地图——这章把每条轴逐个建起来。读完，看到任何一套多 agent 系统，能在三条轴上各点出它的取值，并在最后判断它本就该不该是多 agent。基于 2026-06 的框架现状（LangGraph 1.0、Microsoft Agent Framework v1.0、AG2、OpenAI Agents SDK、CrewAI、Claude Agent SDK）；下文代码用来演示分界判断，均未在本机执行（标 2026-06）。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你要建立的心智模型</p>
+        <ul>
+          <li>拓扑 × 协调 × 通信是三条<strong>正交</strong>的轴——任一多 agent 系统都是三条轴各取一值的组合，而非"挑一个框架"。</li>
+          <li>拓扑回答"连接长什么形状"：supervisor（一个协调者派活）、hierarchical（多层）、network/swarm（agent 直接交接、无中心）。</li>
+          <li>协调回答"下一步决策权在谁手里"：中心调度 vs 去中心 handoff。通信回答"信息怎么流"：共享 state vs 消息传递，外加 per-subagent 上下文隔离。</li>
+          <li>最重要的一道闸：多数任务单 agent + 多工具就够，只有"子任务独立可并行且价值高"才上多 agent。</li>
+        </ul>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           1.1 三轴总览
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s11"><span class="num">1.1</span><span>三轴总览</span></h2>
+
+      <p class="one-liner">拓扑、协调、通信是三条互不绑定的轴；一套多 agent 系统就是在三条轴上各取一值的组合。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>框架文档按"产品"组织——LangGraph 一节、CrewAI 一节、AutoGen 一节，读完只会按框架名记忆，换个框架就重新学。三轴把"框架"拆成"维度"：任何系统都落在拓扑/协调/通信这三条轴上。认出取值，再认框架是哪种组合的封装，迁移成本就从"重学一个产品"降到"换一组取值"。</p>
+      </div>
+
+      <h3>底层机制：为什么这三条轴是"正交"的</h3>
+
+      <p>正交在这里有一个可验证的含义——<strong>固定其中两条轴的取值，第三条仍可独立改变，而系统照常成立</strong>。逐对验证一遍：</p>
+
+      <ul>
+        <li>固定拓扑 supervisor + 通信共享 state，协调可以是"中心调度派活"，也可以换成"协调者只在 state 里放下一步标记、由 agent 自行轮询"——拓扑没变，连接形状没变，决策权位置变了。</li>
+        <li>固定拓扑 supervisor + 协调中心调度，通信可以走全员可见的 group chat，也可以走只读写共享 state——谁说了算没变，信息载体变了。</li>
+        <li>固定协调中心调度 + 通信共享 state，拓扑可以是单层 supervisor，也可以叠成 hierarchical 多层——决策权与信息载体没变，连接的层数变了。</li>
+      </ul>
+
+      <p>三对都能"固定二者、独立改第三",这就是正交的操作性定义。它的实践后果：一套系统不是"是 LangGraph 还是 AutoGen"，而是<strong>三个独立选择叠出来的一个点</strong>，组合数远多于框架数。下面这张图把三条轴画成一个坐标，每个框架是这个坐标里的一块区域，而不是一条轴。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三条正交轴：拓扑、协调、通信，各列出取值；右侧标注框架是某组合的封装">
+          <!-- 三条轴从同一原点发散，互相垂直的视觉暗示（不交叉连线，只做轴 + 刻度文字） -->
+          <!-- 轴 1: 拓扑（向上） -->
+          <line x1="120" y1="320" x2="120" y2="60" class="diagram-accent"/>
+          <polygon points="120,52 116,64 124,64" fill="#B73B2F"/>
+          <text x="120" y="40" text-anchor="middle" class="node-label-accent">拓扑 topology</text>
+          <text x="135" y="92"  class="edge-label" text-anchor="start">network / swarm</text>
+          <text x="135" y="140" class="edge-label" text-anchor="start">hierarchical</text>
+          <text x="135" y="188" class="edge-label" text-anchor="start">supervisor</text>
+
+          <!-- 轴 2: 协调（向右） -->
+          <line x1="120" y1="320" x2="470" y2="320" class="diagram-accent"/>
+          <polygon points="478,320 466,316 466,324" fill="#B73B2F"/>
+          <text x="300" y="352" text-anchor="middle" class="node-label-accent">协调 coordination</text>
+          <text x="210" y="338" class="edge-label" text-anchor="middle">中心调度</text>
+          <text x="400" y="338" class="edge-label" text-anchor="middle">去中心 handoff</text>
+
+          <!-- 轴 3: 通信（向左下，作为第三维的等距投影） -->
+          <line x1="120" y1="320" x2="40" y2="364" class="diagram-soft"/>
+          <text x="20" y="376" text-anchor="start" class="edge-label">通信 communication：共享 state / 消息传递</text>
+
+          <!-- 一个示例点：supervisor × 中心调度（坐标里的一个组合） -->
+          <circle cx="210" cy="188" r="6" fill="#B73B2F"/>
+          <line x1="120" y1="188" x2="210" y2="188" class="diagram-soft"/>
+          <line x1="210" y1="320" x2="210" y2="188" class="diagram-soft"/>
+          <text x="222" y="178" class="branch-label" text-anchor="start">一个组合 = 一个点</text>
+
+          <!-- 右侧：框架是组合区域的封装 -->
+          <rect x="500" y="90" width="200" height="200" rx="6" class="diagram-ink node-fill"/>
+          <text x="600" y="112" text-anchor="middle" class="node-label">框架 = 某组合的封装</text>
+          <text x="514" y="142" class="edge-label" text-anchor="start">LangGraph · 图 / 精控</text>
+          <text x="514" y="168" class="edge-label" text-anchor="start">AG2(AutoGen) · GroupChat</text>
+          <text x="514" y="194" class="edge-label" text-anchor="start">CrewAI · 角色 crew</text>
+          <text x="514" y="220" class="edge-label" text-anchor="start">OpenAI Agents SDK · handoff</text>
+          <text x="514" y="246" class="edge-label" text-anchor="start">Claude Agent SDK</text>
+          <text x="514" y="276" class="edge-label" text-anchor="start" font-style="italic">各占坐标里一块区域</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>三条轴从同一原点发散（红实线两条为主轴、灰虚线为第三维投影）。一套系统 = 坐标里<strong>一个点</strong>（红点示例：supervisor × 中心调度）。右框：每个框架是这片坐标里<strong>一块区域</strong>的封装，不是一条轴。记框架名不如记坐标。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>有人说"swarm 框架就是去中心，supervisor 框架就是中心调度，所以拓扑和协调其实是一回事"。这句话哪里错了？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>错在把"常见搭配"当成"绑定"。<strong>拓扑是连接形状，协调是决策权位置</strong>，两者高度相关但不等同。反例：supervisor 拓扑下，协调权可以不在中心——协调者只负责把任务写进共享 state，由各 worker 自行认领（pull 模式），决策权其实分散了；反过来，network 拓扑里也能塞一个事实上的"裁判 agent"集中拍板。形状和决策权是两条可独立调的轴，常一起动不代表是同一条。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           1.2 拓扑结构
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s12"><span class="num">1.2</span><span>拓扑结构</span></h2>
+
+      <p class="one-liner">拓扑 = agent 之间连成什么形状——三种基本形状：supervisor、hierarchical、network/swarm。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>拓扑决定了控制流的形状，而控制流的形状直接决定了哪些失败会发生（04 章按拓扑组织失败清单）。先把形状认清楚，后面的失败模式才有挂靠的钉子。三个名字首次出现，先用大白话点一句：supervisor = 一个"工头"派活给工人；hierarchical = 工头之上还有工头，多层；network/swarm（蜂群式自由交接）= 没有工头，工人之间直接把活递给下一个人。</p>
+      </div>
+
+      <h3>底层机制：形状的差别落在"边"上</h3>
+
+      <p>把每个 agent 看成节点、"谁能把控制权交给谁"看成有向边，三种拓扑的差别就是边的连法不同，比文档常说的"集中 vs 分散"更具体：</p>
+
+      <ul>
+        <li><strong>supervisor</strong>：边是<em>星形</em>——所有边从中心节点出、再收回中心。worker 之间没有边，彼此不可达。控制流每一跳都经过中心，于是中心的 trace 里能看见全过程。</li>
+        <li><strong>hierarchical</strong>：边是<em>树形</em>——星形的递归，每个 worker 自己又可以是下一层的中心。控制权沿树往下分发、结果沿树往上汇聚；层数 = 决策被转手的次数。</li>
+        <li><strong>network/swarm</strong>：边是<em>任意有向图</em>——任一 agent 都允许有指向其它 agent 的边，没有必经的中心节点。在 LangGraph 里，这条"边"被实现成 handoff 工具返回的 <code>Command(goto=..., graph=Command.PARENT)</code>——agent 调用该工具，运行时就跳到父图的另一个节点，等于自己画了一条边。</li>
+      </ul>
+
+      <p>"边"这个视角能直接读出代价：星形的中心是单点瓶颈也是单点可观测；任意图省掉了中心那一跳所以更快，但没有一处能看见全局，调试要把多段 trace 拼起来。这条权衡 02 章和 04 章会反复回引。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三种拓扑连接形状对比：supervisor 星形、hierarchical 树形、network/swarm 任意图">
+          <defs>
+            <marker id="ar12" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- A. supervisor 星形 -->
+          <text x="120" y="30" text-anchor="middle" class="node-label-accent">supervisor 星形</text>
+          <rect x="85" y="55" width="70" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="120" y="76" text-anchor="middle" class="edge-label" font-weight="700">工头</text>
+          <rect x="35"  y="160" width="56" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="63"  y="180" text-anchor="middle" class="edge-label">w1</text>
+          <rect x="92"  y="160" width="56" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="120" y="180" text-anchor="middle" class="edge-label">w2</text>
+          <rect x="149" y="160" width="56" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="177" y="180" text-anchor="middle" class="edge-label">w3</text>
+          <line x1="108" y1="89" x2="70"  y2="160" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="120" y1="89" x2="120" y2="160" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="132" y1="89" x2="170" y2="160" class="diagram-ink" marker-end="url(#ar12)"/>
+          <text x="120" y="218" text-anchor="middle" class="edge-label" font-style="italic">边只连中心 · worker 互不可达</text>
+
+          <!-- B. hierarchical 树形 -->
+          <text x="360" y="30" text-anchor="middle" class="node-label-accent">hierarchical 树形</text>
+          <rect x="325" y="55" width="70" height="30" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="74" text-anchor="middle" class="edge-label" font-weight="700">总工头</text>
+          <rect x="285" y="120" width="64" height="28" rx="4" class="diagram-ink node-fill"/>
+          <text x="317" y="139" text-anchor="middle" class="edge-label">组长A</text>
+          <rect x="371" y="120" width="64" height="28" rx="4" class="diagram-ink node-fill"/>
+          <text x="403" y="139" text-anchor="middle" class="edge-label">组长B</text>
+          <rect x="270" y="185" width="48" height="26" rx="3" class="diagram-ink node-fill"/>
+          <text x="294" y="203" text-anchor="middle" class="edge-label">w</text>
+          <rect x="322" y="185" width="48" height="26" rx="3" class="diagram-ink node-fill"/>
+          <text x="346" y="203" text-anchor="middle" class="edge-label">w</text>
+          <rect x="386" y="185" width="48" height="26" rx="3" class="diagram-ink node-fill"/>
+          <text x="410" y="203" text-anchor="middle" class="edge-label">w</text>
+          <line x1="345" y1="85" x2="320" y2="120" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="375" y1="85" x2="400" y2="120" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="305" y1="148" x2="294" y2="185" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="325" y1="148" x2="346" y2="185" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="403" y1="148" x2="410" y2="185" class="diagram-ink" marker-end="url(#ar12)"/>
+          <text x="360" y="232" text-anchor="middle" class="edge-label" font-style="italic">星形递归 · 层数 = 转手次数</text>
+
+          <!-- C. network/swarm 任意图 -->
+          <text x="600" y="30" text-anchor="middle" class="node-label-accent">network / swarm 任意图</text>
+          <rect x="560" y="60"  width="56" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="588" y="80"  text-anchor="middle" class="edge-label">a1</text>
+          <rect x="650" y="120" width="56" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="678" y="140" text-anchor="middle" class="edge-label">a2</text>
+          <rect x="545" y="170" width="56" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="573" y="190" text-anchor="middle" class="edge-label">a3</text>
+          <line x1="616" y1="78"  x2="650" y2="128" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="660" y1="150" x2="595" y2="172" class="diagram-ink" marker-end="url(#ar12)"/>
+          <line x1="576" y1="170" x2="568" y2="90"  class="diagram-ink" marker-end="url(#ar12)"/>
+          <text x="600" y="232" text-anchor="middle" class="edge-label" font-style="italic">无必经中心 · agent 自己画边</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>同样三个/几个 agent，三种连法。<strong>supervisor</strong>：边全连中心，worker 互不可达。<strong>hierarchical</strong>：星形递归成树，每层一个小中心。<strong>network/swarm</strong>：边是任意有向图，没有必经中心，agent 用 handoff 自己画边。形状决定了"控制流必经哪里"——也决定了能在哪里看见全局。</figcaption>
+      </figure>
+
+      <h3>类比 · 带边界</h3>
+
+      <p>把三种拓扑类比成公司的汇报线：supervisor 像一个经理带一组互不沟通的下属，所有协调经过经理；hierarchical 像总监—经理—员工的多级汇报；network/swarm 像一群同级同事，谁手上有合适的活就直接转给旁边的人。<strong>类比在这里断裂</strong>：公司的汇报线是为了"权责"，而 agent 拓扑是为了"控制流与上下文边界"——经理换人不影响下属的记忆，但 supervisor 这一跳决定了 worker 能不能看见彼此的上下文。把拓扑当组织架构图去想会漏掉"上下文在哪分隔"这个 agent 独有的维度，那正是 1.4 的主题。</p>
+
+      <h3>场景走查</h3>
+
+      <p>需求："给定一个城市，产出一份含天气、交通、3 个景点的一日游建议"。天气查询、交通查询、景点检索三件事彼此独立、可同时进行，最后拼成一份建议——边从一个协调点发出去、结果收回来，<strong>supervisor 星形</strong>正好贴合。若再要求"景点检索内部再按'美食/历史/自然'三类分头查"，那就是在 worker 之下再开一层，星形递归成<strong>hierarchical</strong>。若需求变成"客服对话，账单问题转账单专员、技术问题转技术专员、专员之间还能互转"，没有必经中心、agent 之间直接交接，那是<strong>network/swarm</strong>。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           1.3 协调机制
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s13"><span class="num">1.3</span><span>协调机制</span></h2>
+
+      <p class="one-liner">协调 = 谁持有"下一步决策权"——中心调度（协调者决定）vs 去中心 handoff（agent 自行决定交给谁）。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>拓扑画出了边，但"边什么时候被走、被谁触发"是另一件事。同一张 supervisor 星形图，决策权可以在中心（协调者每一步决定派给谁），也可以分散（worker 干完自己挑下一步）。把决策权的位置单独拎出来当一条轴，才能解释为什么"同样的图"会有完全不同的运行行为和失败方式。handoff（交接）首次出现，大白话：一个 agent 主动把"这件事现在归你管"交给另一个 agent。</p>
+      </div>
+
+      <h3>底层机制：决策权 = "下一步是谁"这个决定由谁的 LLM 调用产生</h3>
+
+      <p>把它落到代码层面，决策权的位置就是一个很具体的问题——<strong>"下一步该轮到哪个 agent"这个判断，是哪一次 LLM 调用的输出？</strong></p>
+
+      <ul>
+        <li><strong>中心调度</strong>：有一个固定的协调者节点，每一跳都先回到它，由它的 LLM 调用（或一段路由逻辑）产出"下一步是谁"。决策权集中在这一个节点。代价：协调者是必经跳，多一次往返、多一份 token；好处：下一步永远有据可查。</li>
+        <li><strong>去中心 handoff</strong>：没有固定协调者，"下一步是谁"由<em>当前正在跑的那个 agent</em>自己的 LLM 调用产出——它在自己的工具列表里挑一个 handoff 工具调用，把控制权连同上下文交出去。决策权随控制权一起移动。代价：没有一处能集中看见"为什么走到了这一步"，misroute（交错对象）只能事后从各段 trace 拼。</li>
+      </ul>
+
+      <p>这条机制有一个反直觉处：<strong>决策权位置和拓扑不是一一对应</strong>。supervisor 拓扑通常配中心调度，但也能配 handoff（协调者只做入口，之后 agent 互相交接）；network 拓扑通常配 handoff，但塞一个裁判节点就成了事实上的中心调度。所以面试里"画个 supervisor"不等于答完了——还得说清决策权在不在中心。</p>
+
+      <table class="compare-table">
+        <caption>表 1.3 · 中心调度 vs 去中心 handoff</caption>
+        <thead>
+          <tr><th style="width:22%">维度</th><th>中心调度</th><th>去中心 handoff</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>"下一步是谁"由谁决定</td><td>固定协调者节点</td><td>当前正在跑的 agent 自己</td></tr>
+          <tr><td>典型框架</td><td>LangGraph supervisor、CrewAI hierarchical</td><td>OpenAI Agents SDK handoff、LangGraph swarm</td></tr>
+          <tr><td>可观测性</td><td>强——决策都在一处</td><td>弱——决策分散在各 agent</td></tr>
+          <tr><td>延迟 / token</td><td>每跳多一次协调往返</td><td>省掉中心那一跳，更快</td></tr>
+          <tr><td>最怕的失败</td><td>协调者成瓶颈、或自己越权代劳 worker</td><td>misroute、交接后上下文带不全</td></tr>
+        </tbody>
+      </table>
+
+      <h3>类比 · 带边界</h3>
+
+      <p>中心调度像航空的塔台——每架飞机的下一步动作都由塔台统一指挥；去中心 handoff 像接力赛——棒在谁手里，谁决定何时交给下一棒。<strong>断裂点</strong>：塔台和接力都假设"下一个上场的人"基本确定，而 agent 的 handoff 是由 LLM 现场判断的，存在判断错对象的风险（接力赛不会把棒交错跑道，agent 会）。所以去中心 handoff 真正的工程难点不在"交接"这个动作，而在"判断交给谁"这个易错的 LLM 决策——这正是 04 章 misroute 类失败的根。</p>
+
+      <h3>场景走查</h3>
+
+      <p>需求："一个研究助手，先检索资料再写报告"。若让一个固定的协调者每步决定"现在该检索还是该写"，决策可追溯、便于在中间插入人审，这是<strong>中心调度</strong>。需求变成"客服系统，账单专员处理到一半发现是技术问题，直接转给技术专员"——由当前专员自己判断该不该转、转给谁，没有回中心绕一圈，这是<strong>去中心 handoff</strong>。注意同一个客服系统，如果改成"每条消息都先回到一个分诊节点再分发"，它又变回中心调度了——决策权的位置是被设计出来的，不是被场景唯一决定的。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           1.4 通信方式
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s14"><span class="num">1.4</span><span>通信方式</span></h2>
+
+      <p class="one-liner">通信 = 信息怎么在 agent 间流——共享 state（都读写同一状态）vs 消息传递（显式传消息）；外加 per-subagent 上下文隔离。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>拓扑画了边、协调定了谁决策，但"agent 之间到底交换了什么、看得见多少"还没回答。通信这条轴决定了两件高影响的事：上下文成本（谁看见越多，token 越贵）和上下文污染（看见不该看见的，判断被带偏）。它直接连着多 agent 最常见的两类生产事故，所以单列一条轴。</p>
+      </div>
+
+      <h3>底层机制：两种载体，差别在"默认可见范围"</h3>
+
+      <ul>
+        <li><strong>共享 state</strong>：所有 agent 读写同一个状态对象（LangGraph 的 <code>State</code> 就是这种——它同时充当各 agent 之间的"公告板"）。一个 agent 写进 state 的东西，别的 agent 默认读得到。好处：不用显式搬运信息；代价：state 越大，每个 agent 的上下文越臃肿，且容易读到与自己无关的内容。</li>
+        <li><strong>消息传递</strong>：信息以显式消息流动——group chat（全员可见，如 AG2 的 GroupChat）或 handoff 时携带的上下文（点对点，如 OpenAI Agents SDK 把对话上下文随交接一起带过去）。可见范围由"发给谁"显式决定，但要自己保证"传够了"。</li>
+      </ul>
+
+      <h3>per-subagent 上下文隔离：为什么要把 subagent 的上下文分开</h3>
+
+      <p>这是多 agent 区别于"一个长对话"的关键一招，也是 Anthropic 的 multi-agent research 系统反复强调的设计：<strong>给每个 subagent 一份独立、干净的上下文</strong>，而不是把所有 agent 塞进同一个不断膨胀的对话历史。两个动机，正好一推一拉：</p>
+
+      <ul>
+        <li><strong>推：防 context clash（上下文打架）</strong>。若所有 subagent 共享一条历史，A 的中间推理、B 的失败尝试、C 的无关检索全混在一起，每个 agent 都被迫读一堆与自己任务无关的内容——既烧 token，又容易被别人的错误结论带偏。隔离让每个 subagent 只看自己那一摊。</li>
+        <li><strong>拉：但必须"传够信息"</strong>。隔离的代价是 subagent 看不到全局，于是协调者派活时要把"这个子任务需要的背景"明确打包进去——任务目标、约束、已知事实。Anthropic 的经验是：subagent 表现差，常常不是模型不行，而是<em>派活时上下文给得不够</em>。隔离和"传够"是一对必须同时拿捏的力。</li>
+      </ul>
+
+      <p>所以上下文隔离不是"少给信息"，而是"<strong>精确地给</strong>"——切断无关的，打包必需的。这条拿捏失手的两个方向（给太多 = clash、给太少 = subagent 抓瞎），04 章都各有一个失败模式对应。</p>
+
+      <div class="callout insight">
+        <span class="label">和"控制权"的区别</span>
+        <p>通信轴管的是"信息可见范围"，协调轴管的是"决策权位置"，两者独立。一个去中心 handoff（决策分散）的系统，完全可以配共享 state（信息全可见）；一个中心调度（决策集中）的系统，也可以给每个 subagent 隔离上下文（信息分隔）。把"谁能看见"和"谁说了算"分开想，是读懂多 agent 设计的一个关键切分。</p>
+      </div>
+
+      <div class="callout example">
+        <span class="label">例 · 三种通信在代码里长什么样（演示用，未在本机执行 · 2026-06）</span>
+        <div class="code-block">
+          <div class="header">
+            <span class="filename">communication_shapes.py</span>
+            <span class="lang">Python</span>
+            <button class="copy" data-copy-target="cb-14-1">复制</button>
+          </div>
+<pre id="cb-14-1"><code class="language-python"># A. 共享 state —— agent 读写同一个 State，彼此默认可见
+class ResearchState(TypedDict):
+    topic: str
+    findings: list[str]      # 多个 agent 往这里 append，互相读得到
+
+def worker(state: ResearchState) -&gt; dict:
+    note = search(state["topic"])
+    return {"findings": [note]}   # 写回共享 state，其他节点能读到
+
+# B. 消息传递 / handoff —— 控制权 + 上下文显式交给下一个 agent
+#    （OpenAI Agents SDK：handoffs= 声明可交接对象，上下文随交接带过去）
+billing = Agent(name="Billing", instructions="处理账单")
+tech    = Agent(name="Tech",    instructions="处理技术故障")
+triage  = Agent(name="Triage", instructions="按问题类型交接",
+                handoffs=[billing, tech])   # 交接时携带对话上下文
+
+# C. per-subagent 上下文隔离 —— 协调者给每个 subagent 一份"打包好的"干净任务
+def spawn_subagent(subtask: str, packed_context: str):
+    # 关键：不传整条全局历史，只传这个子任务需要的背景（精确地给）
+    return run_agent(system=packed_context, task=subtask)
+</code></pre>
+        </div>
+      </div>
+
+      <div class="annotations">
+        <p><span class="line-ref">findings</span> 是共享 state 的"公告板"语义——append 即广播。<span class="line-ref">handoffs=</span> 是消息传递里点对点交接的声明。<span class="line-ref">packed_context</span> 体现隔离的正确姿势：不是不给，是<strong>只给这个子任务需要的</strong>。</p>
+      </div>
+
+      <h3>类比 · 带边界</h3>
+
+      <p>共享 state 像团队共用一块白板，谁都能写、谁都能看；消息传递像发邮件，收件人明确。上下文隔离像"给每个外包只发与他那块活相关的需求文档，不把整个项目历史甩给他"。<strong>断裂点</strong>：白板/邮件的内容是人写的、稳定的，而 agent 写进共享 state 的常常是没核实的中间结论——别的 agent 读到后会当真，错误就这样传染（白板上的错字不会主动误导同事，state 里的错误结论会）。所以共享 state 的便利伴随"错误广播"的风险，这也是为什么高价值并行任务反而偏向隔离上下文。</p>
+
+      <h3>场景走查</h3>
+
+      <p>需求："3 个 subagent 并行查同一主题的不同侧面，最后汇总"。若它们写进同一个 <code>findings</code> 列表、协调者读全部来汇总——<strong>共享 state</strong>，简单。但若其中一个 subagent 查岔了、把错误结论写进 state，另外两个读到后会顺着错下去——这时改成<strong>每个 subagent 隔离上下文</strong>、只把最终 finding 交回协调者，错误就被关在单个 subagent 里不外溢。需求若是"客服账单专员转技术专员"，转过去时要带上"用户已经说过 API key 失效、已确认账户正常"这些上文——这是<strong>消息传递</strong>里"传够信息"的具体体现，少带一句用户就得重复说一遍。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>同样是并行跑多个 subagent，什么时候该用共享 state、什么时候该用 per-subagent 隔离上下文？给一条判断依据。</p>
+        <details>
+          <summary>展开答案（先答再展开）</summary>
+          <p>判断依据：<strong>subagent 之间需不需要看见彼此的中间产物</strong>，以及<strong>中间产物错了会不会互相带偏</strong>。</p>
+          <p>需要互相看、且彼此基本可信（比如协作搭建一份共同文档的不同章节，要对齐术语）→ 倾向<strong>共享 state</strong>，省去搬运。彼此独立、互相看见只会增加噪声和被错误带偏的风险（比如各查一个独立侧面）→ 倾向<strong>隔离上下文</strong>，只把最终 finding 交回协调者。一句话：共享换协同，隔离换抗污染与省 token。Anthropic 的 research 系统选了隔离——因为并行检索的 subagent 互不需要看彼此的中间过程。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           1.5 单 agent + 工具 vs 多 agent 的分界
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s15"><span class="num">1.5</span><span>单 agent + 工具 vs 多 agent 的分界</span></h2>
+
+      <p class="one-liner">默认单 agent + 多工具；只有"子任务独立可并行且价值高"才上多 agent——这是全教程最重要的判断闸。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前四节教的是"多 agent 怎么搭"。这一节回答一个更上游的问题：<strong>这件事该不该是多 agent</strong>。多数任务一个 agent 配一组工具（外加必要时的固定 workflow）就够了；多 agent 引入并行价值的同时，也引入 token 成倍增长、协调复杂度、调试困难。把这道闸放在 1.5、放在全章最后，是因为它能否决前四节的一切——形状/决策权/通信选得再漂亮，若本就不该上多 agent，整套都是负债。</p>
+      </div>
+
+      <h3>底层机制：多 agent 买的是什么、付的是什么</h3>
+
+      <p>多 agent 不是免费的抽象，它是一笔有明确收支的交易：</p>
+
+      <ul>
+        <li><strong>买到</strong>：① 并行——独立子任务同时跑，省墙钟时间；② 上下文隔离——每个 subagent 专注一摊，防 clash；③ 专业化——不同角色不同 prompt/工具，提质。</li>
+        <li><strong>付出</strong>：① token 成本——Anthropic 公布其 research 系统的多 agent 架构消耗约为单 agent 聊天的 15×；② 协调复杂度——多一层"派活—汇总"要写、要调；③ 可观测性下降——跨多个 agent 拼 trace 才看得清一次运行。</li>
+      </ul>
+
+      <p>这笔账只有在<strong>子任务真的独立可并行、且任务价值足够高到撑得起 15× 量级的 token</strong>时才划算。Anthropic 给的边界很直白：multi-agent 适合"价值高到能吃下 token 开销、且广度优先（breadth-first）可并行探索"的任务，典型是开放式深度检索；反过来，大多数任务、尤其是写代码这种<strong>串行依赖强</strong>的任务，单 agent 更合适——这也是 Cognition 在《Don't Build Multi-Agents》里的核心主张。这条 read-heavy 可并行 vs write-heavy 强依赖的分界，02 章第一节（<a href="02-principles.html#s21">§2.1</a>）会展开成一条主原理。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="决策树：是否该上多 agent，三个判断节点导向单 agent 或多 agent">
+          <defs>
+            <marker id="ar15" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+          <!-- Q1 -->
+          <rect x="200" y="20" width="240" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="320" y="40" text-anchor="middle" class="edge-label" font-weight="700">子任务彼此独立、可并行？</text>
+          <text x="320" y="56" text-anchor="middle" class="edge-label">（不是串行依赖）</text>
+          <!-- Q1 否 -> 单 agent -->
+          <line x1="200" y1="42" x2="110" y2="100" class="diagram-ink" marker-end="url(#ar15)"/>
+          <text x="135" y="78" text-anchor="middle" class="branch-label">否</text>
+          <!-- Q1 是 -> Q2 -->
+          <line x1="380" y1="64" x2="420" y2="110" class="diagram-ink" marker-end="url(#ar15)"/>
+          <text x="415" y="86" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- Q2 -->
+          <rect x="320" y="115" width="240" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="440" y="135" text-anchor="middle" class="edge-label" font-weight="700">价值高到能吃下 ~15× token？</text>
+          <text x="440" y="151" text-anchor="middle" class="edge-label">（够不够本）</text>
+          <!-- Q2 否 -> 单 agent -->
+          <line x1="320" y1="150" x2="150" y2="200" class="diagram-ink" marker-end="url(#ar15)"/>
+          <text x="225" y="170" text-anchor="middle" class="branch-label">否</text>
+          <!-- Q2 是 -> Q3 -->
+          <line x1="445" y1="159" x2="450" y2="205" class="diagram-ink" marker-end="url(#ar15)"/>
+          <text x="465" y="184" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- Q3 -->
+          <rect x="330" y="210" width="240" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="450" y="230" text-anchor="middle" class="edge-label" font-weight="700">单 agent + 工具已试过且不够？</text>
+          <text x="450" y="246" text-anchor="middle" class="edge-label">（不是没试就上）</text>
+          <!-- Q3 否 -> 单 agent -->
+          <line x1="330" y1="248" x2="175" y2="290" class="diagram-ink" marker-end="url(#ar15)"/>
+          <text x="250" y="266" text-anchor="middle" class="branch-label">否</text>
+          <!-- Q3 是 -> 多 agent -->
+          <line x1="450" y1="254" x2="450" y2="296" class="diagram-ink" marker-end="url(#ar15)"/>
+          <text x="466" y="278" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- 终点：单 agent（左下，汇聚多个否） -->
+          <rect x="60" y="290" width="200" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="160" y="315" text-anchor="middle" class="node-label">单 agent + 多工具（默认）</text>
+          <!-- 终点：多 agent（右下） -->
+          <rect x="370" y="298" width="160" height="36" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="450" y="321" text-anchor="middle" class="node-label-accent">才上多 agent</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>三道闸，<strong>任意一道答"否"就回到单 agent + 多工具</strong>（默认）。只有三道全"是"——独立可并行、价值够本、单 agent 确已不够——才上多 agent。注意第三道：先把单 agent 做扎实再说，不是没试就上。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 1.5 · 单 agent + 工具 vs 多 agent</caption>
+        <thead>
+          <tr><th style="width:24%">维度</th><th>单 agent + 多工具（默认）</th><th>多 agent</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>适合的任务</td><td>串行依赖、需前后一致（写代码、写长文）</td><td>独立可并行、广度优先（开放式深度检索）</td></tr>
+          <tr><td>上下文</td><td>一条累积上下文，保一致</td><td>多份隔离上下文，防 clash</td></tr>
+          <tr><td>token 量级</td><td>基准</td><td>约 15×（Anthropic research 系统）</td></tr>
+          <tr><td>调试</td><td>一条 trace 看到底</td><td>跨多 agent 拼 trace</td></tr>
+          <tr><td>代表主张</td><td>Cognition《Don't Build Multi-Agents》</td><td>Anthropic multi-agent research system</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">最常见的错</span>
+        <p>把"多 agent"当成显得高级的默认架构,给一个本质串行的任务（如"按需求写一个功能并自测")硬拆成多个 agent 并行——结果各 agent 写出互相冲突的代码、风格不一、还得花一层去合并冲突，比单 agent 又慢又贵又差。<strong>先问该不该多 agent，再问怎么搭多 agent。</strong>这道闸答错，前四节的功夫全部变成负债。</p>
+      </div>
+
+      <h3>类比 · 带边界</h3>
+
+      <p>类比成"一个人干 vs 组个团队"：能一个人按时干完的活，组团队只会增加沟通成本（开会、对齐、合并）；只有活大到一个人来不及、且能切成互不依赖的几块时，团队才真正提速。<strong>断裂点</strong>：人组团队还能靠默契和临场沟通补救切分不当，agent 之间没有默契——切分不当（本该串行却并行）不会被运行时自动修复，只会原样放大成发散和冲突。所以"能不能切成独立的几块"对 agent 是硬约束，比对人更不容妥协。</p>
+
+      <h3>场景走查</h3>
+
+      <p>需求 A："调研 5 家竞品的定价并出一张对比表"——5 家彼此独立、可同时查、调研结论有商业价值，三道闸全过，<strong>多 agent</strong>（每家一个 subagent 并行检索）合理。需求 B："把这份调研写成一篇连贯的分析报告"——写作前后强依赖、要风格统一，第一道闸就"否"，回到<strong>单 agent</strong>。需求 C："回答一个用户的简单产品问题"——单 agent 配一个检索工具就够，价值也撑不起多 agent 开销，根本不必进后面两道闸。三个需求摆在一起，正好是 1.5 这道闸的日常用法：<em>先判该不该，再谈怎么搭</em>。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           self-check
+           ════════════════════════════════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 14px;">
+          合上教程，把答案先写在纸上或编辑器里。卡住的题，就是心智模型还没建好的地方——回对应小节再来。
+        </p>
+        <ol>
+          <li>用一句话说清拓扑、协调、通信三条轴各自回答什么问题。再举一个例子：固定其中两条、独立改第三条而系统仍成立。</li>
+          <li>supervisor、hierarchical、network/swarm 三种拓扑，从"边"的角度各是什么形状？哪种没有"必经中心"，它带来的好处和代价分别是什么？</li>
+          <li>"per-subagent 上下文隔离"为什么不是简单地"少给信息"？给太多和给太少分别会出什么问题？</li>
+          <li><strong>设计题</strong>：给定需求"一个能回答内部文档问题、并在涉及敏感操作时转人工的企业问答助手"。先判断它该不该上多 agent；若上，在三条轴上各点出你的取值并各给一句理由。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><strong>拓扑</strong>=连接成什么形状；<strong>协调</strong>=下一步决策权在谁手里；<strong>通信</strong>=信息怎么流、谁看得见。例：固定"supervisor 拓扑 + 共享 state 通信"，协调可在中心（协调者每步派活）也可分散（worker 自行认领 state 里的任务）——拓扑和通信没变，决策权位置变了，系统照样跑。这就是三轴正交。</li>
+            <li><strong>supervisor</strong>=星形（边全连中心，worker 互不可达）；<strong>hierarchical</strong>=树形（星形递归，每层一个小中心）；<strong>network/swarm</strong>=任意有向图。<strong>network/swarm 没有必经中心</strong>：好处是省掉中心那一跳、更快、更灵活；代价是没有一处能看见全局，misroute 与调试只能事后拼多段 trace。</li>
+            <li>因为隔离的正确姿势是"<strong>精确地给</strong>"——切断无关的、打包必需的，不是单纯减量。<strong>给太多</strong>=context clash，subagent 被无关内容和别人的错误结论带偏、还烧 token；<strong>给太少</strong>=subagent 缺背景抓瞎，表现差常被误判成"模型不行"。两个方向都失分，要同时拿捏。</li>
+            <li>参考答案（非唯一）：<strong>多半不该上多 agent</strong>——问答+转人工是串行流程、子任务不独立、价值也撑不起 15× token，单 agent + 检索工具 + 一个 HITL 转人工动作即可。<em>若坚持要点取值（练习用）</em>：拓扑 supervisor（一个入口 agent 统筹，便于在敏感点集中插入人审）；协调中心调度（"下一步是检索/回答/转人工"由入口 agent 决定，可追溯，敏感操作前能拦）；通信共享 state（流程线性、信息量小，无需隔离），转人工处用消息传递把已确认上文带给人工。关键在第一步就敢答"不该上"——这正是 1.5 那道闸的用法。</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           进阶挑战 · 刚好够不着
+           ════════════════════════════════════════════════════════ -->
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把一个你没正式学过的系统放进三轴坐标</h3>
+        <p>设想一个"自动写单元测试"的 agent 系统：读一个函数 → 生成测试 → 运行测试 → 失败就改测试再跑，直到通过。<strong>不查它的实现</strong>，只凭你对这件事行为的直觉回答：</p>
+        <ol>
+          <li>它在 1.2 拓扑上更像哪种形状？为什么不适合 network/swarm 并行？</li>
+          <li>它的协调（1.3）决策权更倾向落在中心还是去中心？</li>
+          <li>用 1.5 那三道闸过一遍：它该不该是多 agent？哪一道闸最先把它挡回单 agent？</li>
+          <li>这三个答案里，哪一个判断同时锁定了另外两个？</li>
+        </ol>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>"生成→运行→改→再跑"是一条<strong>带反馈的串行回路</strong>，后一步强依赖前一步的结果——这一个判断就几乎锁定了全部：① 拓扑像单 agent 的自循环（或最多一个 generator-critic 的固定两节点），不适合 network/swarm，因为并行写测试会各写各的、无法对同一份代码收敛；② 决策权倾向<strong>中心/固定流程</strong>（下一步是"改"还是"完成"由一个固定逻辑判断，而非自由交接）；③ 三道闸里<strong>第一道（独立可并行？）就答"否"</strong>，因为它本质串行，于是回到单 agent + 工具（运行测试是个工具调用，不必是另一个 agent）。<strong>"串行依赖强"这一个判断是上游</strong>，它同时决定了拓扑和该不该多 agent——和 02.1 的 read-vs-write 主原理是同一条线。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           参考资料
+           ════════════════════════════════════════════════════════ -->
+      <footer class="references">
+        <h3>本章参考资料</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/engineering/built-multi-agent-research-system">How we built our multi-agent research system</a>（Anthropic Engineering, 2025；orchestrator-worker、per-subagent 上下文隔离、约 15× token 的权威实践来源）</li>
+          <li><a href="https://cognition.ai/blog/dont-build-multi-agents">Don't Build Multi-Agents</a>（Cognition / Walden Yan, 2025；单 agent / single-thread 反方主张）</li>
+          <li><a href="https://docs.langchain.com/oss/python/langgraph/multi-agent">LangGraph 多 agent：supervisor / swarm / network</a>（官方，2026-06 查阅；swarm 的 <code>Command(goto=..., graph=Command.PARENT)</code> handoff 机制）</li>
+          <li><a href="https://openai.github.io/openai-agents-python/handoffs/">OpenAI Agents SDK · Handoffs</a>（官方；交接携带对话上下文）</li>
+          <li><a href="https://docs.ag2.ai/latest/docs/api-reference/autogen/GroupChat/">AG2(AutoGen) · GroupChat</a>（社区分叉；group chat 通信、speaker selection）</li>
+          <li><a href="https://docs.crewai.com/concepts/processes">CrewAI · Processes（sequential / hierarchical）</a>（官方；角色 crew + process 类型）</li>
+          <li><a href="https://docs.anthropic.com/en/docs/agents-and-tools/agent-sdk/overview">Claude Agent SDK</a>（官方）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a href="02-principles.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 5 个设计原理</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 三轴总览</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 拓扑结构</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 协调机制</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 通信方式</a></li>
+        <li><a href="#s15" data-toc-target="s15">1.5 单 vs 多 分界</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

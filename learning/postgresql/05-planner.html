@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 查询规划与执行 · PostgreSQL 核心机制教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; line-height: 1.6; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav a.full { grid-column: 1 / -1; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-storage.html">01 存储</a><span class="sep">—</span>
+    <a href="02-mvcc.html">02 MVCC</a><span class="sep">—</span>
+    <a href="03-vacuum-wal.html">03 回收·WAL</a><span class="sep">—</span>
+    <a href="04-indexes.html">04 索引</a><span class="sep">—</span>
+    <a href="05-planner.html" class="current">05 规划器</a><span class="sep">—</span>
+    <a href="06-vs-mysql.html">06 对比MySQL</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">第 05 章</p>
+        <h1>查询规划与执行</h1>
+        <p class="recap">前面给了堆、索引、可见性图——这一章讲规划器如何在这些访问路径里选一条最便宜的，以及怎么从 <code>EXPLAIN</code> 读出它的决策。规划器是 cost-based 的：它给每个候选计划估一个抽象代价，选最小的那个。代价从统计信息算出来，所以<strong>查询性能 ≈ 估算精度的函数</strong>——这条主线贯穿全章。</p>
+      </header>
+
+      <p>同一条 SQL，PG 往往有不止一种方式执行：全表顺序读、走某个索引、把几个索引的结果用位图合起来、两表连接时用嵌套循环还是哈希……规划器（planner / optimizer）的工作，就是在这些方式里挑一条预计最便宜的，交给执行器去跑。它不靠固定规则（「有索引就走索引」那种），而是给每个候选计划算一个代价数字、比大小。这一章把这个过程拆开：代价怎么算（§cost-model）、估算的原料从哪来（§statistics）、有哪几种扫描和连接可选（§scan-types / §bitmap / §joins）、以及怎么用 <code>EXPLAIN</code> 把它的决策和真实执行对照起来（§explain）。</p>
+
+      <section class="schema-panel" id="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li><strong>规划器是 cost-based，不是 rule-based</strong>——它枚举候选计划、给每个估一个抽象代价、选最小的，没有「见索引就用」的死规则。</li>
+          <li><strong>代价 = 页数 × 页代价 + 行数 × CPU 代价</strong>——顺序页、随机页、每行处理各有一个可调权重，加总就是一个计划的 cost。</li>
+          <li><strong>统计信息（ANALYZE）驱动行数估算</strong>——每列的 n_distinct、MCV、直方图写在 <code>pg_statistic</code> 里，规划器靠它估每个节点输出多少行。</li>
+          <li><strong>四种扫描各有适用区</strong>——seq scan、index scan、index-only scan、bitmap heap scan，按命中比例（选择性）分段，没有永远最快的那个。</li>
+          <li><strong>三种 join 各有适用区</strong>——nested loop、hash join、merge join，按表大小、有无序、有无索引、work_mem 选。</li>
+          <li><strong>EXPLAIN 看估算 vs 实际</strong>——核心诊断是比 estimated rows 和 actual rows，偏差大就说明统计失真。</li>
+        </ul>
+      </section>
+
+      <h2 id="cost-model"><span class="num">§1</span><span>代价模型：把每个计划折算成一个数字</span></h2>
+
+      <p class="one-liner">规划器枚举候选计划，给每个估一个抽象 cost，选最小的那个。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>同一条查询有多种执行路径，必须有个统一的尺子来比较「哪条更快」，否则只能靠死规则，而死规则在数据分布变化时会系统性地选错。代价模型给了这把尺子：把磁盘读和 CPU 处理折算到同一个无量纲的数轴上，所有候选计划在这条数轴上排队，最小者胜出。代价不是毫秒、不是字节，而是一个<em>相对</em>量——只在「计划 A 比计划 B 贵多少」这个意义上有用。理解这一点，才能解释为什么调一个权重参数（如 <code>random_page_cost</code>）能整体改变规划器的偏好。</p>
+      </div>
+
+      <p>一个计划节点的代价，由两类成本加权求和：<strong>I/O 成本</strong>（要读多少个 8KB <a href="01-storage.html#page">Page</a>）和 <strong>CPU 成本</strong>（要处理多少行、算多少表达式）。粗略写成：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">代价的构成（示意）</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="code-cost">复制</button>
+        </div>
+<pre><code id="code-cost" class="language-text">cost ≈ 顺序读页数 × seq_page_cost      (默认 1.0)
+     + 随机读页数 × random_page_cost   (默认 4.0)
+     + 处理行数   × cpu_tuple_cost      (默认 0.01)
+     + 索引项数   × cpu_index_tuple_cost(默认 0.005)
+     + 表达式次数 × cpu_operator_cost   (默认 0.0025)</code></pre>
+      </div>
+
+      <p>这几个权重都是 <code>postgresql.conf</code> 里的 planner cost constant，可在会话级用 <code>SET</code> 调整。它们的<em>绝对</em>值不重要，重要的是彼此的<em>比值</em>——比值决定规划器把「读盘」看得比「算 CPU」重多少，以及把「随机读」看得比「顺序读」重多少。</p>
+
+      <p><strong>底层机制（比文档深一层）。</strong> <code>random_page_cost : seq_page_cost = 4 : 1</code> 这个默认比值是机械盘时代的遗产：机械硬盘随机寻道要转磁头、等盘片转到位，比顺序读一连串相邻扇区慢得多，4 倍是当年测出来的经验值。这个比值有一个直接后果：随机读一个 Page 在规划器眼里相当于顺序读 4 个 Page，所以「走索引随机回堆取少量行」要和「顺序扫一大片堆」掰手腕时，规划器会把索引路径的每次回堆都按 4 倍计价。SSD 上随机和顺序的差距远没有 4 倍那么大，因此 SSD 部署常把 <code>random_page_cost</code> 调到约 1.1——这一调，索引路径的回堆代价骤降，规划器就更敢用 index scan 而非退回 seq scan。这是生产环境最常见也最有效的规划器调参之一，本章末尾的预测题会再回到它。</p>
+
+      <div class="callout tip">
+        <span class="label">类比 · 出行选路</span>
+        <p>代价模型像导航软件选路线：它不真去开一遍，而是给每条候选路线按「里程 × 油耗权重 + 红灯数 × 等待权重」估一个分，选分最低的。<strong>类比边界</strong>：导航的权重（油价、时间）有真实物理单位；规划器的 cost 是纯相对量，换台机器、换个参数，同一计划的 cost 数字就变，只在同一次规划的内部排序里有意义。</p>
+      </div>
+
+      <h2 id="statistics"><span class="num">§2</span><span>统计信息：行数估算的原料</span></h2>
+
+      <p class="one-liner">ANALYZE 把每列的分布写进 pg_statistic，规划器据此估每个节点输出多少行。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§1 的代价公式里，「读多少页、处理多少行」全是估出来的——规划器不会真去数一遍。它需要一份对数据分布的画像，才能在不碰数据的前提下回答「<code>WHERE status='active'</code> 命中约多少行」。这份画像就是统计信息，由 <code>ANALYZE</code> 采样收集。统计准，行数估得准，代价就估得准，计划就选得对；统计一旦过期或缺失，整条估算链从源头开始偏，后果是选错扫描、选错连接。所以统计信息不是「优化项」，而是规划器赖以工作的<em>输入</em>。</p>
+      </div>
+
+      <p><code>ANALYZE</code> 对表做随机采样，把每列的分布摘要写进系统目录 <code>pg_statistic</code>（可读视图是 <code>pg_stats</code>）。autovacuum 守护进程在表的改动量超过阈值时会自动触发 <code>ANALYZE</code>（与 <a href="03-vacuum-wal.html#autovacuum">第 3 章 §autovacuum</a> 同一套触发机制），无需手动盯着。每列收集的关键摘要有四样：</p>
+
+      <table class="compare-table">
+        <caption>ANALYZE 收集的核心统计量</caption>
+        <thead>
+          <tr><th>统计量</th><th>含义</th><th>规划器拿它做什么</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>n_distinct</code></td><td>该列不同值的个数（或负比例）</td><td>估等值/分组的基数：唯一值越多，单个值命中行越少</td></tr>
+          <tr class="selected"><td>MCV（most common values）</td><td>最高频的若干个值及其出现频率</td><td>对高频值精确估行数，不靠平均拍脑袋</td></tr>
+          <tr><td>histogram（直方图）</td><td>把非 MCV 的值域切成等频桶</td><td>估范围条件（<code>&gt;</code>、<code>BETWEEN</code>）落在多少桶里</td></tr>
+          <tr><td>correlation（物理相关性）</td><td>列逻辑序与堆物理序的吻合度（-1~1）</td><td>判断索引扫描回堆是顺序还是随机，影响代价</td></tr>
+        </tbody>
+      </table>
+
+      <p>估行数的逻辑大致是：等值条件先查 MCV，命中就用它的精确频率；没命中就用「(1 − MCV 总频率) ÷ 非 MCV 的不同值数」摊平估算。范围条件查直方图，看条件覆盖了几个等频桶。<code>correlation</code> 接近 1 表示该列的值在堆里几乎按序物理排列（如自增主键），此时索引范围扫描的回堆近似顺序读、代价低；接近 0 则回堆是满表乱跳的随机读、代价高。</p>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 行数估错是慢查询的头号根因之一，且错误会<em>沿计划树向上放大</em>：底层一个扫描节点把「命中 2 行」估成「命中 20000 行」，上层的连接节点就会基于这个错误数字选错连接算法（详见 §joins、§explain）。三种典型的统计失真：其一，<strong>统计过期</strong>——大批量导入后还没跑 <code>ANALYZE</code>，规划器拿着旧画像估新数据；其二，<strong>采样精度不足</strong>——默认 <code>default_statistics_target=100</code>（每列约采 300×100 行、保留 100 个 MCV 与 100 个直方图桶），对值分布极不均匀的大表未必够，调高它能让 MCV 和直方图更细，代价是 <code>ANALYZE</code> 更慢、<code>pg_statistic</code> 更大；其三，<strong>多列相关性丢失</strong>——规划器默认假设各列<em>独立</em>，于是 <code>WHERE city='上海' AND area_code='021'</code> 会把两个条件的选择性直接相乘，而现实中这俩高度相关，相乘后估值会严重偏低。这第三种要靠<strong>扩展统计</strong>（<code>CREATE STATISTICS</code>）显式声明列间的函数依赖或联合分布来纠正。识别「估算为何失真」，就是 §explain 里读 estimated vs actual 偏差的全部意义。</p>
+
+      <div class="callout warning">
+        <span class="label">失败模式 · 独立性假设</span>
+        <p>规划器默认各列相互独立，把多个 <code>AND</code> 条件的选择性相乘。当条件列实际相关（如「省」和「市」、「品牌」和「型号」），相乘会把命中行数估得远低于真实值，进而诱使上层选 nested loop（见 §joins）并把它放大成灾难。对这类相关列组，用 <code>CREATE STATISTICS ... (dependencies, ndistinct)</code> 建扩展统计，再 <code>ANALYZE</code>。</p>
+      </div>
+
+      <h2 id="scan-types"><span class="num">§3</span><span>四种扫描：按选择性分段</span></h2>
+
+      <p class="one-liner">seq scan、index scan、index-only scan、bitmap heap scan——命中比例不同，最优的扫描方式不同。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>「取一张表里满足条件的行」并非只有一种走法。命中极少时，顺着索引精确定位几行最划算；命中大半张表时，挨个查索引再回堆反而比直接顺序扫全表更慢。规划器要在这几种走法里按<em>选择性</em>（条件命中行数占全表的比例）挑一种。理解四种扫描各自的甜区，既能读懂 <code>EXPLAIN</code> 为什么选了某种，也能解释「为什么加了索引反而没走索引」——往往是因为命中比例太高，seq scan 此时确实更便宜。这四种扫描正是第 1、4 章建好的访问路径：堆顺序读、索引随机定位、靠可见性图免回堆、用位图合并。</p>
+      </div>
+
+      <p>四种扫描，从「命中极少」到「命中大半」排开：</p>
+
+      <ul>
+        <li><strong>seq scan（顺序扫描）</strong>：从头到尾顺序读整个堆文件，对每行就地判断条件。读的是连续 Page，是顺序 I/O（每页按 <code>seq_page_cost</code> 计价，便宜）。当条件命中比例高、几乎要碰大部分行时，它最优——反正都要读，顺序读比满表随机跳快。</li>
+        <li><strong>index scan（索引扫描）</strong>：先在索引里定位到满足条件的索引项，再顺着每一项的 <a href="01-storage.html#page">ctid</a> 回堆取整行。高选择性（命中极少行）时最优：只回堆少数几行，省掉了扫全表。代价里每次回堆按随机 I/O（<code>random_page_cost</code>）计，所以命中行一多就不划算。</li>
+        <li><strong>index-only scan（仅索引扫描）</strong>：查询要的列全在索引里，且目标行所在 Page 在可见性图里标记为 all-visible 时，直接从索引返回、<em>免回堆</em>。这把 index scan 最贵的「随机回堆」整段省掉，机制细节见 <a href="04-indexes.html#index-only-scan">第 4 章 §index-only-scan</a>。</li>
+        <li><strong>bitmap heap scan（位图堆扫描）</strong>：中等选择性的甜区，机制见 §bitmap。它先扫索引建一张按 Page 排序的位图，再按物理顺序成批访问堆，把随机 I/O 摊成顺序 I/O。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="选择性从低到高时最优扫描方式的变化谱">
+          <defs>
+            <linearGradient id="sel-grad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#B73B2F" stop-opacity="0.10"/>
+              <stop offset="0.5" stop-color="#B73B2F" stop-opacity="0.16"/>
+              <stop offset="1" stop-color="#B73B2F" stop-opacity="0.22"/>
+            </linearGradient>
+            <marker id="m5-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- the spectrum bar -->
+          <rect x="40" y="60" width="640" height="40" rx="4" fill="url(#sel-grad)" stroke="#E5E5E5" stroke-width="1"/>
+
+          <!-- axis line under the bar -->
+          <line x1="40" y1="120" x2="680" y2="120" class="diagram-ink" marker-end="url(#m5-ink)"/>
+          <text x="40" y="142" text-anchor="start" class="edge-label">命中极少（高选择性）</text>
+          <text x="680" y="142" text-anchor="end" class="edge-label">命中大半（低选择性）</text>
+
+          <!-- segment dividers -->
+          <line x1="253" y1="56" x2="253" y2="104" class="diagram-soft"/>
+          <line x1="467" y1="56" x2="467" y2="104" class="diagram-soft"/>
+
+          <!-- segment labels (13px name + 11px sublabel) -->
+          <text x="146" y="44" text-anchor="middle" class="node-label-accent">index / index-only</text>
+          <text x="146" y="85" text-anchor="middle" class="edge-label">精确定位少量行</text>
+
+          <text x="360" y="44" text-anchor="middle" class="node-label-accent">bitmap heap scan</text>
+          <text x="360" y="85" text-anchor="middle" class="edge-label">位图合并·成批回堆</text>
+
+          <text x="573" y="44" text-anchor="middle" class="node-label-accent">seq scan</text>
+          <text x="573" y="85" text-anchor="middle" class="edge-label">顺序扫全表</text>
+
+          <!-- bottom note -->
+          <text x="360" y="186" text-anchor="middle" class="node-label">没有永远最快的扫描——同一查询，数据分布一变就换方式</text>
+          <text x="360" y="210" text-anchor="middle" class="edge-label">命中比例（选择性）是规划器选扫描的主轴</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>选择性 → 扫描类型谱。左端命中极少走 index / index-only scan，中段走 bitmap heap scan，右端命中大半走 seq scan。<strong>注意</strong>：分界点由代价权重（尤其 <code>random_page_cost</code>）和列的 <code>correlation</code> 共同决定，<em>不</em>是固定百分比；同一条查询换一批数据分布，就会从一段滑到另一段。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 「为什么加了索引却走 seq scan」几乎总能用这张谱回答：当条件命中比例高（例如 <code>WHERE active = true</code> 而九成行都 active），走索引意味着对大半张表逐行随机回堆，按 <code>random_page_cost=4</code> 计价后，总代价反而高于「顺序读一遍全表」。规划器算出 seq scan 更便宜，于是无视那个索引——这是<em>正确</em>决策，不是 bug。反过来，命中极少时它自然会选 index scan。中间地带交给 bitmap，下一节专讲。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一张 100 万行的表，<code>WHERE flag = true</code> 命中其中 95 万行。规划器多半会选哪种扫描？为什么不是「有索引就走索引」？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>seq scan。</strong> 命中 95% 意味着几乎每个堆 Page 都得碰，走索引要对 95 万行逐行随机回堆——按 <code>random_page_cost</code> 计价后远贵于顺序读一遍全表。规划器是 cost-based，不是「见索引就用」：它算出顺序扫更便宜，就忽略那个索引。索引的甜区在<em>高选择性</em>（命中极少），不在这里。</p>
+        </details>
+      </div>
+
+      <h2 id="bitmap"><span class="num">§4</span><span>Bitmap heap scan：把随机 I/O 摊成顺序 I/O</span></h2>
+
+      <p class="one-liner">先扫索引建一张按 Page 排序的 ctid 位图，再按物理顺序一次性访问堆，每个 Page 只碰一次。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>index scan 在命中行变多时有两个痛点：回堆是满表乱跳的随机 I/O；同一个 Page 里若有多行命中，会被反复访问多次。bitmap heap scan 专治这两点——它把「先全找出来、排好序、再去取」插在索引和堆之间，于是中等选择性（既不是极少、也不到大半）这段，它比 index scan（随机 I/O 太贵）和 seq scan（白读太多无关 Page）都便宜。这是规划器在图 5.1 中段几乎总选它的原因，也是它单独成节的理由。</p>
+      </div>
+
+      <p>它分两个阶段，对应 <code>EXPLAIN</code> 里成对出现的两个节点 <code>Bitmap Index Scan</code> 和 <code>Bitmap Heap Scan</code>：</p>
+
+      <ol>
+        <li><strong>建位图</strong>（<code>Bitmap Index Scan</code>）：扫索引，把所有命中项的 <code>ctid</code> 收集进一张内存位图。位图按 <em>Page 号</em>组织——本质是「哪些 Page 里有命中行」的一张图，天然按物理顺序排好。</li>
+        <li><strong>按图取堆</strong>（<code>Bitmap Heap Scan</code>）：按 Page 号<em>从小到大</em>遍历位图，每个有命中的 Page 只访问一次、取出其中所有命中行。访问顺序与堆的物理布局一致——随机 I/O 就此摊成了近似顺序 I/O。</li>
+      </ol>
+
+      <figure>
+        <svg viewBox="0 0 640 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="bitmap heap scan 的两阶段：先建按页排序的位图，再按物理顺序成批回堆">
+          <defs>
+            <marker id="m5-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- stage 1: index scan -->
+          <rect x="30" y="40" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="66" text-anchor="middle" class="node-label">Bitmap Index Scan</text>
+          <text x="105" y="86" text-anchor="middle" class="edge-label">扫索引·收 ctid</text>
+
+          <!-- arrow 1 -->
+          <line x1="180" y1="72" x2="243" y2="72" class="diagram-accent" marker-end="url(#m5-verm)"/>
+
+          <!-- stage 2: the bitmap (page-sorted) -->
+          <rect x="245" y="32" width="150" height="80" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="320" y="54" text-anchor="middle" class="node-label-accent">位图（按 Page 排序）</text>
+          <text x="320" y="74" text-anchor="middle" class="edge-label">P0 ■  P2 ■  P5 ■</text>
+          <text x="320" y="94" text-anchor="middle" class="edge-label">哪些页有命中行</text>
+
+          <!-- arrow 2 -->
+          <line x1="395" y1="72" x2="458" y2="72" class="diagram-accent" marker-end="url(#m5-verm)"/>
+
+          <!-- stage 3: heap scan -->
+          <rect x="460" y="40" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="535" y="66" text-anchor="middle" class="node-label">Bitmap Heap Scan</text>
+          <text x="535" y="86" text-anchor="middle" class="edge-label">按页序成批取</text>
+
+          <!-- the heap pages row -->
+          <text x="320" y="158" text-anchor="middle" class="node-label">堆（按物理 Page 顺序访问，每页只碰一次）</text>
+          <g>
+            <rect x="120" y="176" width="56" height="44" rx="4" class="diagram-accent node-fill-accent"/>
+            <text x="148" y="202" text-anchor="middle" class="edge-label">P0</text>
+            <rect x="196" y="176" width="56" height="44" rx="4" class="diagram-soft node-fill"/>
+            <text x="224" y="202" text-anchor="middle" class="edge-label">P1</text>
+            <rect x="272" y="176" width="56" height="44" rx="4" class="diagram-accent node-fill-accent"/>
+            <text x="300" y="202" text-anchor="middle" class="edge-label">P2</text>
+            <rect x="348" y="176" width="56" height="44" rx="4" class="diagram-soft node-fill"/>
+            <text x="376" y="202" text-anchor="middle" class="edge-label">P3</text>
+            <rect x="424" y="176" width="56" height="44" rx="4" class="diagram-soft node-fill"/>
+            <text x="452" y="202" text-anchor="middle" class="edge-label">P4</text>
+            <rect x="500" y="176" width="56" height="44" rx="4" class="diagram-accent node-fill-accent"/>
+            <text x="528" y="202" text-anchor="middle" class="edge-label">P5</text>
+          </g>
+          <text x="320" y="244" text-anchor="middle" class="edge-label">实心 = 位图标记有命中（P0/P2/P5）·按 0→5 顺序取，不回头</text>
+          <text x="320" y="268" text-anchor="middle" class="branch-label">还能 bitmap AND / OR 多个索引的位图再取一次堆</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>bitmap heap scan 两阶段：<code>Bitmap Index Scan</code> 建一张按 Page 排序的位图，<code>Bitmap Heap Scan</code> 按物理页序成批回堆、每页只碰一次。<strong>注意</strong>：随机 I/O 由此摊成近似顺序 I/O，且多个索引的位图可先 AND/OR 合并再统一取堆——这正是它赢在中段选择性的两条底层原因。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 三件事让它卡在中段最优。其一，<strong>排序消除了随机性</strong>：index scan 按索引顺序（逻辑序）回堆，物理上满表乱跳；bitmap 先按 Page 号排好再取，访问顺序贴合磁盘布局，I/O 接近顺序。其二，<strong>去重消除了重复访问</strong>：一个 Page 里多行命中，index scan 会多次拉取该 Page，bitmap 因为按页组织，每页只访问一次。其三，<strong>可组合</strong>：多个条件各走一个索引，各建一张位图，再做 <code>BitmapAnd</code> / <code>BitmapOr</code> 合并成一张，最后只取一次堆——这让 PG 能同时利用多个单列索引，而不必为每个查询组合都建复合索引。代价是建位图要占内存：命中行太多、位图大到超过 <code>work_mem</code> 时，PG 会把位图降级为「按 Page 粗粒度」（lossy，只记得「这页有命中」而非「这页的哪几行」），回堆时该页要逐行重判条件——这也是为什么命中比例再高就不如直接 seq scan 了，谱的右端由此收束。</p>
+
+      <h2 id="joins"><span class="num">§5</span><span>三种 join：按表形态选算法</span></h2>
+
+      <p class="one-liner">nested loop、hash join、merge join——按表大小、有无序、有无索引、work_mem 取一种。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>连接两张表同样不止一种走法，且选错的代价比选错扫描更惨烈——连接是嵌套的，外层一旦把行数估错，内层的工作量会被成倍放大。三种 join 算法各有一套前提：外表小且内表有索引、两表大且能哈希、两边已按键有序。规划器拿着 §2 的行数估算和各表的索引情况，给三种各算一个代价、选最小。读懂它们的适用区，是解释「为什么这条 join 慢」的关键——绝大多数离谱的慢 join，根因都是行数估错导致选了 nested loop。</p>
+      </div>
+
+      <p>三种算法，各自的甜区：</p>
+
+      <ul>
+        <li><strong>nested loop join（嵌套循环）</strong>：外表每取一行，就去内表找匹配。外表小、内表在连接键上有索引时最优——外表行数少，每行用内表索引精确定位，总工作量 ≈ 外表行数 × 一次索引探查。外表一大、或内表无索引退化成逐行全扫，工作量爆炸。</li>
+        <li><strong>hash join（哈希连接）</strong>：先把较小的一侧（build 端）按连接键建一张内存哈希表，再扫另一侧（probe 端）逐行探哈希表。大表等值连接、数据无序、且 build 端能放进 <code>work_mem</code> 时最优。只支持等值连接（<code>=</code>），不要求任何顺序。build 端放不下 <code>work_mem</code> 时分批落盘（batched），代价上升。</li>
+        <li><strong>merge join（归并连接）</strong>：要求两边都已按连接键<em>有序</em>（顺序可来自索引扫描，或一个显式 Sort 节点），然后像拉链一样线性归并。两表都大、又恰好都能有序提供时高效——它是线性扫一遍，不像 hash 要建表、也不像 nested loop 要重复探查。代价主要在「让两边有序」上。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 660 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="规划器选择 join 算法的决策树">
+          <defs>
+            <marker id="m5-ink2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- D1: both sorted? -->
+          <polygon points="330,20 470,60 330,100 190,60" class="diagram-ink node-fill"/>
+          <text x="330" y="56" text-anchor="middle" class="node-label">两边已按连接键有序？</text>
+          <text x="330" y="74" text-anchor="middle" class="edge-label">索引序 / 显式 Sort</text>
+
+          <!-- D1 yes -> merge -->
+          <line x1="190" y1="60" x2="110" y2="60" class="diagram-ink" marker-end="url(#m5-ink2)"/>
+          <text x="150" y="50" text-anchor="middle" class="branch-label">是</text>
+          <rect x="20" y="36" width="86" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="63" y="58" text-anchor="middle" class="node-label-accent">merge join</text>
+          <text x="63" y="75" text-anchor="middle" class="edge-label">线性归并</text>
+
+          <!-- D1 no -> D2 -->
+          <line x1="330" y1="100" x2="330" y2="138" class="diagram-ink" marker-end="url(#m5-ink2)"/>
+          <text x="344" y="122" text-anchor="middle" class="branch-label">否</text>
+
+          <!-- D2: equi-join & build fits work_mem? -->
+          <polygon points="330,140 480,182 330,224 180,182" class="diagram-ink node-fill"/>
+          <text x="330" y="178" text-anchor="middle" class="node-label">等值连接且较小侧可入内存？</text>
+          <text x="330" y="196" text-anchor="middle" class="edge-label">build 端 ≤ work_mem</text>
+
+          <!-- D2 yes -> hash -->
+          <line x1="480" y1="182" x2="556" y2="182" class="diagram-ink" marker-end="url(#m5-ink2)"/>
+          <text x="518" y="172" text-anchor="middle" class="branch-label">是</text>
+          <rect x="558" y="158" width="86" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="601" y="180" text-anchor="middle" class="node-label-accent">hash join</text>
+          <text x="601" y="197" text-anchor="middle" class="edge-label">建表·探表</text>
+
+          <!-- D2 no -> D3 -->
+          <line x1="330" y1="224" x2="330" y2="262" class="diagram-ink" marker-end="url(#m5-ink2)"/>
+          <text x="344" y="246" text-anchor="middle" class="branch-label">否</text>
+
+          <!-- D3: outer small & inner indexed? -->
+          <polygon points="330,264 480,306 330,348 180,306" class="diagram-ink node-fill"/>
+          <text x="330" y="302" text-anchor="middle" class="node-label">外表小且内表连接键有索引？</text>
+          <text x="330" y="320" text-anchor="middle" class="edge-label">外表每行探内表索引</text>
+
+          <!-- D3 yes -> nested loop -->
+          <line x1="480" y1="306" x2="556" y2="306" class="diagram-ink" marker-end="url(#m5-ink2)"/>
+          <text x="518" y="296" text-anchor="middle" class="branch-label">是</text>
+          <rect x="558" y="282" width="92" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="604" y="304" text-anchor="middle" class="node-label-accent">nested loop</text>
+          <text x="604" y="321" text-anchor="middle" class="edge-label">行数估错最危险</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.3</span>join 算法决策树（简化）：两边已按键有序就 merge；否则等值且较小侧可入内存就 hash；否则外表小且内表有索引就 nested loop。<strong>注意</strong>：这是直觉化的择优顺序，规划器实际是给三者各算 cost 取最小。<code>nested loop</code> 在行数估错时最危险——外表行数被低估，内层探查会被放大成 N 次。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 三种算法的代价曲线随「外表行数」分叉，这解释了为什么行数估算精度对 join 这么致命。<strong>nested loop</strong> 的代价约等于 <em>外表行数 × 单次内表探查代价</em>——是外表行数的<em>线性</em>函数，斜率就是内表那次探查的代价。外表只有几行时斜率乘出来很小，所以它在「外表小」时碾压其他两种；可一旦规划器把外表行数估成 2、实际却是 20000，这条线性代价被放大一万倍，一个本该毫秒级的 nested loop 跑成几分钟。<strong>hash join</strong> 有一笔固定的「建哈希表」启动成本，但之后每行探查是 O(1)，总代价对行数近似线性且斜率极小——所以行数大时它稳。<strong>merge join</strong> 的主成本在排序（若需要），归并阶段是线性扫一遍。规划器选谁，本质是看这三条代价曲线在「估出来的外表行数」那一点谁最低。结论落到诊断上：<strong>join 慢，先去 §explain 比 nested loop 节点的 estimated rows 和 actual rows</strong>——偏差大就是它被错选并放大了。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>两张各上百万行的表做等值连接，连接键上都没有可用的有序索引、且都装不进 <code>work_mem</code>。规划器会选哪种 join？为什么不是 nested loop？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>hash join（必要时分批落盘），或先 Sort 再 merge join。</strong> 两表都大，nested loop 的「外表行数 × 内表探查」会是百万 × 百万量级——天文数字，何况内表无索引、每次探查退化成全扫，直接出局。hash join 即便 build 端放不下 <code>work_mem</code> 要分批，代价仍远低于 nested loop；若两边能借索引或排序变有序，merge join 也是候选。规划器会在 hash 与 merge 之间按各自代价取低者。</p>
+        </details>
+      </div>
+
+      <h2 id="explain"><span class="num">§6</span><span>读 EXPLAIN：把估算和实际对照起来</span></h2>
+
+      <p class="one-liner">EXPLAIN (ANALYZE, BUFFERS) 给出一棵计划树，核心诊断是比 estimated rows 和 actual rows。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前五节讲的全是规划器在「估算世界」里的决策；<code>EXPLAIN</code> 是把这个估算世界和真实执行<em>并排放</em>的唯一窗口。它告诉你规划器选了哪条计划、给每个节点估了多少行多少代价；加上 <code>ANALYZE</code> 真跑一遍，再告诉你实际跑出多少行、花了多久、读了多少 Page。诊断慢查询不是去猜，而是打开这个窗口，找到「估算和实际差最大」的那个节点——那里就是统计失真的源头，也是上层错选计划的起点。这一节把整章主线收口：性能 = 估算精度的函数，而 <code>EXPLAIN</code> 就是度量这个精度的尺子。</p>
+      </div>
+
+      <p>计划是一棵<strong>节点树</strong>，缩进表示父子，<strong>自底向上</strong>执行：最内层的扫描节点先出数据，往上喂给连接、排序、聚合节点。每个节点带几组数字，分两批来源：</p>
+
+      <ul>
+        <li><strong>规划器的估算</strong>（不加 <code>ANALYZE</code> 也有）：<code>cost=启动代价..总代价</code>（启动代价是「吐出第一行前」要花的，总代价是「全部吐完」的累计，单位是 §1 那个抽象量）；<code>rows=</code>估算输出行数；<code>width=</code>每行估算字节宽度。</li>
+        <li><strong>实际执行</strong>（加 <code>ANALYZE</code> 才有，会真的跑一遍查询）：<code>actual time=启动..结束</code>（毫秒）；<code>actual rows=</code>实际输出行数；<code>loops=</code>该节点被执行了几次（nested loop 的内层会等于外表行数）。</li>
+        <li><strong>缓冲区</strong>（加 <code>BUFFERS</code>）：<code>shared hit=</code>从 <code>shared_buffers</code> 缓存命中的 Page 数、<code>read=</code>从磁盘实读的 Page 数——命中多说明数据多在内存，read 多说明在打盘。</li>
+      </ul>
+
+      <p>下面是一条两表 JOIN 的 <code>EXPLAIN (ANALYZE, BUFFERS)</code> 真实形态输出（<strong>未在本机执行</strong>，数字用于演示该看哪些字段）：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">EXPLAIN (ANALYZE, BUFFERS) · 两表 JOIN</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="code-explain">复制</button>
+        </div>
+<pre><code id="code-explain" class="language-text">EXPLAIN (ANALYZE, BUFFERS)
+SELECT o.id, u.name
+FROM orders o JOIN users u ON u.id = o.user_id
+WHERE o.status = 'paid';
+
+                                    QUERY PLAN
+-------------------------------------------------------------------------------------
+ Hash Join  (cost=33.50..1894.20 rows=4820 width=40)
+            (actual time=0.412..18.633 rows=4790 loops=1)
+   Hash Cond: (o.user_id = u.id)
+   Buffers: shared hit=812 read=140
+   -&gt;  Seq Scan on orders o  (cost=0.00..1721.00 rows=4820 width=8)
+                             (actual time=0.020..14.880 rows=4790 loops=1)
+         Filter: (status = 'paid')
+         Rows Removed by Filter: 70210
+         Buffers: shared hit=700 read=140
+   -&gt;  Hash  (cost=21.00..21.00 rows=1000 width=36)
+            (actual time=0.340..0.341 rows=1000 loops=1)
+         Buckets: 1024  Batches: 1  Memory Usage: 72kB
+         -&gt;  Index Scan using users_pkey on users u
+                 (cost=0.29..21.00 rows=1000 width=36)
+                 (actual time=0.012..0.180 rows=1000 loops=1)
+ Planning Time: 0.230 ms
+ Execution Time: 18.920 ms
+              &lt;- 未在本机执行</code></pre>
+      </div>
+
+      <p><strong>逐行解读</strong>，把每个数字映射回前几节：</p>
+      <ul>
+        <li><span class="annotations"><span class="line-ref">Hash Join 顶节点</span></span>树根是 <code>Hash Join</code>（§joins 的哈希连接）。<code>cost=33.50..1894.20</code>：启动代价 33.50（要先把 <code>users</code> 哈希进内存才能出第一行），总代价 1894.20。<code>rows=4820</code> 估、<code>actual rows=4790</code> 实——两者贴近，说明这一层估得准。</li>
+        <li><span class="annotations"><span class="line-ref">Seq Scan on orders</span></span>左子节点：对 <code>orders</code> 走 seq scan，<code>Filter: status='paid'</code> 就地过滤。<code>Rows Removed by Filter: 70210</code> 说明扫了约 7.5 万行、只留下 4790——命中比例低，但 <code>orders</code> 上若无 <code>status</code> 索引，seq scan 是唯一选择。<code>Buffers: shared hit=700 read=140</code>：700 页命中缓存、140 页打了盘。</li>
+        <li><span class="annotations"><span class="line-ref">Hash → Index Scan on users</span></span>右子树先 <code>Index Scan using users_pkey</code> 取出 <code>users</code> 全部 1000 行，再由 <code>Hash</code> 节点建哈希表。<code>Batches: 1</code> 表示一批装下、没落盘；<code>Memory Usage: 72kB</code> 远小于 <code>work_mem</code>，所以 hash join 走的是内存路径。</li>
+        <li><span class="annotations"><span class="line-ref">Planning vs Execution Time</span></span>底部 <code>Planning Time</code>（规划耗时）与 <code>Execution Time</code>（执行耗时）分列。诊断时<strong>不要只盯顶层 Execution Time</strong>，要顺着树找 estimated 和 actual 偏差最大的那个节点。</li>
+      </ul>
+
+      <p>上面是一个「估得准」的健康计划。下面这个相反——一个 estimated 严重低估的节点，看它如何把上层带进坑：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">估算失真引发的错误 nested loop（节选）</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="code-skew">复制</button>
+        </div>
+<pre><code id="code-skew" class="language-text"> Nested Loop  (cost=0.29..845.10 rows=1 width=40)
+              (actual time=0.030..9123.400 rows=50000 loops=1)
+   -&gt;  Seq Scan on events e  (cost=0.00..210.00 rows=1 width=8)
+                            (actual time=0.015..12.300 rows=50000 loops=1)
+         Filter: ((kind = 'click') AND (region = 'east'))
+   -&gt;  Index Scan using users_pkey on users u
+           (cost=0.29..0.63 rows=1 width=36)
+           (actual time=0.001..0.180 rows=1 loops=50000)
+                                                  &lt;- 未在本机执行</code></pre>
+      </div>
+
+      <p>关键在第一个扫描节点：<code>rows=1</code>（估）对 <code>actual rows=50000</code>（实）——两个相关条件 <code>kind='click' AND region='east'</code> 被规划器按<em>独立</em>假设（§2）相乘，选择性估得离谱地低，于是它以为只会出 1 行。基于「外表只有 1 行」，规划器选了 nested loop：对外表那「1 行」去 <code>users</code> 索引探一次，看起来极便宜。可外表<em>实际</em>有 50000 行，于是内层 <code>Index Scan</code> 的 <code>loops=50000</code>——那次索引探查被放大成五万次，<code>actual time</code> 飙到 9 秒。<strong>同样这条查询，若估对了 50000 行，规划器会改选 hash join，一次哈希探表搞定，毫秒级完成。</strong>这就是「行数估错 → 错选 nested loop → 被放大」的完整链条，也是 §5 那句「nested loop 在行数估错时最危险」的实证。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>某节点 <code>EXPLAIN</code> 显示 <code>rows=2</code> 但 <code>actual rows=20000</code>。它正下方喂着一个 nested loop 的外表。接下来最容易出什么问题？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>上层 nested loop 被错选并放大。</strong> 规划器以为外表只有 2 行，于是判定 nested loop（外表 2 行各探一次内表）最便宜。实际外表是 20000 行，内层探查的 <code>loops</code> 随之变成 20000——一次本该轻量的内表查询被执行两万次，查询从毫秒级劣化成秒级甚至分钟级。根因是底层那个节点的行数估算失真（统计过期、或多列相关被当独立相乘），修法是更新统计 / 调 <code>default_statistics_target</code> / 建扩展统计，让规划器估对行数后改选 hash join。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>把 <code>random_page_cost</code> 从默认 4 调到 1.1（典型 SSD 设置），规划器会更偏向哪种扫描？为什么？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>更偏向 index scan。</strong> <code>random_page_cost</code> 是「随机读一个 Page」的计价。index scan 的主要开销正是回堆的随机 I/O，把这个权重从 4 降到 1.1，回堆代价骤降，index scan 的总代价随之下降——原本被判「随机回堆太贵、不如 seq scan」的那些查询，现在算下来 index scan 更便宜，规划器就改走索引。这是 SSD 部署最常见的规划器调参：机械盘的 4:1 比值对随机读快得多的 SSD 是过度惩罚。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>规划器选执行计划，靠的是固定规则（如「有索引就走索引」）还是别的什么？一句话说清依据。</li>
+          <li><code>random_page_cost</code> 默认是 <code>seq_page_cost</code> 的几倍？这个比值反映的是什么硬件假设？</li>
+          <li>bitmap heap scan 凭什么在「中段选择性」赢过 index scan 和 seq scan？说出它做的两件关键事。</li>
+          <li>读 <code>EXPLAIN ANALYZE</code> 诊断慢查询时，最该优先比较哪两个数字？它们偏差大说明什么？</li>
+        </ol>
+        <details>
+          <summary>查看参考答案</summary>
+          <p><strong>1.</strong> 靠代价（cost）。规划器是 cost-based：枚举候选计划、用统计信息给每个估一个抽象 cost、选最小的那个。没有「见索引就用」的死规则——命中比例高时它会正确地选 seq scan 而无视索引。</p>
+          <p><strong>2.</strong> 4 倍（<code>random_page_cost=4.0</code> vs <code>seq_page_cost=1.0</code>）。这个比值是机械盘的遗产：随机寻道远慢于顺序读相邻扇区。SSD 上随机/顺序差距小得多，常把它调到约 1.1，从而让规划器更敢用 index scan。</p>
+          <p><strong>3.</strong> 其一，<strong>按 Page 排序</strong>：先扫索引把命中 <code>ctid</code> 收进按页排序的位图，再按物理页序回堆，把随机 I/O 摊成近似顺序 I/O。其二，<strong>每页只碰一次</strong>：同页多行命中只访问该页一次，避免 index scan 的重复回堆。（附带还能 bitmap AND/OR 合并多个索引。）</p>
+          <p><strong>4.</strong> 比 <strong>estimated rows 和 actual rows</strong>。某节点估 2、实际 20000 这种大偏差，说明统计失真（过期 / 采样不足 / 多列相关被当独立相乘）——它会让上层错选连接算法（典型是把 nested loop 放大成几万次），是慢查询的头号根因。不要只看顶层耗时。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>亲手制造一次「估错行数 → 错选 nested loop」，再用扩展统计救回来</h3>
+        <p>建一张表，放两个<em>强相关</em>的列（例如 <code>city</code> 与 <code>area_code</code>，让每个 city 唯一对应一个 area_code），灌入足够多的行。对 <code>WHERE city=? AND area_code=?</code> 跑 <code>EXPLAIN ANALYZE</code>，证明：规划器把两个条件按独立相乘、<code>estimated rows</code> 远低于 <code>actual rows</code>；当它和另一张表 JOIN 时，因低估而错选了 nested loop。然后用 <code>CREATE STATISTICS</code> 建扩展统计、<code>ANALYZE</code>，再看估算行数和所选计划如何变化。</p>
+        <details>
+          <summary>提示</summary>
+          <p>路径：<code>CREATE STATISTICS s_city (dependencies, ndistinct) ON city, area_code FROM t;</code> 然后 <code>ANALYZE t;</code>。建前，<code>EXPLAIN</code> 里 <code>WHERE city=.. AND area_code=..</code> 的 <code>rows=</code> 会约等于「单列选择性 × 单列选择性 × 总行数」（两个小数相乘 → 极小）；建后，规划器知道这两列函数依赖，<code>rows=</code> 跳到接近真实命中数。对照 <code>pg_stats_ext</code> 看扩展统计是否生效。把「估算行数从离谱到合理」与「所选 join 从 nested loop 切回 hash join」对上，§2/§5/§6 这条链就闭合了。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/18/using-explain.html">PostgreSQL 18 Docs · Using EXPLAIN</a>（计划树、cost/rows/width、ANALYZE 与 BUFFERS 的逐项含义）</li>
+          <li><a href="https://www.postgresql.org/docs/18/runtime-config-query.html">PostgreSQL 18 Docs · Planner Cost Constants</a>（<code>seq_page_cost</code> / <code>random_page_cost</code> / <code>cpu_*</code> 等权重定义与默认值）</li>
+          <li><a href="https://www.postgresql.org/docs/18/row-estimation-examples.html">PostgreSQL 18 Docs · Row Estimation Examples</a>（MCV、直方图、选择性如何算出行数的官方示例）</li>
+          <li><a href="https://www.cybertec-postgresql.com/en/how-to-interpret-postgresql-explain-analyze-output/">Cybertec · How to interpret PostgreSQL EXPLAIN ANALYZE output</a>（estimated vs actual 偏差的实战解读）</li>
+          <li><a href="https://www.interdb.jp/pg/pgsql03.html">The Internals of PostgreSQL · Ch.3 Query Processing</a>（规划器代价估算与计划生成的源码级图解）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="04-indexes.html">
+          <span class="label">← 上一章</span>
+          <span class="title">04 · 索引</span>
+        </a>
+        <a class="next" href="06-vs-mysql.html">
+          <span class="label">下一章 →</span>
+          <span class="title">06 · 深入对比 MySQL</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#cost-model" data-toc-target="cost-model">代价模型</a></li>
+        <li><a href="#statistics" data-toc-target="statistics">统计信息</a></li>
+        <li><a href="#scan-types" data-toc-target="scan-types">四种扫描</a></li>
+        <li><a href="#bitmap" data-toc-target="bitmap">Bitmap 扫描</a></li>
+        <li><a href="#joins" data-toc-target="joins">三种 Join</a></li>
+        <li><a href="#explain" data-toc-target="explain">读 EXPLAIN</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

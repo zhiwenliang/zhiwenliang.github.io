@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 深入对比 MySQL · PostgreSQL 核心机制教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; line-height: 1.6; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav a.full { grid-column: 1 / -1; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-storage.html">01 存储</a><span class="sep">—</span>
+    <a href="02-mvcc.html">02 MVCC</a><span class="sep">—</span>
+    <a href="03-vacuum-wal.html">03 回收·WAL</a><span class="sep">—</span>
+    <a href="04-indexes.html">04 索引</a><span class="sep">—</span>
+    <a href="05-planner.html">05 规划器</a><span class="sep">—</span>
+    <a href="06-vs-mysql.html" class="current">06 对比MySQL</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">第 06 章</p>
+        <h1>深入对比 MySQL</h1>
+        <p class="recap">前五章建立了 PG 的堆 + MVCC + VACUUM + 索引 + 规划器模型——这一章把它和 MySQL/InnoDB 逐一对照，用差异照亮各自的设计取舍。每一节的套路一致：先讲 InnoDB 在机制层怎么做，再对照 PG，再点出这处差异照亮了哪个抉择。对照的基准是 PostgreSQL 18 与 MySQL 8.4 LTS / 9.7 LTS（截至 2026-06）。</p>
+      </header>
+
+      <p>带着 MySQL 的直觉读 PG，最大的风险不是看不懂，而是<em>看懂了错的东西</em>——把「表就是主键 B+tree」「长事务撑大 undo」「默认隔离是 RR」这些 InnoDB 的事实，悄悄套到 PG 上。这一章是整份教程的<strong>跨章辨析章</strong>：把前五章每个 PG 机制，都拉到 InnoDB 的对应实现旁边并排看。同样是「读不阻塞写」，两者代价相反；同样是 count(*)，两边都全扫但 PG 多一条出路；同样是默认隔离级别，失败模式南辕北辙。看清差异，前五章的模型才真正长进直觉里。</p>
+
+      <section class="schema-panel" id="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li><strong>聚簇索引 vs 堆</strong>——InnoDB 表本身是主键 B+tree，叶子存整行；PG 是无序堆 + 平权独立索引，叶子存 ctid。主键选择对二者的存储布局影响天差地别。</li>
+          <li><strong>undo-log MVCC vs 堆内多版本</strong>——InnoDB 原地更新、旧版本进 undo log；PG 旧版本留在堆里成死元组。长事务在前者撑大 undo、在后者撑大表。</li>
+          <li><strong>三日志 vs 单 WAL</strong>——InnoDB/MySQL 用 redo + undo + binlog 三套日志，PG 用一套 WAL 同时干崩溃恢复、物理复制、逻辑解码。</li>
+          <li><strong>默认 RR vs RC</strong>——InnoDB 默认 REPEATABLE READ 靠 next-key 锁防幻读；PG 默认 READ COMMITTED，其 RR 是真正的快照隔离、SERIALIZABLE 是 SSI。失败模式相反：阻塞/死锁 vs 中止重试。</li>
+          <li><strong>优化器与索引差异</strong>——PG 的 join 算法、索引类型、事务型 DDL 的计划空间与能力面都比 InnoDB 大。</li>
+        </ul>
+      </section>
+
+      <h2 id="clustered-vs-heap"><span class="num">§1</span><span>聚簇索引 vs 堆：主键决定一切，还是什么都不决定</span></h2>
+
+      <p class="one-liner">InnoDB 的表就是主键 B+tree，行躺在主键里；PG 的表是无序堆，主键只是又一个指向 ctid 的索引。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这是 PG 与 MySQL 分道扬镳的第一刀，也是后面所有差异的物理源头。<a href="01-storage.html#tuple">第 1 章</a>讲过 PG 的行存在无序堆里、每个索引叶子存 <code>ctid</code>；InnoDB 走的是完全相反的路——让主键<em>决定</em>行的物理位置。先把这一处对照吃透，「UUID 主键在 InnoDB 痛、在 PG 不痛」「二级索引为什么要回表」这类现象才有根。</p>
+      </div>
+
+      <h3>InnoDB 怎么做：表即主键 B+tree</h3>
+
+      <p><strong>InnoDB 的表本身就是一棵以主键排序的 B+tree（聚簇索引 / clustered index，亦称索引组织表）。</strong> 这棵树的叶子节点直接存放<strong>整行数据</strong>——行不是独立躺在某个堆里，行<em>就是</em>主键 B+tree 的叶子内容。默认数据页 16KB。没有显式主键时，InnoDB 会挑第一个非空唯一索引、再不然用内部生成的 6 字节 <code>row_id</code> 当聚簇键。</p>
+
+      <p>这带来一个 MySQL 老手都熟的事实：<strong>二级索引（secondary index）的叶子节点存的是主键值，而不是行的物理指针。</strong> 于是一次非覆盖的二级索引查找要走<strong>两次 B+tree 下降</strong>——先在二级索引树里下降，找到匹配行的主键值；再拿这个主键值到聚簇索引树里<em>第二次</em>下降，才取到整行。这第二步就是 MySQL 语境里的<strong>回表</strong>。只有当查询要的列全在二级索引里（覆盖索引）时，才省掉第二次下降。</p>
+
+      <p><strong>后果直接挂在主键的选择上。</strong> 用单调递增的主键（如 <code>AUTO_INCREMENT</code>），新行总是追加到 B+tree 最右侧的叶子页——顺序写、页填得满、几乎不分裂。换成随机的主键（如 UUID v4），插入点散布在整棵树中间，频繁触发<strong>页分裂</strong>：一个写满的中间页被迫一分为二，留下半空的页、制造碎片、降低页填充率。更隐蔽的代价是：因为<em>每一个</em>二级索引的叶子都存着主键值，主键越宽（UUID 16 字节起，文本主键更甚），所有二级索引就越胖、越占空间、缓存效率越低。</p>
+
+      <h3>对照 PG：堆 + 平权独立索引</h3>
+
+      <p>PG 这边，<a href="01-storage.html#tuple">第 1 章 §tuple</a> 立下的地基此刻全部生效：行存在一个<strong>无序的堆</strong>里，物理顺序与任何键都无关。每一个索引——包括主键索引——都是<strong>独立</strong>的结构，叶子节点存的是 <a href="01-storage.html#hidden-columns"><code>ctid</code></a>，即 <code>(block, offset)</code> 这个物理坐标。PG 里<strong>没有聚簇索引这个概念</strong>，没有哪个索引是「主」的、其余是「从」的：主键索引和任意一个普通 B-tree 索引在结构上完全平权，都通过 <code>ctid</code> 一跳定位到堆里的行。</p>
+
+      <p>所以主键的选择对 PG 的<em>存储布局</em>影响很小。用 UUID 当主键，PG 基本没有 InnoDB 那套惩罚：主键索引该分裂还是分裂（这是 B-tree 的固有行为），但它<strong>不决定行的物理位置</strong>，不会把整张表的数据布局搅乱，更不会因为主键宽就让其它索引一起变胖——因为 PG 的二级索引叶子存的是 <code>ctid</code>（定长 6 字节），不是主键值。代价是另一面：PG 的二级索引<em>无法</em>靠「叶子存主键」实现覆盖时的去回表优化（它本来就一跳到堆，没有「回表」这一说），并且任何索引都会随更新删除而碎片化。PG 的 <code>CLUSTER</code> 命令能按某个索引把堆重排成物理有序，但那只是<strong>一次性</strong>操作——重排完之后新的插入更新照样打乱顺序，PG 不会像 InnoDB 那样持续维护聚簇有序。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左侧 InnoDB 聚簇索引与二级索引回表，右侧 PG 堆加独立索引">
+          <defs>
+            <marker id="m-verm-h" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="m-ink-h" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- divider -->
+          <line x1="380" y1="30" x2="380" y2="410" class="diagram-soft"/>
+          <text x="190" y="22" text-anchor="middle" class="node-label-accent">InnoDB · 聚簇</text>
+          <text x="570" y="22" text-anchor="middle" class="node-label">PostgreSQL · 堆</text>
+
+          <!-- ===== LEFT: InnoDB ===== -->
+          <!-- secondary index tree -->
+          <rect x="24" y="48" width="150" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="99" y="65" text-anchor="middle" class="node-label">二级索引 B+tree</text>
+          <text x="99" y="80" text-anchor="middle" class="edge-label">叶子 = 主键值</text>
+
+          <!-- first descent label -->
+          <line x1="99" y1="88" x2="99" y2="128" class="diagram-ink" marker-end="url(#m-ink-h)"/>
+          <text x="105" y="110" text-anchor="start" class="edge-label">①下降</text>
+
+          <!-- secondary leaf -->
+          <rect x="34" y="128" width="130" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="99" y="149" text-anchor="middle" class="edge-label">得主键 = 42</text>
+
+          <!-- second descent: into clustered -->
+          <line x1="164" y1="145" x2="214" y2="200" class="diagram-accent" marker-end="url(#m-verm-h)"/>
+          <text x="148" y="186" text-anchor="start" class="branch-label">②回表</text>
+
+          <!-- clustered index tree -->
+          <rect x="206" y="200" width="150" height="40" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="281" y="217" text-anchor="middle" class="node-label-accent">聚簇 B+tree</text>
+          <text x="281" y="232" text-anchor="middle" class="edge-label">按主键排序</text>
+
+          <line x1="281" y1="240" x2="281" y2="280" class="diagram-accent" marker-end="url(#m-verm-h)"/>
+
+          <!-- clustered leaf = full row -->
+          <rect x="206" y="280" width="150" height="46" rx="4" class="diagram-accent node-fill"/>
+          <text x="281" y="300" text-anchor="middle" class="branch-label">叶子 = 整行</text>
+          <text x="281" y="317" text-anchor="middle" class="edge-label">行就住在树里</text>
+
+          <text x="190" y="360" text-anchor="middle" class="edge-label">两次 B+tree 下降才取到行</text>
+          <text x="190" y="380" text-anchor="middle" class="edge-label">主键单调=顺序追加</text>
+          <text x="190" y="398" text-anchor="middle" class="branch-label">UUID 主键=页分裂+二级索引变胖</text>
+
+          <!-- ===== RIGHT: PG ===== -->
+          <!-- pk index -->
+          <rect x="416" y="48" width="120" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="476" y="65" text-anchor="middle" class="node-label">主键索引</text>
+          <text x="476" y="80" text-anchor="middle" class="edge-label">叶子 = ctid</text>
+
+          <!-- secondary index -->
+          <rect x="600" y="48" width="130" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="665" y="65" text-anchor="middle" class="node-label">二级索引</text>
+          <text x="665" y="80" text-anchor="middle" class="edge-label">叶子 = ctid</text>
+
+          <!-- both point to heap, one jump each -->
+          <line x1="476" y1="88" x2="540" y2="206" class="diagram-accent" marker-end="url(#m-verm-h)"/>
+          <line x1="665" y1="88" x2="600" y2="206" class="diagram-accent" marker-end="url(#m-verm-h)"/>
+          <text x="556" y="150" text-anchor="middle" class="branch-label">各一跳</text>
+
+          <!-- heap (unordered rows) -->
+          <rect x="430" y="210" width="290" height="96" rx="6" class="diagram-ink node-fill"/>
+          <text x="575" y="230" text-anchor="middle" class="node-label">堆（无序行）</text>
+          <rect x="446" y="244" width="58" height="46" rx="3" class="diagram-ink node-fill"/>
+          <text x="475" y="271" text-anchor="middle" class="edge-label">行 c</text>
+          <rect x="516" y="244" width="58" height="46" rx="3" class="diagram-ink node-fill"/>
+          <text x="545" y="271" text-anchor="middle" class="edge-label">行 a</text>
+          <rect x="586" y="244" width="58" height="46" rx="3" class="diagram-ink node-fill"/>
+          <text x="615" y="271" text-anchor="middle" class="edge-label">行 b</text>
+          <rect x="656" y="244" width="50" height="46" rx="3" class="diagram-soft node-fill"/>
+          <text x="681" y="271" text-anchor="middle" class="edge-label">空位</text>
+
+          <text x="575" y="360" text-anchor="middle" class="edge-label">每个索引平权·都一跳定位</text>
+          <text x="575" y="380" text-anchor="middle" class="edge-label">主键不决定行的物理位置</text>
+          <text x="575" y="398" text-anchor="middle" class="branch-label">UUID 主键基本无惩罚</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>聚簇索引 vs 堆 + 独立索引。<strong>注意</strong>：左侧 InnoDB 的二级索引回表是<em>第二次 B+tree 下降</em>（叶子存主键值，再去聚簇树取整行），不是一次堆定位；右侧 PG 的每个索引都平权、叶子存 <code>ctid</code>，一跳即到堆里的行。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">这处差异照亮了什么取舍</span>
+        <p>InnoDB 把成本压在<strong>写入与主键选择</strong>上：按主键范围扫描天然连续、I/O 友好（聚簇的红利），代价是必须持续维护主键有序、二级索引要回表、主键一宽则全盘受累。PG 把同一个抉择倒过来——堆写入只找空位、不维护任何全局顺序，所以主键选什么都不搅乱布局，代价是 PG 没有「按主键聚簇」的天然顺序红利，要靠 <code>CLUSTER</code> 一次性重排或 BRIN/索引扫描去补。<strong>一句话：InnoDB 让主键决定一切，PG 让主键几乎什么都不决定。</strong></p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个团队抱怨「InnoDB 用 UUID v4 当主键，写入慢、表和索引都偏大」。把这套库迁到 PG、主键仍用 UUID，这些症状还在吗？为什么？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>基本消失。</strong> 根因在于 InnoDB 的表就是主键 B+tree——UUID 随机分布导致中间页频繁分裂、碎片化，且每个二级索引叶子都存着这个 16 字节主键、随之变胖。PG 没有聚簇索引：主键只是又一个叶子存 <code>ctid</code> 的独立索引，<strong>不决定行的物理位置</strong>，行照常往堆的空位塞。UUID 主键索引本身仍会按 B-tree 规则分裂（这躲不掉），但它不会搅乱整张表的数据布局，也不会让其它二级索引跟着变胖——因为 PG 的二级索引叶子存的是定长 <code>ctid</code>，与主键宽度无关。所以「写入慢 + 表/索引偏大」这组由聚簇引起的症状，在 PG 上基本不复现。</p>
+        </details>
+      </div>
+
+      <h2 id="mvcc-undo"><span class="num">§2</span><span>undo-log MVCC vs 堆内多版本：旧版本去了哪</span></h2>
+
+      <p class="one-liner">两种 MVCC 都让读不阻塞写，但旧版本的去向相反——InnoDB 推进 undo log，PG 留在堆里等 VACUUM。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><a href="02-mvcc.html#dead-tuple">第 2 章</a>讲过 PG 的 MVCC：<code>UPDATE</code> 不原地改，新版本写进堆、旧版本成死元组，<a href="03-vacuum-wal.html#vacuum">VACUUM</a> 负责回收。InnoDB 同样是 MVCC、同样「读不阻塞写」，但实现路径完全不同。把两条路径并排看，才能解释一个让 MySQL 老手困惑的现象：为什么 PG 的长事务会把表撑肿，而 InnoDB 的长事务撑肿的却是别的东西。</p>
+      </div>
+
+      <h3>InnoDB 怎么做：原地更新 + undo 链回溯</h3>
+
+      <p><strong>InnoDB 是原地更新（in-place update）。</strong> <code>UPDATE</code> 直接在聚簇索引的叶子上修改那一行的当前值；被覆盖掉的旧值并不丢弃，而是被推入 <strong>undo log</strong>（回滚段，rollback segment）。每一行在聚簇索引里都带两个隐藏字段：<code>DB_TRX_ID</code>（最后修改它的事务 id）和 <code>DB_ROLL_PTR</code>（指向该行在 undo log 里的上一个版本的回滚指针）。</p>
+
+      <p>读的时候，一个事务的一致性视图叫 <strong>read view</strong>。当它读到聚簇索引里的当前行、发现这一行的 <code>DB_TRX_ID</code> 对自己的 read view 不可见（即这行被一个「在该 read view 之后才开始、或此刻尚未提交」的事务改过）时，InnoDB 就顺着 <code>DB_ROLL_PTR</code> 进 undo log，<strong>沿 undo 链一步步回溯、重建出对这个 read view 可见的那个旧版本</strong>。换句话说，InnoDB 的旧版本是「按需从 undo 记录里现场重算」出来的，不是像 PG 那样以完整 tuple 形式躺在表里。</p>
+
+      <p>undo 由专门的 <strong>purge 线程</strong>回收：当某条 undo 记录所对应的旧版本，已经<em>不再被任何活跃 read view 需要</em>时，purge 才能把它清掉。这里埋着 InnoDB 长事务的核心代价——一个长时间运行、或开了事务却空闲不提交的事务，会一直<strong>钉住</strong>它的 read view，使得「它仍需回溯到的那些旧版本」对应的 undo 记录<em>无法被 purge</em>。后果是 <strong>history list length</strong>（待清理的旧版本链总长）持续增长、单行的 undo 版本链越拖越长，于是凡是要回溯老版本的读都被拖慢。但关键在于：<strong>这撑大的是 undo 表空间，表（聚簇索引）本身不膨胀</strong>——当前行始终是原地的那一份。</p>
+
+      <h3>对照 PG：旧版本留在堆里成死元组</h3>
+
+      <p>PG 的做法 <a href="02-mvcc.html#dead-tuple">第 2 章</a>已经讲透：<code>UPDATE</code> 在堆里写一个<em>新</em> tuple，旧 tuple 原地保留、被盖上 <code>xmax</code> 失效戳，待再无快照能看到它便成<strong>死元组</strong>。旧版本就是一份完整的、躺在堆里的 tuple——不需要「重算」，直接读。回收它的是 <a href="03-vacuum-wal.html#vacuum">VACUUM</a>，不是 purge 线程。</p>
+
+      <p>于是 PG 的长事务代价落在另一处：一个长事务持有的旧快照，会拦住 VACUUM——凡是「这个老快照仍能看到」的死元组，VACUUM 都<strong>不能回收</strong>（回收了老事务就读不到它该读的版本了）。死元组在堆里越积越多，<strong>表和它的所有索引一起膨胀（bloat）</strong>。这正是 InnoDB 与 PG 长事务症状的镜像：同一个「长事务拦住清理」的因，在 InnoDB 撑大 undo、在 PG 撑大关系文件。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左侧 InnoDB 原地更新加 undo 链，右侧 PG 堆内多版本">
+          <defs>
+            <marker id="m-verm-m" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="m-ink-m" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <line x1="380" y1="30" x2="380" y2="340" class="diagram-soft"/>
+          <text x="190" y="22" text-anchor="middle" class="node-label-accent">InnoDB · undo</text>
+          <text x="570" y="22" text-anchor="middle" class="node-label">PostgreSQL · 堆内</text>
+
+          <!-- ===== LEFT InnoDB ===== -->
+          <!-- current row in clustered index -->
+          <rect x="40" y="52" width="170" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="125" y="74" text-anchor="middle" class="node-label-accent">当前行（原地）</text>
+          <text x="125" y="92" text-anchor="middle" class="edge-label">balance = 80</text>
+          <text x="125" y="105" text-anchor="middle" class="edge-label">DB_ROLL_PTR ↓</text>
+
+          <!-- roll ptr arrow into undo -->
+          <line x1="125" y1="110" x2="125" y2="150" class="diagram-ink" marker-end="url(#m-ink-m)"/>
+          <text x="132" y="133" text-anchor="start" class="edge-label">回溯</text>
+
+          <!-- undo log chain -->
+          <rect x="40" y="150" width="170" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="125" y="166" text-anchor="middle" class="edge-label">undo: 旧值 100</text>
+          <text x="125" y="181" text-anchor="middle" class="edge-label">DB_ROLL_PTR ↓</text>
+          <line x1="125" y1="190" x2="125" y2="214" class="diagram-soft" marker-end="url(#m-ink-m)"/>
+          <rect x="40" y="214" width="170" height="34" rx="4" class="diagram-soft node-fill"/>
+          <text x="125" y="235" text-anchor="middle" class="edge-label">undo: 更旧值…</text>
+
+          <text x="125" y="282" text-anchor="middle" class="edge-label">读旧版本=沿 undo 链重建</text>
+          <text x="125" y="304" text-anchor="middle" class="branch-label">长事务 → undo 撑大</text>
+          <text x="125" y="324" text-anchor="middle" class="edge-label">表本身不膨胀</text>
+
+          <!-- ===== RIGHT PG ===== -->
+          <text x="570" y="52" text-anchor="middle" class="node-label">同一个 heap page</text>
+          <rect x="430" y="64" width="130" height="58" rx="6" class="diagram-soft node-fill"/>
+          <text x="495" y="86" text-anchor="middle" class="edge-label">v1 旧版本</text>
+          <text x="495" y="103" text-anchor="middle" class="edge-label">xmax = 205</text>
+          <text x="495" y="117" text-anchor="middle" class="branch-label">死元组</text>
+
+          <rect x="580" y="64" width="130" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="645" y="86" text-anchor="middle" class="node-label-accent">v2 新版本</text>
+          <text x="645" y="103" text-anchor="middle" class="edge-label">xmin = 205</text>
+          <text x="645" y="117" text-anchor="middle" class="edge-label">当前有效</text>
+
+          <line x1="560" y1="93" x2="578" y2="93" class="diagram-accent" marker-end="url(#m-verm-m)"/>
+
+          <text x="570" y="160" text-anchor="middle" class="edge-label">两份完整 tuple 并存堆中</text>
+          <line x1="495" y1="170" x2="495" y2="200" class="diagram-ink" marker-end="url(#m-ink-m)"/>
+          <rect x="430" y="200" width="280" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="570" y="225" text-anchor="middle" class="edge-label">VACUUM 回收死元组</text>
+
+          <text x="570" y="282" text-anchor="middle" class="edge-label">读旧版本=直接读那份 tuple</text>
+          <text x="570" y="304" text-anchor="middle" class="branch-label">长事务 → 表+索引膨胀</text>
+          <text x="570" y="324" text-anchor="middle" class="edge-label">VACUUM 被老快照拦住</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.2</span>两种 MVCC 的旧版本去向。<strong>注意</strong>：InnoDB 当前行原地、旧版本在 undo log 里按需重建，长事务撑大 <em>undo</em>；PG 新旧版本都是堆里的完整 tuple、直接读，长事务撑大 <em>表与索引</em>。同样「读不阻塞写」，膨胀的对象相反。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">这处差异照亮了什么取舍</span>
+        <p>两种 MVCC 都实现了「读不阻塞写、写不阻塞读」，代价却是镜像的。PG 把旧版本以完整 tuple 留在堆里——读旧版本零成本（直接读），但膨胀关系文件、要靠 VACUUM 持续回收。InnoDB 把旧值压进 undo——表保持紧凑、当前行永远原地，但读旧版本要沿 undo 链回溯（链越长越慢），且长事务对 undo「收税」。<strong>谁更好取决于负载：PG 怕的是长事务 + 高频更新堆出的膨胀，InnoDB 怕的是长事务把 undo 链拖长后的回溯读放大。</strong></p>
+      </div>
+
+      <h2 id="dual-log"><span class="num">§3</span><span>三日志 vs 单 WAL：一套日志干几件事</span></h2>
+
+      <p class="one-liner">MySQL 用 redo + undo + binlog 三套日志分担职责，PG 用一套 WAL 同时干崩溃恢复、物理复制、逻辑解码。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><a href="03-vacuum-wal.html#wal">第 3 章</a>把 PG 的 WAL 立成「一切持久化与复制的单一事实源」。MySQL 的持久化故事截然不同——它的两层架构天生就把日志切成了多套。看清这个对照，才能解释「为什么 MySQL 复制要配 binlog 而不是 redo」「为什么 PG 流复制和逻辑复制共用一套日志」。</p>
+      </div>
+
+      <h3>InnoDB/MySQL 怎么做：两层架构，三套日志</h3>
+
+      <p>根因是架构。<strong>MySQL 是两层结构：上层是 server 层（解析、优化、执行、复制），下层是可插拔的存储引擎（InnoDB 是默认的那个）。</strong> 这道分层直接导致日志被切成三套，各管一摊：</p>
+
+      <ul>
+        <li><strong>redo log（InnoDB 层）</strong>：物理日志，记录「对哪个页的哪个字节做了什么改动」，环形（固定大小、循环覆盖），唯一职责是<strong>崩溃恢复</strong>——重启后把已提交但未刷盘的页变更重放回来。</li>
+        <li><strong>undo log（InnoDB 层）</strong>：即 §2 的回滚段，服务于<strong>事务回滚与 MVCC 旧版本重建</strong>。</li>
+        <li><strong>binlog（server 层）</strong>：逻辑日志，记录「执行了什么 SQL / 行级数据怎么变」，有 statement / row / mixed 三种格式，是<strong>主从复制与时间点恢复（PITR）</strong>的数据源。因为它在 server 层，所以与具体存储引擎无关。</li>
+      </ul>
+
+      <p>三套日志分属两层，引出一个出名的工程难题：提交一个事务，既要写 InnoDB 的 redo、又要写 server 层的 binlog，两者必须<strong>原子地一起成功或一起失败</strong>，否则主从就会不一致。InnoDB 用<strong>两阶段提交（redo prepare → 写 binlog → redo commit）</strong>保证这一点，并用 <strong>group commit</strong> 把多个并发事务的 fsync 批量合并，摊薄刷盘开销。</p>
+
+      <h3>对照 PG：单一 WAL 一肩挑</h3>
+
+      <p>PG 没有两层架构（存储与执行一体），也就没有「server 层日志 vs 引擎层日志」之分。<a href="03-vacuum-wal.html#wal">第 3 章</a>讲的那一套 <strong>WAL（Write-Ahead Log）就是全部</strong>，它同时承担 MySQL 要三套日志才分担得了的职责：</p>
+
+      <ul>
+        <li><strong>崩溃恢复</strong>——这是 WAL 的本职，对应 MySQL 的 redo。</li>
+        <li><strong>物理流复制</strong>——备库直接接收并重放主库的 WAL 字节流，对应 MySQL 用 binlog 做的复制（但 PG 用的是物理 WAL，不是逻辑语句）。</li>
+        <li><strong>逻辑解码（logical decoding）</strong>——PG 能把同一份物理 WAL <em>解码</em>成逻辑变更流，喂给逻辑复制 / CDC，这部分对应 MySQL 的 row 格式 binlog。</li>
+      </ul>
+
+      <p>至于「旧版本 / 回滚」，PG 不需要单独的 undo 日志——因为旧版本本就是堆里的死元组（§2），回滚靠的也是 MVCC 可见性，不靠回放 undo。所以 MySQL 的 redo + undo + binlog 三件事，在 PG 这里被收敛成「WAL + 堆内多版本」两件事，而其中复制与 CDC 又都从那一份 WAL 派生。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左侧 MySQL 两层架构三套日志，右侧 PG 单 WAL 三职责">
+          <defs>
+            <marker id="m-verm-l" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="m-ink-l" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <line x1="380" y1="30" x2="380" y2="310" class="diagram-soft"/>
+          <text x="190" y="22" text-anchor="middle" class="node-label-accent">MySQL · 三套日志</text>
+          <text x="570" y="22" text-anchor="middle" class="node-label">PostgreSQL · 单 WAL</text>
+
+          <!-- ===== LEFT MySQL two layers ===== -->
+          <rect x="36" y="44" width="308" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="190" y="64" text-anchor="middle" class="node-label">server 层</text>
+          <text x="190" y="80" text-anchor="middle" class="edge-label">解析·优化·执行·复制</text>
+
+          <rect x="36" y="96" width="308" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="190" y="116" text-anchor="middle" class="node-label">存储引擎层 · InnoDB</text>
+          <text x="190" y="132" text-anchor="middle" class="edge-label">可插拔</text>
+
+          <!-- three logs -->
+          <rect x="36" y="176" width="92" height="52" rx="4" class="diagram-ink node-fill"/>
+          <text x="82" y="197" text-anchor="middle" class="node-label">redo</text>
+          <text x="82" y="214" text-anchor="middle" class="edge-label">物理·恢复</text>
+
+          <rect x="144" y="176" width="92" height="52" rx="4" class="diagram-ink node-fill"/>
+          <text x="190" y="197" text-anchor="middle" class="node-label">undo</text>
+          <text x="190" y="214" text-anchor="middle" class="edge-label">回滚·MVCC</text>
+
+          <rect x="252" y="176" width="92" height="52" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="298" y="197" text-anchor="middle" class="node-label-accent">binlog</text>
+          <text x="298" y="214" text-anchor="middle" class="edge-label">逻辑·复制</text>
+
+          <!-- layer to logs -->
+          <line x1="82" y1="140" x2="82" y2="174" class="diagram-ink" marker-end="url(#m-ink-l)"/>
+          <line x1="190" y1="140" x2="190" y2="174" class="diagram-ink" marker-end="url(#m-ink-l)"/>
+          <line x1="298" y1="140" x2="298" y2="174" class="diagram-accent" marker-end="url(#m-verm-l)"/>
+
+          <text x="190" y="262" text-anchor="middle" class="edge-label">redo+binlog 两阶段提交</text>
+          <text x="190" y="284" text-anchor="middle" class="branch-label">group commit 批量 fsync</text>
+
+          <!-- ===== RIGHT PG single WAL ===== -->
+          <rect x="486" y="60" width="168" height="56" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="570" y="84" text-anchor="middle" class="node-label-accent">单一 WAL</text>
+          <text x="570" y="102" text-anchor="middle" class="edge-label">存储执行一体·无分层</text>
+
+          <!-- three duties -->
+          <rect x="430" y="170" width="92" height="50" rx="4" class="diagram-ink node-fill"/>
+          <text x="476" y="190" text-anchor="middle" class="edge-label">崩溃</text>
+          <text x="476" y="206" text-anchor="middle" class="edge-label">恢复</text>
+
+          <rect x="524" y="170" width="92" height="50" rx="4" class="diagram-ink node-fill"/>
+          <text x="570" y="190" text-anchor="middle" class="edge-label">物理流</text>
+          <text x="570" y="206" text-anchor="middle" class="edge-label">复制</text>
+
+          <rect x="618" y="170" width="92" height="50" rx="4" class="diagram-ink node-fill"/>
+          <text x="664" y="190" text-anchor="middle" class="edge-label">逻辑</text>
+          <text x="664" y="206" text-anchor="middle" class="edge-label">解码</text>
+
+          <line x1="500" y1="116" x2="476" y2="168" class="diagram-accent" marker-end="url(#m-verm-l)"/>
+          <line x1="570" y1="116" x2="570" y2="168" class="diagram-accent" marker-end="url(#m-verm-l)"/>
+          <line x1="640" y1="116" x2="664" y2="168" class="diagram-accent" marker-end="url(#m-verm-l)"/>
+
+          <text x="570" y="262" text-anchor="middle" class="edge-label">一套日志承担三件事</text>
+          <text x="570" y="284" text-anchor="middle" class="branch-label">无需独立 undo 日志</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.3</span>三套日志 vs 单一 WAL。<strong>注意</strong>：MySQL 的两层架构把日志切成 redo（引擎·物理·恢复）+ undo（引擎·MVCC）+ binlog（server·逻辑·复制）三套，提交要两阶段协调；PG 一套 WAL 同时干崩溃恢复、物理复制、逻辑解码——MySQL 三套日志分担的职责，PG 用一套承担。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">这处差异照亮了什么取舍</span>
+        <p>MySQL 的多套日志是<strong>可插拔存储引擎</strong>这个架构选择的直接代价：server 层要在不依赖具体引擎的前提下做复制，就必须有一份引擎中立的 binlog；引擎自己又要崩溃恢复（redo）和回滚（undo）。灵活性（换引擎不换复制层）换来了两阶段提交的复杂度。PG 一体化、只一套 WAL，省掉了 redo/binlog 双写与两阶段提交的协调成本，但也意味着复制是 WAL 物理级别的——<strong>架构的简洁与引擎的可插拔，是这里被交换的东西。</strong></p>
+      </div>
+
+      <h2 id="isolation-default"><span class="num">§4</span><span>默认 RR vs RC：失败模式南辕北辙</span></h2>
+
+      <p class="one-liner">InnoDB 默认 REPEATABLE READ 靠 gap 锁防幻读，PG 默认 READ COMMITTED;两者冲突时一个阻塞/死锁、一个直接中止重试。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这是迁移时最容易被默认值咬到的一处。<a href="02-mvcc.html#isolation">第 2 章</a>讲了 PG 的隔离级别建立在快照可见性之上；InnoDB 的同名级别（甚至默认值都不同）走的是另一套机制，连失败的方式都相反。把默认隔离这一对照吃透，是后面迁移对照表里第一条的根。</p>
+      </div>
+
+      <h3>InnoDB 怎么做：默认 RR + next-key 锁</h3>
+
+      <p><strong>InnoDB 默认隔离级别是 REPEATABLE READ（RR）。</strong> 在 RR 下，普通的一致性读用的是事务首次读时建立的快照（与 PG 的快照思路相通）；但 InnoDB 还要在 RR 这一级<em>防住幻读</em>，靠的是<strong>next-key 锁</strong>——它是<strong>记录锁（record lock，锁住索引上某条已存在的记录）+ 间隙锁（gap lock，锁住索引记录<em>之间</em>那段不存在的区间）</strong>的组合。锁住「区间」意味着别的事务无法往这段间隙里插入新行，于是同一个范围查询两次读到的行集合不变——幻读被堵死。</p>
+
+      <p>这里要分清两种读：<strong>普通 <code>SELECT</code> 是一致性快照读，不加锁</strong>；而 <code>SELECT ... FOR UPDATE</code> / <code>FOR SHARE</code> 是<strong>加锁读（locking read）</strong>，会沿扫描路径取 next-key 锁。间隙锁的副作用是出名的：两个事务各自锁住相邻间隙、再都想往里插，就互相等成<strong>死锁</strong>；或者一个事务的范围加锁读，会<strong>阻塞</strong>另一个事务对该范围的插入，哪怕它们插的根本不是同一行。</p>
+
+      <h3>对照 PG：默认 RC，RR 是快照隔离，SERIALIZABLE 是 SSI</h3>
+
+      <p>PG 的三件事都和 InnoDB 不同（<a href="02-mvcc.html#isolation">第 2 章 §isolation</a> 已铺垫）：</p>
+
+      <ul>
+        <li><strong>默认是 READ COMMITTED（RC）</strong>，不是 RR。每条语句开始时取一个新快照，能看到此前已提交的最新数据。</li>
+        <li><strong>PG 的 REPEATABLE READ 是真正的快照隔离（snapshot isolation）</strong>：整个事务用一个固定快照，<strong>没有间隙锁</strong>。它不靠锁住区间防幻读，而是当两个事务的写产生冲突时，直接让其中一个<strong>抛出 <code>40001</code> serialization failure</strong>（序列化失败）、回滚——由应用捕获并重试。</li>
+        <li><strong>PG 的 SERIALIZABLE 是 SSI（Serializable Snapshot Isolation）</strong>：在快照隔离之上追踪事务间的读写依赖，用<strong>谓词锁（predicate lock，即 <code>SIReadLock</code>，一种只做冲突检测、不阻塞别人的「软」锁）</strong>发现破坏可串行性的环，再中止其中一个事务。它仍然不阻塞，只在检测到危险时中止。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">这处差异照亮了什么取舍</span>
+        <p>失败模式彻底相反。<strong>InnoDB 用 gap 锁把冲突挡在「写入之前」——代价是阻塞、以及间隙锁特有的死锁</strong>（两个事务插不同的行也能锁死对方）。<strong>PG 没有 gap 锁，根本不会出现这类「插不同行却互相阻塞」的情形</strong>；它把代价放到「冲突之后」——RR/SERIALIZABLE 在检测到冲突时直接<strong>中止事务、抛 <code>40001</code> 让你重试</strong>。一句话：InnoDB 让你<em>等</em>（甚至死锁），PG 让你<em>重试</em>。迁移的直接含义——PG 应用必须有重试逻辑来兜 <code>40001</code>，而它换来的是没有间隙锁那套阻塞/死锁。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>把一个 MySQL 应用迁到 PG，默认隔离级别从 RR 变成 RC，哪一类查询的行为会变？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>「同一事务里多次读同一数据、并期望两次结果一致」的那类查询会变。</strong> 在 MySQL RR 下，事务用首次读时的快照，整个事务期间重复读返回一致结果（且 next-key 锁还防住幻读）。迁到 PG 默认的 RC 后，<strong>每条语句各取新快照</strong>——同一事务里第二次读，会看到这期间其它事务已提交的改动，于是出现「不可重复读」和「幻读」。依赖事务内读一致性的逻辑（如「读余额→校验→再读余额比对」）必须显式 <code>BEGIN ISOLATION LEVEL REPEATABLE READ</code>，否则行为与原 MySQL 不同。注意 PG 的 RR 是真正的快照隔离、靠中止重试而非 gap 锁，所以切上去之后还要准备好处理 <code>40001</code>。</p>
+        </details>
+      </div>
+
+      <h2 id="optimizer"><span class="num">§5</span><span>优化器与 join：计划空间谁更大</span></h2>
+
+      <p class="one-liner">两者都是基于代价的优化器，但 PG 有三种 join、更丰富的可用索引类型，计划空间更大。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><a href="05-planner.html#joins">第 5 章</a>讲了 PG 规划器在 nested loop / hash / merge 三种 join 之间按代价择优。MySQL 的优化器历史上长期只有 nested-loop 一族，join 算法的演进近几年才补齐。把两边的可选项摆出来，才能解释「同一条多表查询，PG 与 MySQL 选的计划为何不同」。</p>
+      </div>
+
+      <h3>MySQL 怎么做：从 nested-loop 一路补齐</h3>
+
+      <p>MySQL 的 join 算法有一条清晰的演进线：</p>
+      <ul>
+        <li>历史上只有 <strong>nested-loop join</strong> 及其变体 <strong>block-nested-loop（BNL，块嵌套循环）</strong>——把外表成批读进 join buffer 再扫内表，缓解纯逐行嵌套的低效。</li>
+        <li><strong>hash join 自 MySQL 8.0.18（2019-10）引入</strong>；到 <strong>8.0.20（2020-04）移除了 BNL</strong>，由 hash join 全面替代——包括非等值连接、外连接、半连接等场景。</li>
+        <li><strong>MySQL 没有 merge join（sort-merge join）</strong>这种算法。</li>
+        <li>优化器升级：<strong>9.7（2026-04）把 Hypergraph 优化器带进了 Community 版</strong>，扩展了连接顺序的搜索能力。</li>
+      </ul>
+
+      <h3>对照 PG：三种 join + 更多索引扫描方式</h3>
+
+      <p>PG 规划器的 join 工具箱（<a href="05-planner.html#joins">第 5 章 §joins</a>）一直是<strong>三种齐备</strong>：nested loop、hash join、<strong>merge join</strong>——后者是 MySQL 至今没有的。加上 PG 独有的 <strong>bitmap index scan</strong>（把多个索引的命中结果按位图合并后再回堆，详见 <a href="04-indexes.html#index-types">第 4 章</a>），以及规划器能利用的<strong>索引类型远多于 InnoDB</strong>（B-tree / Hash / GIN / GiST / SP-GiST / BRIN，见下一节），PG 优化器的<strong>计划空间明显更大</strong>——同一条查询，可枚举的扫描方式与连接策略组合更多。两者都是<strong>基于代价（cost-based）</strong>的优化器，差别在可选算子的丰富度，而非选择范式。</p>
+
+      <div class="callout insight">
+        <span class="label">这处差异照亮了什么取舍</span>
+        <p>更大的计划空间是<strong>双刃</strong>：PG 能为更多查询形态找到合适的物理计划（尤其大数据量等值连接用 hash、已排序输入用 merge、多条件用 bitmap 合并），但也意味着规划器要在更大的空间里搜索、更依赖准确的统计信息（<code>ANALYZE</code>）。MySQL 的算子少、计划空间小，规划更简单、更可预测，但遇到 PG 用 merge join / bitmap scan 能高效解决的形态时，往往只能退回到 nested-loop 系。<strong>丰富度换来覆盖面，也换来对统计与调优的更高要求。</strong></p>
+      </div>
+
+      <h2 id="index-ddl"><span class="num">§6</span><span>索引类型与事务型 DDL：能力面的差距</span></h2>
+
+      <p class="one-liner">PG 可被规划器利用的索引类型远多于 InnoDB，且 DDL 完全事务化;MySQL 8.0 的原子 DDL 不等于可回滚。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><a href="04-indexes.html#index-types">第 4 章</a>列举了 PG 的多种索引类型。把它们和 InnoDB 的索引清单并排，差距一目了然。而 DDL 是否事务化，则是迁移脚本与上线流程要重写的一处——MySQL 老手习惯的「DDL 隐式提交」在 PG 里不成立。</p>
+      </div>
+
+      <h3>索引类型：InnoDB 的清单 vs PG 的清单</h3>
+
+      <p><strong>InnoDB</strong> 能用的索引类型：B+tree（绝大多数索引）、FULLTEXT（全文）、R-tree（空间索引，用于 <code>GEOMETRY</code>）；此外 8.0 起支持<strong>用生成列做表达式索引</strong>（不能直接对表达式建索引，要先建 generated column）、<strong>invisible 索引</strong>（对优化器隐藏、用于灰度下线索引）、<strong>降序索引</strong>（descending index，真正按降序存储）。</p>
+
+      <p><strong>PG</strong> 能用、且<strong>规划器能直接利用</strong>的索引类型：B-tree、Hash、GIN（倒排，适合数组 / jsonb / 全文）、GiST（通用平衡树，适合几何 / 范围 / 最近邻）、SP-GiST（空间划分）、BRIN（块范围索引，适合超大且物理有序的表）；外加<strong>部分索引（partial index，带 <code>WHERE</code> 条件只索引子集）、表达式索引（直接对表达式建，无需先造生成列）、覆盖索引的 <code>INCLUDE</code> 子句</strong>（把非键列附在叶子上做覆盖）。<a href="04-indexes.html#index-types">第 4 章</a>展开了这些类型各自的命中场景。<strong>结论：可被规划器利用的索引类型，PG 远多于 InnoDB</strong>——这也是上一节「PG 计划空间更大」的一个来源。</p>
+
+      <h3>事务型 DDL：可回滚 vs 隐式提交</h3>
+
+      <p><strong>PG 的 DDL 完全事务化。</strong> <code>CREATE TABLE</code> / <code>ALTER TABLE</code> / <code>DROP TABLE</code> 等都能放进 <code>BEGIN ... COMMIT</code> 里，和普通 DML 一样——中途 <code>ROLLBACK</code> 就把这些 DDL 一并撤销，仿佛没发生过。多条 DDL 加几条数据修正可以打包成<em>一个</em>原子迁移事务，要么全成、要么全回滚。</p>
+
+      <p><strong>MySQL 8.0 引入的是「原子 DDL（atomic DDL）」，但这不等于「事务型 DDL」。</strong> 原子 DDL 保证的是：<em>单条</em> DDL 语句要么完整成功、要么完整失败（即使中途崩溃也不会留下半成品），它把数据字典、存储引擎操作和 binlog 写入捆成一个原子单元。但是：<strong>DDL 语句会触发隐式提交（implicit commit）</strong>——执行一条 DDL 会先把当前事务<em>提交</em>掉，因此 DDL <strong>不能</strong>被包在多语句事务里，也<strong>无法 <code>ROLLBACK</code></strong>。换言之，MySQL 的「原子」管的是单条语句的崩溃安全，不是「多条 DDL 一起回滚」。</p>
+
+      <div class="callout warning">
+        <span class="label">迁移陷阱</span>
+        <p>MySQL 老手习惯把 schema 变更脚本写成「一条条 DDL 顺序执行，错了再手动补救」——因为反正每条都隐式提交、回滚不了。迁到 PG 后这个习惯反而埋下隐患：PG 允许把整套迁移放进一个事务，<strong>应当</strong>利用这一点（出错自动整体回滚），而不是沿用「逐条提交」的老写法。把迁移脚本显式包进 <code>BEGIN; ... COMMIT;</code> 是 PG 上的最佳实践。</p>
+      </div>
+
+      <h2 id="migration"><span class="num">§7</span><span>迁移对照表与一个迁移示例</span></h2>
+
+      <p class="one-liner">把前六节的机制差异，落到迁移时具体要改的语法与行为上。</p>
+
+      <p>下面这张表把「从 MySQL 迁到 PG」时最常撞上的差异逐条列出，每一条都能追溯到前面某一节的机制根源。</p>
+
+      <table class="compare-table">
+        <caption>表 6.1 · 迁移对照（MySQL 8.4/9.7 → PostgreSQL 18）</caption>
+        <thead>
+          <tr><th>主题</th><th>MySQL / InnoDB</th><th>PostgreSQL</th><th>迁移动作</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>默认隔离级别</td><td>REPEATABLE READ</td><td>READ COMMITTED</td><td>需事务内读一致性的逻辑要显式声明 RR;并准备处理 <code>40001</code> 重试（§4）</td></tr>
+          <tr><td><code>count(*)</code></td><td>全表扫描</td><td>全表扫描，但可借 index-only scan + 可见性图（VM）走索引</td><td>别假设任一边「count 很快」;PG 大表可建覆盖索引 + 勤 VACUUM 让 VM 全可见</td></tr>
+          <tr><td>自增主键</td><td><code>AUTO_INCREMENT</code></td><td><code>GENERATED ... AS IDENTITY</code> 或 <code>sequence</code></td><td>都会留空隙（回滚/崩溃后跳号）;PG 的 sequence 是<strong>非事务</strong>的（回滚不退号）</td></tr>
+          <tr class="selected"><td>UUID 主键</td><td>痛：页分裂、碎片、二级索引变胖（聚簇）</td><td>基本无痛：主键不决定行物理位置（堆）</td><td>InnoDB 侧考虑改顺序 UUID/雪花;迁 PG 后此惩罚消失（§1）</td></tr>
+          <tr><td>字符串大小写</td><td>默认 <code>utf8mb4_0900_ai_ci</code>，<strong>不区分大小写</strong></td><td>默认<strong>区分大小写</strong></td><td>依赖不区分比较的逻辑：改用 <code>citext</code> 类型或在比较时 <code>lower()</code></td></tr>
+          <tr><td>更新时间戳</td><td><code>ON UPDATE CURRENT_TIMESTAMP</code></td><td>无等价语法</td><td>用 <code>BEFORE UPDATE</code> 触发器维护 <code>updated_at</code></td></tr>
+          <tr class="selected"><td>upsert</td><td><code>INSERT ... ON DUPLICATE KEY UPDATE</code></td><td><code>INSERT ... ON CONFLICT (...) DO UPDATE</code></td><td>PG <strong>必须指明冲突目标</strong>（哪个唯一约束/列），不能像 MySQL 那样「任意唯一键触发」</td></tr>
+          <tr><td>布尔</td><td><code>BOOLEAN</code> = <code>TINYINT(1)</code> 别名</td><td>真正的 <code>boolean</code> 类型</td><td>把 0/1 语义改成 <code>true</code>/<code>false</code>;注意 <code>tinyint</code> 列不会自动变 bool</td></tr>
+          <tr><td>枚举</td><td><code>ENUM('a','b')</code> 列内联</td><td>用 <code>CREATE TYPE ... AS ENUM</code> 或 <code>CHECK</code> 约束</td><td>先建枚举类型再引用;或退化成带 <code>CHECK</code> 的 <code>text</code></td></tr>
+          <tr><td>建表子句</td><td><code>ENGINE=InnoDB DEFAULT CHARSET=utf8mb4</code></td><td>无引擎/字符集子句</td><td>直接删掉 <code>ENGINE=</code> 与 <code>CHARSET=</code>;编码由数据库/集群层决定</td></tr>
+        </tbody>
+      </table>
+
+      <h3>一个迁移示例：DDL 逐行映射</h3>
+
+      <p>把上表里几条最常见的差异，凝成一段真实迁移 diff。下面两段建表语句左右对应，逐行说明 MySQL 写法在 PG 里换成什么。两段<strong>均未在本机执行</strong>，仅用于演示语法映射。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">MySQL 8.4 · 原始 DDL</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="code-mysql">复制</button>
+        </div>
+<pre><code id="code-mysql" class="language-sql">CREATE TABLE orders (
+  id         BIGINT       NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT       NOT NULL,
+  status     ENUM('new','paid','shipped') NOT NULL DEFAULT 'new',
+  is_active  BOOLEAN      NOT NULL DEFAULT 1,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+                           ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_user_status (user_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- upsert
+INSERT INTO orders (user_id, status) VALUES (42, 'paid')
+  ON DUPLICATE KEY UPDATE status = VALUES(status);
+                                          -- 未在本机执行</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">PostgreSQL 18 · 等价 DDL</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="code-pg">复制</button>
+        </div>
+<pre><code id="code-pg" class="language-sql">CREATE TYPE order_status AS ENUM ('new','paid','shipped');
+
+CREATE TABLE orders (
+  id         BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id    BIGINT       NOT NULL,
+  status     order_status NOT NULL DEFAULT 'new',
+  is_active  BOOLEAN      NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  CONSTRAINT uq_user_status UNIQUE (user_id, status)
+);
+-- updated_at 自动刷新需 BEFORE UPDATE 触发器（PG 无 ON UPDATE 语法）
+
+-- upsert：必须指明冲突目标
+INSERT INTO orders (user_id, status) VALUES (42, 'paid')
+  ON CONFLICT (user_id, status) DO UPDATE
+    SET status = EXCLUDED.status;
+                                          -- 未在本机执行</code></pre>
+      </div>
+
+      <p><strong>逐行映射</strong>，把每处改动对回上表与机制：</p>
+      <ul>
+        <li><span class="annotations"><span class="line-ref">AUTO_INCREMENT → IDENTITY</span></span><code>BIGINT AUTO_INCREMENT</code> 换成 <code>BIGINT GENERATED ALWAYS AS IDENTITY</code>。两者都会留下空隙（回滚/崩溃跳号）;PG 底层用一个<strong>非事务</strong> sequence，回滚不退号。</li>
+        <li><span class="annotations"><span class="line-ref">ENUM 内联 → CREATE TYPE</span></span>MySQL 把枚举写在列上;PG 先 <code>CREATE TYPE order_status AS ENUM (...)</code> 再把列声明成这个类型（也可退化成带 <code>CHECK</code> 的 <code>text</code>）。</li>
+        <li><span class="annotations"><span class="line-ref">BOOLEAN DEFAULT 1 → true</span></span>MySQL 的 <code>BOOLEAN</code> 是 <code>TINYINT(1)</code> 别名、默认值写 <code>1</code>;PG 是真 <code>boolean</code>，默认值写 <code>true</code>。</li>
+        <li><span class="annotations"><span class="line-ref">ON UPDATE CURRENT_TIMESTAMP → 触发器</span></span>PG 没有列级 <code>ON UPDATE</code> 自动刷新语法，<code>updated_at</code> 的自动更新要靠一个 <code>BEFORE UPDATE</code> 触发器（此处仅以注释标出）。<code>TIMESTAMP</code> 一并换成带时区的 <code>TIMESTAMPTZ</code>。</li>
+        <li><span class="annotations"><span class="line-ref">ON DUPLICATE KEY → ON CONFLICT (...)</span></span>upsert 从 <code>ON DUPLICATE KEY UPDATE</code> 换成 <code>ON CONFLICT (user_id, status) DO UPDATE</code>——PG <strong>必须显式指明冲突目标</strong>，且引用新值用 <code>EXCLUDED.col</code>（不是 MySQL 的 <code>VALUES(col)</code>）。</li>
+        <li><span class="annotations"><span class="line-ref">删掉 ENGINE/CHARSET</span></span><code>ENGINE=InnoDB DEFAULT CHARSET=utf8mb4</code> 整段删除——PG 没有可插拔引擎（§3），编码在数据库/集群层定。</li>
+      </ul>
+
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>InnoDB 一次<em>非覆盖</em>的二级索引查找，要走几次 B+tree 下降？分别在哪棵树上、找的是什么？PG 的二级索引查找要几跳？</li>
+          <li>一个长时间不提交的事务，在 InnoDB 撑大的是什么、表本身会膨胀吗？在 PG 撑大的又是什么？为什么方向相反？</li>
+          <li>InnoDB 默认 RR 下两个事务因间隙锁互相等待会发生什么？换成 PG 默认隔离级别 + 把它们的写改成冲突，PG 会用什么方式处理、应用要做什么？</li>
+          <li>MySQL 8.0 的「原子 DDL」能让你把三条 <code>ALTER TABLE</code> 包进一个事务、出错时一起 <code>ROLLBACK</code> 吗？PG 呢？</li>
+        </ol>
+        <details>
+          <summary>查看参考答案</summary>
+          <p><strong>1.</strong> 走<strong>两次</strong>。第一次在<em>二级索引</em> B+tree 上下降，叶子拿到匹配行的<strong>主键值</strong>;第二次拿这个主键值到<em>聚簇索引</em> B+tree 上下降（即回表），叶子才是整行。只有覆盖索引能省掉第二次。PG 的二级索引<strong>一跳</strong>：叶子存 <code>ctid</code>，直接定位到堆里的行（§1，<a href="01-storage.html#hidden-columns">第 1 章</a>）。</p>
+          <p><strong>2.</strong> InnoDB 撑大的是 <strong>undo log</strong>（history list length 增长）——长事务钉住 read view，purge 无法回收旧版本;但<strong>表（聚簇索引）本身不膨胀</strong>，当前行始终原地。PG 撑大的是<strong>表 + 它的所有索引</strong>——长事务的老快照拦住 VACUUM，死元组在堆里堆积。方向相反，是因为旧版本去向相反：InnoDB 进 undo、PG 留在堆（§2，<a href="02-mvcc.html#dead-tuple">第 2 章</a>）。</p>
+          <p><strong>3.</strong> InnoDB 下两个事务各持相邻间隙锁、再都想插入，会互相等成<strong>死锁</strong>（InnoDB 检测到后回滚其一）。PG 默认是 READ COMMITTED、<strong>没有间隙锁</strong>，不会有这类「插不同行也阻塞」的等待;若提到 RR/SERIALIZABLE 且写冲突，PG 会让其中一个事务<strong>抛 <code>40001</code> serialization failure</strong> 并回滚，<strong>应用需捕获并重试</strong>（§4，<a href="02-mvcc.html#isolation">第 2 章</a>）。</p>
+          <p><strong>4.</strong> <strong>不能。</strong> MySQL 的原子 DDL 只保证<em>单条</em> DDL 崩溃时不留半成品;DDL 会触发<strong>隐式提交</strong>，无法被包进多语句事务、也无法 <code>ROLLBACK</code>。PG 的 DDL <strong>完全事务化</strong>：三条 <code>ALTER</code> 可放进同一个 <code>BEGIN ... COMMIT</code>，任一出错 <code>ROLLBACK</code> 时全部撤销（§6）。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>同一负载，量出两种 MVCC 相反的膨胀方向</h3>
+        <p>设计一个能在两个引擎上对照的实验，<strong>实证</strong>「长事务在 InnoDB 撑大 undo、在 PG 撑大表」这条结论。在两边各建一张表灌入若干行，开一个<strong>故意不提交</strong>的长事务（持有快照），然后在另一个连接里对全表反复 <code>UPDATE</code> 多轮。在 PG 侧观察表与索引尺寸如何随轮次增长、VACUUM 为何回收不掉;在 InnoDB 侧观察 undo / history list length 如何增长、而表大小如何保持稳定。</p>
+        <details>
+          <summary>提示</summary>
+          <p><strong>PG 侧</strong>：连接 A 跑 <code>BEGIN ISOLATION LEVEL REPEATABLE READ; SELECT 1;</code> 后<em>挂着不提交</em>;连接 B 反复 <code>UPDATE t SET v = v + 1;</code>。用 <code>pg_total_relation_size('t')</code> 看尺寸逐轮变大，<code>VACUUM (VERBOSE) t;</code> 会报告大量死元组「因 <code>oldest xmin</code> 被 A 钉住」而无法移除——这就是 <a href="03-vacuum-wal.html#vacuum">第 3 章 §VACUUM</a> 讲的回收被拦。<strong>InnoDB 侧</strong>：连接 A 同样开一个 <code>REPEATABLE READ</code> 事务读一下后挂起;连接 B 反复 <code>UPDATE</code>。查 <code>SHOW ENGINE INNODB STATUS\G</code> 里的 <code>History list length</code> 持续上涨，而表数据大小基本不动。把两边曲线放一起，§2 那张图就从纸面变成了实测。提交/结束长事务后，PG 需要 VACUUM 才能复用空间（但文件未必缩小）、InnoDB 的 purge 会追上来回收 undo——这一步也一并观察。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-multi-versioning.html">MySQL 8.4 Reference Manual · InnoDB Multi-Versioning</a>（原地更新、undo log、<code>DB_TRX_ID</code>/<code>DB_ROLL_PTR</code>、purge）</li>
+          <li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-index-types.html">MySQL 8.4 Reference Manual · Clustered and Secondary Indexes</a>（聚簇索引、二级索引存主键值、回表）</li>
+          <li><a href="https://dev.mysql.com/doc/refman/8.4/en/innodb-locking.html">MySQL 8.4 Reference Manual · InnoDB Locking</a>（record lock / gap lock / next-key lock）</li>
+          <li><a href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 Docs · Transaction Isolation</a>（RC 默认、RR=快照隔离、SERIALIZABLE=SSI、<code>40001</code>）</li>
+          <li><a href="https://www.postgresql.org/docs/18/wal-intro.html">PostgreSQL 18 Docs · Write-Ahead Logging (WAL)</a>（单一 WAL 承担恢复与复制）</li>
+          <li><a href="https://www.enterprisedb.com/blog/postgresql-vs-mysql-360-degree-comparison-syntax-performance-scalability-and-features">EnterpriseDB · PostgreSQL vs MySQL: A 360-degree Comparison</a>（架构层面的对照综述）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="05-planner.html">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 查询规划与执行</span>
+        </a>
+        <a class="next" href="07-self-check.html">
+          <span class="label">下一章 →</span>
+          <span class="title">07 · 自测</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#clustered-vs-heap" data-toc-target="clustered-vs-heap">聚簇索引 vs 堆</a></li>
+        <li><a href="#mvcc-undo" data-toc-target="mvcc-undo">undo MVCC vs 堆内</a></li>
+        <li><a href="#dual-log" data-toc-target="dual-log">三日志 vs 单 WAL</a></li>
+        <li><a href="#isolation-default" data-toc-target="isolation-default">默认 RR vs RC</a></li>
+        <li><a href="#optimizer" data-toc-target="optimizer">优化器与 join</a></li>
+        <li><a href="#index-ddl" data-toc-target="index-ddl">索引类型与 DDL</a></li>
+        <li><a href="#migration" data-toc-target="migration">迁移对照与示例</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

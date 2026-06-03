@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 机制与取舍 · Kafka Connect 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html" class="current">02 原理</a><span class="sep">—</span>
+    <a href="03-self-check.html">03 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>机制与取舍：分布式集群怎么协调自己</h1>
+        <p class="recap">01 章认识了 connector / converter / task 这些部件，知道了它们各管什么、配置长什么样。这一章往下钻一层：一个 distributed 集群<strong>没有外部协调器</strong>，凭什么能协调多个 worker？再平衡为什么不再 stop-the-world？序列化在字节层如何工作、偏移如何在重启后恢复、EOS 的事务与 fencing 如何咬合？每个机制都配一张备选方案对比表——看清 Connect 为什么这么设计，而不是只会照着配。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>distributed 集群的<strong>控制面就是三个 compacted topic</strong>（<code>connect-configs</code>/<code>connect-offsets</code>/<code>connect-status</code>）+ 消费组协议，REST 只是读写它们的门面——无 ZooKeeper、无数据库。</li>
+          <li>再平衡是 <strong>incremental cooperative</strong>（KIP-415, 2.3）：拓扑变更只暂停被移动的 task，其余继续搬——不再全员停摆。</li>
+          <li>序列化由 <strong>converter 在字节层</strong>决定（Schema Registry 用 magic byte + schema id），与 connector 解耦；<code>JsonConverter</code> 与 <code>JsonSchemaConverter</code> 是不同 wire format。</li>
+          <li>偏移分两套并各自恢复：source 存 <code>connect-offsets</code> 按 connector 名索引、sink 用消费组；EOS source 用<strong>事务双写 + 代际 fencing</strong>，是 worker 级、仅 distributed 的开关。</li>
+        </ul>
+      </section>
+
+      <p>五个机制按从控制面到数据正确性的顺序排列：<a href="#coordination">分布式协调</a>（集群怎么不靠外部协调器活着）→ <a href="#rebalance">再平衡</a>（拓扑变了怎么重分 task）→ <a href="#serialization">序列化机制</a>（字节层如何编解码）→ <a href="#offset-recovery">偏移管理与恢复</a>（重启从哪续）→ <a href="#eos">EOS source</a>（不重不漏怎么做到）。每个机制先讲<strong>运行方式</strong>，再用<strong>备选方案对比表</strong>说清"为什么没选别的设计"，然后是<strong>代价与失效模式</strong>，最后一道<strong>预测题</strong>。01 章给的是词汇表，这一章给的是这些词背后的工作机制与取舍——这是从"会配"到"理解"的那一层。</p>
+
+      <!-- ============ FIGURE 2.0 — control plane ============ -->
+      <figure>
+        <svg viewBox="0 0 860 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Kafka Connect distributed 控制面：REST API 门面在上，N 个共享 group.id 的 worker 在中，控制面三个 compacted internal topic 在下，全部状态都在 Kafka 里">
+          <defs>
+            <marker id="f0-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="f0-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- REST facade (top) -->
+          <rect x="318" y="24" width="224" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="430" y="44" text-anchor="middle" class="node-label">REST API :8083</text>
+          <text x="430" y="60" text-anchor="middle" class="edge-label">读写控制面</text>
+
+          <!-- worker plane label -->
+          <text x="64" y="120" class="edge-label" font-weight="700">WORKER 面</text>
+          <text x="64" y="136" class="edge-label">共享 group.id</text>
+
+          <!-- three workers -->
+          <rect x="230" y="104" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="290" y="128" text-anchor="middle" class="node-label">worker 1</text>
+          <text x="290" y="146" text-anchor="middle" class="edge-label">task a</text>
+
+          <rect x="370" y="104" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="430" y="128" text-anchor="middle" class="node-label">worker 2</text>
+          <text x="430" y="146" text-anchor="middle" class="edge-label">task b</text>
+
+          <rect x="510" y="104" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="570" y="128" text-anchor="middle" class="node-label">worker 3</text>
+          <text x="570" y="146" text-anchor="middle" class="edge-label">task c</text>
+
+          <!-- REST request lands on any worker -->
+          <line x1="430" y1="68" x2="430" y2="104" class="diagram-ink" marker-end="url(#f0-ink)"/>
+          <text x="478" y="90" text-anchor="middle" class="edge-label">任一 worker</text>
+
+          <!-- control plane box (bottom, dashed = "all inside Kafka") -->
+          <rect x="190" y="224" width="480" height="108" rx="8" class="diagram-soft"/>
+          <text x="430" y="248" text-anchor="middle" class="branch-label">控制面 · 全在 Kafka（compacted topic）</text>
+
+          <rect x="210" y="266" width="136" height="50" rx="5" class="diagram-ink node-fill"/>
+          <text x="278" y="288" text-anchor="middle" class="edge-label">connect-configs</text>
+          <text x="278" y="304" text-anchor="middle" class="edge-label">连接器/任务配置</text>
+
+          <rect x="362" y="266" width="136" height="50" rx="5" class="diagram-ink node-fill"/>
+          <text x="430" y="288" text-anchor="middle" class="edge-label">connect-offsets</text>
+          <text x="430" y="304" text-anchor="middle" class="edge-label">source 偏移</text>
+
+          <rect x="514" y="266" width="136" height="50" rx="5" class="diagram-ink node-fill"/>
+          <text x="582" y="288" text-anchor="middle" class="edge-label">connect-status</text>
+          <text x="582" y="304" text-anchor="middle" class="edge-label">连接器/任务状态</text>
+
+          <!-- workers read/write control plane -->
+          <line x1="290" y1="160" x2="290" y2="222" class="diagram-accent" marker-end="url(#f0-verm)"/>
+          <line x1="570" y1="160" x2="570" y2="222" class="diagram-accent" marker-end="url(#f0-verm)"/>
+          <text x="430" y="200" text-anchor="middle" class="edge-label">读写状态 · 消费组协议协调</text>
+
+          <!-- "no ZK" annotation -->
+          <rect x="690" y="250" width="150" height="56" rx="6" class="diagram-soft node-fill"/>
+          <text x="765" y="272" text-anchor="middle" class="node-label-accent">无 ZooKeeper</text>
+          <text x="765" y="290" text-anchor="middle" class="edge-label">无外部数据库</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.0</span>distributed 控制面：REST 是门面，worker 靠消费组协议加入同一集群，全部配置 / 偏移 / 状态都写进下方三个 compacted topic。
+          <strong>注意</strong>：这三个 topic 就是集群的"大脑"——没有任何外部协调器。它们的配置或压缩一旦不一致，整张图就裂成两个互不相认的集群。</figcaption>
+      </figure>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.1 COORDINATION
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="coordination"><span class="num">2.1</span><span>分布式协调：控制面全在 Kafka 自己的 topic 里</span></h2>
+
+      <p class="one-liner">distributed 集群不靠任何外部协调器协调，而是用 Kafka 的消费组协议加上三个 compacted internal topic——控制面就是 Kafka 本身。</p>
+
+      <h3>运行方式</h3>
+      <p>多个 worker 配同一个 <code>group.id</code>，它们通过 Kafka 的<strong>消费组成员协议</strong>（与普通消费者加入消费组用的是同一套 group membership 机制）加入同一个 Connect 集群。集群里有一个被选出的 leader worker 负责计算 task 分配方案，其余 worker 执行分到自己头上的 task。三类需要持久化、需要跨 worker 一致的状态，各写进一个 compacted topic：</p>
+      <ul>
+        <li><code>connect-configs</code>：connector 与 task 的配置。<code>POST</code> 一个 connector 的本质，就是往这个 topic 追加一条配置记录。</li>
+        <li><code>connect-offsets</code>：source connector 的偏移（见 <a href="#offset-recovery">§2.4</a>）。</li>
+        <li><code>connect-status</code>：connector 与 task 的运行状态（<code>RUNNING</code>/<code>FAILED</code>/<code>PAUSED</code>），<code>GET /status</code> 读的就是它。</li>
+      </ul>
+      <p>这三个 topic 全是 <strong>compacted</strong>（日志压缩）——压缩保留每个 key 的最新值，正好匹配"配置 / 偏移 / 状态都只关心当前值"的语义。REST API（<a href="01-concepts.html#workers">§1.2</a> 已见）不是一个独立服务，它只是这套机制的门面：一次管理请求落到任意 worker，被翻译成对这三个 topic 的读或写，集群里所有 worker 读到后协同执行。这就是 01 章那句"配置即数据"在机制层的展开。</p>
+
+      <h3>备选方案对比</h3>
+      <p>"集群协调"是分布式系统的经典难题，常规答案是引入一个外部协调器（ZooKeeper、etcd）。Connect 选了另一条路。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · distributed 集群协调：三种设计</caption>
+        <thead>
+          <tr><th>方案</th><th>怎么协调 / 存状态</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>外部协调器 ZooKeeper / etcd</td>
+            <td>worker 把成员、配置、偏移托管给独立的协调集群</td>
+            <td>多引入一套要单独部署、监控、备份、扩容的有状态基建；Kafka 自己都在去 ZooKeeper（KRaft），Connect 再依赖它是逆流。被放弃。</td>
+          </tr>
+          <tr>
+            <td>独立数据库存配置/偏移</td>
+            <td>配置、偏移、状态写进关系库或 KV 存储</td>
+            <td>引入一个不在 Kafka 可用性域内的故障点——Kafka 活着但库挂了，集群照样瘫；还要解决库与 Kafka 之间的一致性。被放弃。</td>
+          </tr>
+          <tr class="selected">
+            <td>Kafka topic + 消费组协议</td>
+            <td>消费组成员协议管协调，三个 compacted topic 存全部状态</td>
+            <td>选中：零额外基建，控制面与数据面同生共死，复用 Kafka 已有的复制 / 持久化 / 压缩能力。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 为什么是 compacted</span>
+        <p>三个 topic 用<strong>日志压缩</strong>而非按时间删除，是因为它们存的是"状态"不是"事件流"。状态只关心每个 key 的最新值——connector <code>orders-source</code> 当前的配置是什么、当前搬到哪个偏移、当前是不是 <code>RUNNING</code>。压缩保证 worker 重启后能从 topic 重建出完整的当前世界，又不会让 topic 无限增长。把这三个 topic 设成普通的按时间过期，旧配置 / 偏移会被删掉，集群重启即失忆——这正是它们必须 compacted 的原因。</p>
+      </div>
+
+      <h3>代价与失效模式</h3>
+      <p>"控制面就是几条 topic"换来零外部依赖，代价是<strong>这几条 topic 的健康直接等于集群的健康</strong>。两种典型失效：</p>
+      <ul>
+        <li><strong>internal topic 配置 / 压缩不一致 = 裂集群</strong>。如果新加的 worker 配了不同的 internal topic 名，或这些 topic 没设成 compacted、副本数不足，集群会读不到一致的控制面，表现为 connector 莫名消失、配置回滚、状态错乱。</li>
+        <li><strong><code>group.id</code> 配错 = 一个集群裂成两个</strong>。两批本应同属一个集群的 worker 配了不同 <code>group.id</code>，会各自组成独立集群、各跑一份 connector——同一个 source 被搬两遍。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p>三个 internal topic 必须在全部 worker 上配成<strong>完全相同的名字 + 都 compacted + 副本数 ≥ 3</strong>。生产事故的常见形态是：手动建 topic 时漏设 <code>cleanup.policy=compact</code>，或不同 worker 的 <code>config.storage.topic</code> / <code>offset.storage.topic</code> / <code>status.storage.topic</code> 写得不一致——集群于是间歇性"分裂"，connector 时有时无。修复方向：核对所有 worker 的这三项配置一字不差，并确认 topic 的 <code>cleanup.policy</code>。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>运维把 <code>connect-offsets</code> 这个 topic 误建成了按时间删除（<code>cleanup.policy=delete</code>、保留 7 天）而非 compacted。集群短期看起来正常。两周后所有 source connector 重启了一次，会发生什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>source connector 会<strong>大面积从头重灌</strong>。<code>connect-offsets</code> 存的是每个 source connector 的当前偏移（按 connector 名索引的 key）。按时间删除会把超过 7 天没更新的偏移记录直接删掉；compaction 本该保留每个 key 的最新值，这里却被删除策略丢了。重启后 worker 从这个 topic 读不到旧偏移，等于这些 connector 从未搬过，于是把外部源整个重灌一遍。</p>
+          <p>这道题指向的设计要点：三个 internal topic 必须 compacted，不是可选优化而是<strong>正确性前提</strong>。控制面在 Kafka 里的代价，就是这几个 topic 的配置错误会直接变成数据正确性事故。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一个机制的关系</strong>：worker 靠消费组协议加入集群——那么一个 worker 加入或离开时，它名下的 task 怎么重新分配给其他 worker？这就是<a href="#rebalance">再平衡</a>，而 Connect 的再平衡方式经历过一次关键演进。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.2 REBALANCE
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="rebalance"><span class="num">2.2</span><span>再平衡：incremental cooperative 只暂停被移动的 task</span></h2>
+
+      <p class="one-liner">再平衡是 worker 加入 / 离开 / 配置变更时重新分配 task 的过程；自 KIP-415（2.3）起用 incremental cooperative 策略，只暂停被收回或移动的那部分 task，其余继续搬。</p>
+
+      <h3>运行方式</h3>
+      <p>集群拓扑变化（一个 worker 宕机、新 worker 加入、connector 配置改了 task 数）会触发再平衡——leader worker 重新计算"哪个 task 该在哪个 worker 上"。关键在于<strong>怎么过渡到新方案</strong>：</p>
+      <ul>
+        <li><strong>旧的 eager 策略（2.3 之前）</strong>：再平衡一开始，所有 worker <strong>立即放下手上全部 task</strong>（revoke everything），等 leader 算出新分配后再统一领回。整个集群在这期间停止搬运——一个 worker 的加入会让所有 connector 短暂停摆，这就是 stop-the-world。</li>
+        <li><strong>incremental cooperative（2.3 起，KIP-415）</strong>：leader 先算出新旧分配的<strong>差集</strong>——只有真正需要换主的 task 才被收回，其余 task 完全不受影响、继续搬。收回的 task 在下一轮再分配给目标 worker。整个过程"增量"完成，集群绝大部分吞吐不中断。</li>
+      </ul>
+      <p>对一个跑着几十个 connector 的集群，差别是质变：扩容时加一台 worker，eager 会让全部 connector 抖一下，cooperative 只动那几个被迁移的 task。</p>
+
+      <!-- ============ FIGURE 2.1 — eager vs cooperative ============ -->
+      <figure>
+        <svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="eager 与 incremental cooperative 再平衡对比：新 worker 加入时，eager 暂停全部 task，cooperative 只暂停被迁移的一个 task">
+          <defs>
+            <marker id="f1-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="f1-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- shared trigger -->
+          <text x="430" y="24" text-anchor="middle" class="node-label">触发：worker 3 加入集群</text>
+
+          <!-- ===== TOP ROW: eager ===== -->
+          <text x="60" y="92" class="edge-label" font-weight="700">eager</text>
+          <text x="60" y="108" class="edge-label">(2.3 前)</text>
+
+          <rect x="150" y="64" width="108" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="204" y="86" text-anchor="middle" class="node-label">worker 1</text>
+          <text x="204" y="104" text-anchor="middle" class="branch-label">全部暂停</text>
+
+          <rect x="288" y="64" width="108" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="342" y="86" text-anchor="middle" class="node-label">worker 2</text>
+          <text x="342" y="104" text-anchor="middle" class="branch-label">全部暂停</text>
+
+          <rect x="426" y="64" width="108" height="56" rx="6" class="diagram-soft node-fill"/>
+          <text x="480" y="86" text-anchor="middle" class="node-label">worker 3</text>
+          <text x="480" y="104" text-anchor="middle" class="edge-label">新加入</text>
+
+          <rect x="588" y="64" width="210" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="693" y="89" text-anchor="middle" class="node-label-accent">集群整体停摆</text>
+          <text x="693" y="107" text-anchor="middle" class="edge-label">stop-the-world</text>
+
+          <line x1="534" y1="92" x2="588" y2="92" class="diagram-accent" marker-end="url(#f1-verm)"/>
+
+          <!-- divider -->
+          <line x1="100" y1="150" x2="800" y2="150" class="diagram-soft"/>
+
+          <!-- ===== BOTTOM ROW: cooperative ===== -->
+          <text x="60" y="230" class="edge-label" font-weight="700" fill="#B73B2F">cooperative</text>
+          <text x="60" y="246" class="edge-label">(2.3 起)</text>
+
+          <rect x="150" y="202" width="108" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="204" y="224" text-anchor="middle" class="node-label">worker 1</text>
+          <text x="204" y="242" text-anchor="middle" class="edge-label">继续搬</text>
+
+          <rect x="288" y="202" width="108" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="342" y="224" text-anchor="middle" class="node-label">worker 2</text>
+          <text x="342" y="242" text-anchor="middle" class="branch-label">仅迁出 task d</text>
+
+          <rect x="426" y="202" width="108" height="56" rx="6" class="diagram-soft node-fill"/>
+          <text x="480" y="224" text-anchor="middle" class="node-label">worker 3</text>
+          <text x="480" y="242" text-anchor="middle" class="edge-label">接收 task d</text>
+
+          <rect x="588" y="202" width="210" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="693" y="227" text-anchor="middle" class="node-label">其余 task 不中断</text>
+          <text x="693" y="245" text-anchor="middle" class="edge-label">只动差集</text>
+
+          <line x1="396" y1="230" x2="426" y2="230" class="diagram-ink" marker-end="url(#f1-ink)"/>
+          <text x="411" y="278" text-anchor="middle" class="edge-label">迁移 1 个</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>同一个触发（worker 3 加入）下两种再平衡的差别：eager 让全集群放下所有 task，cooperative 只迁移真正需要换主的 task d。
+          <strong>注意</strong>：cooperative 的关键不是"更快",而是<strong>只动新旧分配的差集</strong>——绝大多数 task 在再平衡期间完全不知情、持续搬运。</figcaption>
+      </figure>
+
+      <h3>备选方案对比</h3>
+      <table class="compare-table">
+        <caption>表 2.2 · 再平衡策略：两代设计</caption>
+        <thead>
+          <tr><th>方案</th><th>过渡方式</th><th>为什么（没）选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>eager（stop-the-world）</td>
+            <td>再平衡时全员先放弃所有 task，再统一重新领取</td>
+            <td>实现简单、分配逻辑无需算差集；但任何拓扑变更都让整个集群停摆，connector 越多抖动越大。2.3 起被取代。</td>
+          </tr>
+          <tr class="selected">
+            <td>incremental cooperative（KIP-415）</td>
+            <td>只收回需要换主的 task，分多轮增量收敛，其余 task 不停</td>
+            <td>选中：拓扑 / 配置变更的影响面缩到最小，扩缩容与单点故障不再波及无关 connector。代价是协议更复杂、收敛要多轮。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 与消费者再平衡同源</span>
+        <p>Connect 的 incremental cooperative 与 Kafka 普通消费者的 cooperative sticky assignor 是<strong>同一个思路的两次落地</strong>：都把"全员重来"改成"只动差集"。读者若已理解主 Kafka 教程里消费组的<a href="../kafka/02-principles.html#rebalance">再平衡</a>，这里只是把"被重分的是分区"换成"被重分的是 task"。这种一致性不是巧合——Connect 复用的就是 Kafka 那套 group membership 机制。</p>
+      </div>
+
+      <h3>代价与失效模式</h3>
+      <p>cooperative 不是没有锋利的边。<strong>worker 数在再平衡过程中继续变动会引入分配倾斜</strong>（KAFKA-12495）：滚动重启时若 worker 一个接一个地进出，多轮增量再平衡可能收敛到一个 task 分布不均的中间态，部分 worker 过载、部分空闲。它不影响正确性，但会让吞吐不均，需要等集群稳定后再触发一次再平衡才会重新摊平。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p>滚动升级或扩容时如果让 worker 进出过快（一个还没稳定下一个又动），cooperative 再平衡会卡在倾斜的中间分配上——表现为某些 worker CPU 打满、另一些几乎空闲，而 task 全是 <code>RUNNING</code>。这不是配置错误，是 KAFKA-12495 这类已知的再平衡时序问题。处理方向：操作 worker 时留足稳定窗口、避免并发进出；集群稳定后必要时手动触发一次再平衡让分配重新摊匀。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 distributed 集群跑着 20 个 connector、共 60 个 task。运维加入第 4 台 worker。用 incremental cooperative 策略，再平衡期间这 60 个 task 里大约有多少会被暂停？换成旧的 eager 策略呢？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>cooperative：<strong>只有需要迁到新 worker 的那一小部分</strong>被暂停——大约是为了让新 worker 分到公平份额而迁移的 task 数（数量级在十几个上下，取决于均摊目标），其余四十多个继续搬。eager：<strong>全部 60 个</strong>先被收回、集群整体停摆，等新分配算完再统一领回。</p>
+          <p>这道题指向的设计要点：再平衡的"代价"不是发生频率，而是<strong>每次波及的 task 范围</strong>。cooperative 把这个范围从"全部"压到"差集",这正是它在大集群里取代 eager 的根本原因。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一个机制的关系</strong>：再平衡决定 task 落在哪个 worker 上跑——而 task 真正搬运时，要把结构化记录变成 Kafka 里的字节。这一步的机制独立于 connector，发生在字节层：<a href="#serialization">序列化机制</a>。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.3 SERIALIZATION
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="serialization"><span class="num">2.3</span><span>序列化机制：converter 在字节层定格式，与 connector 解耦</span></h2>
+
+      <p class="one-liner">序列化由 converter 在字节层完成、与 connector 完全解耦；走 Schema Registry 的格式在字节前缀里写 magic byte + schema id，而 <code>JsonConverter</code> 与 <code>JsonSchemaConverter</code> 是两种不可互换的 wire format。</p>
+
+      <h3>运行方式</h3>
+      <p>01 章（<a href="01-concepts.html#converters">§1.4</a>）讲了 converter 与 connector 解耦"是什么"。这里看字节层"怎么工作"。一条记录在 Connect 内部是带 schema 的结构化对象（<code>SchemaAndValue</code>）；converter 负责把它变成 Kafka 里的字节，反向亦然。关键在于<strong>不同 converter 产出的字节布局完全不同</strong>：</p>
+      <ul>
+        <li><strong>Schema Registry 系（Avro / Protobuf / JSON Schema converter）</strong>：字节不是裸数据，而是带前缀的 wire format——第 1 个字节是 <strong>magic byte</strong>（值 <code>0x00</code>），紧跟 4 字节的 <strong>schema id</strong>，之后才是序列化后的 payload。消费端读到 schema id，去 Schema Registry 拉对应 schema 再解码。schema 本身不随每条消息走，只走一个 id——这是它比内嵌 schema 省体积的原因。</li>
+        <li><strong><code>JsonConverter</code>（<code>org.apache.kafka.connect.json</code>）</strong>：产出纯 JSON 字节，没有 magic byte。<code>schemas.enable=true</code> 时每条消息内嵌一份 <code>{"schema":...,"payload":...}</code>，<code>false</code> 时只发裸 JSON。</li>
+        <li><strong><code>JsonSchemaConverter</code>（<code>io.confluent.connect.json</code>）</strong>：名字像 JSON，但它走 Schema Registry、字节带 magic byte + schema id。<strong>与 <code>JsonConverter</code> 的 wire format 完全不同，不可互换</strong>——这是最容易混淆、也最容易出事的一对。</li>
+      </ul>
+      <p>解耦体现在：同一个 connector，换 converter 就换了线上字节格式，connector 代码与配置一行不动（图 1.2 已示）。这把"序列化"从每个 connector 各实现一遍，变成一个可插拔的横切层。</p>
+
+      <!-- ============ FIGURE 2.2 — wire format ============ -->
+      <figure>
+        <svg viewBox="0 0 820 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两种 wire format 字节布局对比：Schema Registry 系以 magic byte 加 4 字节 schema id 开头再接 payload，JsonConverter 是纯 JSON 无前缀">
+          <defs>
+            <marker id="f2-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- top: schema-registry wire format -->
+          <text x="40" y="46" class="node-label-accent">Avro / Protobuf / JsonSchema converter</text>
+          <rect x="40" y="60" width="60" height="48" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="70" y="80" text-anchor="middle" class="edge-label">magic</text>
+          <text x="70" y="96" text-anchor="middle" class="edge-label">0x00</text>
+
+          <rect x="104" y="60" width="120" height="48" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="164" y="80" text-anchor="middle" class="edge-label">schema id</text>
+          <text x="164" y="96" text-anchor="middle" class="edge-label">4 字节</text>
+
+          <rect x="228" y="60" width="300" height="48" rx="5" class="diagram-ink node-fill"/>
+          <text x="378" y="88" text-anchor="middle" class="node-label">序列化 payload</text>
+
+          <!-- schema id points to registry -->
+          <rect x="588" y="58" width="180" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="678" y="80" text-anchor="middle" class="node-label">Schema Registry</text>
+          <text x="678" y="98" text-anchor="middle" class="edge-label">按 id 查 schema</text>
+          <line x1="164" y1="60" x2="640" y2="58" class="diagram-soft" marker-end="url(#f2-ink)"/>
+
+          <!-- divider -->
+          <line x1="40" y1="140" x2="780" y2="140" class="diagram-soft"/>
+
+          <!-- bottom: plain JsonConverter -->
+          <text x="40" y="176" class="node-label">JsonConverter（纯 JSON，无前缀）</text>
+          <rect x="40" y="190" width="488" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="284" y="216" text-anchor="middle" class="node-label">{ "id": 42, "amount": 9.9 }  ← 直接是 JSON 字节</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>两种 wire format 的字节布局：Schema Registry 系在最前面塞 magic byte + 4 字节 schema id，再接 payload；<code>JsonConverter</code> 从第一个字节起就是 JSON。
+          <strong>注意</strong>：sink 端若用 <code>JsonConverter</code> 去读上面那种带 <code>0x00</code> 开头的字节，第一个字节就解析失败（<code>Unknown magic byte!</code>）——这正是两类 wire format 不可互换的物理根源。</figcaption>
+      </figure>
+
+      <h3>备选方案对比</h3>
+      <table class="compare-table">
+        <caption>表 2.3 · 序列化放在哪：两种设计</caption>
+        <thead>
+          <tr><th>方案</th><th>序列化逻辑的位置</th><th>为什么（没）选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>序列化烧进 connector</td>
+            <td>每个 connector 内部自己实现各种格式</td>
+            <td>换格式要改 connector 代码；每个 connector 各实现一遍 JSON/Avro/Protobuf，重复且不一致；同一 connector 无法跨格式复用。被放弃。</td>
+          </tr>
+          <tr>
+            <td>固定单一线上格式</td>
+            <td>整个 Connect 强制一种序列化（如只许 Avro）</td>
+            <td>无法对接已有的异构 topic（有的 JSON、有的 Avro、key 与 value 不同格式），现实里行不通。被放弃。</td>
+          </tr>
+          <tr class="selected">
+            <td>独立 converter 层（key/value 各一）</td>
+            <td>connector 只产出/消费结构化对象，converter 负责对象↔字节</td>
+            <td>选中：任意 connector × 任意格式自由组合，换格式只动配置；key 与 value 可用不同 converter。代价是多一层、且 sink 端必须配对线上真实格式。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>代价与失效模式</h3>
+      <p>解耦的代价是<strong>sink 端的 converter 必须与 topic 里实际的字节格式严格一致</strong>，否则就是反序列化阶段的硬失败。最典型的失效是 <strong>sink converter 与线上格式不符引发的反序列化风暴</strong>：上游 producer 写 Avro（字节以 <code>0x00</code> 开头），sink 配了 <code>JsonConverter</code>，每一条记录在反序列化时都报 <code>Unknown magic byte!</code>。由于 <code>errors.tolerance</code> 默认 <code>none</code>（<a href="01-concepts.html#error-dlq">§1.7</a>），第一条就让整个 task <code>FAILED</code>。converter 不会"猜"格式、不会默默降级——配错就是失败。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">修复：sink converter 对齐线上 Avro 格式</span>
+          <span class="lang">JSON</span>
+          <button class="copy" data-copy-target="cb-ser-fix">复制</button>
+        </div>
+<pre id="cb-ser-fix"><code class="language-json">{
+  "value.converter": "io.confluent.connect.avro.AvroConverter",
+  "value.converter.schema.registry.url": "http://schema-registry:8081",
+  "key.converter": "org.apache.kafka.connect.storage.StringConverter"
+}</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p>把 <code>JsonConverter</code>（<code>org.apache.kafka.connect.json</code>）当成 <code>JsonSchemaConverter</code>（<code>io.confluent.connect.json</code>）配，两端就此错位——一个发裸 JSON、一个期待 magic byte + schema id 的 JSON。它们名字只差一个词，wire format 却互不兼容。配 converter 时核对<strong>完整类名</strong>，尤其分清 <code>org.apache.kafka</code> 与 <code>io.confluent</code> 两个命名空间。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 source connector 用 <code>JsonSchemaConverter</code>（Confluent，带 magic byte）写一个 topic。下游有人新建一个 sink，把 <code>value.converter</code> 配成了 <code>JsonConverter</code>（Apache，纯 JSON），心想"反正都是 JSON"。sink 起得来吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>起不来——sink 的 task 在<strong>反序列化阶段失败</strong>。<code>JsonSchemaConverter</code> 写出的字节以 magic byte <code>0x00</code> + 4 字节 schema id 开头，<code>JsonConverter</code> 从第一个字节就按 JSON 解析，撞上 <code>0x00</code> 立刻报错（典型是 <code>Unknown magic byte!</code> 或 JSON 解析异常）。"都是 JSON"是错觉：两者的 wire format 一个有 Schema Registry 前缀、一个没有，物理布局不同。</p>
+          <p>这道题指向的设计要点：converter 解耦带来灵活，也把"格式契约"完全压在配置上。<code>org.apache.kafka...JsonConverter</code> 与 <code>io.confluent...JsonSchemaConverter</code> 不可互换——选 converter 时认的是字节布局，不是名字里的"Json"。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一个机制的关系</strong>：converter 把记录序列化进 Kafka 后，task 还得记住"搬到哪了"以便重启续传。而 source 与 sink 的偏移存法和恢复路径完全不同——这是<a href="#offset-recovery">偏移管理与恢复</a>。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.4 OFFSET RECOVERY
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="offset-recovery"><span class="num">2.4</span><span>偏移管理与恢复：source 存 topic、sink 用消费组，两套各自续传</span></h2>
+
+      <p class="one-liner">source connector 把自定义偏移存进 <code>connect-offsets</code>、按 connector 名索引，sink connector 用消费组（组名 <code>connect-&lt;name&gt;</code>）的位点；重启时各自从上次提交处续，REST <code>/offsets</code>（KIP-875）可读写两者。</p>
+
+      <h3>运行方式</h3>
+      <p>01 章（<a href="01-concepts.html#offsets">§1.6</a>）建立了"两套偏移"这件事。这里看<strong>恢复路径</strong>怎么走。两套机制的差别源于一个事实：外部系统没有 Kafka 式的 offset 概念。</p>
+      <ul>
+        <li><strong>source 恢复</strong>：外部系统（DB、文件）的"位点"由 connector 自己定义——"读到 <code>id=10042</code>""文件读到 byte 4096"。框架把这组 <code>{sourcePartition → sourceOffset}</code> 键值对周期性提交进 <code>connect-offsets</code> topic，<strong>key 含 connector 名</strong>。worker 重启或 task 被再平衡到别处，新实例先按自己的 connector 名去 <code>connect-offsets</code> 读回最近一次提交的偏移，再从那里继续向外部系统要数据。</li>
+        <li><strong>sink 恢复</strong>：sink 就是一个 Kafka 消费者，用<strong>普通消费组</strong>位点，组名固定为 <code>connect-&lt;connector 名&gt;</code>，位点存在 <code>__consumer_offsets</code>。重启即普通消费者重启——从消费组上次提交的位点接着消费，与任何 Kafka 消费者完全一样。</li>
+      </ul>
+      <p>"按 connector 名索引"在 source 端埋了一个直接后果：<strong>给 source connector 改名 = 新名字在 <code>connect-offsets</code> 里查不到任何偏移 = 框架认为它从未搬过 = 从头重灌整个外部源</strong>。sink 端同理——改名意味着新消费组，从头消费。KIP-875（3.6）加了 REST <code>GET/PATCH/DELETE /connectors/{name}/offsets</code>，可以查看和手动调整两类偏移，但前提仍是名字稳定。</p>
+
+      <!-- ============ FIGURE 2.3 — source vs sink offset ============ -->
+      <figure>
+        <svg viewBox="0 0 860 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="source 与 sink 两套偏移机制：source connector 把自定义偏移按 connector 名存进 connect-offsets topic，sink connector 用名为 connect-连接器名 的消费组位点存在 __consumer_offsets">
+          <defs>
+            <marker id="f3-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="f3-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== TOP: source path ===== -->
+          <text x="60" y="74" class="edge-label" font-weight="700">SOURCE</text>
+
+          <rect x="150" y="50" width="150" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="225" y="72" text-anchor="middle" class="node-label-accent">source connector</text>
+          <text x="225" y="90" text-anchor="middle" class="edge-label">自定义位点</text>
+
+          <line x1="300" y1="76" x2="392" y2="76" class="diagram-ink" marker-end="url(#f3-ink)"/>
+          <text x="346" y="66" text-anchor="middle" class="edge-label">框架提交</text>
+
+          <rect x="392" y="50" width="200" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="492" y="72" text-anchor="middle" class="node-label">connect-offsets topic</text>
+          <text x="492" y="90" text-anchor="middle" class="edge-label">key 含 connector 名</text>
+
+          <line x1="592" y1="76" x2="660" y2="76" class="diagram-soft" marker-end="url(#f3-ink)"/>
+          <rect x="660" y="50" width="160" height="52" rx="6" class="diagram-soft node-fill"/>
+          <text x="740" y="72" text-anchor="middle" class="node-label">重启按名读回</text>
+          <text x="740" y="90" text-anchor="middle" class="edge-label">改名=丢偏移</text>
+
+          <!-- divider -->
+          <line x1="100" y1="150" x2="800" y2="150" class="diagram-soft"/>
+
+          <!-- ===== BOTTOM: sink path ===== -->
+          <text x="60" y="234" class="edge-label" font-weight="700">SINK</text>
+
+          <rect x="150" y="210" width="150" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="225" y="232" text-anchor="middle" class="node-label">sink connector</text>
+          <text x="225" y="250" text-anchor="middle" class="edge-label">就是个消费者</text>
+
+          <line x1="300" y1="236" x2="392" y2="236" class="diagram-ink" marker-end="url(#f3-ink)"/>
+          <text x="346" y="226" text-anchor="middle" class="edge-label">消费组提交</text>
+
+          <rect x="392" y="210" width="200" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="492" y="232" text-anchor="middle" class="node-label">__consumer_offsets</text>
+          <text x="492" y="250" text-anchor="middle" class="edge-label">组名 connect-&lt;name&gt;</text>
+
+          <line x1="592" y1="236" x2="660" y2="236" class="diagram-soft" marker-end="url(#f3-ink)"/>
+          <rect x="660" y="210" width="160" height="52" rx="6" class="diagram-soft node-fill"/>
+          <text x="740" y="232" text-anchor="middle" class="node-label">重启续消费</text>
+          <text x="740" y="250" text-anchor="middle" class="edge-label">普通消费者语义</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>两套偏移机制并排：source 把自定义位点按 connector 名存进 <code>connect-offsets</code>，sink 用名为 <code>connect-&lt;name&gt;</code> 的消费组位点存进 <code>__consumer_offsets</code>。
+          <strong>注意</strong>：两套都<strong>以 connector 名为锚</strong>——改名在 source 端查不到旧偏移、在 sink 端是个新消费组，两边都从头开始。名字是偏移的主键。</figcaption>
+      </figure>
+
+      <h3>备选方案对比</h3>
+      <table class="compare-table">
+        <caption>表 2.4 · source 与 sink 偏移：统一还是分两套</caption>
+        <thead>
+          <tr><th>方案</th><th>偏移怎么存</th><th>为什么（没）选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>统一用消费组偏移</td>
+            <td>source 也强行套 Kafka 消费组位点语义</td>
+            <td>source 读的是外部系统，位点是"DB 主键 / 文件字节",根本不是"topic+分区+offset",套消费组语义表达不了。被放弃。</td>
+          </tr>
+          <tr>
+            <td>统一存进外部存储</td>
+            <td>source 与 sink 偏移都写进一个独立的偏移库</td>
+            <td>引入 Kafka 之外的故障点（与 §2.1 同理），还要为 sink 放弃 Kafka 原生消费组这套成熟机制。被放弃。</td>
+          </tr>
+          <tr class="selected">
+            <td>source 存 topic / sink 用消费组</td>
+            <td>source 自定义偏移进 <code>connect-offsets</code>；sink 复用消费组位点</td>
+            <td>选中：各自用最贴合语义的机制——source 的位点框架可任意建模，sink 直接白拿消费者重启续传。代价是两套机制、按名索引，改名即丢位置。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>代价与失效模式</h3>
+      <p>分两套的代价集中在一个失效模式：<strong>改 source connector 名 = 丢偏移 = 重灌</strong>。想"重建"一个 source connector 而顺手把名字从 <code>orders-jdbc-source</code> 改成 <code>orders-jdbc-source-v2</code>，新名字在 <code>connect-offsets</code> 里对应一组空偏移，connector 会把整张表从头再搬一遍——对大表是一次代价高昂的全量重灌，还可能给下游灌入重复数据。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">用 REST 显式管理偏移（KIP-875, 3.6+）· 别靠改名</span>
+          <span class="lang">bash</span>
+          <button class="copy" data-copy-target="cb-offset-rest">复制</button>
+        </div>
+<pre id="cb-offset-rest"><code class="language-bash"># 查看当前偏移（source 返回自定义位点；sink 返回消费组位点）
+curl http://worker:8083/connectors/orders-jdbc-source/offsets
+
+# 要重置时：先 stop，再 DELETE 偏移，而不是改名
+curl -X PUT    http://worker:8083/connectors/orders-jdbc-source/stop
+curl -X DELETE http://worker:8083/connectors/orders-jdbc-source/offsets</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p>把"重置一个 source connector 的进度"和"给它改名"当成一回事，是偏移管理里代价最高的失误。改名不会重置进度——它是创建了一个<strong>没有任何偏移记录的新 connector</strong>，于是从头重灌。要重置进度，保持名字不变，用 REST 先 <code>stop</code> 再 <code>DELETE /offsets</code>；要保留进度地重建，更要保持名字一字不动。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 JDBC source connector 已把一张 5 亿行的表增量同步了三个月。团队想"换个更规范的名字"，于是删掉旧 connector、用新名字 <code>POST</code> 了一份配置完全相同（除了 <code>name</code>）的 connector。下一刻发生什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>新 connector 会<strong>从头重灌整张 5 亿行的表</strong>。source 偏移在 <code>connect-offsets</code> 里按 connector 名索引，新名字查不到任何已提交偏移，框架认为这是个全新的、从未搬过的 connector，于是从 <code>incrementing</code> 列的起点重新拉全量——海量重复数据涌向下游，下游若无幂等还会被污染。</p>
+          <p>这道题指向的设计要点：connector 名是偏移的<strong>主键</strong>，不是一个可随意美化的标签。"两套偏移、按名索引"的代价就是名字必须当成契约对待——要改进度用 REST <code>/offsets</code>，绝不靠改名。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一个机制的关系</strong>：默认的偏移提交是"先写记录、再提交偏移"，崩溃时这两步之间的窗口会导致<strong>重发</strong>——即"至少一次"。要做到"精确一次",必须把这两步绑成原子操作。这是 <a href="#eos">EOS source</a>。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.5 EOS SOURCE
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="eos"><span class="num">2.5</span><span>EOS source：事务双写 + 代际 fencing，worker 级开关</span></h2>
+
+      <p class="one-liner">EOS source（KIP-618）把"写记录"与"提交偏移"放进同一个 Kafka 事务原子完成，再用代际 fencing 拒绝僵尸 task 的写入；它是 worker 级开关 <code>exactly.once.source.support</code>，仅 distributed 可用、须全集群一致。</p>
+
+      <h3>运行方式</h3>
+      <p>默认 source 是"至少一次"：task 先把一批记录写进目标 topic，再把对应偏移提交进 <code>connect-offsets</code>。如果崩溃发生在"记录已写、偏移未提交"这个窗口，重启后 task 从旧偏移续传，已写过的那批记录被<strong>重发</strong>。EOS source 用两个 Kafka 原语消除这个窗口：</p>
+      <ul>
+        <li><strong>事务双写</strong>：task 把"一批数据记录"和"对应的偏移更新（写进 <code>connect-offsets</code>）"放进<strong>同一个 Kafka 事务</strong>，原子提交。要么记录与偏移一起生效，要么都不生效——"记录写了、偏移没写"的窗口不复存在。</li>
+        <li><strong>代际 fencing（僵尸隔离）</strong>：再平衡后旧 task 实例可能还"活着"想继续写（僵尸）。框架给每代 task 分配<strong>递增的事务标识</strong>，broker 只接受最新代的事务、<strong>拒绝</strong>旧代的写入。同一份工作因此只有最新一代能提交，僵尸写不进去。</li>
+      </ul>
+      <p>开启是<strong>两阶段滚动</strong>：先把所有 worker 的 <code>exactly.once.source.support</code> 设为 <code>preparing</code> 滚动重启一轮，再设为 <code>enabled</code> 滚动重启一轮。两阶段是为了让集群在升级过程中始终保持一致——不能一半 worker 开、一半没开。connector 侧再声明 <code>exactly-once.support=required</code> 表示它要求这个保证。</p>
+
+      <!-- ============ FIGURE 2.4 — EOS transaction + fencing ============ -->
+      <figure>
+        <svg viewBox="0 0 820 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="EOS source 机制：当前代 task 把数据记录与偏移更新放进同一个 Kafka 事务原子提交，旧代僵尸 task 的写入被 broker 按代际 fencing 拒绝">
+          <defs>
+            <marker id="f4-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="f4-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- current generation task -->
+          <rect x="40" y="64" width="150" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="115" y="86" text-anchor="middle" class="node-label-accent">task（当前代）</text>
+          <text x="115" y="104" text-anchor="middle" class="edge-label">事务 id = N</text>
+
+          <!-- transaction box wrapping two writes -->
+          <rect x="260" y="40" width="220" height="160" rx="8" class="diagram-soft"/>
+          <text x="370" y="62" text-anchor="middle" class="branch-label">同一个 Kafka 事务</text>
+
+          <rect x="282" y="78" width="176" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="370" y="105" text-anchor="middle" class="node-label">写数据记录 → topic</text>
+
+          <rect x="282" y="138" width="176" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="370" y="165" text-anchor="middle" class="node-label">写偏移 → connect-offsets</text>
+
+          <line x1="190" y1="92" x2="282" y2="100" class="diagram-accent" marker-end="url(#f4-verm)"/>
+          <line x1="190" y1="100" x2="282" y2="156" class="diagram-accent" marker-end="url(#f4-verm)"/>
+
+          <!-- broker commits -->
+          <rect x="560" y="78" width="220" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="670" y="104" text-anchor="middle" class="node-label">broker 原子提交</text>
+          <text x="670" y="122" text-anchor="middle" class="edge-label">记录与偏移同生共死</text>
+          <line x1="480" y1="110" x2="560" y2="110" class="diagram-ink" marker-end="url(#f4-ink)"/>
+
+          <!-- zombie old generation -->
+          <rect x="40" y="216" width="170" height="56" rx="6" class="diagram-soft node-fill"/>
+          <text x="125" y="238" text-anchor="middle" class="node-label">僵尸 task（旧代）</text>
+          <text x="125" y="256" text-anchor="middle" class="edge-label">事务 id = N-1</text>
+
+          <line x1="210" y1="244" x2="558" y2="150" class="diagram-soft" marker-end="url(#f4-ink)"/>
+          <rect x="560" y="216" width="220" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="670" y="240" text-anchor="middle" class="node-label-accent">broker 拒绝旧代</text>
+          <text x="670" y="258" text-anchor="middle" class="edge-label">fencing：写不进去</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.4</span>EOS source 两件事：当前代 task 把"写记录"和"写偏移"装进同一个事务原子提交；旧代僵尸 task 因事务 id 过期被 broker fencing 拒绝。
+          <strong>注意</strong>：消除重复靠两件事咬合——事务保证"记录与偏移同生共死"（无重发窗口），fencing 保证"只有最新一代能写"（僵尸不重写）。少任一件都不成立。</figcaption>
+      </figure>
+
+      <h3>备选方案对比</h3>
+      <table class="compare-table">
+        <caption>表 2.5 · source 端怎么做到精确一次：两种设计</caption>
+        <thead>
+          <tr><th>方案</th><th>怎么消除重复</th><th>为什么（没）选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>应用层 / 下游去重</td>
+            <td>接受 source 重发，靠下游按业务主键幂等或去重</td>
+            <td>把正确性责任推给每一个下游，各写各的去重逻辑、容易漏；source 仍在源头制造重复。作为框架级保证被放弃。</td>
+          </tr>
+          <tr>
+            <td>只提交偏移、不用事务</td>
+            <td>更频繁地提交偏移，缩小重发窗口</td>
+            <td>只是把窗口变小，没有消除——崩溃时机不巧仍会重发，做不到"精确一次"。被放弃。</td>
+          </tr>
+          <tr class="selected">
+            <td>Kafka 事务 + 代际 fencing</td>
+            <td>记录与偏移原子双写，僵尸 task 被 broker fencing 拒绝</td>
+            <td>选中：框架在源头保证精确一次，下游无需去重。代价：仅 distributed、worker 级全集群一致、两阶段升级、有事务开销。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>代价与失效模式</h3>
+      <p>EOS source 的代价主要是约束而非性能：<strong>仅 distributed 模式可用</strong>（standalone 没有这套机制）、<strong>是 worker 级开关、必须全集群一致</strong>（不能 per-connector 单独开）、开启要<strong>两阶段滚动</strong>。最常见的失效是认知性的：以为能"只给账务这一个 connector 开 EOS"——做不到，要么整个 distributed 集群一起开，要么都不开。此外事务提交本身有开销，会略增延迟。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">connect-distributed.properties（worker 级、全集群一致）</span>
+          <span class="lang">properties</span>
+          <button class="copy" data-copy-target="cb-eos-props">复制</button>
+        </div>
+<pre id="cb-eos-props"><code class="language-properties"># 两阶段：先全员 preparing 滚动重启，再全员 enabled 滚动重启
+exactly.once.source.support=enabled</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p><code>exactly.once.source.support</code> 不是 per-connector 配置，写进 connector 的 JSON 里不会生效——它是 worker 级、要写进每个 worker 的 properties、且全集群取值必须一致。在 standalone 模式下它根本不可用。"给某个 connector 单独开精确一次"这个需求，在 Connect 的 source EOS 模型里不存在；能控制的只有 connector 侧 <code>exactly-once.support=required</code>（声明该 connector 要求集群提供这个保证）。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>某团队想让一个计费 source connector 精确一次，于是只在这个 connector 的 JSON 配置里加了 <code>"exactly.once.source.support": "enabled"</code>，其余 worker 配置没动。重启后这个 connector 是精确一次吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不是。<code>exactly.once.source.support</code> 是 <strong>worker 级</strong>配置，只在 worker 的 properties 里读；把它塞进 connector 的 JSON 不会开启 EOS——框架不会从 connector 配置里读这个 worker 级开关。这个计费 connector 仍是默认的"至少一次",崩溃时照样可能重发。要真正开启，得把所有 worker 的 properties 设成 <code>enabled</code>（经 <code>preparing</code> 两阶段滚动），并在 connector 侧声明 <code>exactly-once.support=required</code>。</p>
+          <p>这道题指向的设计要点：EOS source 是<strong>集群级能力</strong>，不是单个 connector 的属性。它要 fence 整个集群里同名 task 的所有代、要全员用事务语义，所以只能整集群开——这是它与 per-connector 配置（如 <code>tasks.max</code>、<code>errors.tolerance</code>）的根本区别。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           CROSS-MECHANISM SYNTHESIS
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="synthesis"><span class="num">2.6</span><span>跨机制综合：一条记录如何穿过整个集群</span></h2>
+
+      <p>五个机制不是孤立的——一次真实的搬运同时用到协调、再平衡、序列化、偏移恢复。把它们串成一个场景，看它们如何协同。</p>
+
+      <p><strong>场景</strong>：一个 distributed 集群（worker 1/2/3，<code>exactly.once.source.support</code> 未开）跑着一个 JDBC source connector，从 <code>orders</code> 表增量读、写进 <code>pg-orders</code> topic。某时刻 worker 2 宕机。跟着一条记录走一遍：</p>
+      <ol>
+        <li><strong>task 分配（协调 §2.1 + 再平衡 §2.2）</strong>：connector 启动时，leader worker 按 <code>tasks.max</code> 与可切分单元算出 task，均摊到三个 worker——假设 <code>orders</code> 表的 task d 落在 worker 2 上。这份分配方案写进 <code>connect-configs</code>。</li>
+        <li><strong>读取 + 序列化（序列化 §2.3）</strong>：worker 2 上的 task d 从 <code>orders</code> 读到一行（<code>id=10042</code>），在 Connect 内部是结构化对象；<code>value.converter</code>（设为 Avro）把它序列化成带 magic byte + schema id 的字节，写进 <code>pg-orders</code>。</li>
+        <li><strong>提交偏移（偏移 §2.4）</strong>：框架周期性把 task d 的位点 <code>{table:orders → incrementing:10042}</code> 提交进 <code>connect-offsets</code>，key 含 connector 名。</li>
+        <li><strong>worker 2 宕机 → 再平衡（§2.2）</strong>：消费组协议检测到 worker 2 离开，触发 incremental cooperative 再平衡。worker 1/3 上无关的 task 继续搬，<strong>只有 task d 被重新分配</strong>——假设迁到 worker 3。</li>
+        <li><strong>从偏移续传（§2.4 + §2.1）</strong>：worker 3 上新起的 task d 实例，先按 connector 名去 <code>connect-offsets</code> 读回最近提交的偏移（<code>incrementing:10042</code>），从 <code>id&gt;10042</code> 继续向 <code>orders</code> 要数据——不重读已搬过的行。整个恢复没碰任何外部协调器，全程只读写 Kafka 的 topic。</li>
+      </ol>
+      <p>这一圈把控制面（§2.1 三个 topic）、再平衡（§2.2 只动 task d）、序列化（§2.3 converter 定字节）、偏移恢复（§2.4 按名读回）咬合在一起。<strong>注意一个边界</strong>：因为这个集群没开 EOS（§2.5），第 3 步与第 2 步之间存在窗口——若 worker 2 恰在"记录已写、偏移未提交"时宕机，task d 在 worker 3 上会从上一个已提交偏移续传，重发 <code>10042</code> 这批里已写的记录（至少一次）。要消除这点，才需要 §2.5 的事务双写。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 五个机制的分工</span>
+        <p>一句话各归其位：<strong>协调</strong>决定状态存在哪（三个 topic）、<strong>再平衡</strong>决定 task 跑在哪（只动差集）、<strong>序列化</strong>决定记录长什么样（converter 定字节）、<strong>偏移恢复</strong>决定从哪续（按名读回）、<strong>EOS</strong>决定续得重不重（事务 + fencing）。前四个让搬运能在故障后正确地继续，第五个把"正确"从"至少一次"提到"精确一次"。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           SELF-CHECK
+           ════════════════════════════════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>distributed 集群的控制面由哪三个 topic 构成、各存什么？为什么它们必须是 compacted、且全集群配置一致？</li>
+          <li>incremental cooperative 再平衡相比 eager 改了什么？说清"只动差集"的含义，以及它在大集群里为什么是质变。</li>
+          <li>走 Schema Registry 的 wire format 字节开头是什么？为什么 sink 端把 <code>JsonConverter</code> 用在 Avro topic 上会失败？</li>
+          <li>EOS source 靠哪两个 Kafka 原语做到精确一次？为什么它只能 worker 级、全集群一致地开，不能 per-connector？</li>
+          <li>（跨机制综合题）一个 distributed 集群跑着一个 JDBC source（未开 EOS），某 worker 宕机后一条记录被重新分配、从偏移续传。把这个过程涉及的协调、再平衡、序列化、偏移恢复四个机制串起来讲一遍，并指出在哪一步可能产生重复、要消除它需要开什么。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><code>connect-configs</code>（connector/task 配置）、<code>connect-offsets</code>（source 偏移）、<code>connect-status</code>（connector/task 状态）。必须 compacted 是因为它们存的是"状态"——只关心每个 key 的最新值，压缩保证 worker 重启能从 topic 重建当前世界又不无限增长；按时间删除会丢掉旧 key 的最新值导致失忆（如偏移被删→重灌）。全集群配置一致（topic 名相同、都 compacted、<code>group.id</code> 一致）否则集群会读到不一致控制面或裂成两个。</li>
+            <li>eager 在再平衡时让全员先放弃所有 task 再统一重领（stop-the-world）；cooperative 只收回新旧分配的<strong>差集</strong>（真正需要换主的 task），其余 task 完全不停。质变在于：波及范围从"全部 task"压到"被迁移的少数"——大集群里加一台 worker，eager 让所有 connector 抖动，cooperative 只动那几个 task。</li>
+            <li>走 Schema Registry 的字节以 <strong>magic byte（<code>0x00</code>）+ 4 字节 schema id</strong> 开头，之后才是 payload。<code>JsonConverter</code> 是纯 JSON、没有这个前缀，用它读 Avro topic 时，它把第一个字节（<code>0x00</code>）按 JSON 解析立刻失败（<code>Unknown magic byte!</code>）；因 <code>errors.tolerance</code> 默认 <code>none</code>，第一条就让 task <code>FAILED</code>。两者 wire format 物理布局不同，不可互换。</li>
+            <li>① <strong>Kafka 事务</strong>：把"写记录"与"写偏移（进 <code>connect-offsets</code>）"放进同一事务原子提交，消除"记录写了偏移没写"的重发窗口。② <strong>代际 fencing</strong>：给每代 task 递增事务 id，broker 拒绝旧代僵尸 task 的写入。只能全集群开是因为它要 fence 整个集群里同名 task 的所有代、全员用事务语义——这是集群级能力，不是单 connector 属性；且仅 distributed 可用、两阶段（preparing→enabled）滚动升级。</li>
+            <li>① leader 按 <code>tasks.max</code> 与可切分单元算出 task 均摊到各 worker，方案写进 <code>connect-configs</code>（协调 §2.1）；② task 从表读行、converter 序列化成字节写进 topic（序列化 §2.3）；③ 框架周期性把位点按 connector 名提交进 <code>connect-offsets</code>（偏移 §2.4）；④ worker 宕机触发 incremental cooperative 再平衡，无关 task 不停、只有该 task 被迁到别的 worker（再平衡 §2.2）；⑤ 新 task 实例按 connector 名读回最近偏移、从该位点续传，全程只读写 Kafka topic、不碰外部协调器（§2.4+§2.1）。<strong>产生重复的点</strong>：第②与第③步之间有窗口——若崩溃在"记录已写、偏移未提交"时，续传会重发那批已写记录（至少一次）。要消除它需开 <strong>EOS source（§2.5）</strong>：把记录与偏移原子双写进同一事务，并对僵尸 task 做 fencing。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>EOS source 用 Kafka 事务搞定原子双写——那 EOS sink 为什么不能照搬同一招？</h3>
+        <p>§2.5 的精确一次靠"把记录和偏移放进同一个 Kafka 事务"。这一招成立的前提，是这两个被写的对象<strong>都在 Kafka 里</strong>。现在反过来想 sink 端：sink 要把数据写进的是外部系统（ES、JDBC），消费位点在 Kafka 的消费组里。想一想：为什么"用一个 Kafka 事务把外部写入和消费位点绑在一起"这条路走不通？sink 端要做到精确一次，必须依赖什么、由谁提供？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>Kafka 事务只能覆盖"写进 Kafka 的操作"。source 的两个对象（数据记录、偏移）都是写进 Kafka 的，所以一个事务能同时管。sink 的两个对象是"外部系统的写入"（在 Kafka 之外）和"消费位点"（在 Kafka 内）——前者根本不在 Kafka 事务的管辖范围，事务提交了也无法回滚一次已发生的 ES 写入。线索：sink 端的精确一次必须靠<strong>外部系统自己的能力</strong>——幂等写入（同一记录写多次效果等同一次，如按主键 upsert）或外部系统自己的事务，让重复投递不产生重复效果。这就是为什么 EOS source 是一个统一的框架开关，而"sink 精确一次"取决于目标系统支不支持、没有对应的全局开关。可对照主教程的<a href="../kafka/02-principles.html#delivery">投递语义与事务</a>一节。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/#connect">Kafka Connect 官方文档</a>（官方）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415:+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">KIP-415 · Incremental Cooperative Rebalancing in Kafka Connect</a>（设计文档）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618:+Exactly-Once+Support+for+Source+Connectors">KIP-618 · Exactly-Once Support for Source Connectors</a>（设计文档）</li>
+          <li><a href="https://www.confluent.io/blog/kafka-connect-deep-dive-converters-serialization-explained/">Confluent · Converters and Serialization Explained</a>（维护者博客）</li>
+          <li><a href="https://developers.redhat.com/articles/2024/06/13/how-manage-and-preserve-kafka-connect-offsets-smoothly">Red Hat · Manage and Preserve Kafka Connect Offsets</a>（维护者博客）</li>
+          <li><a href="https://kafka.apache.org/blog/2026/05/22/apache-kafka-4.3.0-release-announcement/">Apache Kafka 4.3.0 Release Announcement</a>（官方发布说明，2026-05）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+        <a href="03-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 自测题库</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#coordination" data-toc-target="coordination">2.1 分布式协调</a></li>
+        <li><a href="#rebalance" data-toc-target="rebalance">2.2 再平衡</a></li>
+        <li><a href="#serialization" data-toc-target="serialization">2.3 序列化机制</a></li>
+        <li><a href="#offset-recovery" data-toc-target="offset-recovery">2.4 偏移管理与恢复</a></li>
+        <li><a href="#eos" data-toc-target="eos">2.5 EOS source</a></li>
+        <li><a href="#synthesis" data-toc-target="synthesis">2.6 跨机制综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

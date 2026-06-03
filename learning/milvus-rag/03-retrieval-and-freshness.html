@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 检索与新鲜度 · Milvus + RAG 落地</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale {
+  background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft);
+  margin: 16px 0; font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink { stroke: var(--ink); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill { fill: var(--bg); }
+.node-fill-accent { fill: var(--vermilion-soft); }
+.node-label { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-data-and-tenancy.html">02 数据·租户</a><span class="sep">—</span>
+    <a href="03-retrieval-and-freshness.html" class="current">03 检索·新鲜度</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>检索与新鲜度：查得准、看得新、换得动</h1>
+        <p class="recap">02 设计了数据与租户隔离——这一章管查询与更新：检索质量（混合检索 + 两阶段 rerank）、新鲜度（一致性级别与 segment 状态）、增量更新与换模型，全部建在 02 那套多租户 schema 之上。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>混合检索的三路材料——dense（语义）、sparse（精确词）、BM25 全文——各自抓什么、何时叠加。</li>
+          <li>两阶段排序：先融合（RRF / Weighted）合并召回列表，再交叉编码器（cross-encoder）精排；两者不是一回事。</li>
+          <li>新鲜度的两个独立维度："能不能看到"（一致性级别）和"看到快不快"（segment 状态）。</li>
+          <li>增量更新（upsert / 删除）与换嵌入模型的蓝绿迁移——以及那条"只换一半就静默返回垃圾"的铁律。</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>混合检索：dense、sparse、BM25 各抓一类查询</span></h2>
+      <p class="one-liner">混合检索 = 同一份语料上并行跑多条召回路：dense 向量抓语义、sparse 向量与 BM25 抓精确词；它们补的是彼此的盲区，不是同一种召回的两个参数。</p>
+
+      <div class="rationale">
+        <span class="label">为什么单路召回不够</span>
+        <p>dense 向量（FLOAT_VECTOR，走 COSINE + HNSW）擅长"意思相近"——用户换种说法也能召回。但它对产品型号、错误码、人名、函数名这类<strong>字面 token</strong>很弱：`BGE-M3` 和"某个嵌入模型"在它眼里距离很近，于是真正要找的那条罕见词反而沉底。sparse 向量（SPARSE_FLOAT_VECTOR，走 IP + SPARSE_INVERTED_INDEX）和 BM25 正好相反——它们按词项命中，精确词一击即中，却读不懂改写。生产语料同时有这两类查询，所以两条路并行、最后融合。</p>
+      </div>
+
+      <p><strong>三路材料的分工</strong>：dense 抓<em>语义与改写</em>；sparse 抓<em>精确 token</em>（含罕见词、型号、代码标识符）；BM25 是 sparse 的"自动挡"——2.5 GA 起，建一个 <code>Function</code>（输入 VARCHAR 文本字段、配 analyzer，输出一个 sparse 字段），灌入的是<strong>原始文本</strong>而非预算好的向量，查询时由引擎实时算 BM25 分。三者落在同一个 collection 的不同字段上，正是 <a href="02-data-and-tenancy.html#s21">02 的 RAG schema（面①，含 sparse / text 字段）</a>预留的位置。</p>
+
+      <p><strong>比文档深一层</strong>：两个容易栽的细节——其一，<strong>sparse 向量只支持 IP（内积）度量，L2 和 COSINE 在 sparse 字段上被禁</strong>，建表时给 sparse 字段写 COSINE 会直接报错；其二，<strong>BM25 不预计算、随插入实时算分</strong>——它不像 dense 那样灌库时就把向量定死，而是查询时基于当前词频统计现算，所以语料分布变化会直接反映到打分上，无需重嵌入。</p>
+
+      <figure>
+        <svg viewBox="0 0 940 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两阶段检索流水线：query 分两路并行召回后融合成 top-100，再交叉编码器精排成 top-5到10 喂给 LLM">
+          <defs>
+            <marker id="m31-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m31-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- query -->
+          <rect x="20" y="98" width="92" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="66" y="122" text-anchor="middle" class="node-label">query</text>
+          <text x="66" y="140" text-anchor="middle" class="edge-label">用户问题</text>
+
+          <!-- two parallel paths -->
+          <rect x="172" y="28" width="190" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="267" y="50" text-anchor="middle" class="node-label">dense 召回</text>
+          <text x="267" y="68" text-anchor="middle" class="edge-label">HNSW · COSINE</text>
+
+          <rect x="172" y="168" width="190" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="267" y="190" text-anchor="middle" class="node-label">sparse / BM25 召回</text>
+          <text x="267" y="208" text-anchor="middle" class="edge-label">SPARSE_INVERTED · IP</text>
+
+          <!-- query to two paths -->
+          <line x1="112" y1="116" x2="172" y2="62"  class="diagram-ink" marker-end="url(#m31-ink)"/>
+          <line x1="112" y1="134" x2="172" y2="190" class="diagram-ink" marker-end="url(#m31-ink)"/>
+
+          <!-- fusion -->
+          <rect x="422" y="98" width="160" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="502" y="120" text-anchor="middle" class="node-label-accent">融合 · RRF</text>
+          <text x="502" y="138" text-anchor="middle" class="edge-label">hybrid_search → top-100</text>
+
+          <!-- two paths to fusion (symmetric, no crossing) -->
+          <line x1="362" y1="55"  x2="424" y2="110" class="diagram-ink" marker-end="url(#m31-ver)"/>
+          <line x1="362" y1="195" x2="424" y2="140" class="diagram-ink" marker-end="url(#m31-ver)"/>
+
+          <!-- rerank -->
+          <rect x="642" y="98" width="150" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="717" y="120" text-anchor="middle" class="node-label">交叉编码器 rerank</text>
+          <text x="717" y="138" text-anchor="middle" class="edge-label">精排 → top-5~10</text>
+
+          <line x1="582" y1="125" x2="642" y2="125" class="diagram-accent" marker-end="url(#m31-ver)"/>
+
+          <!-- LLM -->
+          <rect x="852" y="98" width="72" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="888" y="129" text-anchor="middle" class="node-label">LLM</text>
+
+          <line x1="792" y1="125" x2="852" y2="125" class="diagram-ink" marker-end="url(#m31-ink)"/>
+
+          <text x="502" y="40" text-anchor="middle" class="edge-label" font-weight="700">召回宽而便宜</text>
+          <text x="717" y="40" text-anchor="middle" class="branch-label">精排窄而贵</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>两条召回路对称汇入融合，出宽 top-100，再交给交叉编码器精排出窄 top-5~10。<strong>注意</strong>："融合 rerank"（RRF，合并两个分数体系）和"模型 rerank"（交叉编码器，逐对重打分）是<strong>两个不同阶段</strong>，先融合再精排，不是二选一。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>检索栈：逐路加上去，各补一块盲区</caption>
+        <thead><tr><th>方案</th><th>补的能力</th><th>代价 / 何时不必</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>dense-only</td>
+            <td>语义、改写、跨语言；demo 与纯语义问答够用</td>
+            <td>精确词/型号/代码命中差，罕见词漏召回</td>
+          </tr>
+          <tr class="selected">
+            <td>dense + sparse</td>
+            <td>语义 + 精确 token 双覆盖；生产检索质量的默认底座</td>
+            <td>多一个 sparse 字段与索引；查询要走 hybrid_search</td>
+          </tr>
+          <tr>
+            <td>dense + BM25 全文</td>
+            <td>同上，但 sparse 由引擎实时算、灌原始文本，省去自己产稀疏向量</td>
+            <td>BM25 查询时算分、略增检索开销；需 2.5+ 与 analyzer 配置</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · sparse 向量与 BM25 是同一类召回的两种来路</span>
+        <p>sparse 字段既可以由你在客户端用 SPLADE/BGE-M3 之类产出稀疏向量后灌入，也可以交给 BM25 <code>Function</code> 在服务端从原始文本实时生成。两条来路最终都落到 SPARSE_FLOAT_VECTOR + IP + SPARSE_INVERTED_INDEX 上，检索路径一致——区别只在"稀疏向量谁来算、何时算"。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：3.1 把两条路召回成两个列表；下一节决定这两个列表怎么合（融合 rerank），以及合完之后要不要再上一层交叉编码器精排（模型 rerank）。</p>
+
+      <h2 id="s32"><span class="num">3.2</span><span>两阶段 rerank：先融合排名，再逐对精排</span></h2>
+      <p class="one-liner">两阶段 rerank = 第一阶段把多路召回融合成一个排序（RRF / Weighted），第二阶段用交叉编码器对候选逐对重打分；前者解决"分数怎么合"，后者解决"近似召回不够准"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么要分两阶段</span>
+        <p>dense 与 sparse 的分数不在同一量纲——COSINE 落在 [-1,1]、BM25 是无上界的词频分，直接相加毫无意义。第一阶段融合先把它们对齐成一个列表（宽，top-100）。但 ANN 召回本身是近似的、粗排不够精，于是第二阶段让交叉编码器把 query 和每个候选<strong>拼在一起重新读一遍</strong>，给出真正贴合的相关性分，裁出窄 top-5~10 喂 LLM。第一阶段快而粗，第二阶段慢而精，分工明确。</p>
+      </div>
+
+      <p><strong>API 形态</strong>：<code>hybrid_search</code> 接收一组 <code>AnnSearchRequest</code>（每个字段一个，带 <code>data</code> / <code>anns_field</code> / <code>param</code> / <code>limit</code> / <code>expr</code>）、一个 <code>rerank</code> 融合器、一个总 <code>limit</code>。融合器二选一：</p>
+
+      <table class="compare-table">
+        <caption>第一阶段融合器：RRFRanker vs WeightedRanker</caption>
+        <thead><tr><th>融合器</th><th>怎么合</th><th>调参 / 适用</th></tr></thead>
+        <tbody>
+          <tr class="selected">
+            <td>RRFRanker</td>
+            <td>只用<strong>排名</strong>（第几位）算分，免归一、scale-free，对量纲差异天然免疫</td>
+            <td>默认参数 <code>k=60</code> 即可起步，无权重要调；不确定时更稳的默认</td>
+          </tr>
+          <tr>
+            <td>WeightedRanker</td>
+            <td>把各路分数<strong>归一后加权</strong>求和，需指定 dense / sparse 权重</td>
+            <td>能精调某一路话语权（稀疏权重 ~0.3 常见），但要先归一、对分布敏感、需调参</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>比文档深一层</strong>：RRF 不看分数只看名次，所以 dense 的 COSINE 和 sparse 的 BM25 量纲差多大都无所谓——这正是它"默认更稳"的根因。WeightedRanker 给了你旋钮，但旋钮意味着要先把两路分数归一、再凭经验配权重，分布一漂权重就得重调。先用 RRF 跑通，确有某一路系统性偏强偏弱时再换 Weighted 精调。</p>
+
+      <p><strong>第二阶段：模型 rerank（交叉编码器）</strong>。这一阶段的部署位置在 2.6 有了新选择：</p>
+
+      <table class="compare-table">
+        <caption>第二阶段精排：服务端 Function reranker vs 客户端 reranker</caption>
+        <thead><tr><th>位置</th><th>形态</th><th>取舍</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>服务端（2.6 新增）</td>
+            <td>Function reranker（TEIRanker / vLLM ranker），在 Milvus 内调用打分服务</td>
+            <td>少一次网络往返、候选不出库；但候选字段<strong>必须是 VARCHAR</strong>、一次只处理一个文本字段</td>
+          </tr>
+          <tr>
+            <td>客户端</td>
+            <td>pymilvus[model]：BGERerankFunction（bge-reranker-v2-m3）/ CohereRerankFunction / CrossEncoderRerankFunction</td>
+            <td>选模型自由、易换；要自己把候选取回再打分，多一跳延迟与一份算力</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>检索质量上不去，于是把 RRF 换成 WeightedRanker 调权重，又把 dense 权重一路加大——召回里精确词命中却更差了。哪里反了？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>方向反了。精确词命中靠的是 sparse / BM25 那一路，加大 dense 权重等于<strong>压低</strong>了负责精确匹配的一路，精确词当然更沉。WeightedRanker 的权重要按"哪类查询命中差"反向调：精确词差→提 sparse 权重（常见 ~0.3 起步往上）。更稳的做法是先回到 RRF——它不看分数只看名次，省掉归一和调参，确认是融合策略问题还是召回本身就没召回到，再决定要不要精调权重。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：3.2 的两阶段都假设召回宽度（top-100）和精排后宽度（top-5~10）已经定好；下一节就是这两个数字、以及索引层 ef/nprobe 这几个旋钮该怎么拧。</p>
+
+      <h2 id="s33"><span class="num">3.3</span><span>召回旋钮：宽召回喂 reranker，窄上下文喂 LLM</span></h2>
+      <p class="one-liner">召回旋钮 = 用 ef/nprobe 调"召回率↔延迟"、用检索 top-k 调"喂给 reranker 多宽"、用 final-k 调"进 LLM 上下文多窄"；三者各管一段，别混着拧。</p>
+
+      <div class="rationale">
+        <span class="label">三个旋钮各管什么</span>
+        <p><strong>ef（HNSW）/ nprobe（IVF）</strong>管索引层的搜索努力：调高，遍历更多候选、召回率上升、延迟上升；调低则反之（机制底座见 <a href="../milvus/03-index-internals.html#s38">深潜 03 的 ef/nprobe 旋钮</a>）。<strong>检索 top-k</strong>管召回宽度，取宽（50~100）好让 reranker 有足够候选去精排。<strong>final-k</strong>管进 LLM 的上下文宽度，取窄（5~10），既省 token 又避免长上下文里相关信息被稀释。</p>
+      </div>
+
+      <p><strong>比文档深一层（最佳实践）</strong>：系统过载、延迟超标时，先降 ef/nprobe、收窄检索 top-k——这些直接削减检索成本。<strong>不要靠扩大 LLM 上下文来掩盖低召回</strong>：把更多勉强相关的 chunk 塞进上下文，看起来"信息更全"，实则是用 LLM 的钱补检索的债，且相关信息被噪声淹没后答案更差。<strong>低召回是检索层的 bug（该召回的没召回），不是上下文不够。</strong>先把召回修对，再谈上下文宽度。</p>
+
+      <div class="callout warning">
+        <span class="label">反直觉 · 别用上下文掩盖低召回</span>
+        <p>"答案不对 → 多喂几条 chunk"是最常见的误修。final-k 从 5 加到 30，召回率没变、噪声却涨了，LLM 在更长的上下文里更容易抓错重点。正确顺序：先查 ef/nprobe 与检索 top-k 是否把对的 chunk 召回了（看 recall 指标，不看上下文长度），再决定 final-k。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：3.1–3.3 都默认"要查的数据已经在库里、且可见"。下一节回到 01 的面③——刚写入的数据到底何时可见，由一致性级别和 segment 状态共同决定。</p>
+
+      <h2 id="s34"><span class="num">3.4</span><span>新鲜度与一致性：默认 Bounded 不是 read-your-writes</span></h2>
+      <p class="one-liner">新鲜度 = 刚写入的文档何时能被检索到，由两件独立的事决定：一致性级别（你这次查询能看到多新的视图）和 segment 状态（这条数据建好索引没）；默认 Bounded 不保证写完立刻可见。</p>
+
+      <div class="rationale">
+        <span class="label">深化 01 §1.4 的面③</span>
+        <p>01 给了结论——默认 Bounded 不是 read-your-writes（见 <a href="01-concepts.html#s14">01 面③</a>）。这里补机制：每条查询携带一个 guarantee timestamp，引擎保证读到不早于该时间点的数据视图（TSO / guarantee ts 的细节见 <a href="../milvus/04-search-and-consistency.html#s44">深潜 04</a>）。一致性级别本质就是这个 timestamp 怎么取——取多旧，决定看到多新。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>三档一致性 × RAG 该在何时用哪档</caption>
+        <thead><tr><th>级别</th><th>看到多新 / 延迟</th><th>RAG 何时用</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Bounded（默认）</td>
+            <td>滞后数秒的视图；非 read-your-writes；尾延迟低</td>
+            <td>离线批量灌库后再查询的常规检索——几秒滞后无所谓</td>
+          </tr>
+          <tr class="selected">
+            <td>Session</td>
+            <td>同一 client 读己写（read-your-writes）；延迟介于两者之间</td>
+            <td>刚写入、紧接着要自查的场景——灌库后立刻自测的甜点</td>
+          </tr>
+          <tr>
+            <td>Strong</td>
+            <td>全局最新视图；尾延迟最高</td>
+            <td>跨 client 强一致读写、对"绝对最新"敏感的少数场景</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>比文档深一层</strong>：刚写入的数据先落进 growing segment——<strong>没建索引、靠暴力扫（brute-force）命中</strong>。所以新鲜度其实是两个正交问题：<em>能不能看到</em>由一致性级别决定（guarantee timestamp 够不够新），<em>看到了快不快</em>由 segment 状态决定（还在 growing 暴力扫，还是已 sealed + indexed）。生产里这两件事常被合并误判成一句"Milvus 写入有延迟"——其实一个是可见性、一个是索引时机，修法完全不同。</p>
+
+      <figure>
+        <svg viewBox="0 0 900 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一条从 insert 到可检索的时间线：growing 暴力扫到 sealed 再到 indexed，下方叠三档可见性窗口 Bounded Session Strong">
+          <defs>
+            <marker id="m34-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- timeline axis -->
+          <line x1="40" y1="70" x2="860" y2="70" class="diagram-ink" marker-end="url(#m34-ink)"/>
+          <text x="852" y="58" text-anchor="end" class="edge-label">时间 →</text>
+
+          <!-- insert tick -->
+          <line x1="80" y1="58" x2="80" y2="82" class="diagram-accent"/>
+          <text x="80" y="46" text-anchor="middle" class="branch-label">insert</text>
+
+          <!-- segment stages as boxes on the line -->
+          <rect x="100" y="48" width="200" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="200" y="66" text-anchor="middle" class="node-label">growing 段</text>
+          <text x="200" y="84" text-anchor="middle" class="edge-label">未索引 · 暴力扫</text>
+
+          <rect x="340" y="48" width="200" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="440" y="66" text-anchor="middle" class="node-label">flush → sealed</text>
+          <text x="440" y="84" text-anchor="middle" class="edge-label">落盘 · 待建索引</text>
+
+          <rect x="580" y="48" width="200" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="680" y="66" text-anchor="middle" class="node-label-accent">indexed</text>
+          <text x="680" y="84" text-anchor="middle" class="edge-label">索引就绪 · 快</text>
+
+          <line x1="300" y1="70" x2="340" y2="70" class="diagram-ink" marker-end="url(#m34-ink)"/>
+          <line x1="540" y1="70" x2="580" y2="70" class="diagram-ink" marker-end="url(#m34-ink)"/>
+
+          <!-- visibility bands -->
+          <text x="40" y="150" class="edge-label" font-weight="700">叠加：这次查询能看到多新 ↓</text>
+
+          <rect x="100" y="166" width="200" height="34" rx="5" class="diagram-soft node-fill"/>
+          <text x="200" y="188" text-anchor="middle" class="node-label-accent" font-size="12">Strong</text>
+          <text x="200" y="222" text-anchor="middle" class="edge-label">全局最新 · 最贵</text>
+
+          <rect x="100" y="166" width="380" height="34" fill="none"/>
+          <rect x="320" y="166" width="160" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="400" y="188" text-anchor="middle" class="node-label" font-size="12">Session</text>
+          <text x="400" y="222" text-anchor="middle" class="edge-label">本会话写完即见</text>
+
+          <rect x="560" y="166" width="240" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="680" y="188" text-anchor="middle" class="node-label" font-size="12">Bounded（默认）</text>
+          <text x="680" y="222" text-anchor="middle" class="edge-label">滞后几秒才进窗口</text>
+
+          <text x="40" y="262" class="edge-label">左侧"能看到多快"看上排 segment 状态 · 与下排"能不能看到"相互独立</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>上排是 segment 从 growing（暴力扫）到 indexed（快）的状态推进，下排是 Strong/Session/Bounded 三档"这次查询能看到多新"。<strong>注意</strong>："能看到"（一致性级别）和"看到快不快"（segment 状态）是<strong>两个独立问题</strong>：Session 让你立刻看到刚写的数据，但它仍往往落在 growing 段里被暴力扫到、慢一拍。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>RAG 灌库脚本：写入一批文档后，同一进程立刻按内容自查校验——大部分命中，但偶尔几条空。一致性已经从默认 Bounded 改成 Session 了，为什么还偶发空？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>Session 解决的是"可见性"——同一 client 一定读得到自己刚写的，这一层没问题。偶发空更多出在另一条线：刚写的数据还在 growing segment、靠暴力扫命中，而暴力扫的召回行为与建好索引后未必一致（尤其叠了 filter 时），或写入尚未对该查询完全可见的边界时刻。稳妥校验：写入后显式 <code>flush</code> 等数据落 sealed、或在校验前留出索引就绪的时间，再用 Session 自查。可见性（Session 已修）和 segment 状态（需 flush/等索引）是两件事——这正是上图要分两排的原因。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：3.4 管"写入何时可见"；下一节管"写入本身怎么做"——增量 upsert、删除回收，以及最危险的换模型迁移。</p>
+
+      <h2 id="s35"><span class="num">3.5</span><span>增量更新与换模型：upsert、删除回收、蓝绿迁移</span></h2>
+      <p class="one-liner">增量更新 = 文档变了怎么改库（upsert / 删除）、模型变了怎么换库（蓝绿迁移）；其中最致命的一条是：换嵌入模型时 query 和 doc 必须同时重嵌入，否则静默返回垃圾、不报任何错。</p>
+
+      <div class="rationale">
+        <span class="label">upsert 与删除的回收机制</span>
+        <p><code>upsert</code> = 按主键先删后插。删除不是就地抹掉，而是写一条 <strong>tombstone（删除标记）</strong>——2.5+ 落进专门的 L0 segment，旧数据要靠 compaction + GC 才真正回收（删除占比约超过 10~20% 时触发一轮）。所以高频 upsert 会短期内堆积 tombstone 与冗余行，检索成本上升直到下一轮 compaction。删整篇文档（一篇被切成多 chunk）则用 <code>parent_doc_id</code> 之类的标签批量删——一次 expr 删掉同篇所有 chunk。</p>
+      </div>
+
+      <p><strong>换嵌入模型：维度一变就是新 collection</strong>。向量维度（dim）在<strong>建表时即固定</strong>，换一个输出维度不同的模型，无法原地改 dim——必须新建 collection。标准做法是蓝绿迁移：建 v2（新 dim）→ 离线把全量语料用新模型重嵌入、回填进 v2 → 流量切到 v2 → v1 暂留作回滚。</p>
+
+      <figure>
+        <svg viewBox="0 0 900 210" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="换嵌入模型的蓝绿迁移：v1 在线，建 v2 新维度，离线重嵌入回填，流量切到 v2，v1 留作回滚">
+          <defs>
+            <marker id="m35-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m35-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <rect x="20" y="40" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="95" y="62" text-anchor="middle" class="node-label">v1 collection</text>
+          <text x="95" y="80" text-anchor="middle" class="edge-label">线上 · 旧 dim</text>
+
+          <rect x="230" y="40" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="305" y="62" text-anchor="middle" class="node-label">建 v2 collection</text>
+          <text x="305" y="80" text-anchor="middle" class="edge-label">新 dim · 空</text>
+
+          <rect x="440" y="40" width="170" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="525" y="62" text-anchor="middle" class="node-label">离线重嵌入回填</text>
+          <text x="525" y="80" text-anchor="middle" class="edge-label">全量 → 灌入 v2</text>
+
+          <rect x="670" y="40" width="150" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="745" y="62" text-anchor="middle" class="node-label-accent">流量切到 v2</text>
+          <text x="745" y="80" text-anchor="middle" class="edge-label">cutover</text>
+
+          <line x1="170" y1="68" x2="230" y2="68" class="diagram-ink" marker-end="url(#m35-ink)"/>
+          <line x1="380" y1="68" x2="440" y2="68" class="diagram-ink" marker-end="url(#m35-ink)"/>
+          <line x1="610" y1="68" x2="670" y2="68" class="diagram-accent" marker-end="url(#m35-ver)"/>
+
+          <!-- rollback: v1 retained -->
+          <rect x="20" y="142" width="150" height="40" rx="6" class="diagram-soft node-fill"/>
+          <text x="95" y="167" text-anchor="middle" class="edge-label">v1 留作回滚</text>
+          <path d="M 745 96 L 745 162 L 170 162" class="diagram-soft" marker-end="url(#m35-ink)"/>
+          <text x="450" y="152" text-anchor="middle" class="edge-label">出问题即切回</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>换模型 = 新建 collection 走蓝绿：v2 建好回填、切流、v1 留作回滚。<strong>注意</strong>：向量维度建表即固定，换模型只能新 collection；并且 query 和 doc <strong>必须同时换</strong>到新模型——只换一半，两套嵌入不在同一语义空间，检索<strong>静默返回垃圾、不报错</strong>。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>文档/模型变更：四类操作各怎么落库</caption>
+        <thead><tr><th>变更</th><th>怎么做</th><th>要点</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>改单条 chunk</td>
+            <td>upsert（按 pk 删+插）</td>
+            <td>删除是 tombstone，靠 compaction+GC 回收（约删除&gt;10~20% 触发）</td>
+          </tr>
+          <tr>
+            <td>删整篇文档</td>
+            <td>按 <code>parent_doc_id</code> 批量 delete</td>
+            <td>一次 expr 删掉同篇所有 chunk，别逐 chunk 删</td>
+          </tr>
+          <tr class="selected">
+            <td>换嵌入模型（dim 变）</td>
+            <td>新建 v2 collection + 蓝绿回填切流</td>
+            <td>dim 建表即固定；<strong>query 与 doc 必须同时重嵌入</strong>，否则静默错</td>
+          </tr>
+          <tr>
+            <td>A/B 两套嵌入</td>
+            <td>多向量字段（同 collection 存两套嵌入）</td>
+            <td>单 collection 多向量字段（≤10，自 2.4），免双写双库</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">铁律 · 换模型只换一半 = 静默返回垃圾</span>
+        <p>嵌入模型决定向量所在的语义空间。doc 用新模型、query 仍用旧模型（或反过来），两边向量落在<strong>不同空间</strong>，相似度计算照样跑、照样返回 top-k，<strong>但全是噪声且不报任何错</strong>。这是 RAG 换模型最隐蔽的事故。两条护栏：① 切流时强制 query 与 doc 同源同模型；② 给每条向量打 <code>model_version</code> 标签，检索端校验版本一致，发现混用立刻报警。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：3.1–3.5 定的是单租户视角下的检索与更新行为；下一节快速收一下规模与成本的旋钮，再把全章串成一个生产检索器。</p>
+
+      <h2 id="s36"><span class="num">3.6</span><span>规模与成本：按内存占用选索引</span></h2>
+      <p class="one-liner">规模与成本 = 在召回率、延迟、内存/算力之间挑索引与部署形态；主线只有一条——按"语料能放进多少内存"选索引族。</p>
+
+      <div class="rationale">
+        <span class="label">内存预算决定索引族</span>
+        <p>向量索引的成本主要是内存。三档典型选择：全量能进内存 → <strong>HNSW</strong>（召回与延迟都最优）；只能放约 ¼ 进内存 → <strong>DiskANN</strong>（其余在盘上，尾延迟仍稳，大规模下省算力）；想再省内存 → <strong>IVF_SQ8 + mmap</strong>（量化 + 内存映射省约 70% 内存，代价是召回降约 2~3%）。详细选型矩阵见 <a href="../milvus/05-self-check.html">深潜 05 的选型</a>。</p>
+      </div>
+
+      <p><strong>部署形态</strong>：托管（Zilliz Cloud）省去运维、按量扩缩，适合不想自建集群的团队；自建在规模够大、对成本与数据驻留有要求时更划算——阈值取决于团队运维能力与数据量。还有一档兜底：<strong>语料很小、且数据已经在 Postgres 里</strong>，pgvector 往往比单独引一套 Milvus 更省心，不必为几万条向量上分布式。</p>
+
+      <div class="callout tip">
+        <span class="label">提示 · 索引选型的快判</span>
+        <p>先答一个问题——"全量向量占多少内存、预算放得下多少"。放得下全量用 HNSW；放不下但要稳尾延迟用 DiskANN；预算极紧、能接受召回掉 2~3% 用 IVF_SQ8+mmap。这条主线先定，再去深潜 05 对照过滤比、QPS、更新频率等次级因素。</p>
+      </div>
+
+      <h2 id="s37"><span class="num">3.7</span><span>综合：把一个生产检索器从头拍一遍</span></h2>
+      <p class="one-liner">综合 = 承接 02 的多租户 schema，把 3.1–3.5 的每个决策串成一条检索链路，并看清它们如何相互牵制——一个旋钮动了，下游几个跟着变。</p>
+
+      <p><strong>场景</strong>：多租户企业知识库 RAG，建在 <a href="02-data-and-tenancy.html#s21">02 的 partition-key 多租户 schema</a> 上，每条查询强制带 <code>tenant_id</code> filter（面①是安全边界）。用户既问语义问题，也查产品型号、错误码这类精确词。以下是逐项决策：</p>
+
+      <table class="compare-table">
+        <caption>一个生产检索器的决策清单（承接 02 schema）</caption>
+        <thead><tr><th>决策点</th><th>拍板</th><th>依据 / 牵制</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>检索栈</td>
+            <td>dense + BM25 全文</td>
+            <td>有精确词/型号 → 必须叠 sparse 一路；BM25 省去自产稀疏向量（3.1）</td>
+          </tr>
+          <tr>
+            <td>融合</td>
+            <td>RRFRanker 起步</td>
+            <td>免归一、scale-free、无权重要调；确有偏科再换 Weighted（3.2）</td>
+          </tr>
+          <tr>
+            <td>精排</td>
+            <td>上交叉编码器，候选字段 VARCHAR 走服务端 reranker</td>
+            <td>ANN 粗排不够准；服务端少一跳，但要求候选 VARCHAR（3.2）</td>
+          </tr>
+          <tr>
+            <td>召回宽度</td>
+            <td>检索 top-k≈100，final-k≈8</td>
+            <td>宽喂 reranker、窄进 LLM；过载先降 k/ef 而非扩上下文（3.3）</td>
+          </tr>
+          <tr>
+            <td>一致性</td>
+            <td>常规检索 Bounded，灌库自查 Session</td>
+            <td>离线灌库后查容忍几秒滞后；写完即查用 Session（3.4）</td>
+          </tr>
+          <tr>
+            <td>文档更新</td>
+            <td>改 chunk 用 upsert，删整篇按 <code>parent_doc_id</code> 批删</td>
+            <td>注意 tombstone 堆积与 compaction 回收节奏（3.5）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 决策相互牵制，不能各拍各的</span>
+        <p>这些决策不是六张独立的票。<strong>面① 的 <code>tenant_id</code> filter 把过滤比拉高</strong>——按 <a href="01-concepts.html#s15">01 面④</a>与 <a href="02-data-and-tenancy.html#s24">02 的过滤比↔索引</a>，高过滤比会饿死 HNSW 的图遍历，<strong>逼你重新审视索引选择（3.6）和召回旋钮（3.3）</strong>：往往要把 ef 调高补召回、或对高选择性租户换 IVF 类索引。同理，换模型（3.5）会推翻已建好的索引、连带重定一致性窗口。一处动，链路上几处跟着重拍——这正是 04 章辨析题要练的"牵一发动全身"。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来再展开对照。</p>
+        <ol>
+          <li>dense、sparse、BM25 三路召回各擅长抓哪类查询？为什么 sparse 字段只能用 IP、不能用 COSINE？</li>
+          <li>「融合 rerank（RRF/Weighted）」和「模型 rerank（交叉编码器）」分别解决什么问题？RRF 为什么"默认更稳"？</li>
+          <li>插入后用 Session 自查仍偶发空，可见性已经修了，那剩下的原因在哪一层？怎么修？</li>
+          <li>（设计题）换嵌入模型时，为什么不能原地改 dim、且必须 query 与 doc 同时重嵌入？只换一半会怎样、怎么防？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>dense 抓语义/改写、sparse 抓精确 token/罕见词、BM25 是 sparse 的服务端自动挡（灌原始文本、查询时算分）。sparse 向量在 Milvus 里<strong>只支持 IP 度量，L2/COSINE 被禁</strong>，建表写 COSINE 会报错。</li>
+            <li>融合 rerank 把多路不同量纲的分数合并成一个排序（第一阶段，宽 top-100）；模型 rerank 用交叉编码器逐对重打分、纠正 ANN 粗排（第二阶段，窄 top-5~10）。RRF 只看名次不看分数，免归一、对量纲差异免疫，所以默认更稳。</li>
+            <li>剩下的在 <strong>segment 状态</strong>层：刚写的数据在 growing 段被暴力扫，召回行为与建好索引后未必一致。修法：写入后 <code>flush</code> 等落 sealed、或等索引就绪再校验。可见性（Session 管）和索引时机（flush/等索引管）是两件事。</li>
+            <li>dim 建表即固定，新模型输出维度不同就无法原地改，只能新建 collection。query 与 doc 必须同模型，否则两套向量落在不同语义空间，相似度照算但全是噪声且<strong>不报错</strong>。防：切流时强制同源同模型 + 给向量打 <code>model_version</code> 标签、检索端校验一致。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一个高过滤比租户，把整条链路逼着重拍</h3>
+        <p>承接 3.7 的检索器：某大租户启用了"仅本部门 + 最近 7 天 + 当前用户有权限"三层 filter，叠上 <code>tenant_id</code> 后过滤比极高（通过的行不到 1%）。线上现象：这个租户的召回率从 90% 掉到个位数，延迟也飙。请按本章 + 01/02 的牵制关系，说出至少三处要联动调整的决策——索引层、召回旋钮、检索栈各动什么，以及为什么单调一处不够。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>根因是 <a href="01-concepts.html#s15">01 面④</a>的召回塌陷：极高过滤比饿死 HNSW 图遍历。联动点——①<strong>索引层（3.6）</strong>：对这类高选择性租户考虑 IVF 类索引或可迭代过滤，HNSW 在稀疏连通图上走不动；②<strong>召回旋钮（3.3）</strong>：临时调高 ef 补召回，但延迟会涨，需与过载降 ef 的原则权衡；③<strong>检索栈（3.1）</strong>：精确词靠 sparse/BM25 那路，filter 过严时这一路命中比 dense 更稳，可调整融合权重侧重 sparse；④确认 filter 字段都建了标量索引（02 §2.4），否则退化全表扫。单调一处不够，因为过滤比同时压在"索引能否遍历"和"两路召回各剩多少"上——这就是决策相互牵制的实例。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://milvus.io/docs/multi-vector-search.md">Hybrid Search</a> · <a href="https://milvus.io/docs/full-text-search.md">Full Text Search（BM25）</a>（官方，3.1–3.2）</li>
+          <li><a href="https://milvus.io/docs/reranking.md">Reranking（RRF / Weighted / Function reranker）</a>（官方，3.2）</li>
+          <li><a href="https://milvus.io/docs/consistency.md">Consistency Level</a>（官方，3.4）· <a href="https://milvus.io/docs/upsert-entities.md">Upsert Entities</a>（官方，3.5）</li>
+          <li>机制底座：<a href="../milvus/03-index-internals.html#s38">深潜 03 ef/nprobe</a> · <a href="../milvus/04-search-and-consistency.html#s44">深潜 04 TSO/一致性</a> · <a href="../milvus/05-self-check.html">深潜 05 选型</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-data-and-tenancy.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 数据与租户设计</span>
+        </a>
+        <a href="04-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 自测与辨析</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 混合检索</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 两阶段 rerank</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 召回旋钮</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 新鲜度·一致性</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 更新·换模型</a></li>
+        <li><a href="#s36" data-toc-target="s36">3.6 规模·成本</a></li>
+        <li><a href="#s37" data-toc-target="s37">3.7 综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

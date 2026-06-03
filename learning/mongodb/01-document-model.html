@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 · 文档模型与 BSON · MongoDB 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref { font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500; }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-document-model.html" class="current">01 模型</a><span class="sep">—</span>
+    <a href="02-query-and-aggregation.html">02 查询·聚合</a><span class="sep">—</span>
+    <a href="03-indexing-and-schema-design.html">03 索引·建模</a><span class="sep">—</span>
+    <a href="04-storage-wiredtiger.html">04 存储</a><span class="sep">—</span>
+    <a href="05-replication-and-consistency.html">05 复制·一致性</a><span class="sep">—</span>
+    <a href="06-sharding-and-when-to-use.html">06 分片·选型</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>文档模型与 BSON</h1>
+        <p class="recap">起点页给了一句话本质："schema 是访问模式的函数"。这章把这句话落到具体形状上——文档、集合、BSON、<code>_id</code>、16MB 上限——并讲清这一条如何反转关系型工程师的范式化本能。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>文档 / 集合 / BSON 是什么，和"行 / 表 / JSON"差在哪个机制点上。</li>
+          <li><code>_id</code> 的三条硬规则：强制、不可变、自动唯一索引；ObjectId 为什么能客户端生成。</li>
+          <li>16MB 文档上限不是限制，是建模信号——它在告诉你访问模式何时错了。</li>
+          <li>"为访问模式建模"如何把建模方向从"结构 → 查询"翻转成"查询 → 结构"。</li>
+        </ul>
+      </section>
+
+      <h2 id="s11"><span class="num">1.1</span><span>文档与集合：BSON，不是 JSON</span></h2>
+      <p class="one-liner">文档是一条 BSON 记录，集合是一组文档；集合不强制所有文档同构。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>关系型把一个实体拆到多张表，靠外键和 JOIN 在查询时重新拼装。文档模型允许把"总是一起被使用的数据"放进一条记录，读取时不必重组。代价转移了——不是消失了——后面几节会逐一还账。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：文档不是以文本 JSON 存储，而是以 <strong>BSON</strong>（Binary JSON）存储。差别是机制性的：BSON 给每个字段带上<strong>类型标记和长度前缀</strong>，所以引擎能在不解析整个文档的前提下跳过某个字段、直接定位到一个嵌套路径。这也是为什么 BSON 能表达 JSON 没有的类型——<code>ObjectId</code>、<code>Decimal128</code>（精确十进制，给钱用）、<code>Date</code>（64 位毫秒）、<code>Binary</code>、区分 32/64 位整数。它的代价同样是机制性的：BSON 每个文档都<strong>各自存一份字段名</strong>（没有表头共享字段名），所以同样的数据，文档存储通常比规范化的行占更多空间，短字段名能省下可观的量。</p>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界</span>
+        <p>文档像一份排好版的"订单详情打印页"——所有相关信息已经摆在一页上。关系型像把同样信息拆进档案柜的不同抽屉，看一次详情要开好几个抽屉。<strong>类比失效处</strong>：文档不是冻结的纸，你可以原子地只更新其中一个字段（<code>$set</code> 单字段），不必重写整页。</p>
+      </div>
+
+      <p>下面是同一个"订单详情"在两种模型里的样子。先看摆放，再看读取代价。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左侧关系型用 users/orders/order_items 三张表加外键，右侧 MongoDB 用一个内嵌文档">
+          <defs>
+            <marker id="ar-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <text x="160" y="34" text-anchor="middle" class="node-label">关系型：结构决定摆放</text>
+          <text x="545" y="34" text-anchor="middle" class="node-label-accent">文档：访问决定摆放</text>
+          <line x1="360" y1="20" x2="360" y2="344" class="diagram-soft"/>
+
+          <!-- 左：三张表 -->
+          <rect x="75" y="56" width="160" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="155" y="79" text-anchor="middle" class="node-label">users</text>
+          <text x="155" y="95" text-anchor="middle" class="edge-label">id · name</text>
+
+          <rect x="75" y="146" width="160" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="155" y="169" text-anchor="middle" class="node-label">orders</text>
+          <text x="155" y="185" text-anchor="middle" class="edge-label">id · user_id</text>
+
+          <rect x="75" y="236" width="180" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="165" y="259" text-anchor="middle" class="node-label">order_items</text>
+          <text x="165" y="275" text-anchor="middle" class="edge-label">order_id · sku</text>
+
+          <line x1="150" y1="146" x2="150" y2="104" class="diagram-soft" marker-end="url(#ar-soft)"/>
+          <text x="196" y="128" text-anchor="middle" class="edge-label">user_id</text>
+          <line x1="162" y1="236" x2="162" y2="194" class="diagram-soft" marker-end="url(#ar-soft)"/>
+          <text x="208" y="218" text-anchor="middle" class="edge-label">order_id</text>
+
+          <text x="160" y="312" text-anchor="middle" class="edge-label">一次详情查询</text>
+          <text x="160" y="330" text-anchor="middle" class="branch-label">= 3-way JOIN</text>
+
+          <!-- 右：一个文档 -->
+          <rect x="400" y="56" width="290" height="208" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="416" y="80" class="edge-label" font-weight="700">order 文档</text>
+          <text x="416" y="100" class="edge-label">_id · total · status</text>
+
+          <rect x="420" y="114" width="250" height="42" rx="4" class="diagram-ink node-fill"/>
+          <text x="545" y="140" text-anchor="middle" class="node-label">customer: { name, tier }</text>
+
+          <rect x="420" y="166" width="250" height="76" rx="4" class="diagram-ink node-fill"/>
+          <text x="545" y="192" text-anchor="middle" class="node-label">items: [ {sku,qty}, {sku,qty} ]</text>
+          <text x="545" y="222" text-anchor="middle" class="edge-label">↑ 内嵌数组，随文档一起读出</text>
+
+          <text x="545" y="312" text-anchor="middle" class="edge-label">一次详情查询</text>
+          <text x="545" y="330" text-anchor="middle" class="branch-label">= 按 _id 单次读</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>同一份订单详情的两种摆法。<strong>注意</strong>：右侧不是"把三张表塞进一个字段"，而是按"详情页总是一起读 customer 和 items"这个访问事实，把它们预拼进一个文档——摆放是被查询决定的。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">order-as-document</span>
+          <span class="lang">mongosh</span>
+          <button class="copy" data-copy-target="c-doc">复制</button>
+        </div>
+<pre id="c-doc"><code class="language-javascript">// 一条文档就装下了关系型里要跨 3 张表的数据
+db.orders.insertOne({
+  _id: ObjectId("665f1a2b3c4d5e6f70819200"),
+  total: 248.00,                       // Decimal 应该用 NumberDecimal，演示从简
+  status: "paid",
+  customer: { name: "Lin", tier: "gold" },   // 内嵌子文档
+  items: [                                    // 内嵌数组
+    { sku: "A-12", qty: 1, price: 199.0 },
+    { sku: "B-07", qty: 1, price: 49.0 }
+  ]
+})
+
+// 读详情：一次按 _id 命中，无 JOIN
+db.orders.findOne({ _id: ObjectId("665f1a2b3c4d5e6f70819200") })</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>如果把"该用户的全部历史订单"也嵌进 <code>customer</code> 里，随着用户不断下单，这个文档会发生什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>文档会<strong>无界增长</strong>，逐步逼近 16MB 上限；更糟的是，每次读这个用户（哪怕只想看名字）都会把全部历史订单一起载入内存。这正是经典反模式——嵌入只适合<strong>有界</strong>的、<strong>总是一起读</strong>的数据。历史订单数量无界、且常被独立查询，应当<strong>引用</strong>而非嵌入（§1.4 给判据，03 章给完整决策）。</p>
+        </details>
+      </div>
+
+      <h2 id="s12"><span class="num">1.2</span><span><code>_id</code> 与 ObjectId</span></h2>
+      <p class="one-liner">每个文档必须有唯一且不可变的 <code>_id</code>；省略时引擎自动生成一个 12 字节 ObjectId。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><code>_id</code> 是主键，且自动带一个唯一索引（你删不掉这个索引）。它要解决的问题和关系型主键一样——唯一标识一行——但多了一个分布式诉求：在没有中心协调者的情况下，多个客户端能各自生成不冲突的 ID。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：默认的 ObjectId 是 12 字节，结构是 <strong>4 字节时间戳 + 5 字节随机值 + 3 字节自增计数器</strong>。关键在于：这 12 字节<strong>由客户端驱动生成</strong>，不需要往返数据库去取一个自增序号（对比 MySQL <code>AUTO_INCREMENT</code> 要数据库分配、或 Postgres sequence 要中心计数器）。代价藏在第一段：因为前 4 字节是时间戳，ObjectId <strong>大致随生成时间单调递增</strong>。这带来一个好处和一个陷阱——好处是按 <code>_id</code> 排序近似按时间排序；陷阱是如果直接拿 ObjectId 当 shard key，新写入会全落到"最大值"所在的那个分片，造成热点（06 章会还这笔账）。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ObjectId 的 12 字节布局：4 字节时间戳、5 字节随机值、3 字节计数器">
+          <text x="340" y="42" text-anchor="middle" class="node-label">ObjectId = 12 字节 = 4 + 5 + 3</text>
+
+          <rect x="60" y="64" width="190" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="155" y="90" text-anchor="middle" class="node-label-accent">时间戳</text>
+          <text x="155" y="108" text-anchor="middle" class="edge-label">4 字节 · 秒级</text>
+
+          <rect x="250" y="64" width="240" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="370" y="90" text-anchor="middle" class="node-label">随机值</text>
+          <text x="370" y="108" text-anchor="middle" class="edge-label">5 字节 · 机器+进程</text>
+
+          <rect x="490" y="64" width="130" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="555" y="90" text-anchor="middle" class="node-label">计数器</text>
+          <text x="555" y="108" text-anchor="middle" class="edge-label">3 字节 · 自增</text>
+
+          <line x1="155" y1="138" x2="155" y2="160" class="diagram-accent"/>
+          <text x="340" y="182" text-anchor="middle" class="edge-label">前 4 字节让 ObjectId 近似按时间递增 → 可排序，但直接做 shard key = 热点（06 章）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>ObjectId 的字节布局。<strong>注意</strong>：被高亮的是头部时间戳——它既是"客户端无协调生成又能粗略排序"的来源，也是单调递增 shard key 陷阱的根源。同一个设计，一面是优点一面是代价。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>两个问题：(a) 已经写入的文档，能改它的 <code>_id</code> 吗？(b) 两个不同集合里能存在相同的 <code>_id</code> 吗？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>(a) <strong>不能</strong>。<code>_id</code> 不可变；要"改"只能删除旧文档再插入新的。(b) <strong>能</strong>。唯一性约束是<strong>集合级</strong>的，每个集合是独立命名空间，<code>users</code> 和 <code>orders</code> 各有一个 <code>_id: 1</code> 互不冲突。</p>
+        </details>
+      </div>
+
+      <h2 id="s13"><span class="num">1.3</span><span>16MB 上限：不是限制，是信号</span></h2>
+      <p class="one-liner">单个 BSON 文档最大 16MB；与其把它当成需要绕过的限制，不如当成建模出错的报警。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这个上限防止单文档无界增长拖垮两个地方：内存（WiredTiger 以整个文档为载入单位，04 章）和网络传输。它不是任意拍脑袋的数字，而是一道护栏。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：MongoDB 读写的最小单位是<strong>整个文档</strong>，不是文档里的某个片段。一次 <code>findOne</code> 把整文档读进 WiredTiger cache；一次更新（哪怕只改一个字段）在存储层也要重写整个文档版本（04 章的 MVCC 会讲）。所以一个臃肿的大文档被频繁读取时，会把 cache 里的热数据挤出去，引发更多磁盘读。由此，16MB 上限的真正含义是一句话：<strong>当你的文档在逼近 16MB，你的访问模式已经错了</strong>——几乎总是因为把一个无界数组（评论流、事件日志、历史记录）嵌进了文档。需要存超大二进制（视频、大文件）时用 <strong>GridFS</strong> 把它分块成多条文档，而不是硬塞。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p>"反正 16MB 很大，先嵌着，撞上限再说"——这是把一个建模信号当噪音忽略。等真撞上限时，往往已经有大量超大文档拖垮了 cache 命中率，性能问题在撞上限<em>之前</em>很久就出现了。把它当成"数组该有界"的早期提醒，而不是终点线。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 IoT 设备每秒产生一条读数，你把读数嵌进设备文档的一个数组里。假设每条读数约 200 字节，大约多久撞上 16MB？这说明什么？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>16MB ÷ 200B ≈ 8 万条，每秒一条约 <strong>22 小时</strong>就撞上限。结论不是"调大上限"（不能调），而是"<strong>设备 + 时间窗</strong>才是正确的文档粒度"——把读数按小时/天分桶存成多条文档（这正是 03 章的 Bucket 设计模式，也是时序集合背后的思路）。无界的时间序列<strong>从来</strong>不该整段嵌进一个文档。</p>
+        </details>
+      </div>
+
+      <h2 id="s14"><span class="num">1.4</span><span>为访问模式建模：方向翻转</span></h2>
+      <p class="one-liner">先确定查询怎么读，再决定文档怎么放——schema 是访问模式的函数，这是全教程最该先内化的一条。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这是从关系型迁移过来最大的认知翻转，也是最容易"读着顺、用着错"的地方。范式化（3NF）优化的目标是<strong>写入与一致性</strong>：每个事实只存一处，更新无需同步多处。文档建模优化的目标是<strong>读取</strong>：一起读的数据放一起，读取无需重组。两者不是"谁更先进"，是优化目标不同。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：为什么不能沿用关系型的"先规范结构、查询时再 JOIN"？因为 MongoDB 没有关系型那种高效的跨表 JOIN——<code>$lookup</code> 本质是<strong>嵌套循环</strong>（02 章会拆开看），数据量一大代价陡增。既然查询期拼装很贵，就把拼装<strong>提前到建模期</strong>：列出最高频的几个查询 → 看哪些数据总是被一起读 → 把它们嵌进同一个文档。代价诚实地摆在这里——反范式带来<strong>冗余</strong>和<strong>更新放大</strong>（同一个事实存在多个文档里，更新要改多处）。你是在用"写入复杂度"换"读取简单度"。值不值，取决于读写比和访问模式是否稳定。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两条泳道对比建模方向：关系型从数据结构出发到查询时 JOIN，文档从访问模式出发到单次读取">
+          <defs>
+            <marker id="ar-ink2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="ar-acc2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="40" y="112" text-anchor="middle" class="edge-label" font-weight="700">关系型</text>
+          <text x="40" y="222" text-anchor="middle" class="branch-label">文档</text>
+
+          <!-- lane 1 -->
+          <rect x="90" y="84" width="150" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="165" y="113" text-anchor="middle" class="node-label">数据逻辑结构</text>
+          <rect x="300" y="84" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="113" text-anchor="middle" class="node-label">范式化的表</text>
+          <rect x="500" y="84" width="160" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="113" text-anchor="middle" class="node-label">查询时 JOIN 拼装</text>
+          <line x1="240" y1="108" x2="300" y2="108" class="diagram-ink" marker-end="url(#ar-ink2)"/>
+          <text x="270" y="100" text-anchor="middle" class="edge-label">范式化</text>
+          <line x1="420" y1="108" x2="500" y2="108" class="diagram-ink" marker-end="url(#ar-ink2)"/>
+          <text x="460" y="100" text-anchor="middle" class="edge-label">查询时</text>
+
+          <!-- lane 2 -->
+          <rect x="90" y="194" width="150" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="165" y="223" text-anchor="middle" class="node-label-accent">访问模式 / 查询</text>
+          <rect x="300" y="194" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="223" text-anchor="middle" class="node-label">文档形状</text>
+          <rect x="500" y="194" width="160" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="223" text-anchor="middle" class="node-label">单次读取命中</text>
+          <line x1="240" y1="218" x2="300" y2="218" class="diagram-accent" marker-end="url(#ar-acc2)"/>
+          <text x="270" y="210" text-anchor="middle" class="edge-label">决定</text>
+          <line x1="420" y1="218" x2="500" y2="218" class="diagram-accent" marker-end="url(#ar-acc2)"/>
+          <text x="460" y="210" text-anchor="middle" class="edge-label">预先拼好</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>建模方向的翻转。<strong>注意</strong>：两条泳道的<em>起点</em>不同——关系型从"数据本身长什么样"起步，文档从"查询要怎么读"起步。被高亮的左下角"访问模式"是整条链的源头，这就是"为访问模式建模"的字面意思。</figcaption>
+      </figure>
+
+      <p>把这条原则压成一个可操作的判断序列，遇到"这个字段放哪"时走一遍：</p>
+      <table class="compare-table">
+        <caption>表 1.1 · 嵌入 vs 引用的初判（03 章给完整版）</caption>
+        <thead>
+          <tr><th>问自己</th><th>倾向嵌入</th><th>倾向引用</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>这块数据和主体总是一起被读吗？</td><td>是 → 嵌入</td><td>否，常被单独查 → 引用</td></tr>
+          <tr><td>它会无界增长吗？</td><td>有界（如地址、几个标签）→ 嵌入</td><td>无界（评论、订单、事件）→ 引用</td></tr>
+          <tr><td>它被多个不同实体共享吗？</td><td>否，专属于主体 → 嵌入</td><td>是（如商品被多订单引用）→ 引用</td></tr>
+          <tr><td>它和主体的写入时机一致吗？</td><td>一起写 → 嵌入</td><td>各自独立高频写 → 引用</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个博客系统：文章（post）有作者（author）和评论（comments）。按上表，author 和 comments 各该嵌入还是引用？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>author 倾向引用</strong>：一个作者被很多文章共享（共享判据命中），且作者资料独立更新；通常存 <code>authorId</code>，需要时再查。但若只展示"作者名"且几乎不变，把 <code>{name}</code> 冗余嵌进 post 也合理（用读取简单度换一点冗余）——这正是"看访问模式"而非"看数据关系"。<strong>comments 看量级</strong>：评论无界增长（无界判据命中），且常分页独立加载，倾向引用到单独集合；只有"最多几条、总和文章一起显示"的场景才嵌入。注意这两个判断都没有唯一答案——它们取决于你的<em>读法</em>，不取决于数据本身。这正是为访问模式建模的含义。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>BSON 相比文本 JSON，多了哪一类机制性能力？举出它带来的一个具体好处和一个具体代价。</li>
+          <li><code>_id</code> 的三条硬规则是什么？ObjectId 的 12 字节为什么能在客户端生成而不必访问数据库？</li>
+          <li>16MB 上限"是信号不是限制"——这句话具体在提醒你检查什么？</li>
+          <li>（设计题）一句话说清：为什么把"先规范结构、查询时 JOIN"的关系型策略直接搬到 MongoDB 会代价高昂？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>多了<strong>带类型与长度前缀的二进制字段编码</strong>（以及 ObjectId/Decimal128/Date/Binary 等类型）。好处：能不解析整文档就跳过字段、定位嵌套路径，并精确表达十进制金额。代价：每文档各存一份字段名，存储通常比规范化行更占空间，短字段名更省。</li>
+            <li>强制存在、不可变、自带唯一索引。ObjectId = 4B 时间戳 + 5B 随机 + 3B 计数器，三段都能在客户端本地算出，无需向数据库申请自增序号，因此天然适合分布式无协调生成。</li>
+            <li>提醒你检查：是不是把一个<strong>无界增长的数组</strong>嵌进了文档。逼近上限几乎总意味着访问模式选错了粒度，该改成分桶/引用。</li>
+            <li>因为 MongoDB 的跨文档 <code>$lookup</code> 是嵌套循环、没有关系型那种高效 JOIN；查询期拼装很贵，所以要把拼装提前到建模期（嵌入），否则就是在最贵的路径上反复付费。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个二手交易 App 设计 listing（商品）文档</h3>
+        <p>需求：商品列表页要展示标题、价格、卖家昵称和头像；商品详情页额外展示卖家信用分、最近 3 条买家评价、以及该商品的全部问答（数量无界，常被翻页加载）。先不查任何资料，写出你的文档结构，并对每个"嵌入还是引用"的决策标注判据。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>分三类想：(1) 卖家昵称+头像——列表页高频读、几乎不变 → 适合<strong>冗余嵌入</strong>少量字段（用一点冗余换列表页零 JOIN）；(2) 卖家信用分——会变、且多个商品共享同一卖家 → <strong>引用</strong>，详情页再查；(3) 问答——无界增长 + 翻页独立加载 → 一定<strong>引用</strong>到单独集合，按 <code>listingId</code> 关联。"最近 3 条评价"是个有趣的中间态：可以用 Subset 模式冗余存最近 3 条、其余引用（03 章）。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.mongodb.com/docs/manual/core/document/">Documents</a>（官方 · 文档结构与 BSON 类型）</li>
+          <li><a href="https://bsonspec.org/">BSON Specification</a>（BSON 二进制格式规范）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/reference/method/ObjectId/">ObjectId</a>（官方 · 12 字节结构）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/data-modeling/">Data Modeling Introduction</a>（官方 · 嵌入 vs 引用）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev">
+          <span class="label">← 上一页</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a href="02-query-and-aggregation.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 查询与聚合管道</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 文档与集合 · BSON</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 _id 与 ObjectId</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 16MB 上限</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 为访问模式建模</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

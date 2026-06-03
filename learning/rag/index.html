@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>起点 · RAG 检索增强生成 深潜</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; font-weight: 500; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+.path-list { list-style: none; padding: 0; margin: 16px 0; }
+.path-list li {
+  padding: 10px 0 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 15px;
+}
+.path-list .who {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--vermilion); letter-spacing: 0.04em;
+  margin-right: 10px;
+}
+.toc-files { list-style: none; padding: 0; margin: 16px 0; }
+.toc-files li { margin: 0 0 10px; }
+.toc-files a {
+  display: block; padding: 12px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-files a:hover { border-color: var(--vermilion); }
+.toc-files .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-files .t { font-weight: 600; }
+.toc-files .d { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html" class="current">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-retrieval.html">02 检索</a><span class="sep">—</span>
+    <a href="03-quality.html">03 质量</a><span class="sep">—</span>
+    <a href="04-frontier.html">04 前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">RAG · 检索增强生成 · 概念深潜</p>
+        <h1>把"检索 + LLM"拆成一条可定位、可优化的工程系统</h1>
+        <p class="recap">基于截至 2026-06 的实践与论文 · 深潜（约半天）· 概念为主，代码为示意（未本地验证）。这份教程不教你抄一段 LangChain demo，而是给你一张能在系统答错时定位问题的结构图。</p>
+      </header>
+
+      <h2 id="fit"><span class="num">A</span><span>适合谁</span></h2>
+      <p>这份教程面向已经具备检索与大模型基础、想把 RAG 从"会调库"升级到"懂机制"的工程师。需要你具备三项能力：</p>
+      <ul>
+        <li><strong>用过至少一个向量检索工具</strong>（FAISS / pgvector / Pinecone / Qdrant 之一），能解释 embedding 是什么、近邻搜索在算什么。没有这个基础，先读同系列的 <a href="../vector-database/index.html">向量数据库教程</a>。</li>
+        <li><strong>调用过 LLM API</strong>（OpenAI / Anthropic / 本地模型皆可），知道 prompt、token、context window 这几个词各指什么、各自的限制在哪。</li>
+        <li><strong>能读 Python 伪代码</strong>。教程里的代码是讲机制的示意，不要求本地跑通——重点在"这一步在算什么"，不在环境配置。</li>
+      </ul>
+
+      <h2 id="not-fit"><span class="num">B</span><span>不适合谁</span></h2>
+      <ul>
+        <li><strong>没接触过 embedding / 向量检索</strong>：RAG 把向量检索当地基，这里不会重讲。先看 <a href="../vector-database/index.html">向量数据库教程</a>，再回来。</li>
+        <li><strong>只想要一段能跑的 demo 代码</strong>：去看 LangChain / LlamaIndex 官方 quickstart。这份教程讲的是 demo 背后"为什么这么搭、什么时候会塌"。</li>
+        <li><strong>想深入 embedding 模型或 transformer 的训练内部</strong>：那是表示学习的主题，本教程只用到"嵌入把语义映射成向量"这一层结论。</li>
+      </ul>
+
+      <h2 id="outcome"><span class="num">C</span><span>读完之后你能做到什么</span></h2>
+      <p>核心收获，一句话：<strong>看到一个 RAG 系统答错时，你能定位失败发生在漏斗的哪一段——是召回没捞到、重排没排上、还是生成阶段无视了证据——而不是笼统地"再调调 prompt"或"换个 embedding 模型"碰运气。</strong></p>
+      <p>具体到可验证的能力：</p>
+      <ul>
+        <li><strong>画出</strong> RAG 的"召回→精度漏斗"，并说出每个进阶技术（hybrid、RRF、rerank、HyDE、Contextual Retrieval）插在漏斗的哪一点、修的是哪一段的什么问题。</li>
+        <li><strong>判断</strong>一个业务场景该用 RAG / 微调 / 长上下文 / 几者组合，并说出做这个决定的那条关键轴。</li>
+        <li><strong>区分</strong>检索失败与生成失败，分别用 context recall、faithfulness 等指标把责任落到具体阶段。</li>
+        <li><strong>解释</strong>为什么"检索对了仍会幻觉"，以及 grounding 为什么是概率性的、不是开关。</li>
+        <li><strong>说清</strong> 2026 年仍在演进的前沿（GraphRAG、Agentic RAG、视觉检索）各自补的是朴素 RAG 的哪个具体短板。</li>
+      </ul>
+
+      <section class="schema-panel" aria-labelledby="essence-label">
+        <p class="label" id="essence-label">一句话本质</p>
+        <p>RAG 把知识从模型权重里<strong>解耦</strong>出来，变成一条可分阶段优化的<strong>"检索→生成漏斗"</strong>：检索阶段用廉价方式最大化<strong>召回</strong>，重排 / 生成阶段用昂贵方式最大化<strong>精度</strong>；而 grounding 只是把生成的概率分布推向证据、<strong>并非强制</strong>——所以检索质量是答案质量的上限，但完美检索仍不保证不幻觉。</p>
+      </section>
+      <p>这句话里藏着三根贯穿全教程的支柱：①<strong>知识解耦</strong>（知识从"训练进权重"变成"运行时检索"）；②<strong>召回→精度漏斗</strong>（全教程的组织主线，每个技术都对应漏斗上的一个干预点）；③<strong>grounding 概率契约</strong>（这也是为什么评估必须把"检索对不对"和"答得忠不忠实"分开量）。</p>
+
+      <h2 id="frontier"><span class="num">D</span><span>现状速览（截至 2026-06）</span></h2>
+      <div class="callout">
+        <span class="label">什么稳了 · 什么在变 · 什么过时了</span>
+        <p><strong>已稳定（放心学）</strong>：retrieve-then-generate 闭环 + 分块 + 向量检索（约 2023 定型）；混合检索（dense + BM25）与 cross-encoder 重排已是默认配置，不再是"可选优化"；评估三件套 RAGAS / TruLens / DeepEval 与 faithfulness、context precision/recall、answer relevance 指标（约 2024 定型）。</p>
+        <p><strong>仍在快速演进（学时带上日期）</strong>：Anthropic Contextual Retrieval（2024-09）、GraphRAG → LazyGraphRAG（2024-12 / 2025-06）、Agentic RAG 体系 Self-RAG / CRAG / Adaptive（2025-01 成型）、ColPali 视觉 / late-interaction 检索（ICLR 2025）；embedding 与 reranker 榜单每季度翻动，开源 Qwen3 系列已在 MTEB 反超闭源。</p>
+        <p><strong>已被取代（别学旧法）</strong>："RAG 已死、直接塞 1M 上下文" → 共识已转向"按查询路由"（质量在约 500K token 后下滑）；纯固定大小分块 → 语义 / 上下文分块；纯 dense 检索 → hybrid；复杂 PDF 的 OCR-then-embed → 正被视觉检索蚕食。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">读之前 · 一个关于"读懂了"的警告</span>
+        <p>RAG 的每个组件单看都不难，连起来读会很顺。但"顺"是危险信号，不是学会的证据。三种自我感觉，对应三种假象——读到时请停下来：</p>
+        <p>· <strong>"我读得很顺"</strong>：这是熟悉感，不是掌握。组件名字眼熟 ≠ 你能说出它在漏斗的哪一段、代价是什么。</p>
+        <p>· <strong>"我做题很快"</strong>：多半因为题目是你刚读过那段的复述。真正的检验是 05 章那些"该用 A 还是 B"的判别题。</p>
+        <p>· <strong>"我没卡壳"</strong>：很可能你的思路一直贴着正文滑行，没真正调动结构。每章的"想一想"请先停十秒、自己答，再展开。</p>
+      </div>
+
+      <h2 id="map"><span class="num">E</span><span>概念地图</span></h2>
+      <figure>
+        <svg viewBox="0 0 800 366" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="RAG 召回到精度漏斗全景图：索引侧供给候选，查询经检索、重排、生成三阶逐级收窄，评估度量出口，前沿增强各阶">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="ar-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- 索引侧 feeder (top) -->
+          <rect x="176" y="40" width="200" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="276" y="66" text-anchor="middle" class="node-label">索引侧</text>
+          <text x="276" y="86" text-anchor="middle" class="edge-label">分块 → 嵌入 → 建索引</text>
+          <line x1="276" y1="98" x2="276" y2="150" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="318" y="128" text-anchor="middle" class="edge-label">候选库</text>
+
+          <!-- spine: 查询 → 检索 → 重排 → 生成 -->
+          <rect x="24" y="162" width="120" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="84" y="184" text-anchor="middle" class="node-label">用户查询</text>
+          <text x="84" y="203" text-anchor="middle" class="edge-label">改写 / HyDE</text>
+
+          <rect x="196" y="150" width="160" height="76" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="276" y="182" text-anchor="middle" class="node-label-accent">检索</text>
+          <text x="276" y="202" text-anchor="middle" class="edge-label">全语料 · 召回↑</text>
+
+          <rect x="420" y="150" width="140" height="76" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="490" y="182" text-anchor="middle" class="node-label-accent">重排序</text>
+          <text x="490" y="202" text-anchor="middle" class="edge-label">短名单 · 精度↑</text>
+
+          <rect x="624" y="150" width="152" height="76" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="700" y="182" text-anchor="middle" class="node-label-accent">生成</text>
+          <text x="700" y="202" text-anchor="middle" class="edge-label">grounding · 引用</text>
+
+          <line x1="144" y1="188" x2="196" y2="188" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <line x1="356" y1="188" x2="420" y2="188" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <text x="388" y="178" text-anchor="middle" class="edge-label">~100</text>
+          <line x1="560" y1="188" x2="624" y2="188" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <text x="592" y="178" text-anchor="middle" class="edge-label">~8</text>
+
+          <!-- 前沿 (bottom-left, dashed, feeds spine) -->
+          <rect x="176" y="270" width="200" height="56" rx="6" class="diagram-soft node-fill"/>
+          <text x="276" y="293" text-anchor="middle" class="node-label">前沿方向</text>
+          <text x="276" y="313" text-anchor="middle" class="edge-label">GraphRAG·Agentic·ColPali</text>
+          <line x1="276" y1="270" x2="276" y2="226" class="diagram-soft" marker-end="url(#ar-soft)"/>
+          <text x="312" y="252" text-anchor="middle" class="edge-label">增强</text>
+
+          <!-- 评估 (bottom-right, dashed, measures output) -->
+          <rect x="612" y="270" width="176" height="56" rx="6" class="diagram-soft node-fill"/>
+          <text x="700" y="293" text-anchor="middle" class="node-label">评估</text>
+          <text x="700" y="313" text-anchor="middle" class="edge-label">faithfulness / recall</text>
+          <line x1="700" y1="226" x2="700" y2="270" class="diagram-soft" marker-end="url(#ar-soft)"/>
+          <text x="730" y="252" text-anchor="middle" class="edge-label">度量</text>
+        </svg>
+        <figcaption><span class="fig-num">图 0</span>RAG 的"召回→精度漏斗"全景：查询经检索（全语料、最大化召回）、重排（短名单、最大化精度）、生成（grounding）三阶逐级收窄，候选从约 100 篇缩到约 8 篇、再到 1 个答案。<strong>注意</strong>：每个进阶技术都只插在这条漏斗的某一个环节上——索引侧供给候选、查询改写改写入口、评估度量出口、前沿增强其中某一阶。全教程就是沿这张图逐段下探。</figcaption>
+      </figure>
+
+      <h2 id="paths"><span class="num">F</span><span>学习路径建议</span></h2>
+      <p>顶部那条面包屑（<code>00 → 01 → 02 → 03 → 04 → 05</code>）是默认顺序。按你的目的可以走不同的支线：</p>
+      <ul class="path-list">
+        <li><span class="who">只想建立心智模型</span>读 01（概念与闭环）+ 02（检索机制），再用 05 的判别题检验。03、04 可略读。</li>
+        <li><span class="who">要做技术选型</span>重点读 01 的"一句话本质" + 04（前沿与 RAG-vs-长上下文的路由共识）+ 05 的场景判别题。</li>
+        <li><span class="who">带读他人的 RAG 代码</span>按面包屑顺序全读——你需要 02 的检索机制和 03 的失败模式，才能看懂别人为什么这么搭、哪里埋了雷。</li>
+      </ul>
+
+      <h2 id="toc"><span class="num">G</span><span>目录</span></h2>
+      <ul class="toc-files">
+        <li><a href="01-concepts.html"><span class="n">01</span><span class="t">概念与闭环</span><span class="d">RAG 的核心抽象：为什么要把知识从权重里解耦；索引侧 / 检索侧 / 生成侧的最小心智模型；漏斗与 grounding 契约。</span></a></li>
+        <li><a href="02-retrieval.html"><span class="n">02</span><span class="t">检索机制（下探一层）</span><span class="d">dense 为何失手罕见词、BM25 为何精确匹配靠它、hybrid + RRF 为何用 rank 不用 score、rerank 的 cross-encoder 注意力差异、查询改写为何嵌入"假答案"。</span></a></li>
+        <li><a href="03-quality.html"><span class="n">03</span><span class="t">质量与评估</span><span class="d">让生成真正扎根；分块策略的三难；评估闭环（faithfulness / context precision / context recall / answer relevance）；按漏斗分段的失败模式。</span></a></li>
+        <li><a href="04-frontier.html"><span class="n">04</span><span class="t">前沿（带日期）</span><span class="d">Contextual Retrieval、GraphRAG、Agentic RAG（Self-RAG / CRAG / Adaptive）、ColPali 视觉检索、long-context vs RAG 的路由共识。</span></a></li>
+        <li><a href="05-self-check.html"><span class="n">05</span><span class="t">自测题库</span><span class="d">三层梯度题 + 跨章场景判别（该用哪一段的哪个技术）+ 默写漏斗架构。</span></a></li>
+      </ul>
+
+      <h2 id="next"><span class="num">H</span><span>学完之后</span></h2>
+      <p>这份教程把"RAG 系统的内部结构"装进你的 schema 后，下一步可以往这几个方向接：</p>
+      <ul>
+        <li><strong>Agent 与工具调用</strong>：把单次检索升级成 agent 的一个可重试工具——在你的 schema 上加"检索是 agent 的一种 action"。</li>
+        <li><strong>向量数据库工程</strong>（<a href="../vector-database/index.html">同系列教程</a>）：索引构建、ANN 参数、分片——补齐漏斗第一段的工程细节。</li>
+        <li><strong>评估与可观测性</strong>：把 03 章的离线指标接到线上 trace，在 schema 上加"RAG 的质量要在生产里持续量"。</li>
+        <li><strong>prompt engineering</strong>（<a href="../prompt-engineering/index.html">同系列教程</a>）：生成阶段的 grounding 提示、引用约束、拒答策略，是漏斗最后一段的发力点。</li>
+      </ul>
+
+      <footer class="references">
+        <h3>本教程参考资料</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2005.11401">Lewis et al. 2020 — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</a>（RAG 原始论文）</li>
+          <li><a href="https://arxiv.org/abs/2312.10997">Gao et al. 2023 — Retrieval-Augmented Generation for LLMs: A Survey</a>（Naive / Advanced / Modular 三范式综述）</li>
+          <li><a href="https://www.anthropic.com/news/contextual-retrieval">Anthropic 2024 — Introducing Contextual Retrieval</a>（设计文档 / 维护者博客）</li>
+          <li><a href="https://docs.llamaindex.ai/">LlamaIndex 官方文档</a> · <a href="https://python.langchain.com/docs/concepts/rag/">LangChain RAG 官方文档</a></li>
+          <li><a href="https://docs.ragas.io/">RAGAS — RAG 评估框架文档</a></li>
+        </ul>
+      </footer>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#fit" data-toc-target="fit">A 适合谁</a></li>
+        <li><a href="#not-fit" data-toc-target="not-fit">B 不适合谁</a></li>
+        <li><a href="#outcome" data-toc-target="outcome">C 能做到什么</a></li>
+        <li><a href="#frontier" data-toc-target="frontier">D 现状速览</a></li>
+        <li><a href="#map" data-toc-target="map">E 概念地图</a></li>
+        <li><a href="#paths" data-toc-target="paths">F 学习路径</a></li>
+        <li><a href="#toc" data-toc-target="toc">G 目录</a></li>
+        <li><a href="#next" data-toc-target="next">H 学完之后</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+</script>
+
+</body>
+</html>

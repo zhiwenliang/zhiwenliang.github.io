@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 自测 · Kafka 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html" class="current">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 06</p>
+        <h1>自测题库与面试检验</h1>
+        <p class="recap">前五章把 Kafka 从<a href="01-concepts.html#log-model">"一条可重放的分区日志"</a>的心智模型，逐层铺到存储、副本、再平衡、投递语义的机制，再到生产陷阱与综合选型。读懂和能在面试里讲清楚之间，隔着一道<strong>主动提取</strong>——读过一遍只是认得，能闭卷复述并迁移到新场景才是真懂。这一章就是那道强制提取关。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">怎么用这一章</p>
+        <ul>
+          <li>共 <strong>20 道题</strong>，分三层梯度：概念层（回忆）6 道、原理层（理解）8 道、应用判别层（迁移）6 道。</li>
+          <li>每题带一条 <strong>提示链接</strong>，指回对应章节的锚点——卡住时先回去重读，别直接翻答案。</li>
+          <li>答案<strong>统一放在文末一个折叠块</strong>。先把答案写在纸上或编辑器里，全部做完再展开对照——直接点开等于把题库当又读了一遍，提取效果归零。</li>
+          <li>三层之后有一节<strong>面试加餐</strong>：挑出最易露馅的 6 道题，列出"普通答案 vs 资深答案必须点到的组合"。</li>
+        </ul>
+      </section>
+
+      <figure>
+        <svg viewBox="0 0 720 440" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="难度梯度金字塔：底层概念层回忆、中层原理层理解、顶层判别层迁移，逐层收窄并标注题量">
+          <defs>
+            <marker id="climb" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Pyramid: three stacked trapezoids, widest at bottom -->
+          <!-- Bottom layer: 概念层 (recall) -->
+          <polygon points="110,360 610,360 530,278 190,278" class="diagram-ink node-fill"/>
+          <text x="360" y="312" text-anchor="middle" class="node-label">概念层 · 回忆 recall</text>
+          <text x="360" y="334" text-anchor="middle" class="edge-label">认得术语、复述定义（6 道）</text>
+
+          <!-- Middle layer: 原理层 (understand) -->
+          <polygon points="190,276 530,276 458,194 262,194" class="diagram-ink node-fill"/>
+          <text x="360" y="228" text-anchor="middle" class="node-label">原理层 · 理解 understand</text>
+          <text x="360" y="250" text-anchor="middle" class="edge-label">讲清机制与取舍（8 道）</text>
+
+          <!-- Top layer: 判别层 (discriminate) -->
+          <polygon points="262,192 458,192 360,82 360,82" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="150" text-anchor="middle" class="node-label-accent">判别层</text>
+          <text x="360" y="170" text-anchor="middle" class="edge-label">迁移到新场景（6 道）</text>
+
+          <!-- climb arrow on the left, bottom to top -->
+          <line x1="70" y1="360" x2="70" y2="92" class="diagram-accent" marker-end="url(#climb)"/>
+          <text x="48" y="232" text-anchor="middle" class="branch-label" transform="rotate(-90 48 232)">从记忆爬向迁移</text>
+
+          <!-- right-side stage annotations, aligned to each band, sitting outside the pyramid -->
+          <text x="636" y="322" text-anchor="middle" class="edge-label">对应 01 章</text>
+          <text x="636" y="238" text-anchor="middle" class="edge-label">对应 02 章</text>
+          <text x="636" y="150" text-anchor="middle" class="edge-label">综合全书</text>
+
+          <!-- baseline caption inside-frame note -->
+          <text x="360" y="404" text-anchor="middle" class="edge-label">底层越宽 = 题越基础、数量越多；越往上越少、越难</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>题库的三层难度梯度，从"认得"逐级爬到"会迁移"。
+          <strong>注意</strong>：顶层判别层（朱红）题量不比中层多，却是面试主战场——能把概念层、原理层学到的东西在没见过的场景里组合出来，才是面试官真正在称量的信号。</figcaption>
+      </figure>
+
+      <!-- ════════════════════ 概念层 ════════════════════ -->
+      <section class="self-check" id="concept-layer">
+        <h2><span class="num">§6.1</span><span>概念层（对应 01 章 · 回忆）</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          每题单一考点，能一两句话答出来即可。答不出就回提示链接重读，别凭印象凑。</p>
+        <ol>
+          <li>offset 由谁维护——broker 还是消费者？这个归属决定了 Kafka 哪一条核心性质？
+            <small><a href="01-concepts.html#why">提示：参考 01 章 §1.1</a></small></li>
+          <li>消息被消费之后为什么<strong>不</strong>从日志里删除？它什么时候才真正消失？
+            <small><a href="01-concepts.html#log-model">提示：参考 01 章 §1.2</a></small></li>
+          <li>Kafka 的顺序保证在<strong>什么范围</strong>内成立？为什么不是整个 topic 全局有序？
+            <small><a href="01-concepts.html#topic-partition-offset">提示：参考 01 章 §1.3</a></small></li>
+          <li>一个 consumer group 的并行度上限是多少？组里消费者数量超过它会发生什么？
+            <small><a href="01-concepts.html#producer-consumer">提示：参考 01 章 §1.4</a></small></li>
+          <li>producer 带 key 发送时，记录落进哪个 partition 是怎么决定的？key 传 <code>null</code> 又会怎样？
+            <small><a href="01-concepts.html#producer-consumer">提示：参考 01 章 §1.4</a></small></li>
+          <li>两个不同的 consumer group 读同一个 topic，组 A 读到 offset 100、组 B 才到 10——组 B 会漏掉中间的消息吗？为什么？
+            <small><a href="01-concepts.html#log-model">提示：参考 01 章 §1.2</a></small></li>
+        </ol>
+      </section>
+
+      <!-- ════════════════════ 原理层 ════════════════════ -->
+      <section class="self-check" id="principle-layer">
+        <h2><span class="num">§6.2</span><span>原理层（对应 02 章 · 理解）</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          这一层考机制和取舍，光报配置名不够，要能讲出"怎么运作、代价是什么"。</p>
+        <ol>
+          <li>LEO 和 HW（高水位）分别是什么？为什么消费者只能读到 ≤ HW 的记录？
+            <small><a href="02-principles.html#replication">提示：参考 02 章 §2.3</a></small></li>
+          <li><code>acks=all</code> 是否等于"所有副本都确认"？如果不是，它到底等于什么？
+            <small><a href="02-principles.html#replication">提示：参考 02 章 §2.3</a></small></li>
+          <li>ISR 在什么条件下会收缩（把一个 follower 踢出去）？由哪个配置控制？
+            <small><a href="02-principles.html#replication">提示：参考 02 章 §2.3</a></small></li>
+          <li>eager（急切式）再平衡和 cooperative（协作增量式）再平衡的核心区别是什么？后者解决了前者的什么痛点？
+            <small><a href="02-principles.html#rebalance">提示：参考 02 章 §2.4</a></small></li>
+          <li>幂等 producer 靠什么机制去重？它为什么<strong>顺带</strong>解决了"重试导致乱序"？
+            <small><a href="02-principles.html#delivery">提示：参考 02 章 §2.5</a></small></li>
+          <li>事务（transaction）怎么实现 EOS？<code>read_committed</code> 消费者在其中起什么作用？
+            <small><a href="02-principles.html#delivery">提示：参考 02 章 §2.5</a></small></li>
+          <li>消费者的心跳在后台线程里照常发送，为什么它仍可能被判死并触发再平衡？"存活"到底由什么证明？
+            <small><a href="02-principles.html#rebalance">提示：参考 02 章 §2.4</a></small></li>
+          <li>KRaft 为什么比 ZooKeeper 模式恢复（controller 故障切换）更快、能支撑更多分区？
+            <small><a href="02-principles.html#kraft">提示：参考 02 章 §2.6</a></small></li>
+        </ol>
+      </section>
+
+      <!-- ════════════════════ 应用判别层 ════════════════════ -->
+      <section class="self-check" id="discrimination">
+        <h2><span class="num">§6.3</span><span>应用判别层（综合全书 · 迁移）</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          面试主战场。这些题没有"背一个名词"就能过的答案——要在场景里权衡，讲出选 A 不选 B 的理由和代价。</p>
+        <ol>
+          <li>一条 100 万消息/秒、需要可重放的事件流 vs 一个低吞吐、需要复杂逐条路由 + 重试 + 死信队列（DLQ）的链路——分别该选 Kafka 还是 RabbitMQ？为什么？
+            <small><a href="04-pitfalls.html#performance">提示：综合 01 章日志模型 + 04 章适用边界</a></small></li>
+          <li>业务方要求"全局严格顺序"（整个 topic 所有消息按一条总序）——怎么实现，代价是什么？
+            <small><a href="02-principles.html#partition-order">提示：综合 01 章 §1.3 + 02 章 §2.2</a></small></li>
+          <li>什么时候<strong>不</strong>该选 Kafka？至少举三类场景。
+            <small><a href="04-pitfalls.html#performance">提示：参考 04 章"什么时候不该用"</a></small></li>
+          <li>一个消费组吞吐上不去，于是不断往组里加消费者。结果吞吐确实涨了，但消费 lag 也跟着涨——为什么？怎么修？
+            <small><a href="04-pitfalls.html#performance">提示：综合 01 章 §1.4 + 02 章 §2.4 + 04 章再平衡风暴</a></small></li>
+          <li>给一个新负载定 partition 数：要考虑哪几条相互拉扯的约束？分区定多了、定少了各有什么代价？为什么之后想改很难？
+            <small><a href="02-principles.html#partition-order">提示：综合 01 章 §1.4 + 02 章 §2.2 + 04 章分区数</a></small></li>
+          <li>一个按 <code>userId</code> 分区的 topic，某个大客户占了 90% 流量，导致一个消费者满载、其余空闲。这是什么问题？换成 <code>orderId</code> 当 key 能不能解决？Kafka 会自动均衡吗？
+            <small><a href="02-principles.html#partition-order">提示：综合 02 章 §2.2 热分区 + 04 章 key 倾斜</a></small></li>
+        </ol>
+      </section>
+
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上教程，凭记忆画出一条记录从 <strong>producer → broker → consumer</strong> 的完整路径：标上 leader 与 follower 副本、ISR、HW、以及消费者<strong>提交 offset 的那个点</strong>。画完翻回 <a href="02-principles.html#replication">02 章 §2.3</a> 对照——你把 HW 标在哪里了？它是不是<strong>滞后于 leader 的 LEO 整整一个 fetch 轮</strong>？已 ack 给 producer 的那条记录，在你的图里对消费者可见了吗（它要等 HW 推进才可见）？这一个滞后正是"已确认 ≠ 立即可读"的来源，最容易在画图时被画错。</p>
+      </div>
+
+      <!-- ════════════════════ 面试加餐 ════════════════════ -->
+      <h2 id="strong-answers"><span class="num">§6.4</span><span>面试加餐：强答案必须包含什么</span></h2>
+
+      <p>下面 6 道是 Kafka 面试里<strong>最容易露馅</strong>的题。露馅不在于答错，而在于答得"对但浅"——只报一个关键词，听上去像背过、没用过。面试官称量的是<strong>对取舍的推理</strong>和<strong>把多个机制组合起来的能力</strong>：持久性、EOS、顺序，正确答案几乎都是 "A 且 B 且 C" 的组合命题，缺一个组件就是一个破绽。每道列出"普通答案"和"资深答案必须额外点到的组合"。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 面试官真正在称量什么</span>
+        <p>把 Kafka 说成"更快的消息队列"是<strong>红旗信号</strong>；资深信号是把它框成<strong>分布式、可重放、按分区切分的提交日志 + 独立消费组</strong>。听的是<strong>组合</strong>不是关键词——只说 <code>acks=all</code> 而不讲它和 ISR、<code>unclean.leader.election</code> 的互动，就是背题。再追一句"broker 挂了 / 消费者慢了 / ISR 缩到 1 时各发生什么"，能讲出<strong>失败模式的故事</strong>的人立刻和背配置的人分开。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 6.1 · 6 道易露馅题：普通答案 vs 资深答案的组合</caption>
+        <thead>
+          <tr><th style="width:20%">题</th><th style="width:33%">普通答案（对但浅 / 破绽）</th><th>资深答案必须点到的组合</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>① 端到端怎么保证<strong>不丢消息</strong>？</td>
+            <td>"设 <code>acks=all</code>。"——只说这一个就是破绽，ISR 缩到 1 时它会静默退化。</td>
+            <td><code>acks=all</code> <strong>且</strong> <code>min.insync.replicas≥2</code> <strong>且</strong> <code>replication.factor≥3</code> <strong>且</strong> <code>unclean.leader.election=false</code>，<strong>再加</strong>消费侧"处理完再提交 offset"。五件套缺一个就有丢失窗口；要能说出每一件各堵哪个窗口。</td>
+          </tr>
+          <tr>
+            <td>② <code>replication.factor</code> 和 <code>min.insync.replicas</code> 什么关系？</td>
+            <td>"RF 是副本数，min.insync 是最少同步数。"——只复述定义，没讲怎么配。</td>
+            <td>设 <code>min.insync.replicas = RF − 1</code>：这样挂一台仍能写、挂两台才停写。设成 = RF 则任意一台故障就停写（牺牲可用性）；设成 1 则等于没有下限保护。要点出这是<strong>持久性与可用性之间的旋钮</strong>，持久性的真正来源是 <code>min.insync.replicas</code> 而非 <code>acks</code>。</td>
+          </tr>
+          <tr>
+            <td>③ Kafka 能做<strong>exactly-once</strong> 吗？边界在哪？</td>
+            <td>"开 <code>enable.idempotence=true</code> 就精确一次了。"——过度宣称，这是最常见的误解。</td>
+            <td>幂等 producer 只在<strong>同一会话、同一 (PID, partition)</strong> 内去重，跨进程重启换新 PID 即失效；真正的 EOS 需要<strong>幂等 producer + 事务（transactional.id + epoch）+ 消费侧幂等</strong>三者。且"精确一次"只在 Kafka 的"消费-转换-生产"<strong>闭环内</strong>成立，<strong>不覆盖外部副作用</strong>（DB 写、REST 调用、发邮件那些重试仍会重复触发）。</td>
+          </tr>
+          <tr>
+            <td>④ Kafka 怎么保证<strong>顺序</strong>？</td>
+            <td>"Kafka 保证顺序。"——太笼统，漏掉范围和失效条件。</td>
+            <td>只在<strong>单个 partition 内</strong>保证；要顺序的记录必须用同一个 key 哈希进同一分区。还要点出反例：<code>max.in.flight.requests.per.connection &gt; 1</code> 且<strong>未开幂等</strong>时，某条消息重试会插到后发消息之后，造成乱序——开 <code>enable.idempotence=true</code> 才靠序列号保序。</td>
+          </tr>
+          <tr>
+            <td>⑤ 什么触发<strong>再平衡</strong>？怎么避免再平衡风暴？</td>
+            <td>"消费者增减会触发再平衡。"——只说触发条件，没讲协议代价。</td>
+            <td>要分清 <strong>eager（stop-the-world，全员放弃全部分区）vs cooperative-sticky（只移动需变动的分区，未动的继续消费）</strong>。再讲风暴成因：处理太慢超过 <code>max.poll.interval.ms</code>（或 <code>session.timeout.ms</code> 太紧）→ 成员被驱逐 → 重入 → 循环。缓解：调小 <code>max.poll.records</code>、用<strong>协作式协议 + static membership</strong>（<code>group.instance.id</code>）。</td>
+          </tr>
+          <tr>
+            <td>⑥ <code>acks=1</code> 有什么问题？</td>
+            <td>"<code>acks=1</code> 比 <code>acks=all</code> 弱一点。"——没说清丢在哪个窗口。</td>
+            <td>leader 写进自己的日志就 ack、<strong>不等 follower 复制</strong>；在"已 ack、未复制"这个窗口内若 leader 崩溃，新 leader 从某个 follower 选出，那段没复制出去的记录<strong>随旧 leader 磁盘一起永久丢失</strong>，且不抛任何异常。这是用持久性换延迟，要能描述这个具体的丢失时序。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把"不丢"和"不重"同时讲成一个完整故事</h3>
+        <p>面试官常把表 6.1 的 ①（不丢）和 ③（不重）合并追问："一条订单事件，从 producer 发出到 consumer 处理入库，<strong>既不丢也不重复入库</strong>，整条链路你怎么设计？" 试着不看答案，把生产端持久性配置、broker 端副本/ISR、消费端 offset 提交时机、以及"外部 DB 写"这一步的去重，串成一段 2 分钟能讲完的话。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键是认清两段不同性质的边界：① <strong>Kafka 内部</strong>（producer→broker→consumer 读取）可以靠五件套 + 幂等/事务做到不丢、Kafka offset 不重复提交；② <strong>"写外部 DB"这一步在 Kafka 的 EOS 闭环之外</strong>——重投时这一步会再执行一次。所以"不重复入库"不能指望 Kafka 给你，要靠<strong>消费侧幂等</strong>：用 orderId 做数据库唯一键 / upsert，或先查后写。把"Kafka 保证什么"和"必须自己保证什么"切开讲，是这道题的资深信号。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════ 答案 ════════════════════ -->
+      <details>
+        <summary>答案（三层全部做完、画完图，再展开）</summary>
+
+        <h3>概念层（§6.1）</h3>
+        <ol>
+          <li><strong>offset 由消费者维护</strong>，不是 broker。broker 只负责顺序追加日志、按时间/大小保留；"读到哪"是消费者自己提交到 <code>__consumer_offsets</code> 的一个数字。这个归属是后面一切的总开关——正因为进度在消费者侧、消息不因被读而消失，才有了<strong>可重放</strong>和<strong>多消费组各读各的</strong>。</li>
+          <li>因为 Kafka 是<strong>日志不是队列</strong>：消费是移动游标（seek），不是出队（dequeue），游标前移不影响日志本身。记录何时消失只取决于<strong>保留策略</strong>（<code>retention.ms</code> / <code>retention.bytes</code> 到期删整段，或 compaction 对每 key 只留最新），与"是否被读过"完全解耦。所以消费滞后超过保留期会丢数据。</li>
+          <li>顺序只在<strong>单个 partition 内</strong>保证，不保证 topic 全局有序。原因是物理的：全局总序需要一个单一写入点把所有记录串成一条序列，那就退回单分区、放弃了水平扩展。一条记录的完整坐标是 <code>(topic, partition, offset)</code> 三元组，跨分区的 offset 之间没有可比性。</li>
+          <li>并行度上限 = <strong>partition 数</strong>。一个 partition 同一时刻只能被同组内一个 consumer 持有，所以消费者数超过分区数，多出来的就<strong>空闲拿不到分区</strong>；少于分区数则有消费者要扛多个分区。</li>
+          <li>带 key 时 <code>partition = murmur2(key) % 分区数</code>——相同 key 永远算出同一分区，因此同 key 记录在该分区内有序。key 传 <code>null</code> 时用 <strong>sticky partitioner</strong>（先填满一个分区的 batch 再换），记录在分区间均摊，<strong>失去按 key 的顺序保证</strong>。</li>
+          <li>不会漏。offset 是<strong>每个组各自维护</strong>的游标，互不影响。组 A 读到 100 不会"消耗"掉记录，11–100 号全都还在日志里（只要没超过保留期），组 B 会照常从 11 一路读下去。这正是"日志而非队列"最有用的一条性质：多消费组天然隔离。</li>
+        </ol>
+
+        <h3>原理层（§6.2）</h3>
+        <ol>
+          <li><strong>LEO（Log End Offset）</strong> = 某个副本下一条要写的 offset（即该副本已有记录数）。<strong>HW（高水位）</strong> = ISR 中所有副本里<strong>最小的 LEO</strong>，也就是"已被所有同步副本复制到的最高 offset"。消费者只能读到 ≤ HW 的记录，是因为 HW 以上的记录还没被全部副本复制，一旦 leader 故障可能消失——HW 门控防止消费者读到"将来可能不存在"的记录。代价：HW 在<strong>下一轮 fetch</strong> 才推进，所以已 ack 给 producer 的记录要等约一个 RTT 才对消费者可见。</li>
+          <li><strong>不等于"所有副本"，等于"所有 ISR 成员"</strong>。当 follower 落后被踢出 ISR、ISR 收缩到只剩 leader 一台时，<code>acks=all</code> 就等价于 <code>acks=1</code>——写到一台就算"全部 ISR 确认"。所以持久性的真正来源是 <code>min.insync.replicas</code>（要求至少这么多 ISR 成员在线，否则写入被 <code>NotEnoughReplicas</code> 拒绝），不是 <code>acks</code> 本身。</li>
+          <li>follower 落后 leader 超过 <code>replica.lag.time.max.ms</code>（默认 30s）没追上，就被踢出 ISR。收缩后 ISR 成员变少，会影响 HW 的计算和 <code>acks=all</code> 的实际强度。follower 重新追上后会被加回 ISR。</li>
+          <li><strong>eager</strong>：每轮再平衡所有成员<strong>放弃全部分区</strong>（stop-the-world 屏障），重新分配，期间整组暂停消费。<strong>cooperative/incremental</strong>（2.4+）：只<strong>放弃需要移动的分区</strong>，分两轮收敛，未变动的分区<strong>继续消费</strong>。后者解决了 eager 的全局暂停——大规模消费组扩缩容时，启动时间能从十几分钟降到约一分钟。KIP-848（4.0 GA）进一步把再平衡逻辑移到 broker 端、增量、无客户端 stop-the-world。</li>
+          <li>broker 为每个 <code>(PID, partition)</code> 维护一个<strong>最高序列号</strong>，只接受序列号<strong>恰好 +1</strong> 的 append；重试导致的重复（序列号已见过）被丢弃，出现空洞则抛 <code>OutOfOrderSequenceException</code>。它顺带解决乱序，是因为这套"必须连续 +1"的校验<strong>拒绝乱序 batch</strong>——所以 <code>max.in.flight</code> 可以 &gt;1（≤5）而不会因重试打乱顺序。</li>
+          <li>事务靠 <strong><code>transactional.id</code> + epoch</strong> 隔离僵尸实例：transaction coordinator 跑两阶段提交，给每个涉及的分区写 commit/abort marker，并把<strong>输出写 + 消费 offset 提交放进同一个原子事务</strong>。<code>read_committed</code> 消费者<strong>跳过 aborted 和未决</strong>的记录、且不能越过 LSO（Last Stable Offset），从而只读到已提交事务的结果——这是 EOS 在读侧的兑现。代价：marker + LSO 带来额外延迟和队头阻塞（一个长事务未决会卡住 <code>read_committed</code> 读者）。</li>
+          <li>因为<strong>存活由 <code>poll()</code> 证明，不是由心跳证明</strong>。心跳在后台线程，但它只说明"进程还活着、网络还通";真正的判活看你有没有在 <code>max.poll.interval.ms</code> 内再次调用 <code>poll()</code>。如果在 poll 循环里做了过重的处理（DB/HTTP）迟迟不回来 poll，协调者就判定这个成员<strong>处理不过来 = 死了</strong>，把它驱逐并触发再平衡，在途批次会在新 owner 上<strong>重复处理</strong>。</li>
+          <li>因为 <strong>KRaft 把元数据本身做成一条日志</strong>（内部 topic <code>__cluster_metadata</code>，由 controller quorum 用 Raft 复制），standby controller 持续回放并把全部元数据<strong>常驻内存</strong>。所以 active controller 故障时，新 controller 的状态已经在内存里、几乎瞬时接管。ZooKeeper 模式下 controller 是独立系统，故障切换要<strong>全量重载</strong>元数据，分区一多就慢——这就是 KRaft 能支撑百万级分区、恢复更快的原因。代价：quorum 多数派挂掉就失去可用性。</li>
+        </ol>
+
+        <h3>应用判别层（§6.3）</h3>
+        <ol>
+          <li><strong>100 万/秒 + 可重放选 Kafka</strong>：它的顺序日志 + page cache + 零拷贝就是为高吞吐顺序流设计的，可重放是免费附赠（多消费组各读各的）。<strong>低吞吐 + 复杂逐条路由 + 重试/DLQ 选 RabbitMQ</strong>：Kafka 没有原生的逐条路由（exchange/binding）、没有内置的逐消息重试与死信队列、按分区粗粒度而非按消息精细 ack（share group 在弥补，但语义和成熟度不同）。判别的核心：<strong>"高吞吐可重放的日志" vs "灵活路由 + 逐条投递控制的 broker"</strong>，是两种不同的工具，不是快慢之分。</li>
+          <li>把 topic 设成<strong>单分区</strong>，所有消息走同一条日志即得全局总序。代价巨大：<strong>并行度被钉死为 1</strong>（一个组只能有一个消费者在干活），吞吐被单分区的单机磁盘和单消费者卡死，还失去了 Kafka 的核心扩展能力。所以面试时要主动说："能做，但等于放弃 Kafka 的全部并行优势——先反问业务<strong>是否真需要全局序</strong>，通常按 key 的分区内有序就够了。"</li>
+          <li>至少三类：① <strong>低吞吐 + 需要复杂路由</strong>（用 RabbitMQ 这类传统 broker）；② <strong>需要内置逐条重试 / DLQ / 优先级队列</strong>（Kafka 都得自己造）；③ <strong>请求-响应 / RPC 语义</strong>（Kafka 是单向日志，不是 RPC）。补充：小团队、量也不大却要扛 Kafka 的运维成本（分区规划、再平衡、监控）时，收益盖不过复杂度。判别要点：Kafka 的强项是高吞吐可重放日志，凡是和这条不沾边的需求都该重新考虑选型。</li>
+          <li>因为每加一个消费者就<strong>触发一次再平衡</strong>；如果组本来就不稳定、或处理慢导致成员频繁被驱逐，就会陷入<strong>再平衡风暴</strong>——每次 stop-the-world（或部分暂停）期间消费停顿，lag 在停顿里堆积。更糟的情形是消费者数已经<strong>逼近或超过分区数</strong>，再加只是空转还白白触发再平衡。修：别在不稳定的组上扩容；上<strong>协作式再平衡 + static membership</strong>、调小 <code>max.poll.records</code> 把单批处理时间压在 <code>max.poll.interval.ms</code> 内；先确认分区数是否够，不够要先扩分区。</li>
+          <li>相互拉扯的约束：<strong>① 目标吞吐</strong>（分区越多并行写/读越高）、<strong>② 消费并行度</strong>（消费者数 ≤ 分区数，要留够余量）、<strong>③ 顺序范围</strong>（同 key 必落同分区，分区数影响 key 分布）、<strong>④ 再平衡与故障切换成本</strong>（分区越多 controller/元数据负担、故障切换越慢、文件句柄越多）。<strong>定多了</strong>：抬高端到端延迟、故障切换时间、文件句柄耗尽（每 segment 2 个文件，默认 ulimit 1024）。<strong>定少了</strong>：消费并行度被卡死。<strong>之后难改</strong>：分区数<strong>只能增不能减</strong>，且给有 key 的 topic 加分区会<strong>永久打乱 key→分区映射</strong>、破坏所有下游的按 key 顺序——所以要么保守预估，要么新建 topic 迁移。</li>
+          <li>这是<strong>热分区 / key 倾斜</strong>问题：<code>userId</code> 基数虽高，但单个大客户的流量全哈希到同一分区，压垮持有该分区的消费者。换 <code>orderId</code> 做 key <strong>能缓解</strong>——orderId 基数更高、同一客户的订单会散到多个分区，负载更均匀；代价是<strong>失去"同一 user 的事件有序"</strong>（只剩同一 order 内有序），要确认业务能接受。Kafka <strong>不会自动均衡</strong>倾斜——分配是按分区粒度，不看每分区的实际数据量。所以治本是<strong>选高基数、分布均匀的 key</strong>，而不是指望加消费者。</li>
+        </ol>
+      </details>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.hellointerview.com/learn/system-design/deep-dives/kafka">Hello Interview — Kafka Deep Dive / Kafka vs RabbitMQ</a>（面试系统设计，判别层与选型题的来源）</li>
+          <li><a href="https://kafka.apache.org/documentation/#design">Apache Kafka 官方文档 · Design 节</a>（原理层答案的权威依据）</li>
+          <li><a href="https://www.confluent.io/blog/transactions-apache-kafka/">Confluent — Transactions / EOS in Apache Kafka</a>（事务与 exactly-once 边界）</li>
+          <li><a href="https://www.confluent.io/blog/incremental-cooperative-rebalancing-in-kafka/">Confluent — Incremental Cooperative Rebalancing</a>（再平衡协议演进）</li>
+          <li>shayne007《Kafka 如何保证消息不丢失》——端到端五件套的工程梳理（中文社区高赞，搜索文章标题即得；与本章表 6.1 ① 对照阅读）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-capstone.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 综合实战与选型判断</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到起点 / 目录 →</span>
+          <span class="title">00 · 起点与全教程目录</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#concept-layer" data-toc-target="concept-layer">§6.1 概念层</a></li>
+        <li><a href="#principle-layer" data-toc-target="principle-layer">§6.2 原理层</a></li>
+        <li><a href="#discrimination" data-toc-target="discrimination">§6.3 应用判别层</a></li>
+        <li><a href="#strong-answers" data-toc-target="strong-answers">§6.4 面试加餐</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 调度与资源 · Kubernetes 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 对象模型</a><span class="sep">—</span>
+    <a href="02-control-loop.html">02 控制循环</a><span class="sep">—</span>
+    <a href="03-scheduling.html" class="current">03 调度与资源</a><span class="sep">—</span>
+    <a href="04-networking.html">04 网络模型</a><span class="sep">—</span>
+    <a href="05-storage-state.html">05 存储与状态</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现状与前沿</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>调度与资源：Pod 如何落到 Node 上</h1>
+        <p class="recap">上一章揭示了控制循环——scheduler 正是其中一个控制器，它的职责是给还没有 nodeName 的 Pod 选一个节点。这一章讲它怎么选，以及 requests/limits 这套资源模型背后的内核机制。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章骨架</p>
+        <ul>
+          <li>scheduler 作为控制器：filter（过滤）+ score（打分）两阶段，本质仍是"观测—调谐"。</li>
+          <li>requests vs limits：调度只看 requests，limits 对调度完全无影响。</li>
+          <li>CPU 可压缩（被限流变慢）vs 内存不可压缩（被 OOMKill 杀掉）的内核机制。</li>
+          <li>QoS 三档（Guaranteed / Burstable / BestEffort）如何决定驱逐顺序。</li>
+          <li>affinity / taint / toleration 如何约束 Pod 的落点。</li>
+        </ul>
+      </div>
+
+      <!-- ════════════════════════════════ 3.1 ════════════════════════════════ -->
+      <h2 id="s31"><span class="num">3.1</span><span>scheduler 是个控制器</span></h2>
+
+      <p class="one-liner">scheduler 监听 <code>spec.nodeName</code> 为空的 Pod，为其选一个节点，再把这个决定（binding）写回 api-server——它没有"启动容器"，只是填了一个字段。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>第 2 章把 Kubernetes 拆成一组 level-triggered 的控制循环：每个控制器观测某类对象的实际状态，与期望状态比对，再做一步调谐。scheduler 完全套进这个模型——它观测的"差异"是：<strong>存在一个 Pod，它的 <code>spec.nodeName</code> 还是空的</strong>（期望被调度，实际未被调度）。它的调谐动作只有一个：算出该去哪个节点，把节点名写进去。真正在节点上拉起容器的是 kubelet，那是另一个控制器的事。把"选节点"和"起容器"拆成两个控制器，是 Kubernetes 解耦设计的典型一刀。</p>
+      </div>
+
+      <h3>底层机制（比文档深一层）</h3>
+      <p>很多人把 scheduler 想象成一个"分配器"，仿佛它直接命令某台机器去运行 Pod。实际上它<strong>从不与节点通信</strong>。它的整个工作闭环都发生在 api-server 这一侧：</p>
+      <ul>
+        <li><strong>观测</strong>：通过 watch 机制订阅 Pod 对象，筛出 <code>spec.nodeName == ""</code> 且尚未被处理的那些（处于 Pending）。</li>
+        <li><strong>决策</strong>：在内存里对所有节点跑两阶段算法（下一节展开），选出一个节点。</li>
+        <li><strong>调谐</strong>：创建一个 <code>Binding</code> 子资源 POST 回 api-server，效果等同于把 <code>pod.spec.nodeName</code> 设为选中的节点名。</li>
+      </ul>
+      <p>写回那一刻，scheduler 的工作就结束了。后续交给目标节点上的 kubelet——它也在 watch，发现"有一个 <code>nodeName</code> 等于自己的 Pod 出现了"，于是开始拉镜像、起容器。<strong>scheduler 和 kubelet 之间没有直接调用，只有共享的 api-server 状态作为媒介</strong>。这正是第 2 章那条主线的再次落地：所有组件都对着同一份声明状态做调谐，彼此不耦合。</p>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>scheduler 像餐厅的<strong>领位员</strong>：它只负责看哪张桌子空着、把客人领过去并在座位表上记一笔，并不下厨、也不上菜。上菜（起容器）是那张桌子对应的服务员（kubelet）的事。<strong>边界</strong>：领位员领错了位还能改，scheduler 一旦写入 <code>nodeName</code> 就<strong>不会再改</strong>——Pod 与节点的绑定是终身的，节点出问题只能删掉 Pod 让控制器新建一个再重新调度（这条性质是第 5 章讨论 StatefulSet 稳定身份的前提）。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>如果 scheduler 进程整个挂掉一小时，集群里已经在运行的 Pod 会受影响吗？这一小时里新创建的 Deployment 会怎样？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>已运行的 Pod <strong>毫不受影响</strong>——它们的 <code>nodeName</code> 早已写好，kubelet 仍在各自节点上维持它们，scheduler 不在闭环里。</p>
+          <p>这一小时里新建的 Pod 会一直停在 <strong>Pending</strong>：它们的 <code>nodeName</code> 是空的，没有控制器来填这个字段。scheduler 恢复后，因为是 level-triggered，它 watch 到这批积压的 Pending Pod，挨个调度即可——不需要任何人"重放"这一小时发生的事。这就是声明式 + level-triggered 的容错红利。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：已经知道 scheduler 的动作是"选一个节点写回去"。那它<strong>怎么选</strong>？这就是两阶段算法——先排除不可行的，再给可行的打分。</p>
+
+      <!-- ════════════════════════════════ 3.2 ════════════════════════════════ -->
+      <h2 id="s32"><span class="num">3.2</span><span>两阶段：Filter 过滤，Score 打分</span></h2>
+
+      <p class="one-liner">调度分两步：Filter 先把"放不下/不满足约束"的节点全部排除，得到一批可行节点；Score 再给每个可行节点打分，选分最高的，平手则随机。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"选节点"其实是两个性质不同的问题混在一起：一是<strong>硬约束</strong>——这个节点到底装不装得下、允不允许（资源、标签、污点）；二是<strong>软偏好</strong>——在所有装得下的节点里，哪个更划算（分散负载、亲和性、资源碎片最小）。把它们揉进一个评分函数会很难表达"绝对不行"。所以 Kubernetes 拆成两阶段：Filter 处理"行不行"（布尔判定），Score 处理"哪个更好"（打分排序）。这是一个经典的 <em>predicate 然后 priority</em> 结构。</p>
+      </div>
+
+      <h3>底层机制（比文档深一层）</h3>
+      <p><strong>Filter 阶段</strong>（历史上叫 predicates）逐个节点判定一组布尔条件，任何一条不满足，该节点立即出局。常见的过滤器：</p>
+      <ul>
+        <li><code>PodFitsResources</code>：节点的可分配资源减去其上已有 Pod 的 <strong>requests 之和</strong>，还够不够装下新 Pod 的 requests。这是本章最关键的一条——下一节专讲。</li>
+        <li><code>nodeSelector</code> / node affinity：节点的标签是否匹配 Pod 指定的标签要求。</li>
+        <li>taint 检查：节点上的污点是否被 Pod 的 toleration 容忍（§3.6 展开）。</li>
+        <li>volume 相关：Pod 要挂的卷能否在该节点访问（如某些卷有可用区限制）。</li>
+      </ul>
+      <p>Filter 跑完，得到一批"可行节点"。如果<strong>这批是空的，Pod 就停在 Pending</strong>，并在事件里写 <code>FailedScheduling</code>——这是排查 Pending 的第一现场。</p>
+      <p><strong>Score 阶段</strong>（历史上叫 priorities）只在可行节点里进行：每个打分插件给每个节点打 0–100 分，加权求和，scheduler 选总分最高的那个。若多个节点同分，则在它们之间<strong>随机</strong>挑一个（避免总往同一台堆）。常见打分维度：让 Pod 尽量分散到资源更空闲的节点、满足 pod affinity 偏好、镜像已在节点上缓存等。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="调度漏斗：全部节点经过 Filter 收窄为可行节点，再经过 Score 选出一个">
+          <defs>
+            <marker id="f-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="f-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Stage 1: all nodes -->
+          <rect x="20" y="90" width="150" height="120" rx="6" class="diagram-ink node-fill"/>
+          <text x="95" y="80" text-anchor="middle" class="edge-label" font-weight="700">全部节点</text>
+          <text x="95" y="128" text-anchor="middle" class="node-label">node-1</text>
+          <text x="95" y="152" text-anchor="middle" class="node-label">node-2 … node-N</text>
+          <text x="95" y="180" text-anchor="middle" class="node-label">（含放不下的）</text>
+
+          <!-- Filter stage box -->
+          <rect x="250" y="120" width="120" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="310" y="146" text-anchor="middle" class="node-label-accent">Filter</text>
+          <text x="310" y="166" text-anchor="middle" class="edge-label">布尔·能否放下</text>
+
+          <line x1="170" y1="150" x2="250" y2="150" class="diagram-ink" marker-end="url(#f-ink)"/>
+
+          <!-- Stage 2: feasible nodes (fewer) -->
+          <rect x="430" y="112" width="120" height="76" rx="6" class="diagram-ink node-fill"/>
+          <text x="490" y="102" text-anchor="middle" class="edge-label" font-weight="700">可行节点（少）</text>
+          <text x="490" y="142" text-anchor="middle" class="node-label">node-2</text>
+          <text x="490" y="166" text-anchor="middle" class="node-label">node-5</text>
+
+          <line x1="370" y1="150" x2="430" y2="150" class="diagram-ink" marker-end="url(#f-ink)"/>
+
+          <!-- Score stage -->
+          <rect x="430" y="232" width="120" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="490" y="261" text-anchor="middle" class="node-label-accent">Score 打分</text>
+          <line x1="490" y1="188" x2="490" y2="232" class="diagram-accent" marker-end="url(#f-verm)"/>
+
+          <!-- Stage 3: chosen one -->
+          <rect x="600" y="232" width="100" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="650" y="261" text-anchor="middle" class="node-label">选中 node-5</text>
+          <line x1="550" y1="256" x2="600" y2="256" class="diagram-accent" marker-end="url(#f-verm)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>调度漏斗：全部节点先被 Filter 收窄成"可行节点"，再由 Score 选出一个。
+          <strong>注意</strong>：Filter 判断"装不装得下"用的是节点上各 Pod 的 <strong>requests 之和</strong>——不是 limits、也不是当前实际用量。</figcaption>
+      </figure>
+
+      <p><strong>与下一节的关系</strong>：图 3.1 反复强调 Filter 看的是 requests。但 requests 到底是什么、它和 limits 差在哪、为什么调度只认它一个？下一节是本章的核心。</p>
+
+      <!-- ════════════════════════════════ 3.3 ════════════════════════════════ -->
+      <h2 id="s33"><span class="num">3.3</span><span>requests vs limits：调度只看 requests</span></h2>
+
+      <p class="one-liner">requests 是"承诺给你的最小量"——调度与驱逐都按它算；limits 是"运行时上限"——只在节点上由内核约束。<strong>调度器对 limits 完全视而不见。</strong></p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一个 Pod 既要表达"至少需要这么多才能正常跑"（用于调度时占位、保证不被随意挤掉），又要表达"最多能用到这么多"（用于防止它失控吃光整台机器）。这是两个目的，所以是两个字段。<code>requests</code> 服务于<strong>调度与资源保证</strong>，<code>limits</code> 服务于<strong>运行时隔离</strong>。把它们当成同一个数来设，是后面所有资源类故障的根源。</p>
+      </div>
+
+      <h3>底层机制（比文档深一层）</h3>
+      <p>这里有一个<strong>极其反直觉、却必须记牢</strong>的事实：</p>
+      <div class="callout warning">
+        <span class="label">核心 · 反直觉点</span>
+        <p>调度器<strong>只对节点上所有 Pod 的 requests 求和</strong>，来判断新 Pod 装不装得下。<strong>limits 对调度的判定毫无影响</strong>，节点实际用了多少也不看。一个节点可以被"超卖"——所有 Pod 的 limits 之和远超节点容量，只要 requests 之和不超，调度器照样往上塞。</p>
+      </div>
+      <p>把两个字段的职责并排看：</p>
+
+      <table class="compare-table">
+        <caption>requests 与 limits 的职责分工</caption>
+        <thead>
+          <tr><th>维度</th><th>requests（请求量）</th><th>limits（上限）</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>影响调度吗</td>
+            <td>是——Filter 按 requests 之和判断能否放下</td>
+            <td>否——调度器完全不看</td>
+          </tr>
+          <tr>
+            <td>语义</td>
+            <td>承诺保证给你的最小量</td>
+            <td>允许你用到的最大量</td>
+          </tr>
+          <tr>
+            <td>影响什么</td>
+            <td>调度落点、QoS 判定、驱逐顺序</td>
+            <td>节点上的内核约束（cgroup）</td>
+          </tr>
+          <tr>
+            <td>不设会怎样</td>
+            <td>调度器按 0 占位，极易被塞进超卖节点</td>
+            <td>无上限，可吃满节点资源直到触发节点级保护</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">pod-resources.yaml</span>
+          <span class="lang">yaml</span>
+          <button class="copy" data-copy-target="code-res">复制</button>
+        </div>
+        <pre><code id="code-res" class="language-yaml">resources:
+  requests:        # 调度按这个占位；保证最小量
+    cpu: "250m"    # 0.25 核
+    memory: "256Mi"
+  limits:          # 运行时上限；只在节点上由内核约束
+    cpu: "500m"    # 最多 0.5 核（超了被限流）
+    memory: "512Mi" # 最多 512Mi（超了被 OOMKill）</code></pre>
+      </div>
+      <p>上面这个 Pod 在调度时只占 <code>250m</code> CPU、<code>256Mi</code> 内存的"坑位"；至于 <code>limits</code> 里的 <code>500m</code> / <code>512Mi</code>，调度器看都不看，它们要到 Pod 落地后才由内核登场——而 CPU 和内存这两个 limit 在内核里的下场<strong>截然不同</strong>，这是下一节的主题。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个节点可分配 4 核。上面已有 10 个 Pod，每个 <code>requests.cpu=300m</code>、<code>limits.cpu=1</code>。requests 之和 = 3 核，limits 之和 = 10 核。现在再来一个 <code>requests.cpu=500m</code> 的 Pod，调度器会放它进来吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>会。调度器只看 requests 之和：已有 3 核 + 新的 0.5 核 = 3.5 核，没超过 4 核可分配量，<code>PodFitsResources</code> 通过。limits 之和 10 核（远超 4 核）<strong>对这个判定毫无影响</strong>。</p>
+          <p>代价是这台节点被严重超卖——如果某一刻多个 Pod 同时逼近各自的 limit，CPU 会被瓜分到人人变慢，内存若同时冲高则会触发 OOMKill。"调度通过"不等于"运行无虞"，这正是 requests 与 limits 分离带来的张力。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════ 3.4 ════════════════════════════════ -->
+      <h2 id="s34"><span class="num">3.4</span><span>可压缩 vs 不可压缩：CPU 变慢，内存被杀</span></h2>
+
+      <p class="one-liner">Pod 落到节点后，requests/limits 被翻译成 Linux cgroup 参数。CPU 是<strong>可压缩</strong>资源——超限只是被限流变慢；内存是<strong>不可压缩</strong>资源——超限直接被内核 OOMKill。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"超过 limit 会怎样"这个问题没有统一答案，取决于资源能不能被<strong>压缩</strong>。CPU 时间可以被剥夺——这一刻不给你、下一刻再给，进程只是慢一点，不会因此损坏。内存不行——你已经写进去的数据无法被"暂时收回"，内核要么给你、要么在压力下杀掉某个进程腾出空间。这条物理差异决定了两种 limit 完全不同的失败模式，也决定了你该怎么设它们。</p>
+      </div>
+
+      <h3>底层机制（比文档深一层）</h3>
+      <p>kubelet 把资源字段写进容器的 cgroup。四条映射，逐条看下场：</p>
+      <ul>
+        <li><strong>CPU request → <code>cpu.shares</code></strong>：这是一个<em>相对权重</em>，不是硬上限。节点 CPU 紧张时，各容器按 shares 比例分配时间片；CPU 空闲时，容器可以用超过自己 request 的量。所以 CPU request 决定的是"抢不过来时你能保底拿到的比例"。</li>
+        <li><strong>CPU limit → CFS <code>cfs_quota_us</code> / <code>cfs_period_us</code></strong>：这是<em>硬性限流</em>。内核按 period（默认 100ms）为周期，每周期最多让容器跑 quota 微秒。一旦用完配额，容器在本周期内<strong>被节流（throttled）暂停</strong>，进程<strong>不会被杀，只是变慢</strong>。</li>
+        <li><strong>内存 request</strong>：只参与调度占位与 QoS 判定，内核层面不强约束（不会因为低于 request 就保护你不被回收页缓存）。</li>
+        <li><strong>内存 limit → cgroup <code>memory.limit_in_bytes</code></strong>：硬墙。容器内存用量触到这个值时，内核的 OOM killer 介入，<strong>直接杀掉容器内进程（退出码 137 = 128 + SIGKILL 的 9）</strong>，kubelet 随后将该容器状态标记为 <code>OOMKilled</code> 并按重启策略重启。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">最该记住的一句</span>
+        <p><strong>CPU 超限只是变慢，内存超限会被杀。</strong>更隐蔽的是：CPU 节流<strong>没有 Kubernetes 事件、也没有容器日志</strong>——容器活得好好的，只是莫名其妙变慢、p99 延迟飙升，指标得专门去看 cgroup 的 <code>throttled</code> 计数才能发现。而 OOMKill 是显式的：退出码 137、状态 <code>OOMKilled</code>、有重启记录，一眼可见。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="对比 CPU 超限被节流变慢、内存超限被 OOMKill 杀掉">
+          <defs>
+            <marker id="c-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="c-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- CPU panel -->
+          <text x="40" y="40" class="edge-label" font-weight="700">CPU · 可压缩</text>
+          <line x1="40" y1="100" x2="380" y2="100" class="diagram-ink"/>
+          <!-- limit marker -->
+          <line x1="250" y1="60" x2="250" y2="140" class="diagram-soft"/>
+          <text x="250" y="52" text-anchor="middle" class="edge-label">limit</text>
+          <!-- before limit: rising -->
+          <rect x="60" y="78" width="40" height="22" class="diagram-ink node-fill"/>
+          <rect x="110" y="70" width="40" height="30" class="diagram-ink node-fill"/>
+          <rect x="160" y="64" width="40" height="36" class="diagram-ink node-fill"/>
+          <!-- after limit: throttled flat (capped) -->
+          <rect x="260" y="78" width="40" height="22" class="diagram-accent node-fill-accent"/>
+          <rect x="310" y="78" width="40" height="22" class="diagram-accent node-fill-accent"/>
+          <text x="305" y="126" text-anchor="middle" class="branch-label">被节流·变慢</text>
+          <text x="220" y="160" text-anchor="middle" class="node-label">进程存活，无事件 / 无日志</text>
+
+          <!-- divider -->
+          <line x1="40" y1="190" x2="680" y2="190" class="diagram-soft"/>
+
+          <!-- Memory panel -->
+          <text x="40" y="228" class="edge-label" font-weight="700">内存 · 不可压缩</text>
+          <line x1="40" y1="288" x2="380" y2="288" class="diagram-ink"/>
+          <line x1="250" y1="248" x2="250" y2="328" class="diagram-soft"/>
+          <text x="250" y="240" text-anchor="middle" class="edge-label">limit</text>
+          <!-- rising toward limit -->
+          <rect x="60" y="266" width="40" height="22" class="diagram-ink node-fill"/>
+          <rect x="110" y="256" width="40" height="32" class="diagram-ink node-fill"/>
+          <rect x="160" y="248" width="40" height="40" class="diagram-ink node-fill"/>
+          <!-- hit limit: killed -->
+          <text x="270" y="278" class="node-label-accent">✕ OOMKill</text>
+          <text x="285" y="300" text-anchor="middle" class="branch-label">退出码 137</text>
+          <line x1="200" y1="262" x2="246" y2="262" class="diagram-accent" marker-end="url(#c-verm)"/>
+          <text x="200" y="324" text-anchor="middle" class="node-label">进程被杀，状态 OOMKilled，重启</text>
+
+          <!-- right-side takeaway -->
+          <rect x="450" y="60" width="230" height="90" rx="6" class="diagram-ink node-fill"/>
+          <text x="565" y="92" text-anchor="middle" class="node-label">同样是"超过 limit"</text>
+          <text x="565" y="116" text-anchor="middle" class="node-label">CPU：只是慢</text>
+          <text x="565" y="138" text-anchor="middle" class="node-label-accent">内存：会死</text>
+
+          <rect x="450" y="240" width="230" height="76" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="565" y="270" text-anchor="middle" class="node-label-accent">所以内存 limit</text>
+          <text x="565" y="294" text-anchor="middle" class="node-label">要设成峰值，留足余量</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>同样是"超过 limit"，CPU 被节流（变慢、进程存活），内存被 OOMKill（退出码 137、进程死）。
+          <strong>注意</strong>：CPU 节流无事件、无日志，延迟问题极难定位；这条差异直接决定了你该怎么设两种 limit——内存 limit 必须按峰值设、留余量。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个服务平时只用 200Mi 内存，但每天凌晨批处理时会瞬间冲到 900Mi。有人为了"省资源"把 <code>limits.memory</code> 设成 512Mi。会发生什么？换成 CPU 的同类设置（平时 0.2 核、批处理冲到 1 核，limit 设 0.5 核）又会怎样？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>内存版：每天凌晨内存冲过 512Mi 的瞬间，容器被 <strong>OOMKill（退出码 137）</strong>，批处理中断、容器重启，往往反复 CrashLoop。内存不可压缩，"省"出来的额度直接换成了进程死亡。正解是把内存 limit 设成观测到的<strong>峰值</strong>（900Mi 以上）。</p>
+          <p>CPU 版：批处理时 CPU 需求超过 0.5 核的部分被 <strong>CFS 节流</strong>，进程不死，只是批处理跑得慢（本该 10 分钟被拖到 30 分钟）。没有崩溃、没有事件，只有"为什么今天特别慢"的困惑。同样是上限设低了，CPU 的代价是延迟，内存的代价是死亡。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：requests 和 limits 的相对关系（相等？只设 request？都不设？）不只影响内核约束，还把 Pod 分成三个<strong>服务质量等级</strong>，决定节点内存吃紧时<strong>谁先被赶走</strong>。这就是 QoS。</p>
+
+      <!-- ════════════════════════════════ 3.5 ════════════════════════════════ -->
+      <h2 id="s35"><span class="num">3.5</span><span>QoS 三档：谁先被驱逐</span></h2>
+
+      <p class="one-liner">Kubernetes 按 requests/limits 的设置把 Pod 自动归入 Guaranteed / Burstable / BestEffort 三档；节点资源吃紧需要驱逐 Pod 时，从最低档（BestEffort）开始赶。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>节点内存逼近耗尽时（节点级压力，区别于单容器超 limit 的 OOMKill），kubelet 必须主动驱逐一些 Pod 来自救，否则整台机器会被内核 OOM 拖垮。"先赶谁"不能随机——应该先牺牲那些"没做出资源承诺"的 Pod，保住那些"明确声明了需求、不超量"的关键 Pod。QoS 等级就是 kubelet 用来排这个优先级的依据，它不是你手动设的字段，而是<strong>从 requests/limits 推导</strong>出来的。</p>
+      </div>
+
+      <h3>底层机制（比文档深一层）</h3>
+      <p>三档的判定规则很机械——逐个容器看 requests 和 limits 的关系：</p>
+
+      <table class="compare-table">
+        <caption>QoS 三档：判定条件与驱逐优先级</caption>
+        <thead>
+          <tr><th>QoS 等级</th><th>判定条件</th><th>驱逐 / OOM 顺序</th><th>oom_score_adj</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>Guaranteed</td>
+            <td>每个容器都设了 requests 和 limits，且对 CPU、内存均 <strong>request == limit</strong></td>
+            <td>最后被驱逐（最受保护）</td>
+            <td>最低（-998）</td>
+          </tr>
+          <tr>
+            <td>Burstable</td>
+            <td>至少一个容器设了 requests 或 limits，但不满足 Guaranteed 的全相等条件</td>
+            <td>居中</td>
+            <td>按用量动态计算（2–999）</td>
+          </tr>
+          <tr>
+            <td>BestEffort</td>
+            <td>所有容器都<strong>没设</strong>任何 requests 和 limits</td>
+            <td>最先被驱逐（最不受保护）</td>
+            <td>最高（1000）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>两点要拎清：其一，QoS 是<strong>整个 Pod 级别</strong>的，但判定要看 Pod 里<strong>每个容器</strong>——只要有一个容器不满足"request==limit"，整个 Pod 就掉出 Guaranteed。其二，QoS 同时映射到内核的 <code>oom_score_adj</code>：当节点真的触发内核级 OOM 时，分值越高的越优先被内核选中杀掉，方向和 kubelet 的主动驱逐一致——BestEffort 永远是第一个倒霉的。</p>
+
+      <figure>
+        <svg viewBox="0 0 600 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="QoS 驱逐顺序金字塔：BestEffort 最先驱逐，Guaranteed 最后">
+          <defs>
+            <marker id="q-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- pyramid: top = BestEffort (first evicted), bottom = Guaranteed -->
+          <polygon points="300,40 380,110 220,110" class="diagram-accent node-fill-accent"/>
+          <text x="300" y="92" text-anchor="middle" class="node-label-accent">BestEffort</text>
+
+          <polygon points="220,114 380,114 440,190 160,190" class="diagram-ink node-fill"/>
+          <text x="300" y="160" text-anchor="middle" class="node-label">Burstable</text>
+
+          <polygon points="160,194 440,194 500,270 100,270" class="diagram-ink node-fill"/>
+          <text x="300" y="240" text-anchor="middle" class="node-label">Guaranteed</text>
+
+          <!-- eviction-order arrow on the left, top -> bottom -->
+          <text x="60" y="60" class="edge-label" font-weight="700">先驱逐</text>
+          <line x1="70" y1="80" x2="70" y2="250" class="diagram-accent" marker-end="url(#q-verm)"/>
+          <text x="60" y="270" class="edge-label" font-weight="700">最后驱逐</text>
+
+          <!-- condition annotations on the right -->
+          <text x="520" y="96" class="edge-label">都没设</text>
+          <text x="520" y="160" class="edge-label">设了但不全相等</text>
+          <text x="520" y="240" class="edge-label">req==limit</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>QoS 驱逐顺序：BestEffort 最先被赶，Burstable 居中，Guaranteed 最后。
+          <strong>注意</strong>：想让关键服务最不易被驱逐，就让它的每个容器都 <strong>request == limit</strong>，成为 Guaranteed——这是把"重要性"翻译成调度语言的唯一方式。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 Pod 有两个容器：主容器设了 <code>request==limit</code>，sidecar 只设了 requests 没设 limits。这个 Pod 是什么 QoS？要让它升到 Guaranteed 该怎么改？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>是 <strong>Burstable</strong>。QoS 是 Pod 级判定，但要求<strong>每个</strong>容器都满足 request==limit 才算 Guaranteed；sidecar 没设 limits，于是整个 Pod 掉到 Burstable。</p>
+          <p>要升到 Guaranteed，必须给 sidecar 也补上 CPU、内存的 limits，并让它们等于各自的 requests。一个常被忽视的容器配置，能把整个 Pod 的"受保护级别"拉低——这也是审查关键服务 YAML 时要逐容器看、而不是只看主容器的原因。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════ 3.6 ════════════════════════════════ -->
+      <h2 id="s36"><span class="num">3.6</span><span>约束落点：nodeSelector / affinity / taint</span></h2>
+
+      <p class="one-liner">资源够只是"能放下"，约束机制再叠加"该不该放这里"：nodeSelector 是硬标签匹配，affinity 表达亲和/反亲和偏好，taint + toleration 让节点主动"排斥"除非 Pod 明确"容忍"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>仅按资源调度会忽略很多真实诉求：GPU 任务必须落到带 GPU 的节点；同一服务的多个副本最好分散到不同节点以抗单点故障；某些节点是给特定团队预留的、不希望普通 Pod 乱入。这些"位置约束"无法用 CPU/内存表达，需要一套正交于资源的机制。它们都在 Filter 阶段生效——不满足就直接把节点过滤掉。</p>
+      </div>
+
+      <h3>底层机制（比文档深一层）</h3>
+      <ul>
+        <li><strong>nodeSelector</strong>：最简单的硬约束。Pod 写 <code>nodeSelector: {disktype: ssd}</code>，调度器在 Filter 阶段只保留带 <code>disktype=ssd</code> 标签的节点。不匹配则该节点出局，没有"偏好"余地——要么匹配，要么排除。</li>
+        <li><strong>node affinity</strong>：nodeSelector 的增强版，支持<em>硬性</em>（<code>requiredDuringScheduling</code>，不满足就过滤掉，等价于强约束）和<em>软性</em>（<code>preferredDuringScheduling</code>，不满足只是 Score 阶段扣分，仍可调度）两种强度，还支持 <code>In/NotIn/Exists</code> 等更丰富的匹配。</li>
+        <li><strong>pod affinity / anti-affinity</strong>：约束对象不是节点标签，而是<em>其他 Pod 的位置</em>。affinity 表达"想和某类 Pod 待在一起"（如缓存与应用同节点降延迟）；anti-affinity 表达"想躲开某类 Pod"（如同一 Deployment 的副本互相排斥，强制分散到不同节点/可用区）。</li>
+        <li><strong>taint + toleration</strong>：方向反过来——前几种是 Pod 挑节点，taint 是<strong>节点排斥 Pod</strong>。给节点打污点 <code>kubectl taint nodes node1 key=value:NoSchedule</code> 后，<strong>默认所有 Pod 都不会被调度到它上面</strong>，除非 Pod 显式声明了能"容忍"这个污点的 toleration。常用于专用节点（GPU 节点只接受声明了 GPU toleration 的 Pod）和节点维护（打 <code>NoExecute</code> 污点会驱逐不容忍的现有 Pod）。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>把节点想成餐厅的桌子：<strong>nodeSelector / affinity</strong> 是<em>客人的偏好</em>——"要靠窗的桌子""想和朋友坐一起""别被安排在吵闹区"。<strong>taint</strong> 是<em>桌子自己挂的牌子</em>——"VIP 专座，闲人免进"，只有手持对应邀请函（toleration）的客人才能落座。<strong>边界</strong>：toleration 只是"允许坐"，不是"一定坐这"——一个 Pod 容忍某污点，不代表它会被优先调度到该节点；要真正吸引它过去，还得配合 node affinity。容忍 ≠ 偏好，这是最常见的混淆。</p>
+      </div>
+
+      <!-- ════════════════════════════════ PITFALLS ════════════════════════════════ -->
+      <h2 id="s37"><span class="num">3.7</span><span>三个高频失败模式</span></h2>
+
+      <p>本章的机制对应三类反复出现的线上故障，逐一点明"误解 → 正解"。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱一 · 内存 limit 设太低</span>
+        <p><strong>现象</strong>：容器反复 <code>OOMKilled</code>、退出码 137、陷入 CrashLoopBackOff。<br>
+        <strong>误解</strong>："limit 就是预计平时会用的量"。<br>
+        <strong>正解</strong>：内存<strong>不可压缩</strong>，碰到 limit 就被杀，没有缓冲。内存 limit 要按观测到的<strong>峰值</strong>设、再留余量，而不是按平均用量设。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱二 · requests 设错</span>
+        <p><strong>现象</strong>：设太低 → Pod 被调度到已超卖的节点，节点压力一来就被优先驱逐；设太高 → 节点装不下、Pod 长期 Pending，同时浪费保留的资源。<br>
+        <strong>误解</strong>："调度器看的是 limits，或者看实际用量"。<br>
+        <strong>正解</strong>：调度器<strong>只看 requests 之和</strong>。requests 要贴近"稳态实际需求"——它既是调度占位的依据，也是 QoS 与驱逐顺序的依据。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱三 · CPU 节流无声</span>
+        <p><strong>现象</strong>：服务延迟莫名升高、p99 抖动，但<strong>没有任何报错、没有事件、没有重启</strong>，日志一片正常。<br>
+        <strong>误解</strong>："没有错误日志就说明资源没问题"。<br>
+        <strong>正解</strong>：CPU limit 触发的 CFS 节流是静默的——它只让进程变慢，不产生 Kubernetes 事件或容器日志。要发现它，必须去看 cgroup 的 <code>cpu.stat</code> 里的 <code>throttled</code> 计数（或监控系统里的 CPU throttling 指标）。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">动手画一画</span>
+        <p>不看上文，在纸上画出图 3.2 的对比：横轴是时间、纵轴是用量，画出 CPU 和内存各自"撞到 limit"那一刻之后的曲线走向。CPU 那条线撞线后是什么形状？内存那条呢？画完翻回去对照——你有没有把内存那条画成"撞线后被截断"（其实是进程直接消失）？</p>
+      </div>
+
+      <!-- ════════════════════════════════ SELF-CHECK ════════════════════════════════ -->
+      <section class="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>scheduler 选好节点后，做的<strong>唯一一个写动作</strong>是什么？是它去节点上启动容器吗？</li>
+          <li>一个节点 CPU 可分配 8 核，上面 Pod 的 <code>requests.cpu</code> 之和是 7 核、<code>limits.cpu</code> 之和是 20 核。一个 <code>requests.cpu=2</code> 的新 Pod 能被调度上来吗？为什么？</li>
+          <li>容器超过 CPU limit 和超过内存 limit，下场分别是什么？哪一个会在 <code>kubectl describe</code> 里留下明显痕迹，哪一个不会？</li>
+          <li><strong>（设计层）</strong>为什么要把一个关键服务设成 Guaranteed（每个容器 request==limit）？这对它在节点压力下的命运意味着什么？</li>
+        </ol>
+        <details>
+          <summary>展开参考答案</summary>
+          <p><strong>1.</strong> 唯一写动作是创建一个 <code>Binding</code>、把 <code>pod.spec.nodeName</code> 设为选中节点——纯粹是改 api-server 里的一个字段。它<strong>不</strong>启动容器，启动是目标节点 kubelet watch 到这个 nodeName 后自己做的。</p>
+          <p><strong>2.</strong> 能。调度只看 requests 之和：7 + 2 = 9 核 &gt; 8 核可分配量——等一下，这其实<strong>超了</strong>，<code>PodFitsResources</code> 不通过，Pod 会 Pending。（陷阱：limits 之和 20 核是干扰项，永远不参与判定；真正的红线是 requests 之和不得超过节点可分配量。）</p>
+          <p><strong>3.</strong> 超 CPU limit → 被 CFS 节流、进程存活、变慢，<strong>无事件无日志</strong>，<code>describe</code> 里看不到。超内存 limit → 被 OOMKill、退出码 137、状态 <code>OOMKilled</code>、有重启计数，<code>describe</code> 里清晰可见。</p>
+          <p><strong>4.</strong> 设成 Guaranteed 让它在 QoS 排序里处于<strong>最后被驱逐、oom_score_adj 最低</strong>的位置。节点内存吃紧时，kubelet 先赶 BestEffort、再赶 Burstable，Guaranteed 的关键服务最受保护。代价是 request==limit 意味着按上限预留资源、无法超卖，资源利用率较低——这是"稳定性优先"换来的确定性。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>一个 Pod 一直 Pending，沿着 Filter 阶段列出至少 3 个让所有节点都被过滤掉的原因</h3>
+        <p>Pending 意味着 Filter 阶段没有产出任何可行节点。顺着 §3.2 的过滤器清单，给出至少三类成因，并说明各自该用什么命令去印证。</p>
+        <details>
+          <summary>展开提示</summary>
+          <ul>
+            <li><strong>requests 之和超节点可分配量</strong>：所有节点的剩余可分配资源都装不下这个 Pod 的 requests（<code>kubectl describe pod</code> 会显示 <code>Insufficient cpu/memory</code>）。</li>
+            <li><strong>nodeSelector / node affinity 无匹配</strong>：Pod 要求的节点标签在集群里不存在（如要求 <code>gpu=true</code> 但没有 GPU 节点打了这个标签）。</li>
+            <li><strong>未容忍的 taint</strong>：所有节点都带了 <code>NoSchedule</code> 污点，而 Pod 没有对应的 toleration。</li>
+            <li><strong>没有满足 pod affinity 的节点</strong>：Pod 要求和某类 Pod 同处（或反亲和要求分散），但拓扑上无节点能同时满足。</li>
+            <li><strong>PVC 未绑定 / 卷拓扑受限</strong>：Pod 要挂的 PVC 还没绑定到 PV，或卷被限制在某可用区而该区无可行节点（这条牵出第 5 章存储）。</li>
+          </ul>
+          <p>统一的第一步排查命令：<code>kubectl describe pod &lt;name&gt;</code> 看 <code>Events</code> 里的 <code>FailedScheduling</code> 消息，它会直接告诉你是哪一类过滤器把节点全刷掉了。</p>
+        </details>
+      </div>
+
+      <div class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/scheduling-eviction/" target="_blank" rel="noopener">Kubernetes 官方 · Scheduling, Preemption and Eviction</a></li>
+          <li><a href="https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/" target="_blank" rel="noopener">Kubernetes 官方 · Managing Resources for Containers（requests / limits）</a></li>
+          <li><a href="https://www.k8s.guide/insights/opinion/2026-03-10-kubernetes-scheduling-requests-not-limits/" target="_blank" rel="noopener">k8s.guide · 调度只看 requests、不看 limits</a></li>
+          <li><a href="https://www.groundcover.com/blog/kubernetes-cpu-throttling" target="_blank" rel="noopener">groundcover · Kubernetes CPU Throttling 机制详解</a></li>
+        </ul>
+      </div>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="02-control-loop.html">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 控制循环</span>
+        </a>
+        <a class="next" href="04-networking.html">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 网络模型</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 scheduler 是控制器</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 Filter / Score 两阶段</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 requests vs limits</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 可压缩 vs 不可压缩</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 QoS 三档与驱逐</a></li>
+        <li><a href="#s36" data-toc-target="s36">3.6 约束落点</a></li>
+        <li><a href="#s37" data-toc-target="s37">3.7 失败模式</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

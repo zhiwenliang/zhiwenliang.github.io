@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 · 索引与 schema 设计 · MongoDB 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref { font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500; }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-document-model.html">01 模型</a><span class="sep">—</span>
+    <a href="02-query-and-aggregation.html">02 查询·聚合</a><span class="sep">—</span>
+    <a href="03-indexing-and-schema-design.html" class="current">03 索引·建模</a><span class="sep">—</span>
+    <a href="04-storage-wiredtiger.html">04 存储</a><span class="sep">—</span>
+    <a href="05-replication-and-consistency.html">05 复制·一致性</a><span class="sep">—</span>
+    <a href="06-sharding-and-when-to-use.html">06 分片·选型</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>索引与 schema 设计</h1>
+        <p class="recap">02 章讲了查询和聚合怎么读，也看到 <code>$lookup</code> 是嵌套循环、代价很贵。这章把"建什么索引"和"字段怎么摆"合起来讲——在 MongoDB 它们是同一个决策，而不是关系型里"先建表、再单独调索引"的两步走。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>索引类型全景：single / compound / multikey / text / 2dsphere / wildcard / hashed / partial / sparse / TTL，差异都在"键怎么从文档里取"。</li>
+          <li>ESR 规则：复合索引字段顺序 = Equality → Sort → Range，以及为什么这个顺序是机制而非惯例。</li>
+          <li>嵌入 vs 引用的完整决策，加官方设计模式：Bucket / Subset / Computed / Polymorphic / Schema Versioning / Attribute。</li>
+          <li>反模式：无界数组、海量数组的 multikey 爆炸、过多索引、<code>$lookup</code> 滥用，以及 schema validation 怎么守门。</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>索引类型全景</span></h2>
+      <p class="one-liner">索引是独立于集合存储的 B-tree，键是字段值、值是文档定位符；各类型的差异在于"键怎么从文档里取"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>没有索引的查询是全集合扫描，引擎逐文档比对。索引把"按字段值找文档"变成 B-tree 上的对数查找。这一点和关系型一致；不一致的是 MongoDB 的字段值会是数组、会是任意嵌套路径，所以"键怎么取"分化出了多种索引类型。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：普通 single / compound 索引每个文档贡献<strong>一个</strong>索引项。multikey 不同——当被索引字段是数组时，索引为数组的<strong>每个元素</strong>各存一个索引项。所以一个数组字段的索引项数 ≈ 文档数 × 平均数组长度，远多于文档数。还有一条硬限制：<strong>不能对两个数组字段建复合索引</strong>（parallel arrays 限制），引擎会直接报错——因为两个数组的笛卡尔积会让索引项数爆炸。multikey 不是一种显式声明的类型，而是只要被索引字段含数组值，索引<strong>自动</strong>变成 multikey。</p>
+
+      <p>其余类型各自解决一类"键怎么取或取多少"的问题：<strong>partial</strong> 只索引满足 <code>partialFilterExpression</code> 的文档，省空间也省写入维护；<strong>sparse</strong> 只索引含该字段的文档（缺字段的不进索引）；<strong>TTL</strong> 是单字段索引加 <code>expireAfterSeconds</code>，后台线程<strong>周期性</strong>扫描并删除过期文档——注意是周期删除（默认约 60 秒一轮），不是到点精确即时删；<strong>hashed</strong> 索引哈希字段值，给分片场景提供均匀分布（见 06 章）；<strong>wildcard</strong>（<code>{"$**": 1}</code>）给字段名不固定、无法预先枚举的场景，对所有路径建索引；<strong>text</strong> 做分词全文检索，<strong>2dsphere</strong> 做地理空间查询。</p>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 索引类型 → 用途 → 代价/注意</caption>
+        <thead>
+          <tr><th>类型</th><th>用途</th><th>代价 / 注意</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>single / compound</td><td>等值、范围、排序、覆盖查询</td><td>每文档一个索引项；compound 受 ESR 顺序约束（§3.2）</td></tr>
+          <tr><td>multikey</td><td>对数组字段建索引、按数组元素过滤</td><td>索引项 ≈ 文档数 × 数组长度；不能对两个数组字段建复合索引</td></tr>
+          <tr><td>partial</td><td>只索引满足条件的子集，省空间</td><td>查询条件不落在 <code>partialFilterExpression</code> 内时用不上该索引</td></tr>
+          <tr><td>sparse</td><td>只索引含该字段的文档</td><td>缺字段文档不进索引，相关排序/范围查询会漏掉这些文档</td></tr>
+          <tr><td>TTL</td><td>按 <code>expireAfterSeconds</code> 自动过期文档</td><td>后台线程周期删除（非精确即时）；只能建在单个 <code>Date</code> 字段上</td></tr>
+          <tr><td>hashed</td><td>分片时打散写入、均匀分布</td><td>哈希后丢失顺序，不支持范围查询（见 06 章）</td></tr>
+          <tr><td>wildcard</td><td>字段名不固定、无法预先枚举</td><td>覆盖面广但更大更慢；不能替代有针对性的 compound 索引</td></tr>
+          <tr><td>text / 2dsphere</td><td>全文分词检索 / 地理空间查询</td><td>专用类型；text 每集合至多一个；体积大于普通索引</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>对一个含 50 个标签的数组字段建 multikey 索引，集合有 100 万文档，索引大致有多少项？这对写入意味着什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>索引项数 ≈ 100 万 × 50 = <strong>5000 万项</strong>，是文档数的 50 倍。后果在写入侧：每次改动这个数组（增删一个标签）都要在 B-tree 上维护对应的多个索引项，<strong>数组越大、写入越慢</strong>。这就是"海量数组 + multikey"反模式的机制根源（§3.5 给修复），也是为什么数组字段要控制长度。</p>
+        </details>
+      </div>
+
+      <h2 id="s32"><span class="num">3.2</span><span>ESR 规则：复合索引字段顺序</span></h2>
+      <p class="one-liner">复合索引字段顺序按 Equality → Sort → Range 排，能让一次索引扫描同时完成过滤、排序、范围三件事。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>复合索引能不能被一个查询用上、用得多充分，取决于字段顺序。顺序排错，引擎要么用不上后半段索引，要么被迫在内存里排序（大排序会溢出，02 章讲过 <code>$sort</code> 的内存上限）。ESR 是把顺序选对的规则。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：复合索引 <code>{a:1, b:1, c:1}</code> 的 B-tree 先按 a 排序，a 相同的再按 b 排，b 相同的再按 c 排——是一棵<strong>有序嵌套</strong>的树。这个有序结构决定了三类条件该放哪：</p>
+      <p><strong>Equality（等值）放最前</strong>——等值条件把扫描范围缩成 B-tree 上<strong>一段连续区间</strong>，选择性最高的过滤要尽早做，后面的字段才只在这一小段上工作。<strong>Sort（排序）放中间</strong>——等值段内部，索引按 Sort 字段天然有序，引擎直接顺着读出有序结果，<strong>避免内存 sort</strong>。<strong>Range（范围）放最后</strong>——范围条件（<code>$gt</code>/<code>$lt</code>）在索引上扫描一个连续子区间，放最后才不会打断前面字段的连续性。一个常见错误是把低基数字段（如布尔，只把集合切两半）放最前，那等于浪费了最前位置的选择性。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">esr-example</span>
+          <span class="lang">mongosh</span>
+          <button class="copy" data-copy-target="c-esr">复制</button>
+        </div>
+<pre id="c-esr"><code class="language-javascript">// 查询：某商户、已支付、按金额降序、金额在某区间
+db.orders.find({
+  merchantId: "M-100",        // Equality
+  status: "paid",             // Equality
+  amount: { $gte: 50, $lt: 500 }   // Range
+}).sort({ createdAt: -1 })    // Sort
+
+// 对应的 ESR 索引：先 E（两个等值），再 S，最后 R
+db.orders.createIndex({
+  merchantId: 1,   // E
+  status: 1,       // E
+  createdAt: -1,   // S
+  amount: 1        // R
+})
+// 一次索引扫描即可过滤 + 有序输出 + 区间裁剪，无内存 sort</code></pre>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ESR 规则示意：Equality 把全集缩成一段连续键，Sort 在该段内保持有序，Range 在末端扫描一个子区间">
+          <text x="350" y="34" text-anchor="middle" class="node-label">复合索引 B-tree 的有序键空间</text>
+
+          <!-- 全集底条 -->
+          <rect x="60" y="58" width="580" height="26" rx="4" class="diagram-soft node-fill"/>
+          <text x="350" y="76" text-anchor="middle" class="edge-label">全部索引键（按 a → b → c 有序）</text>
+
+          <!-- E 段：高亮连续区间 -->
+          <rect x="232" y="104" width="236" height="46" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="350" y="125" text-anchor="middle" class="node-label-accent">Equality</text>
+          <text x="350" y="142" text-anchor="middle" class="edge-label">等值 → 缩成一段连续键</text>
+          <line x1="232" y1="84" x2="232" y2="104" class="diagram-soft"/>
+          <line x1="468" y1="84" x2="468" y2="104" class="diagram-soft"/>
+
+          <!-- S 盒 -->
+          <rect x="232" y="172" width="112" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="288" y="192" text-anchor="middle" class="node-label">Sort</text>
+          <text x="288" y="208" text-anchor="middle" class="edge-label">段内天然有序</text>
+
+          <!-- R 盒 -->
+          <rect x="356" y="172" width="112" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="412" y="192" text-anchor="middle" class="node-label">Range</text>
+          <text x="412" y="208" text-anchor="middle" class="edge-label">末端扫子区间</text>
+
+          <line x1="288" y1="150" x2="288" y2="172" class="diagram-accent"/>
+          <line x1="412" y1="150" x2="412" y2="172" class="diagram-accent"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>ESR 把一次索引扫描拆成三段协作。<strong>注意</strong>：Equality 放最前不是惯例而是机制——它把扫描缩成一段连续键，<em>因此</em>后面的 Sort 与 Range 只在这一小段上工作。顺序换了，这个连续性就断了。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>有人把上例索引建成 <code>{ amount: 1, merchantId: 1, status: 1, createdAt: -1 }</code>，把范围字段放最前。为什么这会拖慢查询？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>范围字段 <code>amount</code> 放最前，B-tree 先按一个区间散开，等值条件 <code>merchantId</code>/<code>status</code> 无法把扫描缩成一段连续键——它们散落在 <code>amount</code> 区间内的各处。更糟的是排序：<code>createdAt</code> 落在范围字段之后，索引顺序对它<strong>不再单调</strong>，引擎只能把结果拉进内存排序。ESR 顺序排错，等值的选择性和排序的免费有序<strong>两个好处同时丢失</strong>。</p>
+        </details>
+      </div>
+
+      <h2 id="s33"><span class="num">3.3</span><span>嵌入 vs 引用：完整决策</span></h2>
+      <p class="one-liner">嵌入=一次读命中、但写入会被放大；引用=避免冗余、但读取要二次查询或 <code>$lookup</code>。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>01 章表 1.1 给了四问初判（一起读 / 无界 / 共享 / 写入时机）。这里补上反方向：什么时候引用<em>反而</em>更好，以及嵌入的真实代价。把决策落成一棵能照着走的树。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：嵌入把"总是一起读"的数据预拼进一个文档，读取一次命中、无 <code>$lookup</code>；代价是更新放大（同一事实冗余在多处，改一处要改多处）和文档膨胀（逼近 16MB、挤占 WiredTiger cache，01/04 章）。引用把数据拆到独立集合，避免冗余、各自独立写；代价是读取要二次查询或走 <code>$lookup</code> 嵌套循环。四个判据里<strong>任何一个</strong>命中"引用"侧，就倾向引用：总是一起读吗（否→引用）、会无界增长吗（是→引用）、被多实体共享吗（是→引用）、写入时机一致吗（各自独立高频写→引用）。嵌入是<strong>默认</strong>选项，但要四个条件<strong>全部</strong>落在安全侧才成立。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 460" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="嵌入 vs 引用决策树：依次判断总是一起读、是否无界增长、是否被多实体共享，任一命中则引用，全部安全才嵌入">
+          <defs>
+            <marker id="ar-ink3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- 开始 -->
+          <rect x="270" y="20" width="140" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="340" y="45" text-anchor="middle" class="node-label">开始：字段放哪</text>
+
+          <!-- Q1 菱形 -->
+          <polygon points="340,80 444,128 340,176 236,128" class="diagram-ink node-fill"/>
+          <text x="340" y="124" text-anchor="middle" class="node-label">总是一起读?</text>
+          <text x="340" y="142" text-anchor="middle" class="edge-label">和主体同时取</text>
+
+          <!-- Q2 菱形 -->
+          <polygon points="340,196 444,244 340,292 236,244" class="diagram-ink node-fill"/>
+          <text x="340" y="240" text-anchor="middle" class="node-label">会无界增长?</text>
+          <text x="340" y="258" text-anchor="middle" class="edge-label">数量是否有上界</text>
+
+          <!-- Q3 菱形 -->
+          <polygon points="340,312 444,360 340,408 236,360" class="diagram-ink node-fill"/>
+          <text x="340" y="356" text-anchor="middle" class="node-label">被多实体共享?</text>
+          <text x="340" y="374" text-anchor="middle" class="edge-label">多主体引用同一份</text>
+
+          <!-- 终点：引用（右侧竖列）-->
+          <rect x="520" y="240" width="120" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="267" text-anchor="middle" class="node-label">引用</text>
+
+          <!-- 终点：嵌入（底部）-->
+          <rect x="280" y="424" width="120" height="32" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="340" y="445" text-anchor="middle" class="node-label-accent">嵌入</text>
+
+          <!-- 开始 → Q1 -->
+          <line x1="340" y1="60" x2="340" y2="80" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+
+          <!-- Q1 否 → 引用：右行再下折，箭头落在引用框顶边 -->
+          <line x1="444" y1="128" x2="560" y2="128" class="diagram-ink"/>
+          <line x1="560" y1="128" x2="560" y2="240" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="500" y="120" text-anchor="middle" class="branch-label">否</text>
+          <!-- Q1 是 → Q2 -->
+          <line x1="340" y1="176" x2="340" y2="196" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="356" y="190" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- Q2 是 → 引用 -->
+          <line x1="444" y1="244" x2="520" y2="262" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="478" y="244" text-anchor="middle" class="branch-label">是</text>
+          <!-- Q2 否 → Q3 -->
+          <line x1="340" y1="292" x2="340" y2="312" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="356" y="306" text-anchor="middle" class="branch-label">否</text>
+
+          <!-- Q3 是 → 引用 -->
+          <line x1="444" y1="360" x2="580" y2="360" class="diagram-ink"/>
+          <line x1="580" y1="360" x2="580" y2="284" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="500" y="352" text-anchor="middle" class="branch-label">是</text>
+          <!-- Q3 否 → 嵌入 -->
+          <line x1="340" y1="408" x2="340" y2="424" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="356" y="420" text-anchor="middle" class="branch-label">否</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>嵌入 vs 引用决策树。<strong>注意</strong>：四个判断里任何一个命中"引用"就倾向引用；嵌入是默认终点，但只有"总是一起读、有界、不共享"三关全过才到得了。任一关失守，路径就拐向引用。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>什么场景下，明明数据"总是一起读"，却仍该选引用？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>当这块数据<strong>无界增长</strong>或<strong>被多实体共享</strong>时，即便它和主体常一起读，也该引用。例如商品详情页总要显示商品所属的"类目"信息——一起读，但同一个类目被成千上万商品共享，嵌入会让类目改名时要更新海量文档。共享判据压过了"一起读"，结论是引用类目、读时关联。决策树里"一起读=是"只是放行到下一关，不是直接判嵌入。</p>
+        </details>
+      </div>
+
+      <h2 id="s34"><span class="num">3.4</span><span>官方设计模式</span></h2>
+      <p class="one-liner">设计模式是把"嵌入 vs 引用"这条原则在常见场景下固化成的可复用解法。</p>
+
+      <p>MongoDB 官方把高频建模套路整理成一组模式。逐个看，每个配上"何时用"：</p>
+
+      <p><strong>Bucket（分桶）</strong>：把高频产生的小数据按时间窗或固定数量分桶，多条原始记录合并成一个"桶文档"。接 01 §1.3 的 IoT 例子——每秒一条读数若各存一文档会有海量小文档，按"设备 + 小时"分桶成一个文档、内含该小时的读数数组，既控制文档数又让数组有界。<em>何时用</em>：时序、日志、高频小数据。</p>
+
+      <p><strong>Subset（子集）</strong>：把热子集冗余进主文档，其余引用。例如商品文档里冗余存"最近 3 条评价"供详情页直接显示，完整评价列表引用到独立集合按需翻页。<em>何时用</em>：一个大集合里只有一小段是高频读的。</p>
+
+      <p><strong>Computed（预计算）</strong>：把读时要算的聚合结果预先算好存进文档，省去每次读时重算。例如商品文档存 <code>avgRating</code> 和 <code>reviewCount</code>，写评价时增量更新，读时直接取。<em>何时用</em>：读远多于写、且每次读都要做同样的聚合。</p>
+
+      <p><strong>Polymorphic（多态）</strong>：一个集合存多种形态的文档，加一个 <code>type</code> 鉴别字段区分。例如 <code>events</code> 集合里 <code>click</code>/<code>purchase</code>/<code>signup</code> 各有不同字段，靠 <code>type</code> 分流处理。<em>何时用</em>：一组实体有共性也有差异，且常被一起查询。</p>
+
+      <p><strong>Schema Versioning（schema 版本）</strong>：给文档加 <code>schemaVersion</code> 字段，应用层按版本兼容读取、写入时渐进迁移到新版——无需停机改全表。<em>何时用</em>：schema 要演进，但表大到不能一次性迁移。</p>
+
+      <p><strong>Attribute（属性）</strong>：把数量可变、键不固定的属性存成 <code>[{k, v}]</code> 数组，再对 <code>k</code> 和 <code>v</code> 建索引，从而能按任意属性过滤。<em>何时用</em>：实体有大量稀疏、品类相关的可变属性（见本章 challenge）。</p>
+
+      <table class="compare-table">
+        <caption>表 · 设计模式 → 解决的问题 → 一句话机制</caption>
+        <thead>
+          <tr><th>模式</th><th>解决的问题</th><th>一句话机制</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Bucket</td><td>高频小数据导致海量文档 / 无界数组</td><td>按时间窗或数量把多条记录合并成一个桶文档</td></tr>
+          <tr><td>Subset</td><td>大数组拖垮主文档读取</td><td>热子集冗余进主文档，其余引用到独立集合</td></tr>
+          <tr><td>Computed</td><td>每次读都重复同一聚合</td><td>写时预算结果存进文档，读时直接取</td></tr>
+          <tr><td>Polymorphic</td><td>多形态实体要存一处并一起查</td><td>同一集合存多种文档 + <code>type</code> 鉴别字段</td></tr>
+          <tr><td>Schema Versioning</td><td>schema 演进但表大到不能整迁</td><td>加 <code>schemaVersion</code>，应用层按版本渐进迁移</td></tr>
+          <tr><td>Attribute</td><td>键不固定的可变属性要可过滤</td><td>存成 <code>[{k,v}]</code> 数组并对 <code>k,v</code> 建索引</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="s35"><span class="num">3.5</span><span>反模式与 schema validation</span></h2>
+      <p class="one-liner">反模式几乎都源自同一类错误——把无界或冗余的代价压在了写入和 cache 上；schema validation 在写入时守门。</p>
+
+      <table class="compare-table">
+        <caption>表 3.2 · 反模式 → 根因 → 修复</caption>
+        <thead>
+          <tr><th>反模式</th><th>根因</th><th>修复</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>无界数组</td><td>文档无界增长，逼近 16MB、挤占 cache</td><td>分桶（Bucket）或引用到独立集合</td></tr>
+          <tr><td>海量数组 + multikey</td><td>索引项 ≈ 文档数 × 数组长度，写放大</td><td>限制数组长度，或把数组重构为独立文档</td></tr>
+          <tr><td>过多索引</td><td>每次写都要同步维护所有索引 B-tree</td><td>用 <code>$indexStats</code> 找出低命中索引并删除</td></tr>
+          <tr><td><code>$lookup</code> 当 JOIN 滥用</td><td>嵌套循环，数据量大时代价陡增</td><td>把常一起读的数据嵌入，或对 <code>foreignField</code> 建索引</td></tr>
+          <tr><td>无 schema 校验，脏数据涌入</td><td>缺字段、错类型的文档混入集合</td><td>加 <code>$jsonSchema</code> validator 在写入时拦截</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>schema validation 机制</strong>：MongoDB 允许给集合挂一个 <code>$jsonSchema</code> 校验器，在写入时强制结构与类型。两个开关控制严格度：<code>validationLevel</code> 决定校验范围（<code>strict</code> 校验所有写入，<code>moderate</code> 只校验本就合规的文档的更新），<code>validationAction</code> 决定违规处理（<code>error</code> 拒绝写入，<code>warn</code> 仅记日志放行）。校验器既能在 <code>createCollection</code> 时设，也能用 <code>collMod</code> 给已有集合补上。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">schema-validator</span>
+          <span class="lang">mongosh</span>
+          <button class="copy" data-copy-target="c-val">复制</button>
+        </div>
+<pre id="c-val"><code class="language-javascript">// 给 orders 集合加 $jsonSchema 校验器（写入时强制结构 + 类型）
+db.runCommand({
+  collMod: "orders",
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["merchantId", "status", "amount"],
+      properties: {
+        merchantId: { bsonType: "string" },
+        status: { enum: ["pending", "paid", "refunded"] },
+        amount: { bsonType: "decimal", minimum: 0 }
+      }
+    }
+  },
+  validationLevel: "strict",   // 校验所有写入
+  validationAction: "error"    // 违规直接拒绝
+})</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个集合建了 12 个索引，写入明显变慢，为什么？怎么入手？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>每次 <code>insert</code>/<code>update</code> 都要<strong>同步维护全部 12 棵 B-tree</strong>——一次写在存储层放大成 12 倍量级的索引维护工作，写入吞吐随索引数线性下降。读再快也救不回写被拖垮。入手：用 <code>db.collection.aggregate([{$indexStats:{}}])</code> 看每个索引的实际命中次数，删掉长期零命中或低命中的索引。索引不是越多越好，每一个都在写路径上收税。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>一个数组字段建 multikey 索引，怎么估它的索引项数？给出估算公式，并说明为什么它影响写入性能。</li>
+          <li>ESR 规则里 Equality、Sort、Range 各自为什么放那个位置？逐字母说清机制依据。</li>
+          <li>Bucket 模式解决什么问题？它通过什么手段同时控制文档数和数组长度？</li>
+          <li>（设计题）一个"用户 + 用户的收货地址（最多几个）+ 用户的订单（无界）"。收货地址和订单分别该嵌入还是引用？逐项给判据。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>索引项数 ≈ <strong>文档数 × 平均数组长度</strong>（multikey 为数组每个元素各存一项）。影响写入：每次改动数组都要在 B-tree 上维护对应的多个索引项，数组越大写入维护越重。</li>
+            <li><strong>Equality 放最前</strong>：等值把扫描缩成一段连续键，选择性最高的过滤要最早做。<strong>Sort 放中间</strong>：等值段内索引按 Sort 字段天然有序，顺读即得有序结果，避免内存 sort。<strong>Range 放最后</strong>：范围在索引上扫一个连续子区间，放最后才不打断前面字段的连续性。</li>
+            <li>解决高频小数据导致的<strong>海量小文档</strong>与<strong>无界数组</strong>两个问题。手段：按时间窗或固定数量把多条原始记录合并进一个桶文档——桶的数量受时间窗约束（控文档数），每桶内数组受窗口长度约束（控数组长度）。</li>
+            <li><strong>收货地址 → 嵌入</strong>：有界（最多几个）、几乎总和用户一起读、专属该用户、写入时机一致，四关全过。<strong>订单 → 引用</strong>：无界增长（无界判据命中）、常被独立分页查询、各自高频写入，任一命中即倾向引用，存独立集合按 <code>userId</code> 关联。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给"任意多动态属性且要能按属性过滤"的商品设计 schema 和索引</h3>
+        <p>需求：商品有任意多动态属性（颜色、尺寸、材质……），不同品类的属性集合不同；前台要能按任意属性组合过滤（如"红色 + 棉质"）。先不查资料，选一个设计模式，写出文档结构，并设计支撑过滤的索引。再权衡它和"每个属性一个字段 + wildcard 索引"的取舍。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>用 <strong>Attribute 模式</strong>：把属性存成 <code>attrs: [{k:"color", v:"red"}, {k:"material", v:"cotton"}]</code> 数组，对 <code>{ "attrs.k": 1, "attrs.v": 1 }</code> 建一个 multikey 复合索引——一个索引就能服务所有属性的等值过滤（<code>{"attrs": {$elemMatch: {k:"color", v:"red"}}}</code>）。对比方案是"每个属性一个顶层字段（<code>color</code>/<code>material</code>…）+ wildcard 索引 <code>{"$**":1}</code>"：字段方案查询更直观、单属性查询更快，但字段集合随品类膨胀、wildcard 索引更大更慢且难精确控制。Attribute 用一个稳定索引换字段不固定的灵活性，代价是查询语法绕一层 <code>$elemMatch</code>、且 multikey 索引项随属性数增长。选型取决于属性是否真的无法枚举、以及过滤是单属性还是多属性组合为主。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.mongodb.com/docs/manual/indexes/">Indexes</a>（官方 · 索引类型全景）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/tutorial/equality-sort-range-guideline/">The ESR (Equality, Sort, Range) Guideline</a>（官方 · 复合索引字段顺序）</li>
+          <li><a href="https://www.mongodb.com/blog/post/building-with-patterns-a-summary">Building With Patterns: A Summary</a>（MongoDB blog · 设计模式总览）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/core/schema-validation/">Schema Validation</a>（官方 · <code>$jsonSchema</code> 校验器）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-query-and-aggregation.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 查询与聚合管道</span>
+        </a>
+        <a href="04-storage-wiredtiger.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · WiredTiger 存储引擎</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 索引类型全景</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 ESR 规则</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 嵌入 vs 引用</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 设计模式</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 反模式与校验</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

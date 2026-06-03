@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<!-- tech-tutorial · Nacos · 03 配置中心 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配置中心原理 · Nacos 深入教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-discovery.html">02 服务发现</a><span class="sep">—</span>
+    <a href="03-config.html" class="current">03 配置中心</a><span class="sep">—</span>
+    <a href="04-consistency.html">04 一致性·生产</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>配置中心原理：近实时下发</h1>
+        <p class="recap">上一章是服务列表怎么传播（Distro + 推送）。配置内容的传播是另一套机制——
+          它用"长轮询"在"实时"和"省资源"之间取巧。这一章拆开配置从发布到生效的全链路，并解释最常见的"改了不生效"。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>长轮询：客户端发一个 30s 超时请求，服务端 hold 29.5s，变更即时返回——以及那 0.5s 的用意。</li>
+          <li>变更检测靠 MD5 比对，不靠"定时全量拉"。</li>
+          <li>一条配置从发布到客户端回调的完整链路。</li>
+          <li><code>@RefreshScope</code> 的刷新边界——"改了配置不生效"的头号原因。</li>
+          <li>灰度发布、历史回滚，以及配置在单机 / 集群下分别存哪。</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>长轮询：在"推"和"拉"之间取巧</span></h2>
+      <p class="one-liner">客户端发一个超时 30s 的请求，服务端 hold 住 29.5s 不立刻回；期间配置变了就立即返回，没变到点回"无变化"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么不用最朴素的两种做法</span>
+        <p>客户端要"配置一变就知道"。最朴素是<strong>短轮询</strong>（每隔几秒拉一次）——实时性取决于间隔，且大量请求多数是"没变"，纯浪费。另一极是<strong>服务端推</strong>（维护长连接主动推）——实时但要维护海量连接、且要求客户端可被连达。长轮询取两者之间：一次请求覆盖近 30s，期间一有变更立即返回，既近实时又不空转。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 640 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="配置长轮询时序：客户端发带MD5的请求，服务端hold 29.5秒，命中变更立即返回，否则到点返回304后客户端立即重发">
+          <defs>
+            <marker id="m31-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m31-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+            <marker id="m31-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <line x1="150" y1="62" x2="150" y2="296" class="diagram-ink"/>
+          <line x1="490" y1="62" x2="490" y2="296" class="diagram-ink"/>
+          <text x="150" y="50" text-anchor="middle" class="node-label">Client</text>
+          <text x="490" y="50" text-anchor="middle" class="node-label">Server</text>
+
+          <!-- hold activation bar -->
+          <rect x="482" y="96" width="16" height="128" class="diagram-accent node-fill-accent"/>
+
+          <!-- msg1 -->
+          <line x1="150" y1="92" x2="482" y2="92" class="diagram-ink" marker-end="url(#m31-ink)"/>
+          <text x="312" y="84" text-anchor="middle" class="edge-label">① 长轮询请求（MD5, timeout=30s）</text>
+
+          <text x="476" y="150" text-anchor="end" class="branch-label">配置发布 →</text>
+
+          <!-- msg2a change -->
+          <line x1="482" y1="168" x2="150" y2="168" class="diagram-accent" marker-end="url(#m31-ver)"/>
+          <text x="316" y="160" text-anchor="middle" class="edge-label">②a 命中变更 → 立即返回 dataId</text>
+
+          <!-- msg2b no change -->
+          <line x1="490" y1="232" x2="150" y2="232" class="diagram-soft" marker-end="url(#m31-soft)"/>
+          <text x="320" y="224" text-anchor="middle" class="edge-label">②b 无变更 → 29.5s 后返回 304</text>
+
+          <!-- msg3 re-issue -->
+          <line x1="150" y1="266" x2="490" y2="266" class="diagram-soft" marker-end="url(#m31-soft)"/>
+          <text x="320" y="258" text-anchor="middle" class="edge-label">③ 客户端立即重新发起</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>服务端 hold 期间有两个出口：命中变更（②a，红色，立即）或到点无变更（②b，返回 304）。
+          <strong>注意</strong>：hold <strong>29.5s</strong> 而非 30s——留 0.5s 给网络往返，避免客户端先于服务端超时、把正常的"无变化"误判成请求超时。</figcaption>
+      </figure>
+
+      <div class="rationale">
+        <span class="label">比文档深一层</span>
+        <p>服务端 hold 住请求<strong>不占线程</strong>：用 Servlet 3.0 的 <code>AsyncContext</code> 把请求挂起，线程立刻释放去处理别的请求，到点或有变更时再唤醒响应。这就是单机能扛大量长轮询连接的原因。而"配置变没变"靠<strong>MD5 比对</strong>：客户端把自己持有内容的 MD5 一起发来，服务端拿当前内容的 MD5 一比，不一致才返回——不必传整段内容来判断。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 三种"感知变更"方案</caption>
+        <thead>
+          <tr><th>方案</th><th>实时性</th><th>服务端开销</th><th>取舍</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>短轮询（定时拉）</td><td>差（取决于间隔）</td><td>高：大量空轮询</td><td>实时与开销两头不讨好</td></tr>
+          <tr><td>服务端推（长连接）</td><td>好</td><td>维护海量连接</td><td>1.x 时代连接成本高（2.x 才转向它）</td></tr>
+          <tr class="selected"><td>长轮询</td><td>接近实时</td><td>低：hold 不占线程</td><td>选中：一次请求覆盖 29.5s，变更即时</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">现状 · 截至 2026-06</span>
+        <p>长轮询是 <strong>1.x</strong> 的经典机制，也是面试最常考的模型，理解它是理解"配置近实时"的基础。<strong>2.x 起，配置变更通知也并入了 gRPC 长连接</strong>（与服务发现同一条连接），服务端可直接推 <code>ConfigChangeNotify</code>，比 HTTP 长轮询更直接；但"MD5 比对判断是否真的变了"这一思想仍然保留。下文链路对两者都成立。</p>
+      </div>
+
+      <h2 id="s32"><span class="num">3.2</span><span>配置变更的全链路</span></h2>
+      <p class="one-liner">发布 → 服务端落库并标记变更 → 唤醒挂起的长轮询 / 推送通知 → 客户端拉取最新 → 触发监听回调。</p>
+
+      <p>把一次"在控制台改了一个值"拆成五步，每一步都能对应到一个排障点：</p>
+
+      <figure>
+        <svg viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="配置变更全链路五步：发布配置、服务端落库并标记变更、唤醒长轮询或推送、客户端拉取、回调刷新">
+          <defs>
+            <marker id="m32" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <rect x="16" y="70" width="124" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="78" y="95" text-anchor="middle" class="node-label">① 发布配置</text>
+          <text x="78" y="114" text-anchor="middle" class="edge-label">控制台 / API</text>
+
+          <rect x="172" y="70" width="124" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="234" y="95" text-anchor="middle" class="node-label">② 落库</text>
+          <text x="234" y="114" text-anchor="middle" class="edge-label">标记变更</text>
+
+          <rect x="328" y="70" width="124" height="60" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="390" y="95" text-anchor="middle" class="node-label-accent">③ 唤醒/推送</text>
+          <text x="390" y="114" text-anchor="middle" class="edge-label">挂起的请求</text>
+
+          <rect x="484" y="70" width="124" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="546" y="95" text-anchor="middle" class="node-label">④ 客户端拉取</text>
+          <text x="546" y="114" text-anchor="middle" class="edge-label">最新内容</text>
+
+          <rect x="640" y="70" width="112" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="696" y="95" text-anchor="middle" class="node-label">⑤ 回调</text>
+          <text x="696" y="114" text-anchor="middle" class="edge-label">刷新 Bean</text>
+
+          <line x1="140" y1="100" x2="172" y2="100" class="diagram-ink" marker-end="url(#m32)"/>
+          <line x1="296" y1="100" x2="328" y2="100" class="diagram-ink" marker-end="url(#m32)"/>
+          <line x1="452" y1="100" x2="484" y2="100" class="diagram-ink" marker-end="url(#m32)"/>
+          <line x1="608" y1="100" x2="640" y2="100" class="diagram-ink" marker-end="url(#m32)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>配置变更的五步链路。
+          <strong>注意</strong>：③ 是关键一跳——服务端找到所有挂起的相关长轮询请求（或 gRPC 订阅者）<strong>立即</strong>响应，这一步把"近实时"变成现实；⑤ 的回调是否生效，取决于下一节的刷新边界。</figcaption>
+      </figure>
+
+      <p>这条链路里，前四步是 Nacos 负责的，<strong>第 ⑤ 步回调发生在你的应用进程内</strong>——也正是这一步最容易"看起来没生效"。</p>
+
+      <h2 id="s33"><span class="num">3.3</span><span>刷新边界：为什么"改了不生效"</span></h2>
+      <p class="one-liner">配置推到客户端后，只有标了 <code>@RefreshScope</code> 的 Bean 会被重建以读到新值；普通 <code>@Value</code> 字段不会。</p>
+
+      <p>这是 Nacos 配置最高频的"灵异事件"：控制台明明改了、日志也显示收到变更，但接口返回的还是旧值。根因不在 Nacos，在 Spring 的<strong>刷新边界</strong>：</p>
+
+      <figure>
+        <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="配置刷新边界：变更事件到达后，标注RefreshScope的Bean被重建读到新值，未标注的普通Value字段仍是旧值">
+          <defs>
+            <marker id="m33" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <rect x="260" y="24" width="160" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="340" y="45" text-anchor="middle" class="node-label">配置变更</text>
+          <text x="340" y="63" text-anchor="middle" class="edge-label">新值 v2 已到达</text>
+
+          <rect x="70" y="160" width="220" height="84" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="180" y="190" text-anchor="middle" class="node-label-accent">@RefreshScope + @Value</text>
+          <text x="180" y="214" text-anchor="middle" class="edge-label">Bean 重建 → 读到 v2 ✓</text>
+
+          <rect x="390" y="160" width="220" height="84" rx="6" class="diagram-ink node-fill"/>
+          <text x="500" y="190" text-anchor="middle" class="node-label">仅 @Value（无 RefreshScope）</text>
+          <text x="500" y="214" text-anchor="middle" class="edge-label">不重建 → 仍是旧值 v1 ✗</text>
+
+          <line x1="300" y1="72" x2="180" y2="160" class="diagram-ink" marker-end="url(#m33)"/>
+          <text x="210" y="120" text-anchor="middle" class="edge-label">变更事件</text>
+          <line x1="380" y1="72" x2="500" y2="160" class="diagram-ink" marker-end="url(#m33)"/>
+          <text x="470" y="120" text-anchor="middle" class="edge-label">变更事件</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>同一个变更事件，两个 Bean 命运不同。
+          <strong>注意</strong>：刷新边界由 <code>@RefreshScope</code> 划定——它告诉 Spring"这个 Bean 在配置变更时要丢弃重建"。没标它的 Bean 持有的还是初始化时注入的旧值。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 3.2 · 三种注入写法的刷新行为</caption>
+        <thead>
+          <tr><th>写法</th><th>配置变更后是否自动读到新值</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>@Value</code>（无 @RefreshScope）</td><td>否——仍是旧值</td></tr>
+          <tr class="selected"><td><code>@Value</code> + <code>@RefreshScope</code>（同一 Bean）</td><td>是——Bean 重建后读到新值</td></tr>
+          <tr><td><code>@ConfigurationProperties</code></td><td>是——默认支持刷新，无需 @RefreshScope</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>你用 <code>@Value("${feature.rate}")</code> 注入了一个字段，在 Nacos 改了 <code>feature.rate</code>，控制台显示已更新、客户端日志也打印"received config change"，但接口行为没变。最可能缺了什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>最可能缺了 <code>@RefreshScope</code>。变更确实推到了客户端（日志为证），但承载 <code>@Value</code> 的 Bean 没被标记为可刷新，于是不会重建，字段停留在启动时注入的旧值。给该 Bean 加 <code>@RefreshScope</code>，或改用 <code>@ConfigurationProperties</code>（默认可刷新）。</p>
+        </details>
+      </div>
+
+      <h3>隔离语义复用：namespace / group</h3>
+      <p>呼应 <a href="01-concepts.html#s15">§1.5</a>：配置的 namespace / group 和服务发现是<strong>同一套</strong>。实战里，<code>namespace</code> 拿来隔离 dev / prod 的配置（同一个 dataId 在两个环境互不影响），<code>group</code> 拿来把"同一类配置"跨应用归组。配错 namespace（填了名字而非 UUID）就读不到配置——和发现不到服务，是同一个根因的两种症状。</p>
+
+      <h2 id="s34"><span class="num">3.4</span><span>灰度、回滚与持久化</span></h2>
+      <p class="one-liner">灰度（beta）发布按指定 IP 先推；配置存历史版本可一键回滚；单机用内嵌 Derby，集群用外置 MySQL。</p>
+
+      <p>配置改错的代价比代码 bug 更直接——它瞬间生效到所有实例。Nacos 用三个能力降低这个风险：</p>
+      <ul>
+        <li><strong>灰度 / beta 发布</strong>：发布时指定一批 IP，变更<strong>只推给这些 IP</strong>，验证无误再全量。它和普通发布的区别就在推送对象：普通发布推给全部订阅者，灰度只推给指定 IP 列表。</li>
+        <li><strong>历史版本与回滚</strong>：每次发布留存历史，出问题可一键回滚到上一版本。</li>
+        <li><strong>持久化</strong>：见下表——这也决定了你的集群要不要外挂数据库。</li>
+      </ul>
+
+      <table class="compare-table">
+        <caption>表 3.3 · 配置的持久化</caption>
+        <thead>
+          <tr><th>部署形态</th><th>配置存哪</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>单机 standalone</td><td>内嵌 Derby</td><td>开箱即用，仅适合本地 / 测试</td></tr>
+          <tr class="selected"><td>集群 cluster</td><td>外置 MySQL（多个节点共享）</td><td>生产标配；DB 要做高可用，否则成单点</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 回到那条脊柱</span>
+        <p>注意配置数据落在<strong>强一致</strong>这一侧：它持久化、要求各节点看到的内容一致——正是起点页脊柱图里和持久实例同侧的 CP。这也解释了为什么配置中心不像临时实例那样"分区时各写各的"：一份算错钱的配置在两个节点上不一致，后果比一个实例短暂消失严重得多。下一章把这条脊柱完整收口。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程作答，再展开对照。</p>
+        <ol>
+          <li>长轮询里服务端为什么 hold <strong>29.5s</strong> 而不是 30s？这 0.5s 防的是什么？</li>
+          <li>服务端 hold 住请求期间为什么不占线程？变更检测靠什么判断"内容真的变了"？</li>
+          <li>"改了配置不生效"，从 <code>@Value</code> / <code>@RefreshScope</code> / <code>@ConfigurationProperties</code> 角度，最常见的原因是什么？</li>
+          <li>灰度发布和普通发布，在"推送对象"上的区别是什么？</li>
+          <li>（综合 01）namespace 配错在配置侧表现为"读不到配置"；同样的 namespace 配错，在<strong>服务发现</strong>侧会表现成什么症状？为什么是同一个根因？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>留 0.5s 给网络往返余量。若服务端也 hold 满 30s，客户端可能先到 30s 超时，把本该是"无变化"的正常响应误判成请求超时。</li>
+            <li>用 Servlet 3.0 <code>AsyncContext</code> 挂起请求、释放线程，到点或有变更再唤醒——所以不占线程。变更检测靠 <strong>MD5 比对</strong>：客户端发来持有内容的 MD5，服务端比对当前 MD5，不一致才返回。</li>
+            <li>承载 <code>@Value</code> 的 Bean 没加 <code>@RefreshScope</code>，变更虽推到但 Bean 不重建，字段停在旧值。修复：加 <code>@RefreshScope</code> 或用 <code>@ConfigurationProperties</code>。</li>
+            <li>普通发布推给<strong>全部</strong>订阅者；灰度只推给发布时<strong>指定的 IP 列表</strong>，验证后再全量。</li>
+            <li>服务发现侧表现为"发现不到服务 / no available server"。根因相同：namespace 是服务发现和配置中心<strong>共用</strong>的隔离边界，配错（如填名字落到 public）会同时让两边都"找不到"。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一个开关，要先在 2 台机器上验证</h3>
+        <p>你要上线一个高风险开关 <code>risk.switch=on</code>，希望先在 2 台金丝雀机器验证 10 分钟，再推全量。用本章的能力设计这个流程，并说明：灰度期间，<strong>其余实例</strong>读到的是 on 还是 off？灰度配置和正式配置在 Nacos 里是什么关系？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>用<strong>灰度 / beta 发布</strong>，发布时填那 2 台金丝雀的 IP。灰度期间：只有这 2 台收到 <code>on</code>，其余实例仍读<strong>正式版本</strong>的 <code>off</code>——因为变更只推给了指定 IP。验证无误后"停止 beta / 全量发布"，把灰度内容转正，推给全部。关键认知：灰度本质是"按推送对象切分"，不是改了一个不同的 dataId。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://nacos.io/docs/latest/concepts/config/">Nacos 官方 · 配置管理 Concepts</a>（官方）</li>
+          <li><a href="https://www.cnkirito.moe/nacos-and-longpolling/">Nacos 配置中心长轮询机制详解</a>（cnkirito，机制分析）</li>
+          <li><a href="https://github.com/alibaba/spring-cloud-alibaba/wiki/Nacos-config">Spring Cloud Alibaba · Nacos Config（@RefreshScope / dataId）</a>（生态集成）</li>
+          <li><a href="https://nacos.io/docs/latest/manual/user/java-sdk/usage/">Nacos 官方 · Java SDK（监听与回调）</a>（官方）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-discovery.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 服务发现原理</span>
+        </a>
+        <a href="04-consistency.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 一致性、选型与生产</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 长轮询</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 变更全链路</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 刷新边界</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 灰度·回滚·持久化</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

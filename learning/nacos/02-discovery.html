@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<!-- tech-tutorial · Nacos · 02 服务发现 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>服务发现原理 · Nacos 深入教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-discovery.html" class="current">02 服务发现</a><span class="sep">—</span>
+    <a href="03-config.html">03 配置中心</a><span class="sep">—</span>
+    <a href="04-consistency.html">04 一致性·生产</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>服务发现原理：AP 这一半</h1>
+        <p class="recap">上一章你知道了临时实例（默认）走 AP·Distro。这一章拆开 Distro：临时实例的数据，
+          到底怎么在一个 Nacos 集群的多个节点之间传播、又怎么推到客户端、以及服务端全挂时客户端凭什么还能调用。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>Distro 怎么"分片"：集群里每个节点只对一部分服务数据负责，负责者是谁由一个哈希算出。</li>
+          <li>一次注册写请求的完整路径：任意节点接收 → 转发给 owner → owner 异步复制给其他节点。</li>
+          <li>节点间靠 checksum 只同步差异，新节点冷启动则先拉全量快照再对外服务。</li>
+          <li>服务端推送从 1.x 的 UDP + 客户端轮询，换成 2.x 的 gRPC 长连接，换来了什么。</li>
+          <li>客户端本地快照如何让"Nacos 挂了，调用照常"。</li>
+        </ul>
+      </section>
+
+      <h2 id="s21"><span class="num">2.1</span><span>Distro：分片与异步复制</span></h2>
+      <p class="one-liner">Distro 是 AP 协议：集群中每个节点只对一部分服务"负责"，负责节点先写本地、再异步复制给其他节点。</p>
+
+      <div class="rationale">
+        <span class="label">为什么这么设计</span>
+        <p>临时实例数量可达上百万，且变更频繁（每 5s 一次心跳，见 <a href="01-concepts.html#s14">§1.4</a>）。若每条写入都要全集群强一致确认，吞吐撑不住、可用性也差。Distro 的回答是：把数据<strong>切片分给不同节点各自负责</strong>，写入只在负责节点上同步完成，再异步扩散——牺牲"瞬时一致"，换吞吐和分区可用性。</p>
+      </div>
+
+      <p>"谁负责哪个服务"不是配置出来的，是<strong>算</strong>出来的。Nacos 对服务名做哈希再对健康节点数取模：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">DistroMapper（简化）</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="c21">复制</button>
+        </div>
+<pre id="c21"><code class="language-java">// 对服务名哈希，落到某个健康节点的索引区间，即为该服务的 owner
+int target = distroHash(serviceName) % healthyNodeCount;
+boolean responsible = (target 落在本节点负责的索引区间);
+// 非 owner 收到写请求时，转发给 owner 处理</code></pre>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Distro 写流程：客户端写到任意节点A，A转发给owner节点B，B写本地后异步复制给A和C">
+          <defs>
+            <marker id="m21-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m21-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <rect x="150" y="28" width="180" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="240" y="50" text-anchor="middle" class="node-label">客户端</text>
+          <text x="240" y="68" text-anchor="middle" class="edge-label">注册 svc-X</text>
+
+          <rect x="60" y="160" width="160" height="74" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="192" text-anchor="middle" class="node-label">Node A</text>
+          <text x="140" y="212" text-anchor="middle" class="edge-label">非 owner</text>
+
+          <rect x="280" y="160" width="160" height="74" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="192" text-anchor="middle" class="node-label-accent">Node B</text>
+          <text x="360" y="212" text-anchor="middle" class="edge-label">svc-X 的 owner</text>
+
+          <rect x="500" y="160" width="160" height="74" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="192" text-anchor="middle" class="node-label">Node C</text>
+          <text x="580" y="212" text-anchor="middle" class="edge-label">非 owner</text>
+
+          <!-- (1) client -> A -->
+          <line x1="220" y1="76" x2="150" y2="160" class="diagram-ink" marker-end="url(#m21-ink)"/>
+          <text x="150" y="120" text-anchor="middle" class="edge-label">①写·任意节点</text>
+
+          <!-- (2) A -> B forward -->
+          <line x1="220" y1="186" x2="280" y2="186" class="diagram-ink" marker-end="url(#m21-ink)"/>
+          <text x="250" y="178" text-anchor="middle" class="edge-label">②转发</text>
+
+          <!-- (3a) B -> A replicate -->
+          <line x1="280" y1="210" x2="220" y2="210" class="diagram-soft" marker-end="url(#m21-soft)"/>
+          <!-- (3b) B -> C replicate -->
+          <line x1="440" y1="186" x2="500" y2="186" class="diagram-soft" marker-end="url(#m21-soft)"/>
+          <text x="470" y="178" text-anchor="middle" class="edge-label">③异步复制</text>
+          <text x="250" y="226" text-anchor="middle" class="edge-label">③异步复制</text>
+
+          <text x="360" y="292" text-anchor="middle" class="edge-label">owner = distroHash(svc-X) % 健康节点数</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>写请求总能被任意节点接收，但只有 owner 真正落库，再异步扩散。
+          <strong>注意</strong>：第 ③ 步是<strong>虚线</strong>——fire-and-forget 的异步复制，发出去不等确认。这就是"最终一致"四个字的来源：其他节点拿到这条数据有个时间差。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">代价</span>
+        <p>owner 是按"哈希 % <strong>健康节点数</strong>"算的，所以集群扩缩容（节点数变化）会让大量服务<strong>重新分配 owner</strong>。重新分配期间要重新计算校验和、重新拉数据，曾出现过缓存被瞬时清空、服务列表"忽有忽无"的问题（参见 GitHub issue #10323）。这是 4.5 节失败模式的伏笔。</p>
+      </div>
+
+      <h2 id="s22"><span class="num">2.2</span><span>节点间校验与新节点冷启动</span></h2>
+      <p class="one-liner">节点每 5s 广播自己负责数据的 checksum，对端只拉差异；新节点启动则先从健康节点拉全量快照，再对外服务。</p>
+
+      <p>异步复制不保证送达，所以 Distro 还有一层<strong>定时校验</strong>兜底：每个节点每 5s 把自己负责数据的校验和广播出去，对端比对后只拉取<strong>有差异</strong>的那部分（<code>toUpdate</code> / <code>toRemove</code>），而不是全量交换。这让常态同步很省带宽。</p>
+
+      <p>但有一个例外——<strong>新节点冷启动</strong>。一个刚加入集群的节点没有任何数据，必须先做一次全量同步：它会等集群里至少有 2 个节点，从一个健康对端拉取<strong>全量快照</strong>，灌进内存之后才开始对外提供服务。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 两种同步路径</caption>
+        <thead>
+          <tr><th>场景</th><th>同步方式</th><th>代价 / 含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>常态运行</td><td>每 5s checksum 比对，只传差异</td><td>省带宽；存在最长 ~5s 的校验窗口</td></tr>
+          <tr class="selected"><td>新节点冷启动</td><td>从健康对端拉<strong>全量快照</strong>后才服务</td><td>有"预热"窗口，期间不接流量，避免给出空列表</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 为什么冷启动要先全量</span>
+        <p>如果新节点空着就对外服务，消费方一旦把请求打到它，会查到一个<strong>空的服务列表</strong>——比"列表稍旧"严重得多。先全量再服务，是 AP 系统里对"可用但别给错误答案"的一个具体权衡。</p>
+      </div>
+
+      <h2 id="s23"><span class="num">2.3</span><span>服务端推送：从 UDP 到 gRPC 长连接</span></h2>
+      <p class="one-liner">1.x 用 UDP 推变更 + 客户端定时轮询补偿；2.x 改成一条 gRPC 长连接，推送可靠且省连接。</p>
+
+      <p>实例列表变了，服务端怎么让订阅它的客户端尽快知道？这是 1.x 与 2.x 差别最大的地方，也是你升级时最该理解的一处。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="1.x 用 UDP 推送加客户端轮询补偿；2.x 用一条 gRPC 长连接做可靠双向推送">
+          <defs>
+            <marker id="m22-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m22-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+            <marker id="m22-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <line x1="360" y1="40" x2="360" y2="262" class="diagram-soft"/>
+          <text x="130" y="32" text-anchor="middle" class="branch-label">Nacos 1.x</text>
+          <text x="540" y="32" text-anchor="middle" class="branch-label">Nacos 2.x</text>
+
+          <!-- left: 1.x -->
+          <rect x="60" y="60" width="140" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="130" y="91" text-anchor="middle" class="node-label">Server</text>
+          <rect x="60" y="196" width="140" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="130" y="227" text-anchor="middle" class="node-label">Client</text>
+
+          <line x1="108" y1="112" x2="108" y2="196" class="diagram-soft" marker-end="url(#m22-soft)"/>
+          <text x="104" y="142" text-anchor="end" class="edge-label">UDP推送</text>
+          <line x1="156" y1="196" x2="156" y2="112" class="diagram-ink" marker-end="url(#m22-ink)"/>
+          <text x="160" y="172" text-anchor="start" class="edge-label">轮询补偿</text>
+          <text x="130" y="278" text-anchor="middle" class="edge-label">推送不可靠 · QPS 高</text>
+
+          <!-- right: 2.x -->
+          <rect x="470" y="60" width="140" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="91" text-anchor="middle" class="node-label">Server</text>
+          <rect x="470" y="196" width="140" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="227" text-anchor="middle" class="node-label">Client</text>
+
+          <line x1="540" y1="112" x2="540" y2="196" class="diagram-accent" marker-start="url(#m22-ver)" marker-end="url(#m22-ver)"/>
+          <text x="540" y="150" text-anchor="middle" class="edge-label">gRPC 长连接</text>
+          <text x="540" y="170" text-anchor="middle" class="edge-label">双向·可靠</text>
+          <text x="540" y="278" text-anchor="middle" class="edge-label">一条连接 · 推送可靠</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>左边两根箭头（推 + 补偿）合并成右边一根双向长连接。
+          <strong>注意</strong>：1.x 的 UDP 是<strong>虚线</strong>（不可靠，所以才需要轮询补偿）；2.x 把推送和上报压进同一条 gRPC 连接，于是推送变可靠、连接数大降。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 推送机制 1.x vs 2.x</caption>
+        <thead>
+          <tr><th>维度</th><th>Nacos 1.x</th><th>Nacos 2.x（2021-03 起）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>推送通道</td><td>UDP 推送（不可靠）</td><td>gRPC 长连接（可靠、双向）</td></tr>
+          <tr><td>客户端补偿</td><td>需定时轮询兜底</td><td>连接在即可靠，轮询间隔可拉长</td></tr>
+          <tr><td>连接 / 容量</td><td>短连接多、QPS 高</td><td>连接复用，单机实例承载约 10×</td></tr>
+          <tr><td>新增端口</td><td>仅 8848</td><td>8848 + <strong>9848</strong>(客户端 gRPC) + <strong>9849</strong>(节点间)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱（第 4 章细讲）</span>
+        <p>2.x 的 9848 / 9849 是按主端口 <strong>+1000 / +1001</strong> 自动推算的。只在防火墙开了 8848、没开 9848 的话，2.x 客户端会连不上而 8848 看着是通的——报错指向 8848，极具误导性。</p>
+      </div>
+
+      <h2 id="s24"><span class="num">2.4</span><span>客户端缓存与容灾</span></h2>
+      <p class="one-liner">客户端把拿到的服务列表写成本地快照文件；服务端不可达时，用本地快照兜底，让调用不中断。</p>
+
+      <p>回到 <a href="01-concepts.html#s14">§1.4</a> 那条留下的尾巴：进程崩溃后，调用方"看到它消失"为什么比 30s 更晚？因为消费方并不每次都去问服务端，它本地存了一份服务列表快照。这份快照平时是性能优化，故障时则是<strong>容灾</strong>。客户端解析一份列表时的取数顺序是：</p>
+
+      <figure>
+        <svg viewBox="0 0 680 420" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="客户端取服务列表的决策顺序：先看failover是否开启，否则请求服务端并写快照，服务端不可达则读本地快照兜底">
+          <defs>
+            <marker id="m23-dec" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <ellipse cx="340" cy="36" rx="150" ry="22" class="diagram-ink node-fill"/>
+          <text x="340" y="41" text-anchor="middle" class="node-label">需要一份服务列表</text>
+
+          <polygon points="340,90 445,140 340,190 235,140" class="diagram-ink node-fill"/>
+          <text x="340" y="145" text-anchor="middle" class="node-label">failover 开启?</text>
+          <line x1="340" y1="58" x2="340" y2="90" class="diagram-ink" marker-end="url(#m23-dec)"/>
+
+          <line x1="445" y1="140" x2="540" y2="140" class="diagram-ink" marker-end="url(#m23-dec)"/>
+          <text x="492" y="132" text-anchor="middle" class="branch-label">是</text>
+          <rect x="540" y="118" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="602" y="138" text-anchor="middle" class="node-label">读 failover</text>
+          <text x="602" y="155" text-anchor="middle" class="edge-label">人工兜底</text>
+
+          <line x1="340" y1="190" x2="340" y2="232" class="diagram-ink" marker-end="url(#m23-dec)"/>
+          <text x="356" y="214" text-anchor="middle" class="branch-label">否</text>
+
+          <polygon points="340,232 445,282 340,332 235,282" class="diagram-ink node-fill"/>
+          <text x="340" y="287" text-anchor="middle" class="node-label">服务端可达?</text>
+
+          <line x1="445" y1="282" x2="540" y2="282" class="diagram-ink" marker-end="url(#m23-dec)"/>
+          <text x="492" y="274" text-anchor="middle" class="branch-label">是</text>
+          <rect x="540" y="256" width="130" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="605" y="278" text-anchor="middle" class="node-label">server 返回</text>
+          <text x="605" y="297" text-anchor="middle" class="edge-label">并写 snapshot</text>
+
+          <line x1="340" y1="332" x2="340" y2="372" class="diagram-ink" marker-end="url(#m23-dec)"/>
+          <text x="356" y="356" text-anchor="middle" class="branch-label">否</text>
+          <rect x="245" y="372" width="190" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="340" y="397" text-anchor="middle" class="node-label">读本地 snapshot 兜底</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>取数顺序：failover 目录（人工）→ 服务端（顺便写快照）→ 本地快照（兜底）。
+          <strong>注意</strong>：最后这条"否 → 读本地 snapshot"就是"Nacos 全挂、调用照常"的底气；代价是这期间感知不到实例的上下线。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>整个 Nacos 集群都挂了，此刻正在运行的 <code>order-service</code> 还能不能调用 <code>user-service</code>？新启动的一个 <code>user-service</code> 实例能被发现吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p><strong>已有的调用：能</strong>。<code>order-service</code> 用本地 snapshot 里的 <code>user-service</code> 列表继续调。<strong>新实例：不能</strong>被发现——注册和变更推送都依赖服务端，服务端没了，这段时间的上下线全部"冻结"在快照那一刻。所以 Nacos 短时不可用不致命，但长时间不可用会让集群拓扑严重失真。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程作答，再展开对照。</p>
+        <ol>
+          <li>Distro 里"哪个节点负责哪个服务"是怎么决定的？用一句话描述这个算法。</li>
+          <li>节点间常态同步是全量传输还是只传差异？新节点冷启动时又是哪种？为什么不一样？</li>
+          <li>1.x 用 UDP 推 + 客户端轮询，2.x 换成了什么？最主要的两个收益是什么？</li>
+          <li>为什么 Nacos 服务端全挂了，消费方<strong>短时间内</strong>还能继续发起调用？此时它"看不到"什么？</li>
+          <li>（综合 01）一个临时实例进程崩溃，服务端约 30s 后删除它。为什么调用方"彻底不再打它"会明显晚于这 30s？把 §1.4 的删除时间线和本章的客户端缓存接起来回答。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>对服务名哈希再对<strong>健康节点数</strong>取模：<code>distroHash(serviceName) % healthyNodeCount</code>，落在某节点负责的索引区间，它就是该服务的 owner。</li>
+            <li>常态：每 5s 比对 checksum，只传差异；冷启动：从健康对端拉<strong>全量快照</strong>再对外服务。冷启动空数据若直接服务会给出空列表，比"稍旧"严重，所以先全量。</li>
+            <li>换成一条 <strong>gRPC 长连接</strong>。收益：① 推送可靠（不再靠 UDP + 轮询）；② 连接复用，单机承载约 10×。</li>
+            <li>因为消费方本地有服务列表 <strong>snapshot</strong>，服务端不可达时用它兜底。此时看不到任何实例的上下线变化（拓扑冻结在快照那一刻）。</li>
+            <li>服务端删除只更新<strong>服务端</strong>视图；消费方要等本地缓存的下一个刷新周期（2.x 长连接推送较快，但仍非即时）才更新列表，且若推送/刷新延迟，崩溃实例会在调用方列表里多停留一段。删除时间线 + 客户端缓存两段叠加，才是"调用方彻底不打它"的真实耗时。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>扩容瞬间，为什么服务列表"忽多忽少"</h3>
+        <p>线上把 Nacos 集群从 5 个节点扩到 10 个，扩容后的几十秒内，部分服务的消费方观察到服务列表抖动（一会儿能查到、一会儿空）。用本章的三个机制解释这个现象的因果链。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>owner = 哈希 % <strong>节点数</strong>（§2.1）→ 节点数从 5 变 10，大量服务的 owner 重新分配 → 新 owner 上的数据要靠 checksum 比对 + 拉取重建（§2.2）→ 重建窗口内该服务数据可能短暂缺失，叠加推送（§2.3）把"暂时为空"的列表推给了客户端 → 表现为抖动。这正是 GitHub #10323 描述的场景，也说明：扩缩容应在低峰、分批进行。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://nacos.io/blog/article-nacos-distro-mechanism/">Nacos 官方 · Distro 一致性协议机制</a>（官方）</li>
+          <li><a href="https://www.alibabacloud.com/blog/an-in-depth-insight-into-nacos-2-0-architecture-and-new-model-with-a-supported-grpc-persistent-connection_597804">In-depth Insight into Nacos 2.0 Architecture（gRPC 长连接）</a>（Alibaba Cloud）</li>
+          <li><a href="https://nacos.io/docs/latest/guide/user/failover/">Nacos 官方 · Java Client Failover（容灾）</a>（官方）</li>
+          <li><a href="https://github.com/alibaba/nacos/issues/10323">GitHub #10323 · 集群扩缩容缓存抖动</a>（issue）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+        <a href="03-config.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 配置中心原理</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 Distro 分片与复制</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 校验与冷启动</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 推送 UDP→gRPC</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 客户端缓存容灾</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

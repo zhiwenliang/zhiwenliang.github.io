@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<!--
+  tech-tutorial · Redis 深度教程 · 03 持久化与内存生命周期
+  Aesthetic: minimalist monochrome + single vermillion accent
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>持久化与内存生命周期 · Redis 深度教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700;
+  font-size: 30px; line-height: 1.2; margin: 0 0 12px;
+  letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { font-size: 15.5px; line-height: 1.65; margin: 0; }
+
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em;
+  background: var(--bg-soft); padding: 1px 5px; border-radius: 2px;
+  color: var(--vermilion); border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms;
+  user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px;
+  color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* index landing: chapter directory cards */
+.toc-cards { display: grid; grid-template-columns: 1fr; gap: 0; margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.toc-cards a { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 14px 18px; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--rule); transition: background 150ms; }
+.toc-cards a:last-child { border-bottom: none; }
+.toc-cards a:hover { background: var(--bg-soft); }
+.toc-cards .n { font-family: var(--mono); font-size: 13px; color: var(--vermilion); font-weight: 700; padding-top: 2px; }
+.toc-cards .t { font-weight: 600; font-size: 15px; }
+.toc-cards .d { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; line-height: 1.5; }
+
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-data-structures.html">01 数据结构</a><span class="sep">—</span>
+    <a href="02-single-thread-and-io.html">02 内核模型</a><span class="sep">—</span>
+    <a href="03-persistence-and-memory.html" class="current">03 持久化</a><span class="sep">—</span>
+    <a href="04-caching-patterns.html">04 缓存工程</a><span class="sep">—</span>
+    <a href="05-distributed.html">05 分布式</a><span class="sep">—</span>
+    <a href="06-redis-for-agents.html">06 Agent</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Redis 深度教程 · 03</p>
+        <h1>持久化与内存生命周期</h1>
+        <p class="recap">前两章解释了 Redis 为什么快、为什么每条命令天然原子。数据全在内存，引出两个"万一"：进程挂了怎么不丢（持久化），内存满了留谁（淘汰）。这两个问题的答案，都从基石二——单线程不能停下来做快照——直接推导出来。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>RDB 为什么要 fork 子进程、copy-on-write（COW，写时复制）如何保证快照一致性、大实例 fork 延迟从哪里来</li>
+          <li>多段 AOF（7.0）：appendonlydir/ 下 base + incr.aof + manifest 三段结构；混合持久化把两者最优点合并</li>
+          <li>fsync 三种策略的丢失窗口量化：always / everysec / no</li>
+          <li>RDB vs AOF 选型取舍，以及生产为什么常两者并开</li>
+          <li>过期删除的惰性 + 定期两路，以及副本为何不自行过期</li>
+          <li>内存淘汰八种策略；近似 LRU 与 LFU 的机制，以及为什么用近似而非精确</li>
+        </ul>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">本章 = 基石二的推论</span>
+        <p>基石二：单线程串行执行。主线程不能停下来做快照，所以要 <code>fork</code> 一个子进程——子进程在 fork 那刻持有内存的视图，父进程继续服务写请求。同理，主线程不能长时间扫描所有过期 key，所以过期删除拆成「惰性」和「定时采样」两路。把这条逻辑线拉通，持久化和内存管理的所有取舍就都有了推导源头。</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="rdb"><span class="num">3.1</span><span>RDB：fork 子进程做快照</span></h2>
+      <p class="one-liner">RDB 在某个时刻把整个内存数据集序列化成一个紧凑的二进制文件；靠 fork 出子进程来完成，父进程借助 copy-on-write 继续服务，快照保持那一刻的一致性视图。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>主线程不能暂停来做全量序列化——那会让所有客户端等待几秒乃至几十秒。fork 把进程的虚拟地址空间克隆给子进程，操作系统并不真的复制物理内存，只是复制页表（page table）；父子进程初始时共享同一套物理页面。子进程顺序写磁盘的同时，父进程照常接收写命令：写到哪个页，OS 才触发 COW、为父进程复制那一页，子进程依然看到 fork 时的旧值。快照因此一致、主线程因此不停。</p>
+      </div>
+
+      <p>fork 由 <code>save</code> 或 <code>bgsave</code> 触发，也可由 <code>redis.conf</code> 的 <code>save</code> 规则自动触发。<code>save &lt;seconds&gt; &lt;changes&gt;</code> 的含义是：在 <code>seconds</code> 秒内发生了至少 <code>changes</code> 次写操作，则自动执行一次 <code>bgsave</code>。默认三条规则（7.x）：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">redis.conf · RDB 触发规则</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-rdb-save">复制</button></div>
+        <pre id="cb-rdb-save"><code class="language-bash">save 3600 1      # 1 小时内至少 1 次写 → bgsave
+save 300  100    # 5 分钟内至少 100 次写 → bgsave
+save 60   10000  # 1 分钟内至少 10000 次写 → bgsave
+
+# 关闭自动 RDB（只用 AOF）：
+save ""</code></pre>
+      </div>
+
+      <h3>fork 的代价：页表复制与 THP</h3>
+      <p>fork 本身不复制物理内存，但必须复制进程的<strong>页表</strong>。页表大小正比于虚拟地址空间的映射条数，而非数据量本身。一个 20 GB 的实例，页表可能占几十到几百 MB；fork 时主线程在这段时间内阻塞（操作系统在内核态完成页表复制），延迟通常在 <strong>数十毫秒到数百毫秒</strong>量级，大实例偶发 1–2 秒。</p>
+
+      <p><strong>透明大页（Transparent Huge Pages，THP）</strong>放大这个问题：THP 把普通 4 KB 页合并成 2 MB 的大页，COW 时粒度也变成 2 MB——父进程只改了几个字节，OS 却要复制整个 2 MB 大页，写入放大可达 500 倍。生产环境 Redis 官方建议关闭 THP：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">关闭透明大页（OS 级）</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-thp">复制</button></div>
+        <pre id="cb-thp"><code class="language-bash">echo never &gt; /sys/kernel/mm/transparent_hugepage/enabled
+# 持久化写入 /etc/rc.local 或 systemd service</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">fork 延迟是「主线程停顿」，不是后台耗时</span>
+        <p>fork 调用本身在主线程完成，OS 复制页表期间主线程阻塞，表现为 Redis 对所有客户端的命令响应在那段时间内暂停。页表复制完成后主线程立即恢复，子进程接管磁盘写入（后台异步）。监控指标看 <code>latest_fork_usec</code>（INFO persistence 输出）。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="RDB fork + copy-on-write 时序：父进程 fork 子进程，COW 保持快照一致">
+          <defs>
+            <marker id="ar3a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar3a-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- time axis label -->
+          <text x="30" y="22" class="edge-label">时间轴 →</text>
+          <line x1="30" y1="28" x2="740" y2="28" class="diagram-soft"/>
+
+          <!-- parent process row -->
+          <text x="30" y="78" class="node-label">主进程</text>
+          <!-- parent timeline bar -->
+          <rect x="110" y="58" width="580" height="36" rx="4" class="diagram-ink node-fill"/>
+          <!-- fork moment marker -->
+          <line x1="200" y1="52" x2="200" y2="102" class="diagram-accent" stroke-width="1.8"/>
+          <text x="200" y="46" text-anchor="middle" class="branch-label">fork()</text>
+          <!-- parent serving label -->
+          <text x="155" y="80" text-anchor="middle" class="edge-label">主线程阻塞</text>
+          <text x="155" y="92" text-anchor="middle" class="edge-label">（页表复制）</text>
+          <text x="430" y="80" text-anchor="middle" class="node-label">继续服务写请求</text>
+
+          <!-- child process row -->
+          <text x="30" y="160" class="node-label">子进程</text>
+          <!-- child timeline bar -->
+          <rect x="200" y="140" width="490" height="36" rx="4" class="diagram-soft node-fill"/>
+          <text x="445" y="162" text-anchor="middle" class="edge-label">顺序写 dump.rdb（持有 fork 时刻视图）</text>
+
+          <!-- COW event -->
+          <rect x="310" y="196" width="200" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="410" y="218" text-anchor="middle" class="node-label-accent">COW 触发</text>
+          <text x="410" y="234" text-anchor="middle" class="edge-label">父进程写某页 → OS 复制该页</text>
+          <text x="410" y="246" text-anchor="middle" class="edge-label">子进程仍见旧值</text>
+
+          <!-- arrows -->
+          <line x1="370" y1="94" x2="360" y2="196" class="diagram-ink" marker-end="url(#ar3a-ink)"/>
+          <text x="324" y="150" text-anchor="middle" class="edge-label">写命令到达</text>
+
+          <!-- memory pages row -->
+          <rect x="110" y="278" width="90" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="155" y="302" text-anchor="middle" class="edge-label">共享物理页</text>
+          <rect x="230" y="278" width="90" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="275" y="302" text-anchor="middle" class="edge-label">共享物理页</text>
+          <rect x="350" y="278" width="100" height="40" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="400" y="295" text-anchor="middle" class="node-label-accent">父新副本</text>
+          <text x="400" y="309" text-anchor="middle" class="edge-label">COW 复制</text>
+          <rect x="470" y="278" width="90" height="40" rx="4" class="diagram-soft node-fill"/>
+          <text x="515" y="295" text-anchor="middle" class="edge-label">子见旧页</text>
+          <text x="515" y="309" text-anchor="middle" class="edge-label">（快照一致）</text>
+
+          <text x="30" y="302" class="edge-label">物理内存</text>
+          <line x1="410" y1="250" x2="400" y2="278" class="diagram-accent" marker-end="url(#ar3a-accent)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>fork + copy-on-write 时序。父进程 fork 后立即恢复服务，写命令触发 COW 在物理层为父进程单独复制被修改的页；子进程始终看到 fork 时刻的内存视图，快照因此一致。<strong>注意</strong>：fork 调用本身（页表复制）在主线程同步完成，这段时间内主线程对外表现为短暂阻塞。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想 · fork 之后写入越多越好还是越少越好</span>
+        <p>fork 触发 bgsave 期间，父进程的写入量越大，RDB 文件的数据越新吗？实际上对 RDB 有什么影响？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>RDB 文件始终记录 fork 那一刻的内存视图，与 fork 之后父进程写入多少无关——子进程看不到父进程 fork 后的写入。fork 后写入越多，唯一的副作用是 COW 复制的物理页越多，内存占用峰值越高（极端情况下内存翻倍）。RDB 文件的"新旧程度"只取决于上一次 bgsave 是什么时候触发的，与 bgsave 期间的写入量无关。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="aof"><span class="num">3.2</span><span>AOF：追加写命令 + 重写压缩</span></h2>
+      <p class="one-liner">AOF（Append Only File）把每条写命令以 RESP 格式追加到文件末尾；重写（rewrite）在不中断服务的情况下把文件压缩成等价的最小命令集。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>RDB 两次快照之间的写入在宕机时全部丢失，间隔越长丢失越多。AOF 以命令日志的方式记录每次写操作，宕机恢复时重放日志即可还原数据——理论上丢失窗口可以压到一秒以内（everysec）甚至零（always）。代价是文件比 RDB 大、恢复时要重放所有命令、重放速度慢。</p>
+      </div>
+
+      <h3>多段 AOF（Redis 7.0）</h3>
+      <p>7.0 之前 AOF 是单个文件（<code>appendonly.aof</code>），rewrite 要把整个文件原地重写，存在覆盖失败导致丢数据的风险。7.0 引入<strong>多段 AOF（Multi-Part AOF）</strong>，AOF 数据拆成三类文件，统一放在 <code>appendonlydir/</code> 目录下：</p>
+
+      <ul>
+        <li><strong>base 文件</strong>（<code>appendonly.aof.1.base.rdb</code> 或 <code>.aof</code>）：某次 rewrite 时的全量基线快照。当 <code>aof-use-rdb-preamble yes</code>（默认）时，base 用 RDB 格式写入，称为<strong>混合持久化</strong>——base 紧凑、恢复快，增量部分仍用 AOF 命令格式。</li>
+        <li><strong>增量文件</strong>（<code>appendonly.aof.1.incr.aof</code>）：base 建好之后，新写入的命令追加到这里。</li>
+        <li><strong>manifest 清单文件</strong>（<code>appendonly.aof.manifest</code>）：记录当前哪个 base、哪些 incr 是有效的，恢复时按 manifest 顺序加载，多余的旧文件直接删除，彻底消除单文件覆盖的一致性风险。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 740 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="多段 AOF 文件结构：appendonlydir/ 下 base、incr、manifest 三段">
+          <defs>
+            <marker id="ar3b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar3b-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- directory box -->
+          <rect x="30" y="30" width="680" height="220" rx="8" class="diagram-soft node-fill"/>
+          <text x="370" y="20" text-anchor="middle" class="node-label">appendonlydir/</text>
+
+          <!-- manifest -->
+          <rect x="60" y="56" width="200" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="160" y="80" text-anchor="middle" class="node-label-accent">manifest</text>
+          <text x="160" y="96" text-anchor="middle" class="edge-label">appendonly.aof.manifest</text>
+          <text x="160" y="108" text-anchor="middle" class="edge-label">记录有效 base + incr 列表</text>
+
+          <!-- base -->
+          <rect x="290" y="56" width="200" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="390" y="80" text-anchor="middle" class="node-label">base（全量基线）</text>
+          <text x="390" y="96" text-anchor="middle" class="edge-label">.base.rdb（混合）</text>
+          <text x="390" y="108" text-anchor="middle" class="edge-label">rewrite 时生成</text>
+
+          <!-- incr -->
+          <rect x="520" y="56" width="170" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="605" y="80" text-anchor="middle" class="node-label">incr（增量）</text>
+          <text x="605" y="96" text-anchor="middle" class="edge-label">.incr.aof</text>
+          <text x="605" y="108" text-anchor="middle" class="edge-label">base 之后的命令</text>
+
+          <!-- recovery flow -->
+          <rect x="160" y="170" width="420" height="58" rx="6" class="diagram-soft node-fill"/>
+          <text x="370" y="193" text-anchor="middle" class="node-label">恢复顺序（由 manifest 驱动）</text>
+          <text x="370" y="211" text-anchor="middle" class="edge-label">① 读 manifest → ② 加载 base（RDB 反序列化）→ ③ 重放 incr.aof</text>
+          <text x="370" y="223" text-anchor="middle" class="edge-label">旧 base / incr 文件直接删除，无需原地覆盖</text>
+
+          <!-- arrows manifest → recovery -->
+          <line x1="160" y1="116" x2="280" y2="170" class="diagram-accent" marker-end="url(#ar3b-accent)"/>
+          <line x1="390" y1="116" x2="370" y2="170" class="diagram-ink" marker-end="url(#ar3b-ink)"/>
+          <line x1="605" y1="116" x2="460" y2="170" class="diagram-ink" marker-end="url(#ar3b-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>Redis 7.0 多段 AOF 文件结构。<strong>注意</strong>：manifest 是唯一的一致性锚点——恢复时先读 manifest 再按顺序加载文件，不依赖文件名或修改时间，rewrite 完成前旧文件不会被删除，消除了单文件原地覆盖的风险。</figcaption>
+      </figure>
+
+      <div class="callout example">
+        <span class="label">混合持久化（aof-use-rdb-preamble）</span>
+        <p><code>aof-use-rdb-preamble yes</code>（7.0 及以上默认开启）让 rewrite 生成的 base 文件采用 RDB 格式，而不是重新把所有 key 用 AOF 命令格式写一遍。好处：base 紧凑（RDB 是二进制格式，比 RESP 命令日志小得多），加载 base 时走 RDB 反序列化路径，比重放命令快数倍；incr 部分仍是 AOF 命令，保留了增量的精确性。这就是"混合持久化"——RDB 的空间效率 + AOF 的持久精度，生产推荐保持默认开启。</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="fsync"><span class="num">3.3</span><span>fsync 策略与丢失窗口</span></h2>
+      <p class="one-liner">AOF 追加写命令后，数据先到 OS 页缓存（page cache），需要 fsync 才真正落盘；fsync 策略决定丢失窗口的上限。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>write() 系统调用把数据写入内核页缓存，进程即认为写入完成；OS 决定何时把脏页刷到磁盘。若宕机时磁盘上没有的数据，重放 AOF 时就不存在这部分命令，数据因此丢失。fsync 强制 OS 立即把缓存中的脏数据刷盘，代价是额外的磁盘 I/O。不同的 fsync 频率决定了"最坏情况下丢多少"。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>appendfsync 三种策略</caption>
+        <thead><tr><th>策略</th><th>执行时机</th><th>最大丢失窗口</th><th>性能影响</th></tr></thead>
+        <tbody>
+          <tr><td><code>always</code></td><td>每条写命令执行后立即 fsync</td><td>理论 0（宕机前已落盘）</td><td>最慢；每条命令都付一次磁盘 I/O 延迟，QPS 通常降 10–100 倍</td></tr>
+          <tr class="selected"><td><code>everysec</code></td><td>后台线程每秒调用一次 fsync</td><td>约 1 秒内的写入</td><td>推荐默认；吞吐量接近 <code>no</code>，丢失窗口有明确上界</td></tr>
+          <tr><td><code>no</code></td><td>不主动 fsync，由 OS 决定</td><td>取决于 OS flush 间隔（Linux 默认 30 秒）</td><td>最快；丢失窗口完全不可控</td></tr>
+        </tbody>
+      </table>
+
+      <p><code>everysec</code> 由一个后台 I/O 线程（bio 线程）负责，每隔 1 秒调用一次 <code>fsync(fd)</code>。宕机发生在最坏位置时，上次 fsync 到宕机之间最多 1 秒的写入未落盘，因此说"最多丢约 1 秒的数据"。注意：这里的 1 秒是统计上界，实际丢失量取决于宕机时刻距上次 fsync 的间隔，可以是 0 到 1 秒之间的任意值。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想 · everysec 为什么最多丢 1 秒而不是 0</span>
+        <p>有人认为：bio 线程每秒 fsync，宕机发生在 fsync 刚完成后，那这 1 秒内的写入不是都在 page cache 里没落盘吗？为什么说"最多约 1 秒"而不是精确 1 秒？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>说"约 1 秒"是因为宕机时刻是随机的：如果宕机发生在 fsync 刚完成后 0.01 秒，只丢 0.01 秒；如果发生在 fsync 前 0.01 秒，丢 0.99 秒。统计上界是 1 秒，但期望丢失量约 0.5 秒。之所以不是 0，是因为 write() 成功后数据仅在 page cache，主进程认为"写完了"就去处理下一条命令，但这批数据要等 bio 线程的下次 fsync 才真正落盘——这段时间内宕机就会丢失。<code>always</code> 模式不经过 bio 线程，主线程每条命令写完后直接调用 fsync，丢失窗口理论为 0，代价是每条命令都串行等待磁盘。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="comparison"><span class="num">3.4</span><span>RDB vs AOF 选型</span></h2>
+      <p class="one-liner">RDB 紧凑、恢复快、有丢失间隔；AOF 持久精度高、文件大、重放慢。生产常两者并开，用混合格式取最优解。</p>
+
+      <table class="compare-table">
+        <caption>RDB vs AOF 全维度对比</caption>
+        <thead><tr><th>维度</th><th>RDB</th><th>AOF（everysec + 混合）</th></tr></thead>
+        <tbody>
+          <tr><td>文件大小</td><td>紧凑二进制，同等数据量最小</td><td>比 RDB 大；混合格式 base 接近 RDB，incr 较小</td></tr>
+          <tr><td>恢复速度</td><td>反序列化 RDB，通常是最快路径</td><td>先加载 base（RDB），再重放 incr.aof；比纯 AOF 快，比纯 RDB 慢少许</td></tr>
+          <tr><td>最大丢失窗口</td><td>两次 bgsave 之间，默认可达数分钟到 1 小时</td><td>everysec ≈ 1 秒；always ≈ 0</td></tr>
+          <tr><td>主线程影响</td><td>fork 带来毫秒到秒级暂停；bgsave 期间大量 COW 拉高内存</td><td>追加写命令几乎零开销；rewrite 也靠 fork，有同样的 fork 延迟</td></tr>
+          <tr><td>数据完整性风险</td><td>RDB 文件写一半宕机 → 文件损坏，需从上上次恢复</td><td>manifest 保证多段 AOF 的原子切换，7.0 以上风险极低</td></tr>
+          <tr class="selected"><td>生产推荐</td><td colspan="2">两者并开（<code>appendonly yes</code> + 保留 RDB）+ <code>aof-use-rdb-preamble yes</code>；优先用 AOF 恢复（更新），RDB 作兜底备份</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">为什么不只选其中一个</span>
+        <p>只用 RDB：丢失窗口不可接受（分钟级），bgsave 触发频率高则 fork 代价高，低则丢失多。只用 AOF：唯一的完整备份在 AOF 文件，一旦文件损坏（truncate、误删）无兜底；纯 AOF 恢复比 RDB 慢，大实例重启时间长。两者并开后：AOF 负责精度，RDB 负责兜底与快速恢复——两个目标分别由最合适的机制满足，而非用一个机制勉强兼顾两个目标。</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="expiry"><span class="num">3.5</span><span>过期删除：惰性 + 定期两路</span></h2>
+      <p class="one-liner">过期 key 的删除走两条路：访问时惰性检查，以及 serverCron 定期采样；副本不自行过期，等主库传播 DEL/UNLINK。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>主线程不能在每次 serverCron 时扫描所有过期 key——实例里可能有数千万个 key，全扫一遍会让主线程阻塞数十秒。把过期删除拆成「用时才判」和「小批量定期清理」两路，是「单线程不能长时间做一件事」这个约束的直接推论。</p>
+      </div>
+
+      <h3>惰性删除（lazy expiration）</h3>
+      <p>任何读写命令访问某个 key 时，Redis 先调用 <code>expireIfNeeded()</code> 检查该 key 是否已过期。若过期，立即删除并返回 nil（或空结果），命令本身不再继续执行。这路删除零额外开销——只有被访问的 key 才被检查；代价是长时间不访问的已过期 key 会积压在内存里。</p>
+
+      <h3>定期删除（active expiration）</h3>
+      <p>serverCron 按 <code>hz</code>（默认 10，即每秒执行 10 次）调度过期清理逻辑。每轮从设有过期时间的 key 字典（<code>expires</code> dict）中<strong>随机采样 20 个 key</strong>，删掉其中已过期的；若这一轮删掉的比例超过 25%，说明过期 key 密度高，立即再来一轮，直到比例降到 25% 以下或达到单次时间上限（默认 25ms）。这个机制保证：既不长期占用主线程，也不会因为惰性路径的懒惰让过期 key 无限堆积。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">redis.conf · 过期相关配置</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-expiry">复制</button></div>
+        <pre id="cb-expiry"><code class="language-bash">hz 10                  # serverCron 每秒调度次数，提高可加快过期清理（但增加 CPU）
+dynamic-hz yes         # 自适应调整 hz（负载高时升，空闲时降）；7.x 默认开启
+lazyfree-lazy-expire yes  # 过期删除改为异步（bio 线程），避免大 key 过期阻塞主线程</code></pre>
+      </div>
+
+      <h3>副本不自行过期</h3>
+      <p>Replica（副本）上的 key 不会被主动过期删除，只能等主库（primary）传播 <code>DEL</code> 或 <code>UNLINK</code> 命令过来才删除。原因：副本没有写权限，若副本自行删除会造成主从数据不一致（主库还在、副本先删）。但副本上访问一个已过期但主库尚未传播 DEL 的 key 时，4.0 以后副本会根据本地时钟判断是否过期，若过期则返回 nil——读行为一致，但删除操作仍由主库主导。</p>
+
+      <div class="callout warning">
+        <span class="label">时钟偏移导致副本提前过期</span>
+        <p>副本判断过期依赖本地时钟，若主从之间存在系统时钟偏差，副本可能比主库更早或更晚认为某个 key 过期，导致读结果短暂不一致。生产环境务必通过 NTP 保持主从时钟同步，偏差控制在毫秒级以内。</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2 id="eviction"><span class="num">3.6</span><span>内存淘汰：近似 LRU 与 LFU</span></h2>
+      <p class="one-liner">内存达到 <code>maxmemory</code> 上限时，Redis 按 <code>maxmemory-policy</code> 决定淘汰哪些 key；近似 LRU 和 LFU 用采样池降低精度换取极低的内存和 CPU 开销。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Redis 是纯内存数据库，写入不受控时内存会耗尽，进程被 OOM Killer 杀掉。<code>maxmemory</code> 设定上限，超限时触发淘汰。精确 LRU 需要一个全局有序链表维护访问时间顺序，每次访问都要把节点移到链表头——对于千万级 key 的实例，这个链表本身就会占用大量内存，且每次写命令都要操作链表，与单线程的串行性相互放大。近似方案用少量元数据（每 key 24 位时钟）+每次淘汰时随机采样一小批 key 选最旧的，把准确度和开销都控制在可接受范围内。</p>
+      </div>
+
+      <h3>八种淘汰策略</h3>
+      <table class="compare-table">
+        <caption>maxmemory-policy 八种选项</caption>
+        <thead><tr><th>策略</th><th>淘汰范围</th><th>算法</th><th>典型场景</th></tr></thead>
+        <tbody>
+          <tr><td><code>noeviction</code>（默认）</td><td>—</td><td>不淘汰，写命令返回 OOM 错误</td><td>不允许丢数据的场景</td></tr>
+          <tr class="selected"><td><code>allkeys-lru</code></td><td>全部 key</td><td>近似 LRU</td><td>通用缓存，不确定哪些 key 有 TTL</td></tr>
+          <tr class="selected"><td><code>allkeys-lfu</code></td><td>全部 key</td><td>LFU（4.0+）</td><td>有稳定热点的场景，抗扫描污染</td></tr>
+          <tr><td><code>allkeys-random</code></td><td>全部 key</td><td>随机</td><td>访问均匀、无冷热区分时</td></tr>
+          <tr><td><code>volatile-lru</code></td><td>有 TTL 的 key</td><td>近似 LRU</td><td>持久 key 不允许被淘汰</td></tr>
+          <tr><td><code>volatile-lfu</code></td><td>有 TTL 的 key</td><td>LFU</td><td>同上 + 热点保留</td></tr>
+          <tr><td><code>volatile-random</code></td><td>有 TTL 的 key</td><td>随机</td><td>同上 + 无冷热偏好</td></tr>
+          <tr><td><code>volatile-ttl</code></td><td>有 TTL 的 key</td><td>优先淘汰 TTL 最短的</td><td>希望先让即将过期的 key 先走</td></tr>
+        </tbody>
+      </table>
+
+      <h3>近似 LRU：24 位时钟 + 采样池</h3>
+      <p>每个 <code>redisObject</code> 有一个 <strong>24 位的 LRU 时钟字段</strong>，记录最近一次访问的秒级时间戳（低 24 位，约 194 天回绕一次）。触发淘汰时，Redis 随机采样 <code>maxmemory-samples</code>（默认 5）个 key，加入一个候选池（eviction pool），保留其中访问时间最老的 key；下次淘汰再采样，与池中已有候选合并选最旧的淘汰。</p>
+
+      <p>把 <code>maxmemory-samples</code> 调到 10，准确度已非常接近真正的 LRU，但内存和 CPU 开销仍是 O(采样数) 而非 O(key 总数)。</p>
+
+      <h3>LFU（Redis 4.0）：Morris 计数器 + 时间衰减</h3>
+      <p>LFU 把 LRU 时钟字段复用为一个 <strong>8 位字段</strong>，分成两部分：</p>
+      <ul>
+        <li><strong>高 5 位（ldt）</strong>：上次访问的分钟级时间戳，用于衰减计算——<code>lfu-decay-time</code>（默认 1 分钟）控制每过多少分钟计数减 1。</li>
+        <li><strong>低 3 位（counter）</strong>——这里文档有误，实际 LFU 使用原来 lru 字段的高 16 位存时间、低 8 位存计数。更准确地说：低 8 位作为 <strong>Morris 概率计数器</strong>，饱和在 255（实际访问次数对应约 100 万次）——每次访问不是无条件加 1，而是以 <code>1 / (counter × lfu-log-factor + 1)</code> 的概率加 1，使计数增长随访问次数呈对数曲线。<code>lfu-log-factor</code> 默认 10，让计数器在约 100 万次访问时饱和到 255。</li>
+      </ul>
+
+      <p>LFU 的核心优势：<strong>对一次性大扫描（全表遍历、批量导入）有天然抵抗力</strong>——新访问的 key 计数从 0 开始，不会立刻把老热点挤走；而 LRU 只看最近一次访问时间，一次全表扫描会把所有扫过的 key 都标记成"最近访问"，把真正的热点从淘汰候选池里挤掉。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想 · allkeys-lru 还是 allkeys-lfu</span>
+        <p>一个场景：有约 10 个稳定热点 key（被频繁访问），每天凌晨有一批批量任务扫描几十万个 key 做统计，这些 key 平时几乎不访问。用 allkeys-lru 还是 allkeys-lfu？为什么？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>用 <code>allkeys-lfu</code>。LRU 只看最近访问时间：凌晨批量扫描后，几十万个冷 key 的 lru 时钟全部更新为"最近访问"，比真正的热点 key 更新；如果此时内存压力触发淘汰，LRU 会把真正的热点当成"长时间未访问"优先淘汰，导致热点缓存失效、业务延迟尖刺。LFU 的 counter 由访问频率决定：热点 key 的 counter 经过长期积累很高，一次扫描把冷 key 的 counter 从 0 涨到几，无法与热点的 counter 竞争；淘汰时 LFU 优先淘汰 counter 最低的冷 key，热点安全。</p>
+        </details>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 740 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一条写命令经过 RDB 与 AOF 两条持久化路径的示意">
+          <defs>
+            <marker id="ar3c-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar3c-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="ar3c-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- client command box -->
+          <rect x="30" y="120" width="130" height="52" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="95" y="142" text-anchor="middle" class="node-label-accent">写命令</text>
+          <text x="95" y="158" text-anchor="middle" class="edge-label">SET / HSET 等</text>
+
+          <!-- main thread / memory -->
+          <rect x="220" y="120" width="160" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="300" y="142" text-anchor="middle" class="node-label">主线程执行</text>
+          <text x="300" y="158" text-anchor="middle" class="edge-label">写入内存数据集</text>
+
+          <!-- arrow client → main -->
+          <line x1="160" y1="146" x2="220" y2="146" class="diagram-accent" marker-end="url(#ar3c-accent)"/>
+
+          <!-- AOF path -->
+          <rect x="460" y="36" width="200" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="560" y="58" text-anchor="middle" class="node-label">AOF buffer</text>
+          <text x="560" y="74" text-anchor="middle" class="edge-label">命令追加到 page cache</text>
+
+          <rect x="460" y="116" width="200" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="560" y="138" text-anchor="middle" class="node-label">fsync（bio 线程）</text>
+          <text x="560" y="154" text-anchor="middle" class="edge-label">everysec → 每秒落盘</text>
+
+          <!-- RDB path -->
+          <rect x="460" y="200" width="200" height="52" rx="6" class="diagram-soft node-fill"/>
+          <text x="560" y="222" text-anchor="middle" class="node-label">fork 子进程</text>
+          <text x="560" y="238" text-anchor="middle" class="edge-label">bgsave → dump.rdb</text>
+
+          <!-- arrows main → AOF / RDB -->
+          <line x1="380" y1="136" x2="460" y2="62" class="diagram-ink" marker-end="url(#ar3c-ink)"/>
+          <text x="418" y="90" text-anchor="middle" class="edge-label">同步写入</text>
+          <line x1="380" y1="156" x2="460" y2="142" class="diagram-ink" marker-end="url(#ar3c-ink)"/>
+          <line x1="380" y1="162" x2="460" y2="226" class="diagram-soft" marker-end="url(#ar3c-soft)"/>
+          <text x="418" y="206" text-anchor="middle" class="edge-label">触发规则满足</text>
+
+          <!-- AOF buffer → fsync -->
+          <line x1="560" y1="88" x2="560" y2="116" class="diagram-ink" marker-end="url(#ar3c-ink)"/>
+
+          <!-- disk icon for AOF -->
+          <rect x="680" y="36" width="40" height="40" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="700" y="61" text-anchor="middle" class="node-label-accent">磁盘</text>
+          <line x1="660" y1="62" x2="680" y2="56" class="diagram-accent" marker-end="url(#ar3c-accent)"/>
+
+          <!-- disk icon for RDB -->
+          <rect x="680" y="200" width="40" height="40" rx="4" class="diagram-soft node-fill"/>
+          <text x="700" y="225" text-anchor="middle" class="edge-label">磁盘</text>
+          <line x1="660" y1="226" x2="680" y2="220" class="diagram-soft" marker-end="url(#ar3c-soft)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>一条写命令经过 AOF 与 RDB 两条持久化路径。<strong>注意</strong>：AOF 路径是同步的——每条命令执行后立即追加到 buffer，由 bio 线程异步 fsync；RDB 路径是异步 + 周期性的，由 fork 子进程独立完成，主线程不等待。</figcaption>
+      </figure>
+
+      <!-- ============================================================ -->
+      <section class="self-check">
+        <h2 id="self-check"><span class="num">·</span><span>自测</span></h2>
+        <ol>
+          <li>RDB bgsave 期间父进程收到写命令，数据会进 RDB 文件吗？为什么？</li>
+          <li><code>appendfsync everysec</code> 模式下，Redis 宕机最多丢失多少数据？原因是什么？</li>
+          <li>Redis 7.0 的多段 AOF 比旧版单文件 AOF 解决了什么具体风险？manifest 文件的作用是什么？</li>
+          <li>设计判别：一个同时作为缓存和持久化存储的实例（要求重启后数据尽量不丢、且恢复速度尽量快），持久化策略怎么配？</li>
+        </ol>
+        <details>
+          <summary>展开全部答案</summary>
+          <p><strong>1.</strong> 不会进入这次 bgsave 生成的 RDB 文件。fork 之后子进程持有 fork 那刻的内存视图，父进程后续写命令触发 COW，子进程看不到这些变更——它只写 fork 时刻的数据到 dump.rdb。这些新写入会在下一次 bgsave 或 AOF 中体现。</p>
+          <p><strong>2.</strong> 最多丢约 1 秒内的写入。原因：write() 系统调用把命令追加到 OS page cache，bio 线程每秒执行一次 fsync 把 page cache 刷盘；宕机发生在上次 fsync 完成后到下次 fsync 之前，最坏情况间隔约 1 秒，这期间的写入在磁盘上不存在，重放 AOF 时不可恢复。之所以不是 0：write() 返回后主线程认为"写完"，但数据仅在 page cache，需等下次 fsync 才真正落盘。</p>
+          <p><strong>3.</strong> 旧版单文件 AOF 在 rewrite 时需要原地覆盖，若覆盖到一半进程崩溃，文件可能处于既不是旧 AOF 也不是新 AOF 的损坏状态，数据丢失或无法恢复。多段 AOF 通过 manifest 清单文件原子切换：rewrite 完成后才更新 manifest 指向新的 base + incr，旧文件在 manifest 更新完成前不会被删除；恢复时以 manifest 为权威来源，消除了覆盖过程中宕机的一致性风险。manifest 文件的作用：记录当前有效的 base 文件和 incr 文件列表及其顺序，是 AOF 数据集的"目录"，加载时按 manifest 顺序依次处理，多余的历史文件直接忽略并清理。</p>
+          <p><strong>4.</strong> 推荐配置：<code>appendonly yes</code>（开启 AOF）+ <code>appendfsync everysec</code>（丢失窗口约 1 秒，性能可接受）+ <code>aof-use-rdb-preamble yes</code>（混合持久化，base 用 RDB 格式，恢复快）+ 同时保留 RDB（<code>save</code> 规则保持默认，作为兜底备份）。恢复时优先用 AOF（数据更新），RDB 作为 AOF 文件损坏时的兜底。如果能接受约 1 秒丢失，这套配置同时满足"恢复快"（base RDB + 少量 incr 重放比纯 AOF 快得多）和"丢失少"（AOF everysec）两个目标。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>估算并缓解 20 GB 实例的 fork 延迟</h3>
+        <p>一个 20 GB 数据集的 Redis 实例，开启了透明大页（THP）。执行 <code>bgsave</code> 时监控到 <code>latest_fork_usec</code> 超过 2 秒，同时 bgsave 期间有持续写入（约 500 MB/s 的写吞吐）。分析这 2 秒延迟的两个主要来源，并给出三条缓解措施。</p>
+        <details>
+          <summary>提示（不给全解）</summary>
+          <p><strong>延迟来源一：页表复制。</strong> 20 GB 数据集对应的页表大小正比于映射的页数；在 4 KB 普通页下，20 GB ÷ 4 KB ≈ 500 万个页表条目，复制这张页表本身就需要几十到几百毫秒。想一想：THP 把页大小变成 2 MB，同等数据量页表条目数如何变化？页表复制时间如何变化？</p>
+          <p><strong>延迟来源二：COW 缺页处理。</strong> fork 后父进程继续写入，每次写到一个共享页面时触发 COW：OS 为父进程分配新物理页、复制旧内容、更新页表。THP 下每次 COW 复制 2 MB 而非 4 KB，写入放大约 500 倍。500 MB/s 写吞吐在 THP 下意味着巨大的 COW 开销。</p>
+          <p><strong>三条缓解方向</strong>（各想一条机制）：① 关闭 THP（降低 COW 粒度）；② 控制 bgsave 期间的写入量（减少触发 COW 的次数）；③ 提高 AOF rewrite 频率、减少依赖 bgsave 的频率（减少 bgsave 触发次数本身）。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li><a href="https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/">redis.io · Redis Persistence</a>（RDB / AOF 官方文档）</li>
+          <li><a href="https://redis.io/blog/redis-7-0-multi-part-aof-design/">redis.io · Redis 7.0 Multi-Part AOF Design</a>（多段 AOF 设计说明，官方博客）</li>
+          <li><a href="https://redis.io/docs/latest/develop/reference/eviction/">redis.io · Key eviction · LRU / LFU</a>（淘汰策略与近似算法官方文档）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="02-single-thread-and-io.html">
+          <span class="label">← 上一章</span>
+          <span class="title">02 单线程与 IO 模型</span>
+        </a>
+        <a class="next" href="04-caching-patterns.html">
+          <span class="label">下一章 →</span>
+          <span class="title">04 缓存工程</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#rdb" data-toc-target="rdb">3.1 RDB · fork + COW</a></li>
+        <li><a href="#aof" data-toc-target="aof">3.2 AOF · 多段结构</a></li>
+        <li><a href="#fsync" data-toc-target="fsync">3.3 fsync 策略</a></li>
+        <li><a href="#comparison" data-toc-target="comparison">3.4 RDB vs AOF</a></li>
+        <li><a href="#expiry" data-toc-target="expiry">3.5 过期删除</a></li>
+        <li><a href="#eviction" data-toc-target="eviction">3.6 内存淘汰</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

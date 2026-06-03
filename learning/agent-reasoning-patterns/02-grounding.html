@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>接地：从「想」到「做」 · Agent 推理模式（ReAct / Reflexion 等）教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+.toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+@media (max-width: 640px) { .toc-grid { grid-template-columns: 1fr; } }
+.toc-card { display: block; padding: 14px 16px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.toc-card:hover { border-color: var(--vermilion); }
+.toc-card .n { font-family: var(--mono); font-size: 11px; color: var(--vermilion); font-weight: 700; letter-spacing: 0.06em; }
+.toc-card .t { display: block; font-weight: 600; font-size: 15px; margin: 4px 0 2px; }
+.toc-card .d { display: block; font-size: 13px; color: var(--ink-soft); line-height: 1.45; }
+.meta-row { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin: 8px 0 0; letter-spacing: 0.03em; }
+.meta-row strong { color: var(--ink-soft); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-cot-family.html">01 CoT 家族</a><span class="sep">—</span>
+    <a href="02-grounding.html" class="current">02 接地</a><span class="sep">—</span>
+    <a href="03-search-frontier.html">03 搜索·前沿</a><span class="sep">—</span>
+    <a href="04-reasoning-models.html">04 推理模型</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Agent 推理模式 · 深挖版教程 · 第 2 章</p>
+        <h1>接地：从「想」到「做」</h1>
+        <p class="recap">上一章建立了「推理即算力」，也留下一个尾巴——闭环 CoT 没有外部真值校验、会一脸自信地错。这一章就是答案：把每一步推理钉在外部反馈上。纵轴（接地 grounding）的下半场从这里开始。</p>
+        <p class="meta-row"><strong>定位</strong>：纵轴下半 · grounding　|　<strong>主角</strong>：ReAct · Plan-and-Execute · Reflexion　|	<strong>代码状态</strong>：示例为讲解用伪代码，标注"未本地验证"</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章把这四件事钉清楚</p>
+        <ul>
+          <li>闭环推理（CoT / ToT）为什么会自信地幻觉——错误进了链条就顺着往下传，没有任何一步回头核对真值</li>
+          <li>ReAct 怎么用 <strong>observation</strong>（把真实结果喂回推理的那一步）接地：交错 Thought → Action → Observation，让下一步推理以真值为条件</li>
+          <li>前置规划（Plan-and-Execute）vs 交错（ReAct）：计划越前置越省调用，但世界中途变了，计划就过时</li>
+          <li>Reflexion 怎么跨「回合（episode，一次完整尝试）」接地：把一次失败的口头复盘写进记忆，下次重试前置进上下文</li>
+        </ul>
+      </section>
+
+      <p>横轴这一章往右移了两格：从上一章的串行 token、并行采样，走到<strong>工具往返</strong>（ReAct）与<strong>重试回合</strong>（Reflexion）。但本章真正的主线是纵轴——所有这三种模式都在做同一件第 1 章模式做不到的事：<strong>让推理循环接上外部真值</strong>。同一句贯穿全教程的话依旧成立：每种模式都用推理期算力换可靠性；区别只在算力花在哪、循环接不接外部真值。第 1 章的 CoT 把算力花在串行 token 上、却把循环闷在模型内部；这一章把循环打开，接到世界上。</p>
+
+      <h2 id="s21"><span class="num">2.1</span><span>为什么闭环会幻觉</span></h2>
+      <p class="one-liner">CoT 和 ToT 生成的只是「看起来对」的文本——没有任何一步去和真实世界核对，错误一旦进入链条就顺着往下传。</p>
+
+      <p>第 1 章末尾的 faithfulness 讨论已经埋下伏笔：一段 CoT 链条读起来步步成理，不等于每一步都成立。把那个观察推到极限，就是闭环推理的根本风险。一次 CoT 调用，从头到尾发生在模型内部——输入 token 进去，中间 token 一路自回归地生成出来，输出 token 收尾。整条链上，<strong>没有任何一个环节把中间结论拿去和外部真值对照</strong>。模型写下"《泰坦尼克号》的导演是斯皮尔伯格"时，它不会、也无从去查一下；它只是按训练分布，生成了一个高概率、读起来通顺的下一句。</p>
+
+      <div class="rationale">
+        <span class="label">底层机制 · 错误传播 error propagation</span>
+        <p>自回归生成的每一步，都把已经写出的全部 token 当成既定前提。这意味着链条第 3 步如果错了，第 4、5、6 步不是去纠正它，而是<strong>以这个错误为条件</strong>继续往下推——错误被当成事实，顺着链条放大。这就是 error propagation：闭环里没有任何反向校验的力量，一个早期的小错会被后续每一步当成地基，盖出一座自洽却整体错误的推理楼。链条越长，越自洽，也越危险——因为它读起来越像真的。</p>
+      </div>
+
+      <p>这正是纵轴上半（内部闭环）的代价，也是引入 grounding 的全部动机。把更多算力花在更长的链条、更宽的树上（横轴右移），只会让这座楼盖得更高更精致——但地基若错，楼越高摔得越狠。要根治，得换一根轴：不在「想得更多」上加码，而是给循环装一个能<strong>从外部纠错</strong>的接口。下一节的 ReAct 就是这个接口最直接的形态。</p>
+
+      <h3>场景走查：一道多跳事实题</h3>
+      <p>题目：<em>「莱昂纳多·迪卡普里奥出生那年，拿下奥斯卡最佳影片的电影，它的导演是谁？」</em>这是一道两跳题——先定位「出生年」，再查「那年的最佳影片及其导演」。纯 CoT 怎么走：</p>
+      <div class="callout example">
+        <span class="label">纯 CoT（闭环，无核对）</span>
+        <p>「迪卡普里奥出生于 1974 年。1974 年的奥斯卡最佳影片是《教父 2》，导演是弗朗西斯·科波拉。」——读起来天衣无缝，但<strong>两处都可能是编的</strong>：出生年若记成 1974（实际 1974-11-11 出生，奥斯卡颁的是上一年度影片，时间错位极易混淆），最佳影片归属哪一届更容易张冠李戴。模型不会停下来查，它只是顺着高概率往下写，把一个似是而非的导演自信地交了出来。</p>
+      </div>
+      <p>问题不在模型"不够聪明"，而在这条链<strong>结构上没有核对的入口</strong>。下一节同一道题，ReAct 会先 search、再 observe 到真实结果、然后才落笔——区别就是那一根从外部回流的线。</p>
+
+      <h2 id="s22"><span class="num">2.2</span><span>ReAct：用 observation 接地</span></h2>
+      <p class="one-liner">交错 Thought → Action → Observation：Action 调用工具或环境，Observation 把真实结果喂回推理，于是下一步「想」是以真值为条件，而不是只凭先验。</p>
+
+      <p>ReAct（Yao et al. 2022，<em>Reasoning + Acting</em>，直译「边推理边行动」）的结构朴素到一句话能讲完：让模型在一个循环里交替产出三种东西——<strong>Thought</strong>（一句自然语言推理，决定下一步干什么）、<strong>Action</strong>（一个结构化的工具调用，比如 <code>search[1974 奥斯卡最佳影片]</code>）、<strong>Observation</strong>（外部代码执行那个 Action 后，把真实返回结果作为文本贴回上下文）。然后基于这条新到手的真值，模型产出下一个 Thought，循环继续，直到某个 Action 是 <code>finish[答案]</code>。</p>
+
+      <p>它同时解决了两个方向的病。纯推理（CoT）的病是<strong>幻觉、且无法更新事实</strong>——模型只能调用训练时见过的世界，查不了今天的航班、也核对不了一个具体年份。纯行动（一个只会调工具、不会推理的策略）的病是<strong>无法规划</strong>——它能执行单步动作，却串不起「先查 A、根据 A 的结果决定查 B」这种依赖链。ReAct 把两者缝在一起：Thought 负责规划与决策，Action/Observation 负责落地与核对。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ReAct 的 Thought-Action-Observation 闭环，Observation 的箭头来自框外的外部工具或世界，与 CoT 的纯内部闭环对比">
+          <defs>
+            <marker id="arrowReact" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrowGround" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- LEFT: CoT closed internal loop, for contrast -->
+          <text x="118" y="34" text-anchor="middle" class="node-label" font-weight="700">CoT：内部闭环</text>
+          <rect x="40" y="58" width="156" height="150" rx="8" class="diagram-soft"/>
+          <text x="118" y="80" text-anchor="middle" class="edge-label">模型内部</text>
+          <rect x="70" y="96" width="96" height="34" rx="6" class="diagram-ink node-fill"/>
+          <text x="118" y="117" text-anchor="middle" class="node-label" font-size="12">想</text>
+          <rect x="70" y="150" width="96" height="34" rx="6" class="diagram-ink node-fill"/>
+          <text x="118" y="171" text-anchor="middle" class="node-label" font-size="12">再想</text>
+          <line x1="118" y1="130" x2="118" y2="150" class="diagram-ink" marker-end="url(#arrowReact)"/>
+          <text x="232" y="138" text-anchor="middle" class="edge-label">无核对</text>
+
+          <!-- RIGHT: ReAct loop with external grounding -->
+          <text x="510" y="34" text-anchor="middle" class="node-label-accent" font-weight="700">ReAct：接地闭环</text>
+
+          <!-- Thought -->
+          <rect x="430" y="58" width="160" height="38" rx="6" class="diagram-ink node-fill"/>
+          <text x="510" y="82" text-anchor="middle" class="node-label" font-size="12">Thought（想）</text>
+          <!-- Action -->
+          <rect x="430" y="132" width="160" height="38" rx="6" class="diagram-ink node-fill"/>
+          <text x="510" y="156" text-anchor="middle" class="node-label" font-size="12">Action（做）</text>
+          <!-- Observation -->
+          <rect x="430" y="206" width="160" height="38" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="510" y="230" text-anchor="middle" class="node-label-accent" font-size="12">Observation（看）</text>
+
+          <!-- Thought -> Action -->
+          <line x1="510" y1="96" x2="510" y2="132" class="diagram-ink" marker-end="url(#arrowReact)"/>
+          <!-- Action -> external tool -->
+          <line x1="590" y1="151" x2="690" y2="151" class="diagram-ink" marker-end="url(#arrowReact)"/>
+          <!-- External tool/world box, OUTSIDE -->
+          <rect x="640" y="124" width="104" height="54" rx="8" class="diagram-accent" stroke-dasharray="5 3"/>
+          <text x="692" y="146" text-anchor="middle" class="branch-label" font-size="11">外部工具 / 世界</text>
+          <text x="692" y="164" text-anchor="middle" class="edge-label">Wikipedia API…</text>
+          <!-- grounding line: external -> Observation (the key red line) -->
+          <path d="M 692 178 L 692 225 L 596 225" class="diagram-accent" fill="none" marker-end="url(#arrowGround)"/>
+          <text x="690" y="206" text-anchor="middle" class="branch-label" font-size="10">真值回流</text>
+          <!-- Observation -> next Thought (loop back up) -->
+          <path d="M 430 225 L 360 225 L 360 77 L 430 77" class="diagram-ink" fill="none" marker-end="url(#arrowReact)"/>
+          <text x="360" y="155" text-anchor="middle" class="edge-label">下一轮</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>左边的 CoT 在模型内部空转、没有任何核对入口；右边的 ReAct 多了一根<strong>从框外回流</strong>的红线——Observation 把真实外部状态注入上下文。<strong>注意</strong>：接地的全部要害，就是那根从「外部工具 / 世界」流回 Observation 的红线；没有它，ReAct 退化成普通 CoT。</figcaption>
+      </figure>
+
+      <div class="rationale">
+        <span class="label">底层机制 · 深一层：Observation 改变了下一步的条件分布</span>
+        <p>关键不在「模型会调工具」这件表面事，而在 Observation 把<strong>真实外部状态</strong>写进了上下文。自回归生成永远是「给定上文，预测下一个 token」。CoT 的上文全由模型自己生成，所以下一步只能以模型的<strong>先验</strong>为条件——它编出的那个导演，就是先验里最顺的猜测。ReAct 在上文里插入了一段模型自己生不出来的真值（"搜索结果：1974 年最佳影片是《骗中骗》"），于是下一个 Thought 是<strong>以这段真值为条件</strong>生成的。这一步条件的替换，正是消除 CoT 自信幻觉与错误传播的机制本身：错误不再能无阻力地往下传，因为每隔一步就有一段外部真值把链条钉回地面。</p>
+      </div>
+
+      <p>ReAct 还便宜得惊人：原始论文靠 <strong>1–2 个 in-context 例子</strong>（few-shot 演示几轮 Thought/Action/Observation 长什么样）就能让模型学会这套交错格式，无需微调。它在 <strong>PaLM-540B</strong> 与 <strong>GPT-3</strong> 上验证。决策类任务的提升尤其大：<strong>ALFWorld</strong>（文字版具身家务任务）上 ReAct 比 imitation / RL 基线<strong>绝对高出 34%</strong>；<strong>WebShop</strong>（模拟网购）上<strong>高出约 10%</strong>。这些任务的共同点是——你必须真的去环境里看一眼当前状态，纯靠脑补走不通。</p>
+
+      <div class="callout warning">
+        <span class="label">别漏 · 一个被广泛误记的细节</span>
+        <p>「ReAct 在所有任务上都吊打 CoT」是错的。在知识密集型问答 <strong>HotpotQA</strong> 上，<strong>单纯 ReAct 可能不如单纯 CoT</strong>——因为 ReAct 受限于检索质量，搜不到好结果时反而被带偏，而 CoT 能放开调用模型的内部知识。论文里那个著名的胜绩，是 <strong>ReAct + CoT-Self-Consistency 合用</strong>（ReAct 搜不动时回退到 CoT 投票，两者互补），常被以讹传讹成"纯 ReAct 赢了"。记准这一点，面试里能一句话戳破对方的复述式理解。</p>
+      </div>
+
+      <h3>场景走查：同一道多跳题，ReAct 怎么走</h3>
+      <p>回到 §2.1 那道题。ReAct 不再一口气编出导演，而是把它拆成可核对的几轮。逐步标注每一段对应什么：</p>
+      <div class="code-block">
+        <div class="header"><span class="filename">react_trace.txt</span><span class="lang">trace</span></div>
+        <pre><code class="language-text">Thought 1:  要先确定迪卡普里奥的出生年份。            ← 规划：决定先查哪一跳
+Action 1:   search["Leonardo DiCaprio 出生年份"]      ← 行动：发出结构化工具调用
+Observation 1: 莱昂纳多·迪卡普里奥，1974-11-11 出生。  ← 接地：真实结果回流（模型自己生不出这条）
+Thought 2:  1974 年出生。下一步查 1974 年度奥斯卡最佳影片。
+Action 2:   search["1974 年度 奥斯卡 最佳影片"]
+Observation 2: 第 47 届（表彰 1974 年影片）最佳影片为《教父 2》。  ← 接地：纠正了"届/年份"错位
+Thought 3:  《教父 2》的导演需要确认。
+Action 3:   search["教父 2 导演"]
+Observation 3: 《教父 2》导演为弗朗西斯·福特·科波拉。
+Thought 4:  三跳齐了，可以作答。
+Action 4:   finish["弗朗西斯·福特·科波拉"]            ← 收尾：每一跳都被外部真值钉过</code></pre>
+      </div>
+      <p>对照纯 CoT 那条「一口气编完」的链：ReAct 把同一道题切成「想要查什么 → 真的去查 → 拿真值校准下一步」的节拍。每个 Observation 都是一次纠错机会——哪怕 Thought 2 的年份记岔了，Observation 2 也会把它拽回正轨。这就是接地与闭环最直观的差别。</p>
+
+      <p>至于 Action 在工程上<strong>究竟怎么变成一次真实的 <code>tool_use</code> 调用</strong>、结果又怎么被解析回 Observation——那是工具协议层的事，本教程不展开，详见 <a href="../tool-use/03-agent-loop.html#s32">tool-use · Agent Loop</a>。而 ReAct 作为一种<strong>控制流</strong>在「提前承诺 ↔ 临场适应」轴上的定位与机制细节，规划视角讲得更细：<a href="../agent-planning/02-decomposition.html#s21">agent-planning · ReAct</a>。本节只关心一件事——它<em>为什么能消除幻觉</em>（答案就是那根真值回流线）。</p>
+
+      <div class="predict">
+        <span class="question-label">先想再翻 · Predict</span>
+        <p>把上面 trace 里所有 Observation 行删掉、只留 Thought 和 Action，让模型照着往下生成——它还算不算 ReAct？输出质量会怎样？</p>
+        <details>
+          <summary>翻看答案</summary>
+          <p>不算了，它退化成了纯 CoT。Observation 是接地的唯一载体；删掉它，模型的下一个 Thought 又只能以自己生成的上文为条件，真值回流线断了，自信幻觉与错误传播全部回来。更糟的是格式上它<em>还长得像</em> ReAct（有 Thought 有 Action），容易骗过 review——这正是图 2.1 那根红线被强调的原因：判断一个循环接没接地，看的不是它有没有 Action，而是有没有真值流回来喂给下一步。</p>
+        </details>
+      </div>
+
+      <h2 id="s23"><span class="num">2.3</span><span>Plan-and-Execute（前置）vs ReAct（交错）</span></h2>
+      <p class="one-liner">ReAct 走一步看一步、交错地接地；Plan 系把规划提到最前面一次出全——更省调用、更便宜，代价是世界中途变了，计划就过时。</p>
+
+      <p>ReAct 的接地是<strong>交错</strong>式的：每个 Action 之后立刻 observe、立刻调整。另一种思路是把「想」整体前置——先一次性想出完整计划，再逐步执行。这条路有两个常被混为一谈的东西，必须拆开讲。</p>
+
+      <h3>论文：Plan-and-Solve（Wang 2023）</h3>
+      <p><strong>Plan-and-Solve</strong>（Wang et al. 2023，arXiv 2305.04091）是一个<strong>单次 zero-shot prompt</strong>，不是多智能体架构。它把经典的「Let's think step by step」升级成「先理解问题、<strong>制定一个分步计划</strong>，再按计划逐步求解」——本质是用一句更结构化的指令，引导模型在<strong>一次</strong>生成里先列计划纲要、再展开。它的进阶版 <strong>PS+</strong> 进一步加上「<strong>抽取相关变量、算出中间量</strong>」的指令，专治算术题里看错数、漏算中间步的毛病。效果：在 <strong>GSM8K</strong>（小学数学应用题）上，PS+ 用 <strong>text-davinci-003</strong> 拿到 <strong>58.2%</strong>，全面超过 Zero-shot-CoT。注意它仍是闭环的——计划和求解都在一次模型生成里完成，没有外部真值；它的接地程度其实和 CoT 同档，"Plan"在这里是一种 prompt 结构，不是工具往返。</p>
+
+      <h3>工程脚手架：LangChain 的 Plan-and-Execute agent</h3>
+      <p>另一个东西是 <strong>LangChain 的「Plan-and-Execute」agent</strong>（思路源自 BabyAGI）：一个<strong>独立的 planner LLM</strong> 先产出一张完整的步骤表，然后一个 <strong>executor</strong> 逐条执行——执行每一步时才可能去调工具、接地。它是<strong>工程脚手架</strong>，不是 Wang 那篇论文。两者都叫「Plan」，但层级完全不同：论文是「一次生成内先列计划」的提示技巧；LangChain 是「planner 与 executor 分成两个角色」的运行架构。把它们混作一谈，是这一带最常见的认知错位。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="交错 ReAct 与前置 Plan-Execute 两条时间线对比：上排想做看交替，下排先一次出全计划再逐步执行">
+          <defs>
+            <marker id="arrowTL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- TOP timeline: ReAct interleaved -->
+          <text x="20" y="50" class="node-label-accent" font-weight="700" font-size="13">ReAct · 交错</text>
+          <line x1="150" y1="60" x2="720" y2="60" class="diagram-ink" marker-end="url(#arrowTL)"/>
+          <!-- T A O repeating -->
+          <rect x="160" y="42" width="44" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="182" y="64" text-anchor="middle" class="edge-label">想</text>
+          <rect x="212" y="42" width="44" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="234" y="64" text-anchor="middle" class="edge-label">做</text>
+          <rect x="264" y="42" width="44" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="286" y="64" text-anchor="middle" class="branch-label" font-size="10">看</text>
+          <rect x="324" y="42" width="44" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="346" y="64" text-anchor="middle" class="edge-label">想</text>
+          <rect x="376" y="42" width="44" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="398" y="64" text-anchor="middle" class="edge-label">做</text>
+          <rect x="428" y="42" width="44" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="450" y="64" text-anchor="middle" class="branch-label" font-size="10">看</text>
+          <rect x="488" y="42" width="44" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="510" y="64" text-anchor="middle" class="edge-label">想</text>
+          <rect x="540" y="42" width="44" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="562" y="64" text-anchor="middle" class="edge-label">做</text>
+          <rect x="592" y="42" width="44" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="614" y="64" text-anchor="middle" class="branch-label" font-size="10">看</text>
+          <text x="690" y="98" text-anchor="middle" class="edge-label">每步都重想</text>
+
+          <!-- BOTTOM timeline: Plan-Execute upfront -->
+          <text x="20" y="186" class="node-label" font-weight="700" font-size="13">Plan-Execute · 前置</text>
+          <line x1="150" y1="196" x2="720" y2="196" class="diagram-ink" marker-end="url(#arrowTL)"/>
+          <!-- one big plan box, then execute steps -->
+          <rect x="160" y="166" width="120" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="220" y="190" text-anchor="middle" class="node-label" font-size="12">一次出全计划</text>
+          <text x="220" y="208" text-anchor="middle" class="edge-label">步1·步2·步3</text>
+          <rect x="320" y="178" width="80" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="360" y="200" text-anchor="middle" class="edge-label">执行 步1</text>
+          <rect x="420" y="178" width="80" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="460" y="200" text-anchor="middle" class="edge-label">执行 步2</text>
+          <rect x="520" y="178" width="80" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="560" y="200" text-anchor="middle" class="edge-label">执行 步3</text>
+          <text x="660" y="240" text-anchor="middle" class="edge-label">不再回头改计划</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>上排 ReAct 想 / 做 / 看交替、每步都重想（planner 调用多、贵，但意外能立刻被看见）；下排 Plan-Execute 先一次性出全计划、再逐步执行。<strong>注意</strong>：计划越前置，planner 调用越省、越便宜，但执行途中世界若变了，前置的计划越看不见意外、越容易过时。</figcaption>
+      </figure>
+
+      <div class="rationale">
+        <span class="label">取舍 · 前置规划买什么、赔什么</span>
+        <p><strong>买到</strong>：planner 只调一次（而非每步重想），执行阶段可以用更便宜的逻辑甚至更小的模型，总 token 成本与延迟都低；计划还能被人读一遍、审一遍再放行。<strong>赔上</strong>：计划是在「执行前的世界快照」上做的，一旦执行途中世界变了（某步报错、检索到的事实推翻了前提、外部状态被别人改了），<strong>计划就过时（stale）</strong>，executor 还在照着一张已作废的地图走。ReAct 反过来——每步都重想，贵，但任何意外都在下一个 Thought 里立刻被纳入。<strong>世界越稳、步骤越确定，越偏前置；世界越动、越需要临场纠偏，越偏交错。</strong></p>
+      </div>
+
+      <p>这条「前置 ↔ 交错」正是规划视角的主轴。Plan-and-Execute 作为一种控制流的完整定位（planner / executor 怎么分、什么时候触发重规划），见 <a href="../agent-planning/02-decomposition.html#s22">agent-planning · Plan-and-Execute</a>。</p>
+
+      <h2 id="s24"><span class="num">2.4</span><span>Reflexion：跨回合用记忆接地</span></h2>
+      <p class="one-liner">ReAct 在一次尝试内接地；Reflexion 跨「回合」接地——一次失败后把口头自我批评写进记忆，下次重试前置进上下文，零梯度更新。</p>
+
+      <p>ReAct 和 Plan-Execute 的接地都发生在<strong>一次尝试（episode，一个回合 = 从开始到给出结果或失败的完整一轮）之内</strong>。Reflexion（Shinn et al. 2023，arXiv 2303.11366）把接地的尺度拉长到<strong>回合之间</strong>：这一回合栽了，不白栽——让模型把"我哪一步错了、下次该怎么改"用自然语言写下来，存进 <strong>episodic memory</strong>（情节记忆，一段跨回合保留的文字笔记），下一回合重试时把这段反思<strong>前置进上下文</strong>，相当于带着上次的教训重来。</p>
+
+      <p>它有三个角色：<strong>Actor</strong>（真正去做任务的策略，本身可以就是个 ReAct agent）、<strong>Evaluator</strong>（判定这一回合成没成、给出信号，可以是单元测试、环境奖励、或一个打分模型）、<strong>Self-Reflection</strong>（拿到失败信号后，生成一段口头复盘）。循环是：Actor 跑一回合 → Evaluator 判失败 → Self-Reflection 写反思 → 反思进记忆 → Actor 带记忆再跑下一回合。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Reflexion 跨回合记忆：回合1失败后写反思存入记忆，回合2带着记忆重试">
+          <defs>
+            <marker id="arrowRef" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrowRefA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Episode 1 -->
+          <rect x="40" y="48" width="130" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="72" text-anchor="middle" class="node-label" font-size="12">回合 1：失败</text>
+          <!-- -> reflect -->
+          <line x1="170" y1="68" x2="230" y2="68" class="diagram-ink" marker-end="url(#arrowRef)"/>
+          <rect x="232" y="48" width="140" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="302" y="66" text-anchor="middle" class="node-label-accent" font-size="12">写口头反思</text>
+          <text x="302" y="81" text-anchor="middle" class="edge-label">"我漏看了X"</text>
+          <!-- -> memory -->
+          <line x1="372" y1="68" x2="432" y2="68" class="diagram-ink" marker-end="url(#arrowRef)"/>
+          <rect x="434" y="44" width="150" height="48" rx="6" class="diagram-accent" stroke-dasharray="5 3"/>
+          <text x="509" y="66" text-anchor="middle" class="branch-label" font-size="12">episodic memory</text>
+          <text x="509" y="82" text-anchor="middle" class="edge-label">情节记忆（持续累积）</text>
+
+          <!-- memory feeds into Episode 2 (down then left) -->
+          <path d="M 509 92 L 509 150 L 215 150 L 215 168" class="diagram-accent" fill="none" marker-end="url(#arrowRefA)"/>
+          <text x="360" y="142" text-anchor="middle" class="branch-label" font-size="10">前置进上下文</text>
+
+          <!-- Episode 2 -->
+          <rect x="120" y="170" width="190" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="215" y="190" text-anchor="middle" class="node-label" font-size="12">回合 2：带记忆重试</text>
+          <text x="215" y="206" text-anchor="middle" class="edge-label">这次避开上次的错</text>
+          <!-- note: no weight update -->
+          <text x="600" y="190" class="edge-label">权重不变</text>
+          <text x="600" y="206" class="edge-label">口头强化 · 零梯度</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>失败不更新权重，而是变成一段文字存进 episodic memory，下一回合前置回上下文——这就是「口头强化」。<strong>注意</strong>：接地这次发生在回合之间，载体是记忆里那段自我批评；它要起作用，前提是 Evaluator 能给出"这回合失败了"的可靠信号。</figcaption>
+      </figure>
+
+      <div class="rationale">
+        <span class="label">底层机制 · 为什么叫「口头强化」而非强化学习</span>
+        <p>Reflexion <strong>不更新任何权重</strong>。传统强化学习靠梯度把奖励信号回灌进参数；Reflexion 把"奖励"翻译成一段自然语言反思，靠<strong>上下文</strong>而非<strong>参数</strong>传递改进——论文称之为 <strong>verbal reinforcement（口头强化）</strong>，零梯度。所以把它归为 RL 其实有点勉强：它没有策略梯度、没有价值函数更新，更像「带长期记忆的自我提示」。这也决定了它的脾气——改进是<em>软</em>的（取决于模型读不读得懂、用不用得上那段反思），不像梯度更新那样<em>硬</em>地刻进权重。</p>
+      </div>
+
+      <p>效果相当亮眼：<strong>HumanEval</strong>（代码生成）上，给 <strong>GPT-4</strong> 套 Reflexion，pass@1 从 <strong>80% 提到 91%</strong>（失败用例 → 跑测试 → 反思哪里写错 → 重写）；<strong>ALFWorld</strong> 上达到 <strong>97%</strong>。它和 ReAct 是叠加关系：Actor 用 ReAct 在回合内接地，Reflexion 在回合间接地，两层接地各管一段。Reflexion 作为「反思家族」的一员、它和 Self-Refine 等的异同，见 <a href="../agent-planning/03-search-reflection.html#s33">agent-planning · Reflexion</a>。</p>
+
+      <div class="callout warning">
+        <span class="label">代价 · 三个让 Reflexion 失效的条件</span>
+        <p><strong>① 没有可靠的 reward / eval 信号就没用。</strong>Reflexion 的全部杠杆压在 Evaluator 上——它得能判断"这回合到底成没成"。代码任务有单元测试、游戏有胜负，信号清晰；可一旦任务的成败本身模糊（"这篇文案写得好不好"），Evaluator 给不出可信判定，反思就成了无的放矢。<strong>② 一条坏反思会把错误固化。</strong>反思是模型自己写的，也可能写错；一条误导性的反思被前置进下一回合，会让 Actor <em>更</em>偏，越改越糟。<strong>③ 记忆持续变长。</strong>每回合都往 episodic memory 里加，上下文越堆越长，成本上升、且早期反思可能与当前回合不再相关。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">先想再翻 · Predict</span>
+        <p>把 Reflexion 用在一个「开放式写作润色」任务上（没有单元测试、没有客观对错），让它反复反思重写。它多半会怎样？</p>
+        <details>
+          <summary>翻看答案</summary>
+          <p>多半原地打转甚至变差。问题出在 Evaluator：开放式写作没有客观成败信号，所谓"评估"只能是模型对自己的主观打分，而模型既当运动员又当裁判，反思就失去了外部真值的锚——这恰恰违背了本章主线（接地需要<em>外部</em>真值）。更隐蔽的是代价②：一条主观且可能错误的反思被当成改进前置进去，会把输出往一个并不更好的方向越推越远。要救，得给它一个<em>外部</em>的、可信的评估信号（见本章末 challenge）。</p>
+        </details>
+      </div>
+
+      <h3>把三种接地放一起看</h3>
+      <table class="compare-table">
+        <caption>本章三种模式 · 接地发生在哪、靠什么、什么时候失效</caption>
+        <thead>
+          <tr><th>模式</th><th>算力花在哪（横轴）</th><th>接地发生在哪 / 靠什么</th><th>主要代价</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>ReAct</td>
+            <td>工具往返</td>
+            <td>一次尝试内 · 每步的 Observation 把真值喂回推理</td>
+            <td>受检索质量牵制；HotpotQA 上单用可能不如 CoT</td>
+          </tr>
+          <tr>
+            <td>Plan-Execute</td>
+            <td>前置规划 + 逐步执行</td>
+            <td>计划前置、执行时才接地 · planner / executor 分离</td>
+            <td>世界中途变了计划就过时（stale）</td>
+          </tr>
+          <tr>
+            <td>Reflexion</td>
+            <td>重试回合</td>
+            <td>回合之间 · 口头反思存入 episodic memory 再前置</td>
+            <td>没有可靠 eval 信号即失效；坏反思会固化错误；记忆变长</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>三者沿横轴依次右移（工具往返 → 前置规划 → 重试回合），但都坐在纵轴下半——都接了外部真值，只是接地的<strong>时间尺度</strong>不同：ReAct 在步与步之间，Plan-Execute 在计划与执行之间，Reflexion 在回合与回合之间。这正是本章的骨架。</p>
+
+      <section class="self-check">
+        <h2 id="self-check">自测 &amp; 辨析</h2>
+        <p>合上本页，先自己作答，再展开核对。第 4 题是设计层。</p>
+        <ol>
+          <li>
+            一段 agent trace 里有 Thought 和 Action，但每个 Action 后面跟的"Observation"其实是模型自己续写出来的、没真去调工具。它接地了吗？
+            <details>
+              <summary>翻看答案</summary>
+              <p>没有。接地的唯一判据是<strong>有没有外部真值流回上下文</strong>，而不是格式上有没有 Action / Observation 字样。模型自己续写的 Observation 仍来自先验，真值回流线是断的——它本质还是 CoT，只是穿了件 ReAct 的外衣（呼应图 2.1 和 §2.2 的 Predict）。</p>
+            </details>
+          </li>
+          <li>
+            为什么说「ReAct 在所有任务上都强于 CoT」是错的？举出反例任务。
+            <details>
+              <summary>翻看答案</summary>
+              <p>反例是 <strong>HotpotQA</strong>：单纯 ReAct 受检索质量牵制，搜不到好结果时被带偏，可能不如能放开调用内部知识的单纯 CoT。论文里的胜绩是 <strong>ReAct + CoT-Self-Consistency 合用</strong>，不是纯 ReAct。</p>
+            </details>
+          </li>
+          <li>
+            Reflexion 跨回合改进，却说它「不是真正的强化学习」，为什么？
+            <details>
+              <summary>翻看答案</summary>
+              <p>因为它<strong>零梯度、不更新权重</strong>。它把失败翻译成一段自然语言反思，靠<strong>上下文</strong>而非<strong>参数</strong>传递改进——论文称 verbal reinforcement（口头强化）。没有策略梯度、没有价值函数更新，所以归到 RL 名下有点勉强。</p>
+            </details>
+          </li>
+          <li>
+            <strong>（设计层）</strong>一个客服 agent 要处理「按订单号查物流、若延误则按公司政策给补偿方案」。该用 ReAct 还是 Plan-Execute？说清为什么不选另一个。
+            <details>
+              <summary>翻看答案</summary>
+              <p>偏 <strong>ReAct（交错）</strong>。关键在「<strong>若延误则…</strong>」——补偿这一步<strong>依赖物流查询的真实结果</strong>，执行前根本不知道走不走得到补偿分支，世界状态（物流是否延误）必须查了才知道。Plan-Execute 的前置计划在这里会过时：它得在没看到物流结果前就把整张步骤表定死，要么把补偿分支硬编进去（可能根本用不上）、要么漏掉（真延误时没法临场补）。ReAct 每步重想的代价（多几次 planner 调用）在这种<strong>状态依赖、分支由真值决定</strong>的任务里完全值得。反过来，若任务是「固定地把一张表的每行翻译并写回」——步骤确定、世界不变——那才轮到 Plan-Execute 省调用的优势。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <div class="challenge">
+        <span class="label">刚好够不着 · Challenge</span>
+        <h3>给一个没有可靠 eval 信号的任务，说明 Reflexion 为什么会失效、怎么补</h3>
+        <p>任务：让 agent 反复打磨一封「劝退信」，要求"既坚定又不失礼貌"。这里没有单元测试、没有客观胜负。<strong>(a)</strong> 用本章的机制说清：Reflexion 在这个任务上为什么多半原地打转甚至变差（提示：Evaluator 这一环断在哪、坏反思怎么固化）。<strong>(b)</strong> 不改 Reflexion 的核心循环，只动 Evaluator，给出至少一种把"模糊主观判断"重新接上<strong>外部真值</strong>的办法——让那段反思重新有锚可依。想清楚后，对照 §2.4 的 Predict 与代价清单检验自己的答案是否抓住了"接地需要外部真值"这条主线。</p>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考资料</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a>（Yao et al. 2022，arXiv 2210.03629）</li>
+          <li><a href="https://arxiv.org/abs/2305.04091">Plan-and-Solve Prompting: Improving Zero-Shot CoT by LLMs</a>（Wang et al. 2023，arXiv 2305.04091）</li>
+          <li><a href="https://arxiv.org/abs/2303.11366">Reflexion: Language Agents with Verbal Reinforcement Learning</a>（Shinn et al. 2023，arXiv 2303.11366）</li>
+          <li><a href="https://blog.langchain.dev/planning-agents/">LangChain · Plan-and-Execute Agents</a>（工程脚手架，思路源自 BabyAGI；区别于 Plan-and-Solve 论文）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="01-cot-family.html">
+          <span class="label">← 上一章</span>
+          <span class="title">01 CoT 家族</span>
+        </a>
+        <a class="next" href="03-search-frontier.html">
+          <span class="label">下一章 →</span>
+          <span class="title">03 搜索·前沿</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 闭环为何幻觉</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 ReAct · observation</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 前置 vs 交错</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 Reflexion · 记忆</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测 &amp; 辨析</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+</body>
+</html>

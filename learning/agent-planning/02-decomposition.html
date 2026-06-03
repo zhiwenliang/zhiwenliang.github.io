@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 任务分解家族 · Agent 任务规划（Planning）教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:#FFFFFF; --bg-soft:#FAFAFA; --bg-edge:#F4F4F4; --ink:#0A0A0A; --ink-soft:#525252;
+  --ink-faint:#A3A3A3; --rule:#E5E5E5; --vermilion:#B73B2F; --vermilion-soft:rgba(183,59,47,0.06);
+  --code-string:#2D6A4F; --code-number:#8B6914; --code-fn:#2C3E50;
+  --sans:'Noto Sans SC',-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Menlo',monospace;
+  --measure:880px; --page-max:1280px; --line:1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15.5px; line-height:var(--line); font-feature-settings:"kern","liga"; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+main { position: relative; }
+.progress-bar { position:fixed; top:0; left:0; height:2px; width:0; background:var(--vermilion); z-index:100; transition:width 80ms linear; }
+.learning-path { max-width:var(--page-max); margin:0 auto; padding:16px 40px 0; font-family:var(--mono); font-size:11px; letter-spacing:0.04em; color:var(--ink-faint); }
+.learning-path a { color:var(--ink-faint); text-decoration:none; padding:2px 0; margin:0 4px; }
+.learning-path a:first-child { margin-left:0; }
+.learning-path .sep { color:var(--ink-faint); margin:0 2px; user-select:none; }
+.learning-path .current { color:var(--vermilion); font-weight:700; }
+.page { display:grid; grid-template-columns:minmax(0,1fr) 200px; gap:48px; max-width:var(--page-max); margin:0 auto; padding:24px 40px 80px; }
+@media (max-width:1080px) { .page { grid-template-columns:1fr; gap:0; padding:16px 24px 64px; } .toc-sidebar { display:none; } }
+article { max-width:var(--measure); min-width:0; }
+.chapter-opener { padding:24px 0 16px; border-bottom:1px solid var(--rule); margin-bottom:24px; }
+.chapter-opener .chapter-label { font-family:var(--mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 8px; font-weight:500; }
+.chapter-opener h1 { font-family:var(--sans); font-weight:700; font-size:30px; line-height:1.2; margin:0 0 12px; letter-spacing:-0.01em; color:var(--ink); }
+.chapter-opener .recap { font-size:14px; color:var(--ink-soft); margin:0; max-width:640px; }
+@media (max-width:640px) { .chapter-opener h1 { font-size:24px; } }
+.schema-panel { border-left:2px solid var(--ink); padding:4px 0 4px 16px; margin:16px 0 32px; }
+.schema-panel .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 8px; font-weight:500; }
+.schema-panel ul { list-style:none; padding:0; margin:0; }
+.schema-panel li { padding:4px 0; font-size:14.5px; line-height:1.55; color:var(--ink); }
+.schema-panel li::before { content:"—  "; color:var(--ink-faint); }
+article p, article li { font-size:15.5px; line-height:var(--line); color:var(--ink); margin:0.9em 0; }
+article strong { font-weight:600; color:var(--ink); }
+article em { font-style:italic; color:var(--ink); }
+article :not(pre) > code { font-family:var(--mono); font-size:0.88em; background:var(--bg-soft); padding:1px 5px; border-radius:2px; color:var(--vermilion); border:1px solid var(--rule); }
+article a { color:var(--ink); text-decoration:underline; text-decoration-color:var(--ink-faint); text-underline-offset:2px; text-decoration-thickness:1px; transition:color 150ms,text-decoration-color 150ms; }
+article a:hover { color:var(--vermilion); text-decoration-color:var(--vermilion); }
+article h2 { font-family:var(--sans); font-weight:700; font-size:22px; line-height:1.3; margin:36px 0 8px; padding-top:16px; border-top:1px solid var(--rule); letter-spacing:-0.005em; }
+article h2 .num { font-family:var(--mono); font-weight:500; font-size:15px; color:var(--ink-faint); margin-right:10px; }
+article h3 { font-family:var(--sans); font-weight:600; font-size:16px; margin:20px 0 8px; color:var(--ink); }
+article .one-liner { font-size:16px; line-height:1.55; color:var(--ink); font-weight:500; margin:8px 0 18px; padding-left:12px; border-left:2px solid var(--ink-faint); }
+article .rationale { background:var(--bg-soft); padding:12px 16px; border-left:2px solid var(--ink-soft); margin:16px 0; font-size:14.5px; }
+article .rationale > .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:500; margin-bottom:4px; display:block; }
+article .rationale p { margin:4px 0; }
+.code-block { margin:16px 0; border:1px solid var(--rule); border-radius:3px; overflow:hidden; background:var(--bg-soft); }
+.code-block .header { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:var(--bg-edge); border-bottom:1px solid var(--rule); font-family:var(--mono); font-size:11px; color:var(--ink-soft); }
+.code-block .header .filename { font-weight:500; }
+.code-block .header .lang { color:var(--ink-faint); text-transform:uppercase; font-weight:500; font-size:10px; }
+.code-block .header .copy { border:none; background:transparent; font-family:var(--mono); font-size:10px; color:var(--ink-soft); cursor:pointer; padding:2px 6px; letter-spacing:0.05em; text-transform:uppercase; transition:color 150ms; }
+.code-block .header .copy:hover { color:var(--vermilion); }
+.code-block .header .copy.copied { color:var(--vermilion); }
+.code-block pre { margin:0; padding:14px 16px; overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.6; color:var(--ink); background:var(--bg-soft); }
+.code-block pre code { background:none; padding:0; color:inherit; border:none; font-weight:400; }
+.token.keyword,.token.boolean,.token.constant { color:var(--vermilion); font-weight:500; }
+.token.string,.token.char { color:var(--code-string); }
+.token.number { color:var(--code-number); }
+.token.comment,.token.prolog,.token.doctype,.token.cdata { color:var(--ink-faint); font-style:italic; }
+.token.function { color:var(--code-fn); font-weight:500; }
+.token.class-name { color:var(--ink); font-weight:700; }
+.token.operator,.token.punctuation { color:var(--ink-soft); }
+.token.builtin { color:var(--vermilion); }
+.token.property { color:var(--ink); }
+.token.tag,.token.attr-name { color:var(--code-fn); }
+.token.attr-value { color:var(--code-string); }
+.predict { margin:16px 0; padding:12px 16px; background:var(--bg-soft); border-left:2px solid var(--vermilion); border-radius:2px; }
+.predict > .question-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--vermilion); font-weight:500; margin:0 0 4px; display:block; }
+.predict p { margin:4px 0; color:var(--ink); }
+details { margin:10px 0 0; border-top:1px dashed var(--rule); padding-top:10px; }
+details > summary { cursor:pointer; list-style:none; font-family:var(--mono); font-size:11px; color:var(--ink-soft); letter-spacing:0.04em; padding:4px 0; transition:color 150ms; user-select:none; display:flex; align-items:center; gap:6px; }
+details > summary::-webkit-details-marker { display:none; }
+details > summary::before { content:"▸"; display:inline-block; color:var(--ink-faint); transition:transform 200ms,color 150ms; font-size:9px; }
+details[open] > summary::before { transform:rotate(90deg); color:var(--vermilion); }
+details > summary:hover { color:var(--vermilion); }
+details > summary:hover::before { color:var(--vermilion); }
+details > *:not(summary) { margin-top:8px; padding-left:14px; border-left:1px solid var(--rule); }
+.callout { margin:16px 0; padding:10px 16px; border-left:2px solid var(--ink-soft); background:var(--bg-soft); font-size:14.5px; }
+.callout .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:var(--ink-soft); margin:0 0 4px; display:block; }
+.callout p { margin:4px 0; }
+.callout.warning { border-left-color:var(--vermilion); background:var(--vermilion-soft); }
+.callout.warning .label { color:var(--vermilion); }
+.callout.tip { border-left-color:var(--ink-soft); }
+.callout.example { border-left-color:var(--ink-soft); }
+.callout.insight { border-left-color:var(--ink-soft); }
+.compare-table { margin:20px 0; width:100%; border-collapse:collapse; font-size:14px; }
+.compare-table caption { text-align:left; font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); padding:0 0 8px; font-weight:500; }
+.compare-table thead th { text-align:left; font-family:var(--sans); font-weight:600; font-size:13px; color:var(--ink); padding:8px 10px; border-bottom:1px solid var(--ink); }
+.compare-table tbody td { padding:8px 10px; border-bottom:1px solid var(--rule); vertical-align:top; line-height:1.5; }
+.compare-table tbody tr.selected td { font-weight:500; }
+.compare-table tbody tr.selected td:first-child { border-left:2px solid var(--vermilion); padding-left:8px; color:var(--vermilion); position:relative; }
+figure { margin:24px 0; }
+figure svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+figcaption { font-family:var(--sans); font-size:13px; color:var(--ink-soft); text-align:center; margin-top:10px; line-height:1.5; }
+figcaption .fig-num { font-family:var(--mono); font-weight:600; color:var(--vermilion); margin-right:6px; font-size:11px; letter-spacing:0.04em; }
+.self-check { margin:32px 0 20px; border-top:1px solid var(--ink); padding-top:20px; }
+.self-check h2 { border:none; padding-top:0; margin-top:0; font-size:18px; }
+.self-check ol { padding-left:22px; }
+.self-check ol li { margin:10px 0; padding-left:4px; }
+.self-check ol li::marker { font-family:var(--mono); color:var(--ink-faint); font-weight:500; font-size:13px; }
+.challenge { margin:24px 0; padding:14px 18px; background:var(--bg-soft); border-left:2px solid var(--vermilion); border-radius:2px; }
+.challenge .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:var(--vermilion); margin:0 0 8px; display:block; }
+.challenge h3 { margin-top:0; font-size:15px; }
+.references { margin:32px 0 16px; padding-top:16px; border-top:1px solid var(--rule); }
+.references h3 { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:500; margin:0 0 8px; }
+.references ul { padding-left:16px; }
+.references li { font-size:13.5px; line-height:1.55; color:var(--ink-soft); }
+.references li a { color:var(--ink); }
+.chapter-nav { margin-top:28px; padding-top:16px; border-top:1px solid var(--rule); display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.chapter-nav a { display:block; padding:12px 14px; border:1px solid var(--rule); text-decoration:none; color:var(--ink); transition:border-color 150ms; }
+.chapter-nav a:hover { border-color:var(--vermilion); }
+.chapter-nav a.next { text-align:right; }
+.chapter-nav .label { display:block; font-family:var(--mono); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:2px; }
+.chapter-nav .title { font-weight:500; font-size:14px; }
+.toc-sidebar { position:sticky; top:24px; align-self:start; padding-top:24px; font-family:var(--mono); font-size:11px; line-height:1.55; max-height:calc(100vh - 48px); overflow-y:auto; }
+.toc-sidebar .toc-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); font-weight:500; margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+.toc-sidebar ul { list-style:none; padding:0; margin:0; }
+.toc-sidebar li { margin:2px 0; }
+.toc-sidebar a { display:block; padding:3px 0 3px 10px; color:var(--ink-soft); text-decoration:none; border-left:2px solid transparent; transition:all 150ms; font-size:11px; }
+.toc-sidebar a:hover { color:var(--ink); }
+.toc-sidebar a.active { color:var(--vermilion); border-left-color:var(--vermilion); font-weight:500; }
+@media (prefers-reduced-motion:no-preference) { .chapter-opener { animation:fade-in 400ms cubic-bezier(0.2,0.7,0.3,1) both; } .schema-panel { animation:fade-in 400ms 100ms cubic-bezier(0.2,0.7,0.3,1) both; } }
+@keyframes fade-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+.diagram-ink { stroke:var(--ink); fill:none; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }
+.diagram-accent { stroke:var(--vermilion); fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.diagram-soft { stroke:var(--ink-faint); fill:none; stroke-width:1.1; stroke-dasharray:3 3; }
+.node-fill { fill:var(--bg); }
+.node-fill-accent { fill:var(--vermilion-soft); }
+.node-label { font-family:var(--sans); font-size:13px; font-weight:500; fill:var(--ink); }
+.node-label-accent { font-family:var(--sans); font-size:13px; font-weight:700; fill:var(--vermilion); }
+.edge-label { font-family:var(--mono); font-size:11px; fill:var(--ink-soft); paint-order:stroke; stroke:var(--bg); stroke-width:4px; stroke-linejoin:round; }
+.branch-label { font-family:var(--mono); font-size:11px; font-weight:700; fill:var(--vermilion); paint-order:stroke; stroke:var(--bg); stroke-width:4px; stroke-linejoin:round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-foundations.html">01 基础</a><span class="sep">—</span>
+    <a href="02-decomposition.html" class="current">02 分解家族</a><span class="sep">—</span>
+    <a href="03-search-reflection.html">03 搜索·反思</a><span class="sep">—</span>
+    <a href="04-frontier.html">04 前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>任务分解家族：沿权衡轴走一遍</h1>
+        <p class="recap">上一章立起了「承诺↔适应」这条轴，并把 ReAct 放在最适应的右端。这一章从 ReAct 出发，沿轴向"提前承诺"端走——每走一步，看它换来什么、又失去什么。四个范式（ReAct → Plan-and-Execute → ReWOO → LLMCompiler）就是这条轴上由右向左的四个落点。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>四个范式 = 同一条「承诺↔适应」轴上由右到左的四个落点，不是四套孤立机制</li>
+          <li>Plan-and-Execute 把「想」和「做」拆给两个模型，靠"贵规划器跑一次 + 廉价执行器跑 N 次"省钱</li>
+          <li>ReWOO 省 token 的真实机制 = 不把 observation 重复编码回推理循环——不是少调工具</li>
+          <li>LLMCompiler 把计划编译成一张可并行的 DAG，像 CPU 乱序执行那样调度独立子任务</li>
+          <li>承诺得越多，越省 token、越能并行，但对"计划外的意外"越盲</li>
+        </ul>
+      </section>
+
+      <h2 id="s21"><span class="num">2.1</span><span>ReAct 再看一眼：轴的最右端</span></h2>
+      <p class="one-liner">ReAct = 每行动一步就把真实观察喂回、再想下一步——最适应，也最贵、最串行。它是本章后三个范式都要打的靶子。</p>
+
+      <div class="rationale">
+        <span class="label">为什么先回到它</span>
+        <p>本章后面三个范式（Plan-and-Execute、ReWOO、LLMCompiler）的论文，全都拿 ReAct 当对照基线来证明自己更省、更快、更准。不先把 ReAct 的成本机制看透，后面"省 5 倍 token""降 3.7 倍延迟"这些数字就失去了锚点——它们都是相对 ReAct 而言的。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：ReAct 的成本来自一个常被误读的地方。它每一步都把<strong>累积到当前的全部上下文</strong>——原始 prompt 加上之前所有的 Thought、Action、Observation——重新编码进模型，再生成下一个 Thought。于是第 1 步编码 1 份上下文，第 2 步编码"上下文 + obs1"，第 3 步编码"上下文 + obs1 + obs2"……每条观察一旦进入轨迹，就会在剩下的每一步里被<strong>反复重新编码</strong>。轨迹有 N 步，最早那条观察就被编码了约 N 次。这使得总 token 消耗随轨迹长度增长（注意力计算的二次项还会让延迟涨得更陡），而且整个过程<strong>严格串行</strong>：第 N 步的 Thought 必须等第 N−1 步的 Observation 落地才能开始。</p>
+
+      <div class="callout warning">
+        <span class="label">钉死这一点 · 本章三个范式都从这里分叉</span>
+        <p>ReAct 贵，<strong>不是因为它调了很多次工具</strong>，而是因为同一条观察被重新编码了很多次。后三个范式各自攻击这条成本链的不同环节：Plan-and-Execute 让"想下一步"这件贵事少做几次；ReWOO 直接让观察<strong>不再回流</strong>到推理循环；LLMCompiler 打掉"串行"这一条，让独立步骤并行跑。把这句话记住，下面每一节都在拆它。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>假设一个 ReAct 任务要跑 8 步，每步的工具观察都不算短。如果只想把账单降下来，最该动手减少的是"工具调用次数"，还是"每步重新喂回的上下文体积"？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>是后者——<strong>每步重新喂回的上下文体积</strong>。工具调用本身（外部 API）通常不是 token 账单的大头；大头是每一步都把越来越长的历史塞回 LLM 重新编码。8 步里最早那条观察会被编码约 8 次。这正是 §2.3 ReWOO 的攻击点：它把观察彻底踢出推理循环，让推理器只为每条观察"付一次费"。记住这个判断，到 ReWOO 那节会兑现。</p>
+        </details>
+      </div>
+
+      <h2 id="s22"><span class="num">2.2</span><span>Plan-and-Execute：把「想」和「做」分开</span></h2>
+      <p class="one-liner">先让一个强模型一次性列出完整步骤，再让一个廉价模型逐步执行；每步做完过一道重规划闸门。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>ReAct 把"想下一步"和"做这一步"揉在同一个循环里，每一步都要请出同一个（通常很贵的）模型重新通读全部历史去推理。可多数步骤其实是机械执行，根本不需要顶配模型的推理力。把"想"（规划）和"做"（执行）拆开，就能用一个强模型把计划想一次，剩下的执行交给廉价模型——既省钱，又让规划器一次性看到全局、不被中间细节带偏。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：这里必须拆开两个长期被工程师混为一谈的名字——<strong>Plan-and-Solve</strong> 和 <strong>Plan-and-Execute</strong>，它们是<strong>两个不同的东西</strong>。</p>
+      <p><strong>Plan-and-Solve</strong>（Wang et al. 2023，arXiv 2305.04091）是一篇论文，本质是<strong>一次 zero-shot 的 prompt 改写</strong>：把 CoT 的 <code>"Let's think step by step"</code> 换成 <code>"Let's first devise a plan, then carry out the plan step by step"</code>；PS+ 版本再加一句"抽取相关变量和数值"。计划和求解在<strong>同一次生成</strong>里完成，没有 few-shot 示例、没有第二个模型。它的收益是统计意义上的错误抑制：缺步错误从 12% 降到 7%、计算错误从 7% 降到 5%。它属于上一章提过的"先定计划"思想的最早形态，但它并不引入独立的执行器。</p>
+      <p><strong>Plan-and-Execute</strong>（LangChain 的工程产物，受 BabyAGI 启发）则是<strong>另一回事</strong>：一个强<strong>planner</strong> 模型只跑<strong>一次</strong>，产出完整的步骤列表；然后一个廉价 <strong>executor</strong> 逐条执行每一步。成本结构因此是 <code>1×强模型 + N×廉价模型</code>，当步骤数 N 大于约 3 时就开始比"N 次都用强模型"的 ReAct 划算。它还在每一步执行后加一道 <strong>replan</strong>（重规划）闸门：拿到这一步的真实结果后，回看计划是否需要修改——这正是它没有把承诺推到最左端、仍保留一定适应性的原因。</p>
+
+      <div class="callout warning">
+        <span class="label">最容易被搞混的一点</span>
+        <p>Plan-and-Solve（论文，一次生成的 prompt 技巧）≠ Plan-and-Execute（LangChain 的双模型架构 + 重规划闸门）。名字像、思想沾边，但一个是"改一句 prompt"，一个是"拆成 planner/executor 两个角色 + 失败回到 planner"。工程讨论里这两个名字几乎天天被混用——看到时先问一句：到底指哪一个。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Plan-and-Execute 架构：规划器跑一次，执行器循环 N 次，失败经重规划闸门回到规划器">
+          <defs>
+            <marker id="pe-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <rect x="24" y="92" width="128" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="88" y="116" text-anchor="middle" class="node-label-accent">Planner 规划器</text>
+          <text x="88" y="134" text-anchor="middle" class="edge-label">强模型·跑 1 次</text>
+
+          <line x1="152" y1="120" x2="206" y2="120" class="diagram-ink" marker-end="url(#pe-arrow)"/>
+          <text x="179" y="110" text-anchor="middle" class="edge-label">步骤列表</text>
+
+          <rect x="206" y="92" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="266" y="116" text-anchor="middle" class="node-label">步骤队列</text>
+          <text x="266" y="134" text-anchor="middle" class="edge-label">step 1..N</text>
+
+          <line x1="326" y1="120" x2="380" y2="120" class="diagram-ink" marker-end="url(#pe-arrow)"/>
+
+          <rect x="380" y="92" width="132" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="446" y="116" text-anchor="middle" class="node-label">Executor 执行器</text>
+          <text x="446" y="134" text-anchor="middle" class="edge-label">廉价模型·跑 N 次</text>
+
+          <path d="M 446 92 C 446 56, 326 56, 326 88" class="diagram-ink" fill="none" marker-end="url(#pe-arrow)"/>
+          <text x="386" y="50" text-anchor="middle" class="edge-label">取下一步</text>
+
+          <line x1="446" y1="148" x2="446" y2="184" class="diagram-ink" marker-end="url(#pe-arrow)"/>
+
+          <rect x="372" y="184" width="148" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="446" y="206" text-anchor="middle" class="node-label">Replan 重规划闸门</text>
+          <text x="446" y="222" text-anchor="middle" class="edge-label">需改计划？</text>
+
+          <polyline points="372,209 88,209 88,148" class="diagram-accent" fill="none" marker-end="url(#pe-arrow)"/>
+          <text x="220" y="201" text-anchor="middle" class="branch-label">失败 → 回规划器</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>Plan-and-Execute：规划器只跑一次产出全列表，执行器对每步跑一次，失败时经重规划闸门回到规划器。
+          <strong>注意</strong>：那条红色回边（Replan → Planner）是它区别于"纯提前承诺"的关键——它承诺了一份计划，但每步后仍留了一扇能改计划的门。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>像装修：设计师（强模型）先出一版完整施工图，工人（廉价模型）照图逐项施工，每完成一项工头回看图纸要不要改。类比失效在沟通成本：真实工地里设计师和工人能随时对话澄清，而这里 planner 把图交给 executor 后，两者只通过那份计划文本沟通——planner 表达不清的地方，executor 会照着错的执行，错误就这么传下去（planner→executor 的误差传播是它的固有代价）。</p>
+      </div>
+
+      <p>这一步沿轴向左挪买到了<strong>成本</strong>（N 大时省钱）和<strong>专注</strong>（规划器一次看全局、执行器只管干活），付出的是<strong>重规划延迟</strong>（每步后都要过闸门）和<strong>planner→executor 的误差传播</strong>。它仍在轴的中段——既非 ReAct 的全适应，也非下面 ReWOO 的全盲承诺。</p>
+
+      <h2 id="s23"><span class="num">2.3</span><span>ReWOO：把 observation 踢出推理循环</span></h2>
+      <p class="one-liner">规划器先用占位变量写好整张蓝图，工具一次性填空，求解器读一遍蓝图加证据就出答案——观察从不回流到推理。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§2.1 钉死的结论是：ReAct 贵在"同一条观察被反复重新编码"。Plan-and-Execute 减少了"想"的次数，但执行器每步仍在通读历史。ReWOO（Xu et al. 2023，arXiv 2305.18323）把这条成本链从根上切断——既然观察重新编码是元凶，那就让观察<strong>压根不进推理循环</strong>。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：ReWOO 拆成三个模块。<strong>Planner</strong>（规划器）一口气写出整张蓝图，形式是一串 (Plan, #E) 元组：每条计划带一个 <code>#E1, #E2…</code> 这样的<strong>占位变量</strong>，代表"这一步工具的输出"——而此刻这个输出<strong>还不存在</strong>，规划器是在不知道结果的情况下先把整条链写完的。<strong>Workers</strong>（工人）随后把这些工具<strong>各跑一次</strong>，把真实输出填进对应的 <code>#E</code>。<strong>Solver</strong>（求解器）最后把"蓝图 + 填好的证据"<strong>读一遍</strong>，给出答案。</p>
+      <p>关键就在这里，也是上一章 §1.2 那个 callout 埋下的伏笔的兑现：ReAct 在<strong>每一步</strong>都把"prompt + 之前全部 Thought/Action/Observation"重新喂进 LLM，观察被一遍遍重新编码；ReWOO <strong>只在开头付一次规划器的 prompt 费用</strong>，之后观察永远不回流到推理器。于是在 HotpotQA 上，ReWOO 用<strong>约 2,000 token 拿到 42.4% 准确率</strong>，而 ReAct 是<strong>约 10,000 token、40.8% 准确率</strong>——<strong>token 少 5 倍，准确率还略高</strong>。</p>
+
+      <div class="callout warning">
+        <span class="label">把"省"的来源说死</span>
+        <p>这 5 倍省的是"<strong>不重复编码 observation</strong>"，<strong>不是"少调了几次工具"</strong>。ReWOO 调的工具次数和 ReAct 同量级——它省在推理器再也不用一次次重读越堆越长的观察历史。这个区分是本章最大的"啊哈"：token 成本的杀手是<strong>重新编码</strong>，不是<strong>调用次数</strong>。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ReAct 每步重新喂回越来越长的上下文，对比 ReWOO 规划器跑一次、工人填空、求解器跑一次、观察不回流">
+          <defs>
+            <marker id="rw-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="rw-arrow-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ReAct side -->
+          <text x="30" y="28" class="node-label" font-weight="700">ReAct：每步重喂，上下文越堆越大</text>
+          <text x="30" y="62" class="edge-label">step1</text>
+          <rect x="78" y="50" width="60" height="18" rx="3" class="diagram-ink node-fill"/>
+          <text x="108" y="63" text-anchor="middle" class="edge-label">ctx</text>
+
+          <text x="30" y="98" class="edge-label">step2</text>
+          <rect x="78" y="86" width="60" height="18" rx="3" class="diagram-ink node-fill"/>
+          <rect x="138" y="86" width="52" height="18" rx="3" class="diagram-ink node-fill-accent"/>
+          <text x="164" y="99" text-anchor="middle" class="edge-label">+obs1</text>
+
+          <text x="30" y="134" class="edge-label">step3</text>
+          <rect x="78" y="122" width="60" height="18" rx="3" class="diagram-ink node-fill"/>
+          <rect x="138" y="122" width="52" height="18" rx="3" class="diagram-ink node-fill-accent"/>
+          <rect x="190" y="122" width="52" height="18" rx="3" class="diagram-ink node-fill-accent"/>
+          <text x="216" y="135" text-anchor="middle" class="edge-label">+obs2</text>
+
+          <text x="30" y="170" class="edge-label">step4</text>
+          <rect x="78" y="158" width="60" height="18" rx="3" class="diagram-ink node-fill"/>
+          <rect x="138" y="158" width="52" height="18" rx="3" class="diagram-ink node-fill-accent"/>
+          <rect x="190" y="158" width="52" height="18" rx="3" class="diagram-ink node-fill-accent"/>
+          <rect x="242" y="158" width="52" height="18" rx="3" class="diagram-ink node-fill-accent"/>
+          <text x="268" y="171" text-anchor="middle" class="edge-label">+obs3</text>
+
+          <line x1="78" y1="196" x2="300" y2="196" class="diagram-accent"/>
+          <text x="189" y="214" text-anchor="middle" class="branch-label">每步把全部历史重编码 → token 随轨迹涨</text>
+
+          <!-- divider -->
+          <line x1="350" y1="40" x2="350" y2="290" class="diagram-soft"/>
+
+          <!-- ReWOO side -->
+          <text x="392" y="28" class="node-label-accent" font-weight="700">ReWOO：观察不回流</text>
+
+          <rect x="392" y="56" width="120" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="452" y="76" text-anchor="middle" class="node-label-accent">Planner</text>
+          <text x="452" y="93" text-anchor="middle" class="edge-label">写蓝图·1 次</text>
+
+          <line x1="452" y1="104" x2="452" y2="138" class="diagram-ink" marker-end="url(#rw-arrow)"/>
+          <text x="500" y="125" text-anchor="middle" class="edge-label">#E1 #E2</text>
+
+          <rect x="392" y="138" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="452" y="158" text-anchor="middle" class="node-label">Workers</text>
+          <text x="452" y="175" text-anchor="middle" class="edge-label">填 #E·各 1 次</text>
+
+          <line x1="452" y1="186" x2="452" y2="220" class="diagram-ink" marker-end="url(#rw-arrow)"/>
+          <text x="506" y="207" text-anchor="middle" class="edge-label">证据填好</text>
+
+          <rect x="392" y="220" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="452" y="240" text-anchor="middle" class="node-label">Solver</text>
+          <text x="452" y="257" text-anchor="middle" class="edge-label">读 1 次·出答案</text>
+
+          <text x="600" y="150" class="branch-label">观察</text>
+          <text x="600" y="168" class="branch-label">从不</text>
+          <text x="600" y="186" class="branch-label">回到</text>
+          <text x="600" y="204" class="branch-label">推理器</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>本章的核心图：左边 ReAct 每一步都把越堆越长的上下文（含全部 obs）重新喂回推理；右边 ReWOO 规划器只跑一次、观察填进占位变量后不再回流。
+          <strong>注意</strong>：左边那排不断变长的红色色块就是 token 账单的来源——ReWOO 省的正是这部分"重复编码"，而非工具调用次数。</figcaption>
+      </figure>
+
+      <p>蓝图写出来大致长这样（占位变量 <code>#E1</code> 在被填值前就被 <code>#E2</code> 的计划引用了）：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">rewoo-blueprint · 示意</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="rewoo-blueprint">复制</button>
+        </div>
+<pre id="rewoo-blueprint"><code class="language-text">Plan: 搜索《盗梦空间》的导演
+#E1 = Search["盗梦空间 导演"]
+
+Plan: 用 #E1 的结果查这位导演下一部上映的电影
+#E2 = Search["导演 #E1 下一部 上映"]
+
+# Planner 一次性写完上面整张蓝图（此刻 #E1/#E2 都还没有值）
+# Workers 跑工具填值；Solver 读「蓝图 + 填好的 #E」一次性作答</code></pre>
+      </div>
+      <p class="meta-row" style="margin-top:8px">未本地验证 · 仅为说明占位变量与"先写全蓝图、后填空"的结构</p>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>像填一张报销表的草稿：先把整张表的栏目和公式列好（蓝图），栏里先写占位符"待填"（<code>#E</code>），最后一次性把发票金额填进去算总额——不必每填一个数字就把整张表从头读一遍。类比失效在依赖：报销表的栏目互相独立，而 ReWOO 的 <code>#E2</code> 计划可以引用 <code>#E1</code>，所以它不是完全无序的填空，而是带前后引用的蓝图。</p>
+      </div>
+
+      <p><strong>代价</strong>：蓝图是<strong>蒙着眼睛</strong>承诺的。当某一步的真实工具结果本该让计划改道时，ReWOO 没有观察回流、改不了道——这是它沿轴又向左挪一格付出的适应性。</p>
+
+      <div class="callout warning">
+        <span class="label">一个反直觉的失败模式</span>
+        <p>给 ReWOO <strong>更多工具，反而更差</strong>。论文里 7 工具版的 ReWOO 在 2 工具版能做对的任务上失败了；20 条失败轨迹里有 17 条是<strong>工具误用</strong>——规划器在蒙眼状态下挑错了工具，而又没有观察能当场把它拽回来。工具越多，蒙眼挑错的概率越大。这正是"提前承诺"代价的具体长相：承诺得越早，越没有机会用真实反馈纠正选择。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>有人想给 ReWOO 接上"每填完一个 <code>#E</code> 就让规划器看一眼、必要时改后续计划"。这么改之后，它在轴上会往哪端移动？又会把刚省下的什么重新赔回去？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>会往<strong>适应端（右）</strong>移动——它重新引入了观察回流，换回了"中途纠偏"的能力，正好补上工具误用那个失败模式。但代价是把 ReWOO 最核心的省 token 机制赔了回去：一旦规划器要在每步后重看证据，观察就又开始反复进入推理循环，5 倍的 token 优势随之蒸发。这恰恰说明轴是连续的——任何往适应端的移动，都在用 token 换纠错。改到极端，它就退化回 Plan-and-Execute 乃至 ReAct 了。</p>
+        </details>
+      </div>
+
+      <h2 id="s24"><span class="num">2.4</span><span>LLMCompiler：把计划编译成可并行的 DAG</span></h2>
+      <p class="one-liner">规划器把任务编译成一张带依赖的 DAG，调度单元像 CPU 乱序执行那样，一旦某个任务的依赖就绪就立刻派发，独立任务并行跑。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前三个范式都没碰 ReAct 的另一条成本：<strong>串行</strong>。ReAct 一次只想一步、必须等观察落地才能想下一步，于是彼此<strong>独立</strong>的子任务（比如"分别查三个城市的天气"）也被迫排队。LLMCompiler（Kim et al. 2023/2024，arXiv 2312.04511，ICML'24）专门打这条：把计划编译成一张<strong>显式标出依赖</strong>的图，没有依赖关系的任务就同时发出去。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：三个部件协作。<strong>Function Calling Planner</strong>（规划器）产出一张<strong>任务 DAG</strong>，用 <code>$1, $2…</code> 占位变量把任务间的依赖关系编码进去（某任务的参数写成 <code>$1</code>，就表示它要等 1 号任务的输出）。<strong>Task Fetching Unit</strong>（任务获取单元，论文<strong>明确按 CPU 的指令获取 / 乱序执行建模</strong>）负责：把已解析出的变量值代入等待中的任务，并在某个任务的依赖<strong>一就绪就立刻把它派发出去</strong>。<strong>Executor</strong>（执行器）则把彼此独立的任务<strong>并发</strong>执行。这一下同时拔掉了 ReAct 的串行瓶颈和它两个有名的失败模式——重复地把之前已经发过的调用又生成一遍、以及过早停止。</p>
+
+      <p>收益是全方位的：相对 ReAct <strong>延迟最多降 3.7 倍、成本最多降 6.7 倍、准确率高约 9%</strong>；在 Game-of-24 上甚至靠"执行器→规划器"的动态重规划反馈，比 ToT 还快约 2 倍。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="LLMCompiler 把计划编译成 DAG，任务获取单元把无依赖的两个任务并行派发，第三个任务等两者就绪后再跑">
+          <defs>
+            <marker id="lc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="lc-arrow-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <rect x="24" y="100" width="128" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="88" y="124" text-anchor="middle" class="node-label-accent">Planner 规划器</text>
+          <text x="88" y="142" text-anchor="middle" class="edge-label">编出 DAG</text>
+
+          <line x1="152" y1="128" x2="206" y2="128" class="diagram-ink" marker-end="url(#lc-arrow)"/>
+
+          <rect x="206" y="100" width="138" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="275" y="124" text-anchor="middle" class="node-label">任务获取单元</text>
+          <text x="275" y="142" text-anchor="middle" class="edge-label">仿 CPU 乱序派发</text>
+
+          <!-- parallel dispatch -->
+          <line x1="344" y1="116" x2="438" y2="64" class="diagram-accent" marker-end="url(#lc-arrow-v)"/>
+          <line x1="344" y1="140" x2="438" y2="192" class="diagram-accent" marker-end="url(#lc-arrow-v)"/>
+          <text x="392" y="80" text-anchor="middle" class="branch-label">并行</text>
+
+          <rect x="438" y="40" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="498" y="60" text-anchor="middle" class="node-label">task1</text>
+          <text x="498" y="77" text-anchor="middle" class="edge-label">无依赖</text>
+
+          <rect x="438" y="168" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="498" y="188" text-anchor="middle" class="node-label">task2</text>
+          <text x="498" y="205" text-anchor="middle" class="edge-label">无依赖</text>
+
+          <!-- task3 depends on both -->
+          <rect x="438" y="104" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="498" y="124" text-anchor="middle" class="node-label">task3</text>
+          <text x="498" y="141" text-anchor="middle" class="edge-label">依赖 $1 $2</text>
+
+          <polyline points="558,64 600,64 600,118 562,118" class="diagram-soft" marker-end="url(#lc-arrow)"/>
+          <polyline points="558,192 600,192 600,138 562,138" class="diagram-soft" marker-end="url(#lc-arrow)"/>
+          <text x="636" y="124" text-anchor="middle" class="edge-label">两者就绪</text>
+          <text x="636" y="140" text-anchor="middle" class="edge-label">才跑</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>LLMCompiler 的 DAG：task1 与 task2 无相互依赖，任务获取单元把它们并行派发；task3 的参数是 <code>$1 $2</code>，须等两者就绪才跑。
+          <strong>注意</strong>：task1 与 task2 上下并排、同时发出，这就是"独立子任务并行"的样子——ReAct 会把这两个强行排成前后两步。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>像现代 CPU 的乱序执行：指令之间没有数据依赖，就不必按书写顺序排队，谁的操作数先备齐谁先执行——任务获取单元就是这个"调度器"。类比失效在确定性：CPU 的指令依赖在编译期完全已知且固定，而 LLMCompiler 的 DAG 是 LLM 当场生成的，会把 <code>$1/$2</code> 的参数映射错（论文里约 8% 的失败正是这种参数映射错误），CPU 调度器不会犯这种"看错依赖"的错。</p>
+      </div>
+
+      <p><strong>代价 / 边界</strong>：当依赖关系<strong>只有在运行时才能知道</strong>（数据相关的分支——比如"先查 A，由 A 的结果决定下一步查 B 还是查 C"），LLMCompiler 没法预先把整张图编出来，只能<strong>停下来重新编译</strong>。这正好把它钉回轴上：它擅长的是"依赖结构提前可知、且有大量独立子任务"的场景——也就是上一章 §1.1 那个"分别查三城天气"指向的"提前承诺"端。沿轴它比 ReWOO 还靠左一点，因为它承诺的不只是一条线性蓝图，而是一整张并行结构。</p>
+
+      <h2 id="s25"><span class="num">2.5</span><span>跨概念综合：四个范式在轴上的位置</span></h2>
+      <p>把四个范式按"承诺多少"摆到那条轴上：<strong>ReAct</strong> 在最右（最适应——每步看真实结果再决定，零提前承诺）；<strong>Plan-and-Execute</strong> 在中段（承诺一份计划，但每步后留了重规划的门，仍能适应）；<strong>ReWOO</strong> 更靠左（蒙眼承诺整条线性蓝图，观察不回流，省 token 但不能中途改道）；<strong>LLMCompiler</strong> 最靠左（承诺的是一整张可并行 DAG，把独立子任务同时发出去）。由右到左，每挪一格都在用"适应能力"换"更省 / 更并行"——这就是上一章那条轴在本章的完整展开。三个范式攻击的还是 §2.1 那条成本链的不同环节：Plan-and-Execute 减少"贵推理"的次数、ReWOO 砍掉观察回流、LLMCompiler 打掉串行。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 四个范式在轴上的取舍对照（数字均相对 ReAct 基线）</caption>
+        <thead>
+          <tr>
+            <th>范式</th>
+            <th>LLM 调用与 token 成本</th>
+            <th>能否并行</th>
+            <th>能否中途适应</th>
+            <th>最适合的任务</th>
+            <th>主要代价</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ReAct</td>
+            <td>每步重编码全部历史，token 随轨迹增长（基线）</td>
+            <td>否，严格串行</td>
+            <td>能，每步都看真实观察</td>
+            <td>顺序依赖、强需当场纠错的多跳任务</td>
+            <td>贵、慢；易陷思考/行动死循环</td>
+          </tr>
+          <tr>
+            <td>Plan-and-Execute</td>
+            <td>1×强 + N×廉价，N&gt;3 时省于 ReAct</td>
+            <td>默认顺序执行</td>
+            <td>能，每步后过重规划闸门</td>
+            <td>大框架可预知、个别步骤需纠偏</td>
+            <td>重规划延迟；planner→executor 误差传播</td>
+          </tr>
+          <tr>
+            <td>ReWOO</td>
+            <td>规划器仅 1 次、观察不回流：约省 64% token（约 5×）</td>
+            <td>工人可一并执行，但蓝图为线性链</td>
+            <td>否，蓝图蒙眼承诺</td>
+            <td>依赖链清晰、工具少而稳定的多跳问答</td>
+            <td>计划盲定；工具越多越易误用（17/20 失败为工具误用）</td>
+          </tr>
+          <tr>
+            <td>LLMCompiler</td>
+            <td>延迟最多降 3.7×、成本最多降 6.7×、准确率约 +9%</td>
+            <td>能，独立任务并发</td>
+            <td>有限，靠执行器→规划器动态重编译</td>
+            <td>依赖结构提前可知、含大量独立子任务</td>
+            <td>运行时才知的数据相关分支须停下重编译；约 8% 失败为参数映射错</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>表里<strong>没有标注"选中"的那一行</strong>——因为这不是一场有赢家的比拼，而是一条<strong>连续光谱</strong>。选哪个，取决于任务在"怕意外"和"怕贵 / 怕慢"之间偏向哪头：怕意外、需当场纠错就往右（ReAct / Plan-and-Execute），依赖清晰、想省钱或想并行就往左（ReWOO / LLMCompiler）。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>"把一篇长论文分成 8 段、每段各自生成一句摘要、最后拼起来"——这个任务摆到轴上，最该落在哪个范式？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>最该落在 <strong>LLMCompiler</strong>（或退一步 ReWOO）那端。8 段摘要<strong>彼此独立</strong>、依赖结构提前完全可知（就是"8 个并列任务 + 1 个汇总任务"），没有任何一段的结果会改变其他段怎么做——这正是"提前承诺 + 并行"的甜点区。用 ReAct 跑等于把 8 个能同时做的事强行排成 8 步串行，既慢又贵。这题直接呼应上一章 §1.1 "分别查三城天气"埋下的那个判断：独立子任务指向轴的提前承诺端。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color:var(--ink-soft); font-style:italic; font-size:15px;">先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节再读一遍。</p>
+        <ol>
+          <li>ReWOO 在 HotpotQA 上比 ReAct 省了约 5 倍 token。这 5 倍省的到底是什么？是"少调了工具"还是别的？</li>
+          <li>Plan-and-Solve 和 Plan-and-Execute 是不是一回事？用一句话说出各自最本质的形态。</li>
+          <li>ReWOO 和 LLMCompiler 都"提前承诺计划"，但它们各自省下的东西不同——一个省的是什么，另一个省的是什么？是 token 还是延迟？</li>
+          <li>给 ReWOO 接更多工具为什么反而更差？这件事和那条「承诺↔适应」轴有什么关系？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>省的是"<strong>不再把 observation 重复编码进推理循环</strong>"。ReAct 每步都重读越堆越长的观察历史，ReWOO 的规划器只在开头付一次费、观察填进 <code>#E</code> 后不回流。工具调用次数和 ReAct 同量级——省的不是调用次数。</li>
+            <li>不是一回事。Plan-and-Solve = 一篇论文里的<strong>一次 zero-shot prompt 改写</strong>（"先定计划再逐步执行"，计划与求解同一次生成，无独立执行器）；Plan-and-Execute = LangChain 的<strong>双角色架构</strong>（强 planner 跑一次 + 廉价 executor 跑 N 次 + 每步后重规划闸门）。</li>
+            <li>ReWOO 省的主要是 <strong>token</strong>（不重复编码观察）；LLMCompiler 省的主要是 <strong>延迟</strong>（把独立子任务并行、打掉串行瓶颈，最多降 3.7× 延迟，附带降成本、升准确率）。一个攻"重复编码"，一个攻"串行"。</li>
+            <li>因为蓝图是蒙眼承诺的：工具越多，规划器在没有观察反馈的情况下挑错工具的概率越大（论文里 17/20 条失败是工具误用），而它又没有观察回流来当场纠正。这正是轴左端"提前承诺"代价的具体长相——承诺越早，越没机会用真实反馈纠偏。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个"混合依赖"任务设计调度</h3>
+        <p>任务：「给定 5 个 GitHub 仓库 URL，分别拉取各自最新 release 的 changelog，汇总成一份对比表；但其中第 1 个仓库若拉取失败，则改用它的 tag 列表兜底」。把它摆到表 2.1 上：哪部分天然适合 LLMCompiler 的并行承诺？哪部分必须保留 ReAct/重规划式的临场适应？写出你会怎么把两端缝在一起，并指出缝合处最容易出问题的地方。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>把任务切成两层看。<strong>5 个仓库的 changelog 拉取彼此独立</strong>、依赖结构提前可知 → 这是 LLMCompiler 并行 DAG 的甜点区，5 个任务一起发。但"第 1 个失败则改用 tag 列表"是一条<strong>运行时才知的数据相关分支</strong>——拉取结果（成功/失败）决定走哪条路，这正是 LLMCompiler 必须停下重编译、或交给一层重规划/ReAct 式适应来兜的地方。缝合处的风险：那个"失败兜底"分支若也被规划器提前蒙眼写进 DAG，就退回了 ReWOO 的工具误用风险——它没看到真实的失败结果，就承诺了兜底路径。务实做法是"独立部分并行承诺 + 易错分支保留观察回流"，也就是 §2.5 说的"按任务在轴上偏哪头分段处理"。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a>（Yao et al. 2022，本章基线）</li>
+          <li><a href="https://arxiv.org/abs/2305.04091">Plan-and-Solve Prompting</a>（Wang et al. 2023，一次生成的 prompt 技巧；注意与 Plan-and-Execute 区分）</li>
+          <li><a href="https://arxiv.org/abs/2305.18323">ReWOO: Decoupling Reasoning from Observations for Efficient Augmented Language Models</a>（Xu et al. 2023）</li>
+          <li><a href="https://arxiv.org/abs/2312.04511">An LLM Compiler for Parallel Function Calling</a>（Kim et al. 2023/2024，ICML'24）</li>
+          <li><a href="https://blog.langchain.com/planning-agents/">LangChain · Planning Agents</a>（Plan-and-Execute / ReWOO / LLMCompiler 的工程实现与对比）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-foundations.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 基础</span>
+        </a>
+        <a href="03-search-reflection.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 搜索 &amp; 反思家族</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 ReAct 再看一眼</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 Plan-and-Execute</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 ReWOO</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 LLMCompiler</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 四范式在轴上</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) { tocLinks.forEach(a => a.classList.remove('active')); link.classList.add('active'); }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+</body>
+</html>

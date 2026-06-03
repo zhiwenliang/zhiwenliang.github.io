@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 陷阱 · Kafka 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html" class="current">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>生产陷阱：机制被违反时的失败模式</h1>
+        <p class="recap">02 章讲清了存储、分区顺序、副本/ISR、再平衡、投递语义这五套机制为什么这么设计。本章是同一批机制在被误用、被错配、或被默认值悄悄违反时的失败模式——每一条都能回溯到某个具体机制上的一次违约。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>数据丢失、正确性、性能运维三类失败模式各自的根因机制不同——按根因排序而非按现象排序</li>
+          <li>"不丢消息"是 <code>acks=all</code> + <code>min.insync.replicas</code> + <code>replication.factor</code> + <code>unclean.leader.election=false</code> + 处理后再提交的组合命题，不是单个开关</li>
+          <li>每条陷阱的三要素：症状（你观测到什么）→ 根因（违反了哪条机制）→ 修复（错误写法对正确写法）→ 如何在设计层面避免再次触发</li>
+          <li>什么时候不该用 Kafka——失败模式的总和会反过来界定它的适用边界</li>
+        </ul>
+      </section>
+
+      <p>这一章按<strong>根因与严重度</strong>排序，不按出现频率。数据丢失放最前：丢掉的记录不会回来，而重复和乱序还能在下游补救。每条失败模式都标注它违反了 <a href="02-principles.html">02 章</a>的哪条机制——失败模式不是孤立的故障，是某个设计取舍在被忽略时显形。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 400" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="陷阱按失败类别与严重度二维分类，并标注配置因果链">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Axes -->
+          <line x1="120" y1="350" x2="730" y2="350" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="120" y1="350" x2="120" y2="40" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="425" y="384" text-anchor="middle" class="edge-label" font-weight="700">失败类别（按根因机制）</text>
+          <text x="44" y="195" text-anchor="middle" class="edge-label" font-weight="700" transform="rotate(-90 44 195)">严重度</text>
+
+          <!-- X category labels -->
+          <text x="235" y="368" text-anchor="middle" class="edge-label">数据丢失</text>
+          <text x="425" y="368" text-anchor="middle" class="edge-label">正确性</text>
+          <text x="620" y="368" text-anchor="middle" class="edge-label">性能 / 运维</text>
+
+          <!-- Severity bands (dashed guides) -->
+          <line x1="120" y1="120" x2="700" y2="120" class="diagram-soft"/>
+          <line x1="120" y1="235" x2="700" y2="235" class="diagram-soft"/>
+          <text x="700" y="92" text-anchor="end" class="edge-label" fill="#B73B2F">不可逆</text>
+          <text x="700" y="208" text-anchor="end" class="edge-label">可补救</text>
+          <text x="700" y="322" text-anchor="end" class="edge-label">可调优</text>
+
+          <!-- Data-loss cluster (high severity, left) -->
+          <rect x="160" y="58" width="156" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="238" y="78" text-anchor="middle" class="node-label-accent">acks=1 / unclean</text>
+          <text x="238" y="95" text-anchor="middle" class="edge-label">已提交记录消失</text>
+
+          <!-- Correctness cluster (mid severity, center) -->
+          <rect x="350" y="150" width="150" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="425" y="170" text-anchor="middle" class="node-label">重复 / 乱序</text>
+          <text x="425" y="187" text-anchor="middle" class="edge-label">幂等可去重</text>
+
+          <!-- Performance cluster (low severity, right) -->
+          <rect x="542" y="262" width="158" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="621" y="282" text-anchor="middle" class="node-label">再平衡风暴 / 倾斜</text>
+          <text x="621" y="299" text-anchor="middle" class="edge-label">配置可缓解</text>
+
+          <!-- Causal chain inset (bottom-left, shows pitfalls are not isolated) -->
+          <text x="128" y="60" class="edge-label" font-weight="700" fill="#B73B2F">因果链</text>
+          <line x1="316" y1="82" x2="348" y2="160" class="diagram-soft" marker-end="url(#ar-verm)"/>
+          <text x="332" y="128" text-anchor="middle" class="branch-label">↘</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.0</span>陷阱按"根因机制"（X 轴）与"能否补救"（严重度，Y 轴）二维分布；越靠左上越致命。
+          <strong>注意</strong>：数据丢失类落在"不可逆"带，所以本章把它放最前；右下虚线箭头表示一类失败会引发另一类——配错持久性会被误当成性能问题来调，根因找错。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 按根因排序而非按现象</span>
+        <p>同一个现象（"消息没了""消费者卡住")可能由多条机制失败造成。把陷阱挂在根因机制上，遇到现象时才能反查是哪条机制被违反，而不是逐个试配置。本章三节正对应三类根因：持久性机制（<a href="02-principles.html#replication">副本/ISR</a>）、投递语义机制（<a href="02-principles.html#delivery">幂等/顺序</a>）、消费组协调机制（<a href="02-principles.html#rebalance">再平衡</a>）。</p>
+      </div>
+
+      <!-- ════════════════ DATA LOSS ════════════════ -->
+      <h2 id="data-loss"><span class="num">4.1</span><span>数据丢失类（最严重，不可逆）</span></h2>
+
+      <p>数据丢失的共同根因是<strong>持久性保证被高估</strong>：producer 以为记录已经安全落地，实际上它只到了一台机器、或还没复制就因故障消失。全部回溯到 <a href="02-principles.html#replication">§2.3 副本与 ISR</a> 里 HW（高水位）与 ISR 的语义。</p>
+
+      <h3>陷阱 1：<code>acks=1</code> 丢数据（leader ack 后未复制即崩溃）</h3>
+      <p><strong>症状</strong>：producer 端 <code>send()</code> 全部返回成功、回调拿到了 offset；某次 broker 故障切换后，下游消费者读到的最高 offset 比 producer 确认过的要小——中间一段记录凭空消失，且无任何异常抛出。</p>
+      <p><strong>根因</strong>：<code>acks=1</code> 表示 leader 把记录写进自己的日志就立即 ack，<strong>不等待 follower 复制</strong>。回链 <a href="02-principles.html#replication">§2.3</a>：HW 只在 ISR 中所有副本都 fetch 到之后才推进。<code>acks=1</code> 在"leader 已写、follower 未同步"这个窗口里 ack 了 producer；若 leader 此刻崩溃，新 leader 从某个 follower 选出，那段没复制出去的记录随旧 leader 的磁盘一起丢失。这是用持久性换延迟。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">producer-acks.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-acks1">复制</button>
+        </div>
+<pre id="cb-acks1"><code class="language-properties"># 错误写法：leader 单方面确认，复制前的崩溃窗口会丢已 ack 的记录
+acks=1
+
+# 正确写法：等所有 ISR 成员都复制到才确认
+acks=all
+# 注意 acks=all 本身不够，必须搭配陷阱 3 的 min.insync.replicas，否则会静默退化</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>：把 <code>acks=all</code> 写进生产 producer 的<strong>基线配置模板</strong>，不要让它停留在各服务自行决定。对吞吐敏感、可容忍丢失的旁路链路（如可重算的指标采样）才显式降到 <code>acks=1</code>，并在代码注释里写明"此链路接受丢失"——把例外变成需要主动声明的决定，而不是默认。</p>
+
+      <h3>陷阱 2：unclean leader election 丢已提交数据</h3>
+      <p><strong>症状</strong>：一次多 broker 同时故障后集群恢复了可用性、分区重新可写，但已经确认给 producer、甚至已经被消费过的一段记录消失了。这比陷阱 1 更隐蔽——丢的是<strong>已经越过 HW、对消费者可见过</strong>的记录。</p>
+      <p><strong>根因</strong>：<code>unclean.leader.election.enable=true</code> 允许一个<strong>不在 ISR 里、落后的副本</strong>当选 leader，以便在所有同步副本都不可用时恢复写入。回链 <a href="02-principles.html#replication">§2.3</a>：假设 producer 已 ack 到 offset 100、HW=100，落后副本只复制到 offset 80 就被选为 leader，它会把日志截断到 80，81–100 永久丢失。这是用一致性换可用性，且丢失<strong>静默发生</strong>。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">broker-server.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-unclean">复制</button>
+        </div>
+<pre id="cb-unclean"><code class="language-properties"># 错误写法：允许落后副本上位，截断已提交记录换取可用性
+unclean.leader.election.enable=true
+
+# 正确写法（4.x 默认即 false，但旧集群/旧 topic 可能残留 true）
+unclean.leader.election.enable=false
+# 代价：所有 ISR 副本都挂时分区停写，直到某个同步副本恢复——这是刻意的</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>：把它当成一个<strong>持久性 vs 可用性的显式声明</strong>而非性能开关。金融、订单、计费类不能丢数据的 topic 一律 <code>false</code>；同时在 broker 默认值与 topic 级覆盖两处都核对——一个老 topic 上残留的 <code>true</code> 会绕过 broker 默认。监控 <code>UncleanLeaderElectionsPerSec</code> 指标，任何非零都该告警。</p>
+
+      <h3>陷阱 3：<code>acks=all</code> 静默退化成 <code>acks=1</code>（ISR 缩到 1）</h3>
+      <p><strong>症状</strong>：配置审计显示 <code>acks=all</code> 一切合规，但某次故障后仍然丢了已 ack 的记录。看上去和陷阱 1 矛盾——明明设了最强确认。</p>
+      <p><strong>根因</strong>：<code>acks=all</code> 的语义是"所有 <strong>ISR 成员</strong>确认"，不是"所有副本确认"。回链 <a href="02-principles.html#replication">§2.3</a> 的关键洞察：当 follower 落后超过 <code>replica.lag.time.max.ms</code> 被踢出 ISR，ISR 可能<strong>收缩到只剩 leader 一台</strong>。此时 <code>acks=all</code> 等价于 <code>acks=1</code>——写到一台就算"全部 ISR 确认"，下一次故障即丢。持久性的真正来源是 <code>min.insync.replicas</code>，不是 <code>acks</code>。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">durability-combo.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-isr">复制</button>
+        </div>
+<pre id="cb-isr"><code class="language-properties"># 错误写法：只设 acks=all，ISR 缩到 1 时静默退化成单副本写入
+acks=all
+# （未设 min.insync.replicas，默认 1）
+
+# 正确写法：broker / topic 端要求至少 2 个 ISR 成员在线
+acks=all                       # producer 端
+min.insync.replicas=2          # broker / topic 端
+replication.factor=3           # topic 端
+# 效果：ISR 缩到 1 时写入被 NotEnoughReplicas 拒绝，而不是默默欠复制</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>：持久性是 <code>acks=all</code> + <code>min.insync.replicas=2</code> + <code>replication.factor=3</code> 三者<strong>同时</strong>成立才有的属性，缺一即降级。设计原则：<code>min.insync.replicas = replication.factor - 1</code>——这样允许挂一台仍可写、挂两台才停写。把"宁可拒绝写入也不欠复制"作为默认立场（fail-closed），让丢失窗口根本不存在，而不是事后补救。</p>
+
+      <div class="callout warning">
+        <span class="label">反直觉提醒</span>
+        <p><code>acks=all</code> 本身<strong>不够</strong>。没有 <code>min.insync.replicas≥2</code>，它会在 ISR 收缩时退化成 <code>acks=1</code>。审计配置时只看到 <code>acks=all</code> 就放心，是最常见的误判。</p>
+      </div>
+
+      <h3>陷阱 4：<code>replication.factor=1</code> 与 fetch/message 尺寸错配</h3>
+      <p><strong>症状</strong>：两种形态。其一，单个 broker 下线整个分区彻底不可用、其上记录全丢。其二，producer 能成功写入大消息（broker 收下了），但这条记录始终复制不到 follower，于是它从不越过 HW、消费者永远读不到，或在故障时丢失。</p>
+      <p><strong>根因</strong>：<code>replication.factor=1</code> 意味着每个分区只有一份，没有任何冗余——这通常是开发环境单节点默认值<strong>泄漏到了生产</strong>。第二种形态回链 <a href="02-principles.html#replication">§2.3</a> 的复制路径：follower 像消费者一样 fetch，单次 fetch 上限由 <code>replica.fetch.max.bytes</code> 控制；若它小于 <code>message.max.bytes</code>，一条合法大消息能被 leader 接收却<strong>无法被 follower 拉取</strong>，复制就此卡死。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">replication-sizing.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-rf1">复制</button>
+        </div>
+<pre id="cb-rf1"><code class="language-properties"># 错误写法：dev 默认漏到 prod + 复制拉取上限小于单条消息上限
+replication.factor=1
+replica.fetch.max.bytes=1048576    # 1 MiB
+message.max.bytes=10485760         # 10 MiB —— 大消息能写入却无法被复制
+
+# 正确写法：生产至少 3 副本，且复制拉取上限 ≥ 单条消息上限
+replication.factor=3
+message.max.bytes=10485760              # broker
+replica.fetch.max.bytes=10485760       # >= message.max.bytes</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>：生产集群把 <code>default.replication.factor=3</code> 设为<strong>集群级默认</strong>，并禁用或受控 <code>auto.create.topics.enable</code>——自动建 topic 极易带出 RF=1。尺寸三件套（producer <code>max.request.size</code>、broker <code>message.max.bytes</code>、consumer <code>fetch.max.bytes</code>，外加 <code>replica.fetch.max.bytes</code>）必须当成一组联动配置统一推导，见陷阱 15。</p>
+
+      <h3>陷阱 5：auto-commit 丢消息（提交的是 poll 返回的，不是处理过的）</h3>
+      <p><strong>症状</strong>：消费者进程崩溃或被杀后重启，发现中间一批消息从未被业务处理，但它们的 offset 已经提交、不会再投递——消息在"已消费"账面上存在，实际从未落地。</p>
+      <p><strong>根因</strong>：<code>enable.auto.commit=true</code>（默认）按 <code>auto.commit.interval.ms</code>（默认 5s）定时提交<strong>最近一次 <code>poll()</code> 返回的 offset</strong>，而不是业务实际处理完的 offset。回链 <a href="02-principles.html#rebalance">§2.4</a> 的 offset 提交语义：offset 由消费者侧维护、提交到 <code>__consumer_offsets</code>。设想 <code>poll()</code> 返回 1000 条，处理到第 501 条时定时器触发、把 offset 提交到了 1000，紧接着进程 OOM 被杀——重启从 1001 开始，502–1000 这段<strong>未处理却已提交</strong>，永久跳过。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">ConsumerCommit.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-autocommit">复制</button>
+        </div>
+<pre id="cb-autocommit"><code class="language-java">// 错误写法：自动提交按定时器走，提交的是 poll 返回的、不是处理完的
+Properties bad = new Properties();
+bad.put("enable.auto.commit", "true");      // 默认值
+bad.put("auto.commit.interval.ms", "5000");
+KafkaConsumer&lt;String, String&gt; c = new KafkaConsumer&lt;&gt;(bad);
+while (true) {
+    var records = c.poll(Duration.ofMillis(100));
+    for (var r : records) process(r);       // 处理到一半崩溃 → 已提交的尾段丢失
+}
+
+// 正确写法：关掉自动提交，处理完整批后再同步提交
+Properties good = new Properties();
+good.put("enable.auto.commit", "false");
+KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(good);
+while (true) {
+    var records = consumer.poll(Duration.ofMillis(100));
+    for (var r : records) process(r);       // 先把这一批全部处理掉
+    consumer.commitSync();                  // 再提交——崩溃只会重投，不会丢
+}</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>：默认就关掉 <code>enable.auto.commit</code>，把 offset 提交作为业务处理成功后的<strong>显式动作</strong>。这把失败模式从"丢失"翻转成"重复"——重复可以靠消费侧幂等兜住（见陷阱 8），丢失无法补救。需要更细粒度时用 <code>commitSync(offsets)</code> 提交到确切处理位置。</p>
+
+      <div class="callout warning">
+        <span class="label">反直觉提醒</span>
+        <p>默认 auto-commit 听起来安全，<strong>却会丢消息</strong>——它按定时器提交 <code>poll()</code> 返回的 offset，与业务是否处理完毫无关系。"用默认值最稳妥"在这里恰好相反。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="不丢消息的四道防线叠加，每道防线堵住一个丢失窗口">
+          <defs>
+            <marker id="ar-gap" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- record entering -->
+          <text x="60" y="40" text-anchor="middle" class="edge-label" font-weight="700">一条记录</text>
+          <text x="60" y="56" text-anchor="middle" class="edge-label">要安全落地</text>
+
+          <!-- 4 stacked defense bars -->
+          <rect x="150" y="24" width="430" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="170" y="51" class="node-label">① acks=all</text>
+          <text x="568" y="51" text-anchor="end" class="edge-label">堵：leader 单方面确认</text>
+
+          <rect x="150" y="92" width="430" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="170" y="119" class="node-label">② min.insync.replicas=2</text>
+          <text x="568" y="119" text-anchor="end" class="edge-label">堵：ISR 缩到 1 静默退化</text>
+
+          <rect x="150" y="160" width="430" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="170" y="187" class="node-label">③ replication.factor=3</text>
+          <text x="568" y="187" text-anchor="end" class="edge-label">堵：单 broker 挂掉无冗余</text>
+
+          <rect x="150" y="228" width="430" height="44" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="170" y="255" class="node-label-accent">④ unclean.leader.election=false</text>
+          <text x="568" y="255" text-anchor="end" class="edge-label">堵：落后副本上位截断</text>
+
+          <!-- consumer side note -->
+          <rect x="150" y="296" width="430" height="40" rx="4" class="diagram-soft node-fill"/>
+          <text x="170" y="321" class="node-label" font-size="12">＋ 消费侧：处理后再提交 offset</text>
+          <text x="568" y="321" text-anchor="end" class="edge-label">堵：auto-commit 丢未处理段</text>
+
+          <!-- "缺一道就有缺口" arrow on the right -->
+          <line x1="640" y1="40" x2="640" y2="300" class="diagram-accent" marker-end="url(#ar-gap)"/>
+          <text x="664" y="175" text-anchor="middle" class="branch-label" transform="rotate(90 664 175)">缺一道即有缺口</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>"不丢消息"是四道防线（加消费侧提交时机）叠加的<strong>组合</strong>属性，不是某个单一开关。
+          <strong>注意</strong>：每道防线只堵一个特定的丢失窗口（标在右侧）；去掉任意一道，对应窗口就重新打开——陷阱 1–5 正是逐道防线缺失的具体后果。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>RF=3、<code>acks=all</code>、<code>min.insync.replicas=3</code>。一台 broker 例行重启，producer 写入会怎样？把这个配置和"<code>min.insync.replicas=2</code>"对比。</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p><code>min.insync.replicas=3</code> 时，三个副本全部要在 ISR 里写入才成功。一台重启 → ISR 降到 2 → <strong>不满足 3</strong> → producer 收到 <code>NotEnoughReplicas</code>、分区停写，直到那台回到 ISR。即"任何一台不可用就停写"。</p>
+          <p>设成 <code>RF-1=2</code> 才是正解：允许挂一台仍可写、挂两台才停写，在"容忍单点故障"和"持久性"之间取平衡。把 <code>min.insync.replicas</code> 设成等于 RF 是常见的过度收紧——把可用性砍没了却没换来额外持久性。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════ CORRECTNESS ════════════════ -->
+      <h2 id="correctness"><span class="num">4.2</span><span>正确性类（重复与乱序）</span></h2>
+
+      <p>这一类的共同根因是<strong>对投递语义的边界误判</strong>：把"至少一次"当成了"恰好一次"，或把幂等的去重范围想得比实际大。全部回链 <a href="02-principles.html#delivery">§2.5 投递语义</a>。和数据丢失不同，重复与乱序<strong>能在下游补救</strong>（幂等处理、去重键），所以严重度低一档——但若误以为已经"恰好一次"而不做补救，等于把可补救的问题留成了脏数据。</p>
+
+      <h3>陷阱 6：重试导致静默乱序</h3>
+      <p><strong>症状</strong>：单分区内消息顺序被打乱。比如同一个 key 的"创建—更新—删除"三条消息，下游收到的却是"创建—删除—更新"，状态机错乱。无任何异常。</p>
+      <p><strong>根因</strong>：<code>max.in.flight.requests.per.connection&gt;1</code>（默认 5）允许同一连接上多个未确认批次并发在途。回链 <a href="02-principles.html#partition-order">§2.2 分区与顺序</a>：顺序只在单分区内、且依赖写入到达顺序。当批次 N 失败重试、而批次 N+1 已经先落盘，重试后的 N 排到了 N+1 后面——顺序就此颠倒。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">producer-ordering.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-inflight">复制</button>
+        </div>
+<pre id="cb-inflight"><code class="language-properties"># 错误写法：多个在途批次 + 重试 → 重试的批次可能排到后面，顺序颠倒
+max.in.flight.requests.per.connection=5
+retries=2147483647
+# 未开幂等
+
+# 正确写法：开启幂等，broker 按序列号保序并去重
+enable.idempotence=true
+# 开启后 Kafka 自动约束 in.flight<=5、acks=all、retries>0；
+# 序列号机制拒绝乱序 batch，所以重试也不会打乱顺序</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>：<code>enable.idempotence=true</code> 在 4.x 已是默认，但旧配置模板或显式覆盖可能关掉它。把它当成<strong>顺序保证的开关而不只是去重开关</strong>——它通过 broker 端维护 <code>(PID, partition) → 最高 seq</code>、只接受 seq 恰好 +1 的 append，顺带把"重试乱序"和"重试重复"两个问题一起解决。除非有明确理由，永远不要关。</p>
+
+      <h3>陷阱 7：ACK 丢失致重复，且幂等跨会话失效</h3>
+      <p><strong>症状</strong>：下游出现重复记录。排查发现 producer 开了幂等，单进程内确实不重复；但 producer <strong>重启或崩溃恢复后</strong>，重复又出现了。</p>
+      <p><strong>根因</strong>：两层。第一层，broker 写入成功但 ack 在网络上丢了，producer 超时重发——幂等 producer 靠 <code>(PID, seq)</code> 能识别并丢弃这个重复。第二层（边界）回链 <a href="02-principles.html#delivery">§2.5</a> 的 EOS 真实边界：幂等去重<strong>只在同一个 PID + 同一 producer 会话内</strong>有效。producer 重启会拿到<strong>新的 PID</strong>，broker 视之为全新生产者，旧会话发过的记录无法再去重，跨重启的重复就此漏过。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">TransactionalProducer.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-txn">复制</button>
+        </div>
+<pre id="cb-txn"><code class="language-java">// 错误写法：以为开了幂等就跨重启不重复——新 PID 让跨会话去重失效
+props.put("enable.idempotence", "true");   // 只在单会话内去重
+
+// 正确写法：要跨重启的恰好一次，用事务（transactional.id 靠 epoch 跨会话存活）
+props.put("enable.idempotence", "true");
+props.put("transactional.id", "order-writer-1");  // 稳定 ID，重启后复用
+KafkaProducer&lt;String, String&gt; producer = new KafkaProducer&lt;&gt;(props);
+producer.initTransactions();
+try {
+    producer.beginTransaction();
+    producer.send(record);
+    // 把消费 offset 也纳入同一事务，构成消费-转换-生产闭环
+    producer.sendOffsetsToTransaction(offsets, groupMetadata);
+    producer.commitTransaction();
+} catch (KafkaException e) {
+    producer.abortTransaction();
+}</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>：先界定需求边界。仅需"重试不重复"用幂等即可；需要<strong>跨进程重启</strong>的恰好一次，必须上事务——稳定的 <code>transactional.id</code> 通过 epoch 隔离僵尸实例、跨会话存活。同时记住事务的恰好一次<strong>只在 Kafka 的消费-转换-生产闭环内成立</strong>，不覆盖外部副作用（DB 写、HTTP 调用、发邮件），那些仍需自己做幂等。</p>
+
+      <div class="callout warning">
+        <span class="label">反直觉提醒</span>
+        <p>幂等 producer 只在<strong>单个进程生命周期内</strong>去重。崩溃重启换了新 PID，去重立刻失效。把 <code>enable.idempotence=true</code> 当成端到端恰好一次，是面试和生产里最常见的过度宣称。</p>
+      </div>
+
+      <h3>陷阱 8：再平衡后重复处理；"先提交后处理"反而丢失</h3>
+      <p><strong>症状</strong>：一次消费组再平衡（扩容、重启、或处理超时驱逐）之后，一批消息被<strong>重复处理</strong>了一遍——下游收到重复副作用。有人为消灭重复而改成"先提交 offset 再处理"，结果重复消失了，但崩溃时变成了丢失。</p>
+      <p><strong>根因</strong>：默认是至少一次（先处理后提交）。回链 <a href="02-principles.html#rebalance">§2.4 消费组与再平衡</a>：消费者在处理完、提交 offset <strong>之前</strong>崩溃或被驱逐，那批在途消息会在新 owner 上重投——这是至少一次的固有代价，正确做法是让处理幂等。反向的"先提交后处理"把语义改成了至多一次：offset 已提交但处理还没做就崩溃，那批消息再也不会投递，从重复翻转成<strong>丢失</strong>。感觉更安全的早提交，其实更危险。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">IdempotentConsumer.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-idem-consumer">复制</button>
+        </div>
+<pre id="cb-idem-consumer"><code class="language-java">// 错误写法：先提交后处理 → 崩溃时消息丢失（at-most-once）
+for (var r : records) {
+    consumer.commitSync();   // 先提交
+    process(r);              // 还没处理就崩溃 → 这条永久跳过
+}
+
+// 正确写法：先处理后提交（at-least-once）+ 处理本身做成幂等
+for (var r : records) {
+    // 用业务唯一键去重：同一 key 重复到达时是 no-op
+    upsertByBusinessKey(r.key(), r.value());   // 例如 INSERT ... ON CONFLICT DO NOTHING
+}
+consumer.commitSync();       // 处理完整批再提交；崩溃只会重投，幂等吸收</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>:接受"至少一次 + 消费侧幂等"是默认且正确的组合，不要试图靠调整提交时机消灭重复——那只会把丢失风险引进来。幂等的实现方式：业务唯一键 upsert、去重表、或下游天然幂等的操作。需要真正端到端恰好一次时回到陷阱 7 的事务方案。</p>
+
+      <div class="callout warning">
+        <span class="label">反直觉提醒</span>
+        <p>"先提交后处理"把失败模式从<strong>重复</strong>翻转成<strong>丢失</strong>。重复可以靠幂等吸收，丢失不能——所以感觉更安全的早提交，才是更危险的那个。</p>
+      </div>
+
+      <h3>陷阱 9：schema 演进卡死消费者</h3>
+      <p><strong>症状</strong>：producer 上线了一个新版本消息格式后，部分消费者开始大面积反序列化失败、整个消费组卡在某个 offset 推进不动，错误是 schema 不兼容。</p>
+      <p><strong>根因</strong>:producer 发布了一个不兼容的 schema 变更（如删字段、改类型、加无默认值的必填字段）。Schema Registry 默认兼容模式是 <code>BACKWARD</code>——只保证<strong>新 schema 能读旧数据</strong>，且<strong>只对紧邻的上一版、非传递</strong>。在 producer 和 consumer 混版本部署、消费者读到比自己新的 schema 写的数据时，<code>BACKWARD</code> 兜不住。这条不直接对应 02 章某机制，根因在 schema 契约管理而非 broker——但它和顺序/投递一样属于"正确性"失败：消息在但读不出。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">schema-compat.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-schema">复制</button>
+        </div>
+<pre id="cb-schema"><code class="language-properties"># 错误写法：默认 BACKWARD，混版本舰队中新写旧读会失败
+# （删字段 / 改类型 / 加必填无默认值字段都会破坏兼容）
+
+# 正确写法：混版本部署用 FULL_TRANSITIVE，并约束变更类型
+# Schema Registry subject 级配置：
+compatibility=FULL_TRANSITIVE
+# 变更纪律：只新增可选字段 / 带默认值字段；不删、不改类型、不加必填项</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>:对生产者消费者混版本滚动部署的 topic，把 subject 兼容模式设为 <code>FULL_TRANSITIVE</code>（新旧互相可读、且对所有历史版本传递成立）。配套变更纪律：只加可选/带默认值的字段，绝不删字段、改类型或加必填项。把 schema 变更纳入 CI 校验，不兼容的变更在合并前就拦下。</p>
+
+      <!-- ════════════════ PERFORMANCE / OPS ════════════════ -->
+      <h2 id="performance"><span class="num">4.3</span><span>性能与运维类</span></h2>
+
+      <p>这一类严重度最低——不丢数据、不破坏正确性，但会让吞吐归零或资源耗尽。共同根因是<strong>把并行单位（分区）和协调成本（再平衡）想得太理想</strong>，全部回链 <a href="02-principles.html#partition-order">§2.2 分区</a> 与 <a href="02-principles.html#rebalance">§2.4 再平衡</a>。</p>
+
+      <h3>陷阱 10：再平衡风暴，吞吐归零</h3>
+      <p><strong>症状</strong>:消费组 lag 持续上涨、吞吐周期性归零，日志里反复出现成员离组又入组。集群没挂、消息也没丢，但消费几乎停滞。</p>
+      <p><strong>根因</strong>:单批处理时间超过 <code>max.poll.interval.ms</code>（默认 5 分钟），或 <code>session.timeout.ms</code> 设得过紧。回链 <a href="02-principles.html#rebalance">§2.4</a> 的关键代价：心跳跑在后台线程，但成员<strong>存活由 <code>poll()</code> 调用证明</strong>。处理太慢 → 两次 <code>poll()</code> 间隔超限 → coordinator 判定成员死亡 → 触发再平衡 → 分区重分配 → 慢消费者重新加入又再次超时 → 循环。在 eager（急切式）协议下每次再平衡都是 stop-the-world，整组停摆。</p>
+      <div class="callout example">
+        <span class="label">例 · 真实案例</span>
+        <p>某 240 个消费者的服务做滚动重启。重启后实例首次心跳约 38 秒到达，超过 30 秒的 <code>session.timeout.ms</code>，于是每个实例都先被判死、再入组，叠加滚动节奏，整组陷入约 <strong>9 分钟</strong>的再平衡 churn、消费停滞。启用 <strong>static membership</strong> 后，重启的实例凭 <code>group.instance.id</code> 认领回原分配、不触发再平衡——再平衡次数从 30+ 降到 0。</p>
+      </div>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">rebalance-tuning.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-rebalance">复制</button>
+        </div>
+<pre id="cb-rebalance"><code class="language-properties"># 错误写法：批太大处理超时 + eager 协议 + 无 static membership
+max.poll.records=500
+session.timeout.ms=30000           # 滚动重启首次心跳就可能超
+
+# 正确写法：减小批量 + 协作式增量再平衡 + 静态成员
+max.poll.records=100                       # 缩短单批处理时间
+partition.assignment.strategy=org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+group.instance.id=consumer-instance-7      # 每实例唯一且稳定 → 重启不触发再平衡
+session.timeout.ms=45000                   # 给滚动重启留出首次心跳余量</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>:三管齐下。① 把单批处理时间控制在 <code>max.poll.interval.ms</code> 内（减小 <code>max.poll.records</code> 或加速处理）；② 用协作式增量再平衡（<code>CooperativeStickyAssignor</code>），只移交需要变动的分区、其余继续消费，没有全局 stop-the-world；③ 给每个实例配稳定的 <code>group.instance.id</code> 启用 static membership，让重启不触发再平衡。4.0 的 KIP-848 把再平衡逻辑移到 broker 端、增量收敛，进一步压缩 churn。</p>
+
+      <h3>陷阱 11：加消费者反而 lag 增大</h3>
+      <p><strong>症状</strong>:lag 高，于是给消费组扩容；扩容后吞吐没上去，lag 反而比扩容前更大。</p>
+      <p><strong>根因</strong>:回链 <a href="02-principles.html#rebalance">§2.4</a>。在 eager 协议下，每加入一个新成员都触发一次 stop-the-world 再平衡——全组暂停消费、重算分配、重新拉起。如果组本身已经不稳定（处理偏慢、临近超时），新成员加入引发的再平衡会进一步挤占处理时间，把组推向陷阱 10 的风暴。另一种情形：分区数已经等于消费者数，再加的消费者<strong>分不到分区</strong>、纯闲置，却仍参与了那次再平衡的代价。</p>
+      <div class="callout warning">
+        <span class="label">反直觉提醒</span>
+        <p>加消费者<strong>可能让 lag 更糟</strong>。每次 join 都是一次再平衡（eager 下还是 stop-the-world）；分区数是消费并行度的硬上限，超过分区数的消费者只会闲置并徒增协调成本。</p>
+      </div>
+      <p><strong>如何避免再次触发</strong>:扩容前先确认两件事——组是否稳定（不在临界超时），以及分区数是否还有余量（消费并行度上限 = 分区数）。先切到协作式增量再平衡再扩容，避免扩容动作本身引发 stop-the-world。若分区数已是瓶颈，问题在分区规划（陷阱 14），加消费者无效。</p>
+
+      <h3>陷阱 12：慢消费者阻塞 poll 线程</h3>
+      <p><strong>症状</strong>:消费者偶尔因下游（数据库、HTTP）变慢而处理时间拉长，紧接着就被判死、触发再平衡，形成"下游抖动 → 再平衡 → 更慢"的连锁。</p>
+      <p><strong>根因</strong>:在 <code>poll()</code> 循环里直接做重活（同步 DB 写、外部 HTTP 调用）。回链 <a href="02-principles.html#rebalance">§2.4</a>：<code>poll()</code> 既拉消息又承担"成员存活"的证明，处理阻塞在 poll 线程上就等于心跳停摆。一旦单批处理超过 <code>max.poll.interval.ms</code>，成员被判死。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">PauseResume.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-pause">复制</button>
+        </div>
+<pre id="cb-pause"><code class="language-java">// 错误写法：重活直接堵在 poll 线程上，下游变慢即超时被驱逐
+while (true) {
+    var records = consumer.poll(Duration.ofMillis(100));
+    for (var r : records) slowDbWrite(r);   // 阻塞 → 错过下一次 poll → 判死
+}
+
+// 正确写法：卸到工作线程，poll 线程用 pause/resume 维持存活而不超时
+var partitions = consumer.assignment();
+while (true) {
+    var records = consumer.poll(Duration.ofMillis(100));
+    if (!records.isEmpty()) {
+        consumer.pause(partitions);          // 暂停拉取，但继续 poll 维持心跳
+        submitToWorkerPool(records);         // 重活交给工作线程
+    }
+    if (workerPoolIdle()) {
+        consumer.resume(partitions);         // 处理跟上后恢复拉取
+        commitProcessedOffsets(consumer);    // 按已完成进度提交
+    }
+}</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>:保持 poll 线程轻量——只拉取和派发，重活卸到工作线程池。用 <code>pause()</code>/<code>resume()</code> 在工作线程忙时停止拉取新数据、同时继续调用 <code>poll()</code> 维持存活计时器，避免假死驱逐。offset 严格按工作线程<strong>实际完成</strong>的进度提交。</p>
+
+      <h3>陷阱 13：热分区 / key 倾斜</h3>
+      <p><strong>症状</strong>:某一个消费者实例 CPU/lag 居高不下、其余实例几乎空闲，整组吞吐被这一个实例拖住。扩容无效。</p>
+      <p><strong>根因</strong>:回链 <a href="02-principles.html#partition-order">§2.2</a>:相同 key 经 murmur2 哈希落到同一分区以保证顺序。若 key 选择导致分布极度不均（例如按租户分区、而某个大租户占了大半流量），该租户的分区成为热点、承接它的消费者过载。Kafka <strong>不会自动均衡</strong>倾斜的负载——分区是固定归属的。</p>
+      <p><strong>如何避免再次触发</strong>:选<strong>高基数、分布均匀</strong>的分区 key（用 <code>orderId</code> 而非 <code>userId</code>，用 <code>userId</code> 而非 <code>tenantId</code>）。若业务要求按某低基数维度保序、又无法承受倾斜，考虑复合 key（如 <code>tenantId + orderId</code>）在保序粒度和均衡之间折中。规划阶段就用真实流量分布压测分区热度，别等上线发现单分区被打爆。</p>
+
+      <h3>陷阱 14：分区数过多/过少，不可减，加分区破坏顺序</h3>
+      <p><strong>症状</strong>:三种。其一，消费并行度卡死——消费者数想加却加不上去（分区太少）。其二，controller 故障切换慢、broker 文件句柄耗尽报错（分区太多）。其三，给一个有 key 的 topic 加了分区后，下游按 key 的顺序全乱了。</p>
+      <p><strong>根因</strong>:回链 <a href="02-principles.html#partition-order">§2.2</a>。分区是并行的单位，消费者数不能超过分区数，<strong>过少</strong>则并行度被锁死。<strong>过多</strong>则每个 segment 占 2 个文件句柄（默认 ulimit 1024 很快耗尽）、且抬高 controller 元数据与故障切换开销（KRaft 缓解但不消除）。最隐蔽的是：分区数<strong>只能加不能减</strong>，而给有 key 的 topic 加分区会改变 <code>key % 分区数</code> 的映射——同一个 key 从此哈希到不同分区，<strong>历史顺序与未来顺序在不同分区之间永久错位</strong>。</p>
+      <div class="callout warning">
+        <span class="label">反直觉提醒</span>
+        <p>分区数<strong>永远不能减</strong>，且给有 key 的 topic <strong>加分区会静默破坏 key 顺序</strong>——murmur2 哈希的目标分区变了，同 key 消息散到新旧不同分区。分区越多也不等于越能扩展：故障切换时间、文件句柄、端到端延迟都会被推高。</p>
+      </div>
+      <p><strong>如何避免再次触发</strong>:分区数当成<strong>难以回退的容量决策</strong>来定——按目标吞吐、单分区吞吐上限、未来消费并行需求保守预估，留一定余量但不盲目设大。确需调整且不能容忍顺序错乱时，<strong>新建一个分区数合适的 topic、双写或迁移</strong>，而不是在原 topic 上加分区。无 key（顺序无关）的 topic 加分区才是安全的。</p>
+
+      <h3>陷阱 15：消息过大，三个尺寸配置不匹配</h3>
+      <p><strong>症状</strong>:producer 抛 <code>RecordTooLargeException</code>，或消费端拉取失败/卡住，或大消息能写入却复制不出去（与陷阱 4 的第二形态同源）。</p>
+      <p><strong>根因</strong>:四个尺寸配置分散在三端、彼此不一致——producer 的 <code>max.request.size</code>、broker 的 <code>message.max.bytes</code>、consumer 的 <code>fetch.max.bytes</code>，以及复制路径的 <code>replica.fetch.max.bytes</code>。任意一个小于实际消息体，对应环节就断：producer 端拒发、broker 端拒收、consumer 端拉不动、follower 端复制不了。回链 <a href="02-principles.html#storage">§2.1 存储</a>:记录是顺序写进 segment 的字节流，每一跳都有自己的尺寸上限。</p>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">message-size.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-size">复制</button>
+        </div>
+<pre id="cb-size"><code class="language-properties"># 错误写法：四个尺寸各自为政，某一跳卡住
+max.request.size=1048576           # producer 1 MiB
+message.max.bytes=10485760         # broker 10 MiB
+fetch.max.bytes=1048576            # consumer 1 MiB —— 拉不动 broker 上的大消息
+
+# 正确写法：四者按同一上限对齐推导（示例统一到 10 MiB）
+max.request.size=10485760          # producer
+message.max.bytes=10485760         # broker
+replica.fetch.max.bytes=10485760   # broker 复制路径，>= message.max.bytes
+fetch.max.bytes=10485760           # consumer</code></pre>
+      </div>
+      <p><strong>如何避免再次触发</strong>:把四个尺寸当成一组联动配置、从单一上限统一推导，写进配置模板而非各端独立设置。更根本的设计：<strong>大对象不要走 Kafka</strong>。Kafka 适合高吞吐的小记录；大文件用 <strong>claim-check 模式</strong>——把对象存到 S3/对象存储，消息体里只放一个指针（URL/key），消费者凭指针去取。这同时避开了尺寸配置地狱和大消息对 page cache 的污染。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个有 key 的 topic 当前 6 分区，消费组 6 个实例刚好打满，lag 仍在涨。直接把分区加到 12 行不行？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不行——加分区会把 <code>key % 6</code> 变成 <code>key % 12</code>，同一个 key 从此哈希到不同分区，<strong>破坏所有下游按 key 的顺序</strong>（陷阱 14）。而且要先确认 lag 涨的根因：若是单批处理太慢或下游瓶颈，加分区/加消费者都不解决（陷阱 10、12）。</p>
+          <p>正确路径：先定位是并行度不足还是处理慢。确属分区数瓶颈、且需保序，就<strong>新建 12 分区的 topic 迁移</strong>，而不是原地加分区。若顺序无关，原地加分区才安全。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════ ANTI-PATTERNS / WHEN NOT ════════════════ -->
+      <h2 id="anti-patterns"><span class="num">4.4</span><span>反模式与"什么时候不要用 Kafka"</span></h2>
+
+      <p>前面 15 条失败模式的总和，反过来勾出 Kafka 的适用边界。它是分布式可重放的分区日志——这套设计在某些场景是错的工具，硬上会持续与机制对抗。这一节服务后面的<a href="05-capstone.html">选型判断</a>。</p>
+
+      <h3>常见反模式</h3>
+      <ul>
+        <li><strong>把 Kafka 当请求-响应的 RPC 用</strong>:日志模型是单向追加 + 异步消费，没有内建的"响应"通道。硬做要靠关联 ID + 临时响应 topic，延迟和复杂度都远高于直接用 RPC。</li>
+        <li><strong>用消费者数超过分区数来追求并行</strong>:并行上限是分区数，多出的消费者纯闲置（陷阱 11、14）。</li>
+        <li><strong>用大量短命 topic 或海量分区做隔离</strong>:抬高 controller 负担、文件句柄、故障切换时间（陷阱 14）。</li>
+        <li><strong>把大文件直接塞进消息体</strong>:污染 page cache、撞尺寸上限——用 claim-check（陷阱 15）。</li>
+        <li><strong>靠默认配置上生产</strong>:RF=1、auto-commit、ISR 无下限都是会丢数据的默认（陷阱 3、4、5）。</li>
+      </ul>
+
+      <h3>什么时候不要用 Kafka</h3>
+      <table class="compare-table">
+        <caption>表 4.1 · Kafka 不擅长的场景与更合适的替代</caption>
+        <thead>
+          <tr><th>场景</th><th>为什么 Kafka 是错的工具</th><th>更合适的方向</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>低吞吐、消息量小</td><td>分区/副本/消费组的运维与认知成本，换不回日志模型的吞吐优势</td><td>传统消息队列 / 数据库表轮询</td></tr>
+          <tr><td>复杂的逐条路由</td><td>无内建按内容路由（topic exchange、header 路由）；要在消费端自行分发</td><td>RabbitMQ 等带 exchange 路由的 broker</td></tr>
+          <tr><td>需要内建重试 / 死信队列</td><td>无原生 per-message 重试与 DLQ，需自建重试 topic + 计数</td><td>RabbitMQ / SQS（原生 DLQ）</td></tr>
+          <tr><td>优先级队列</td><td>分区日志严格按追加顺序，无消息优先级概念</td><td>支持 priority 的队列系统</td></tr>
+          <tr><td>请求-响应 / 同步调用</td><td>单向异步日志，没有响应通道</td><td>gRPC / HTTP / RPC 框架</td></tr>
+          <tr><td>小团队、无专职运维</td><td>即便 KRaft 简化了架构，集群容量规划、分区/ISR/再平衡调优仍有持续运维成本</td><td>托管队列 / 云原生消息服务</td></tr>
+          <tr class="selected"><td>高吞吐事件流 + 可重放 + 多消费组独立消费</td><td>正是日志模型的主场：顺序 I/O、消费不删数据、offset 在消费侧</td><td>选中 Kafka</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · "更快的队列"是红旗</span>
+        <p>把 Kafka 当"更快的 MQ"会持续撞上这一章的失败模式——因为它不是队列，是日志。需要逐条路由、优先级、内建 DLQ、同步响应时，硬用 Kafka 等于跟它的设计取舍对着干。资深判断不是"什么都用 Kafka"，而是认得出哪些负载与日志模型对齐、哪些不对齐。KIP-932 的 share group（4.2 GA）为部分队列语义场景提供了原生选项，但它仍架在日志之上，不改变上面这些边界。</p>
+      </div>
+
+      <!-- ════════════════ SELF-CHECK ════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>一个面试官给出说法"设了 <code>acks=all</code>，所以不会丢消息"。指出这个说法的漏洞，并给出端到端不丢消息的完整配置组合（含消费侧）。</li>
+          <li><code>enable.auto.commit=true</code> 在什么具体时序下会丢消息？为什么把它关掉反而让失败模式变得"可补救"？</li>
+          <li>幂等 producer（<code>enable.idempotence=true</code>）能保证跨进程重启不重复吗？说明它的去重边界，以及要跨重启恰好一次该用什么。</li>
+          <li>(设计题) 一个有 key 的 6 分区 topic，6 个消费者打满后 lag 仍涨。逐步说明你会怎么定位根因，以及为什么"直接加分区到 12"是错的。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><code>acks=all</code> 的语义是"所有 ISR 成员确认"，ISR 缩到 1 时它退化成 <code>acks=1</code>（陷阱 3）。完整组合：<code>acks=all</code> + <code>min.insync.replicas=2</code> + <code>replication.factor=3</code> + <code>unclean.leader.election.enable=false</code>，<strong>外加消费侧处理后再提交 offset</strong>。任缺一道就有丢失窗口（图 4.1）。设计上 <code>min.insync.replicas = RF-1</code> 以容忍单点故障同时保持可写。</li>
+            <li>auto-commit 按 <code>auto.commit.interval.ms</code> 定时提交最近一次 <code>poll()</code> 返回的 offset，与业务是否处理完无关。时序：poll 返回 1000 条，处理到第 501 条时定时器提交了 offset=1000，进程随即崩溃 → 重启从 1001 开始，502–1000 未处理却已提交、永久跳过（陷阱 5）。关掉它、改成处理完再 <code>commitSync()</code>，失败模式从"丢失"翻转成"重复"，而重复能用消费侧幂等吸收，丢失不能。</li>
+            <li>不能。幂等去重只在<strong>同一个 PID + 同一 producer 会话</strong>内有效；进程重启拿到新 PID，旧会话的记录无法再去重（陷阱 7）。要跨重启恰好一次需用事务：稳定的 <code>transactional.id</code> 靠 epoch 跨会话存活、隔离僵尸实例。且事务的恰好一次只在 Kafka 消费-转换-生产闭环内成立，不覆盖 DB 写、HTTP 等外部副作用。</li>
+            <li>先定位根因而非急着扩容：① 看单个实例是否倾斜（热分区/key 倾斜，陷阱 13）；② 看单批处理时间是否接近 <code>max.poll.interval.ms</code> 或下游是否是瓶颈（陷阱 10、12）——若是，加分区/加消费者都无效；③ 确认并行度是否真被分区数卡死。直接加分区到 12 会把 <code>key % 6</code> 变成 <code>key % 12</code>、破坏所有下游按 key 顺序（陷阱 14）。确属分区瓶颈且需保序时，新建 12 分区 topic 迁移，而非原地加分区。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一条"绝不丢、可容忍重复"的支付事件链做端到端配置</h3>
+        <p>一条支付成功事件，要求：绝不丢失、可容忍重复（下游有幂等去重）、单账户内严格有序、能容忍一台 broker 故障仍可写。写出 producer、broker/topic、consumer 三端的关键配置，并说明分区 key 怎么选、为什么不需要事务。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>持久性走四道防线（图 4.1）；有序靠 <code>enable.idempotence=true</code> + 合适的分区 key（账户维度保序，但注意倾斜——见陷阱 13）；"可容忍重复"意味着<strong>不需要事务</strong>，至少一次 + 消费侧幂等就够（陷阱 8）。容忍一台故障 ⇒ <code>min.insync.replicas = RF-1 = 2</code>。逐项对照陷阱 1/2/3/6/8 的"正确写法"。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/#design">Apache Kafka 官方文档 · Design</a>（官方 · 复制、acks、ISR 语义）</li>
+          <li><a href="https://newrelic.com/blog/best-practices/kafka-consumer-config-auto-commit-data-loss">New Relic — Kafka consumer auto-commit 与数据丢失</a>（auto-commit 丢消息时序）</li>
+          <li><a href="https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/">Confluent — 如何选择 topic 与分区数</a>（分区过多/过少代价）</li>
+          <li><a href="https://www.confluent.io/blog/incremental-cooperative-rebalancing-in-kafka/">Confluent — Incremental Cooperative Rebalancing</a>（再平衡风暴、协作式协议、static membership 案例）</li>
+          <li><a href="https://www.confluent.io/blog/transactions-apache-kafka/">Confluent — Transactions & EOS</a>（幂等边界、事务跨会话恰好一次）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-practice.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 实操</span>
+        </a>
+        <a href="05-capstone.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 综合实战与选型</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#data-loss" data-toc-target="data-loss">4.1 数据丢失类</a></li>
+        <li><a href="#correctness" data-toc-target="correctness">4.2 正确性类</a></li>
+        <li><a href="#performance" data-toc-target="performance">4.3 性能与运维类</a></li>
+        <li><a href="#anti-patterns" data-toc-target="anti-patterns">4.4 反模式 / 何时不用</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

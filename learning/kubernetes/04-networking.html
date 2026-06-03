@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update <title>
+    3. Update the .learning-path breadcrumb (mark current chapter with .current)
+    4. Fill in <article> with chapter content using the reusable HTML
+       snippets defined in references/tutorial_template.md
+    5. Update sticky TOC links (aside.toc-sidebar > ul) to match in-article anchors
+    6. Update prev/next nav at bottom
+
+  Class names you'll use (full reference in tutorial_template.md):
+    .learning-path   .chapter-opener (now uses .chapter-label, not .numeral)
+    .schema-panel   .one-liner   .rationale   .annotations
+    .code-block (with .header > .filename .lang .copy)
+    .callout (.warning .tip .example .insight — only .warning shows accent)
+    .compare-table (tr.selected)
+    figure > svg > figcaption (figcaption > .fig-num)
+    .predict   details > summary
+    .self-check   .challenge   .references   .chapter-nav
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网络模型 · Kubernetes 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 对象模型</a><span class="sep">—</span>
+    <a href="02-control-loop.html">02 控制循环</a><span class="sep">—</span>
+    <a href="03-scheduling.html">03 调度与资源</a><span class="sep">—</span>
+    <a href="04-networking.html" class="current">04 网络模型</a><span class="sep">—</span>
+    <a href="05-storage-state.html">05 存储与状态</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现状与前沿</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>网络模型：扁平网络与 Service 的真相</h1>
+        <p class="recap">上一章讲 Pod 如何落到 Node。落地之后，Pod 之间、Pod 与外界如何通信？答案里藏着一个反直觉的真相：Service 的 ClusterIP 根本不是一块网卡。</p>
+      </header>
+
+      <p>前三章建立的主线是：Kubernetes 是一组 level-triggered 控制循环，每个控制器盯着期望状态、不断把现实拉过去。本章引入又一个控制器——<strong>kube-proxy</strong>。它 watch Service 与 EndpointSlice 这两类对象，把它们 reconcile 成节点内核里的一组路由规则。这条主线在本章收口于一个让人愣住的事实：一个 Service 的 <strong>ClusterIP 不是任何真实接口</strong>，它只是 kube-proxy 写进内核的一组 DNAT 规则。把这一点想透，「后端 Pod 挂了为什么不是连接被拒」「为什么 ping 不通 ClusterIP 却能 curl 通」这些怪象全都变成直接推论。</p>
+
+      <section class="schema-panel" id="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li><strong>扁平网络公理</strong>——每个 Pod 拿到一个独立、可路由的 IP，Pod 间通信<em>不经 NAT</em>，节点上的 agent 能直达所有 Pod。</li>
+          <li><strong>Service = 稳定虚拟身份</strong>——用 label selector 选中一组易逝的 Pod，控制器维护一份 EndpointSlice（就绪 Pod 的 IP 列表）。</li>
+          <li><strong>ClusterIP 的真相</strong>——它不是接口、没有进程监听，是 kube-proxy 写进内核的 DNAT 规则；发往它的包在内核被改写目标地址、转发到某个后端 Pod。</li>
+          <li><strong>kube-proxy 三种模式</strong>——iptables（当前默认）、IPVS（大规模、已在 1.35 弃用）、nftables（1.33 起 stable，尚未成为默认）。</li>
+          <li><strong>暴露方式分工</strong>——ClusterIP / NodePort / LoadBalancer 是三类 Service；Ingress 是 L7 入口，<em>不是</em>一种 Service 类型，而是 Service 之上的一层。</li>
+        </ul>
+      </section>
+
+      <h2 id="flat-network"><span class="num">§4.1</span><span>扁平网络公理：每个 Pod 一个可路由 IP</span></h2>
+
+      <p class="one-liner">Kubernetes 的网络模型只有三条公理：每个 Pod 一个独立可路由 IP、Pod 间通信不做 NAT、节点 agent 能直达每个 Pod。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Docker 单机时代的网络靠端口映射：容器躲在宿主机的 NAT 后面，外界要访问就把宿主机的某个端口转发进去。一台机器跑几个容器还行，可一旦放到集群、跑成千上万个容器，这个模型立刻崩。端口是有限的（一台机 65535 个），多个容器抢同一个常用端口会冲突，得引入一张全局端口账本去记「哪个容器占了宿主机哪个端口」；更糟的是 NAT 会改写源地址——服务收到的连接都来自宿主机 IP，<em>真实来源被抹掉</em>，依赖源 IP 的日志、ACL、限流统统失灵。扁平网络就是为了一次性绕开这一整类问题：让每个 Pod 像一台拥有自己 IP 的小 VM。</p>
+      </div>
+
+      <p>扁平网络模型把上面的痛点用三条硬性约束消解掉：</p>
+
+      <ul>
+        <li><strong>每个 Pod 拿到自己独立、可路由的 IP。</strong>这个 IP 在整个集群范围内唯一，Pod 内的容器共享它（同一个网络命名空间）。Pod 用<em>标准端口</em>对外提供服务——一个 Web 应用就监听 80，不必为了避让别人而改成 8081、8082。端口冲突这个问题从根上不存在了。</li>
+        <li><strong>Pod 与 Pod 之间直接通信，全程不做 NAT。</strong>Pod-A 发给 Pod-B 的包，到达 B 时源地址<em>仍然是 A 的 Pod IP</em>，没有被任何中间环节改写。源 IP 被完整保留，日志记得到真实来源、ACL 能按来源放行、限流能按来源计数。</li>
+        <li><strong>节点上的 agent（如 kubelet、kube-proxy）能直达所有 Pod。</strong>这条保证了健康检查、流量转发这些跨节点的控制动作不需要额外的隧道穿透。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两个 Node 各自承载若干 Pod，每个 Pod 带独立 IP，跨节点 Pod 直连不做 NAT">
+          <defs>
+            <marker id="m41-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Node 1 -->
+          <rect x="30" y="60" width="280" height="200" rx="8" class="diagram-ink node-fill"/>
+          <text x="50" y="84" text-anchor="start" class="edge-label" font-weight="700">Node 1</text>
+
+          <!-- Node 1 pods -->
+          <rect x="56" y="108" width="100" height="56" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="106" y="132" text-anchor="middle" class="node-label-accent">Pod A</text>
+          <text x="106" y="150" text-anchor="middle" class="edge-label">10.1.1.7</text>
+
+          <rect x="184" y="108" width="100" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="234" y="132" text-anchor="middle" class="node-label">Pod</text>
+          <text x="234" y="150" text-anchor="middle" class="edge-label">10.1.1.8</text>
+
+          <rect x="56" y="188" width="100" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="106" y="212" text-anchor="middle" class="node-label">Pod</text>
+          <text x="106" y="230" text-anchor="middle" class="edge-label">10.1.1.9</text>
+
+          <!-- Node 2 -->
+          <rect x="390" y="60" width="280" height="200" rx="8" class="diagram-ink node-fill"/>
+          <text x="410" y="84" text-anchor="start" class="edge-label" font-weight="700">Node 2</text>
+
+          <!-- Node 2 pods -->
+          <rect x="416" y="108" width="100" height="56" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="466" y="132" text-anchor="middle" class="node-label-accent">Pod B</text>
+          <text x="466" y="150" text-anchor="middle" class="edge-label">10.2.3.4</text>
+
+          <rect x="544" y="108" width="100" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="594" y="132" text-anchor="middle" class="node-label">Pod</text>
+          <text x="594" y="150" text-anchor="middle" class="edge-label">10.2.3.5</text>
+
+          <rect x="416" y="188" width="100" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="466" y="212" text-anchor="middle" class="node-label">Pod</text>
+          <text x="466" y="230" text-anchor="middle" class="edge-label">10.2.3.6</text>
+
+          <!-- Direct A -> B link (Pod A right edge to Pod B left edge) -->
+          <line x1="156" y1="136" x2="416" y2="136" class="diagram-accent" marker-end="url(#m41-verm)"/>
+          <text x="350" y="125" text-anchor="middle" class="branch-label">无 NAT</text>
+          <text x="350" y="155" text-anchor="middle" class="edge-label">源 IP 不变</text>
+
+          <!-- bottom note -->
+          <text x="350" y="296" text-anchor="middle" class="edge-label">每个 Pod 一个可路由 IP · 彼此直达 · 无宿主机端口映射</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>跨节点的 Pod 直连。Pod A（10.1.1.7）发给 Pod B（10.2.3.4）的包直接送达，不经任何端口映射或地址转换。<strong>注意</strong>：每个 Pod 都持有集群内可路由的 IP，彼此直达——没有 Docker 单机那种「容器藏在宿主机端口背后」的映射层，到达 B 时源 IP 仍是 A 的 Pod IP。</figcaption>
+      </figure>
+
+      <p><strong>代价（比文档深一层）。</strong> 这三条公理是 Kubernetes <em>提出的要求</em>，而不是它自己实现的能力。「让任意两个 Pod 跨节点直连、还不做 NAT」在物理上并不免费——不同节点上的 Pod IP 段如何互通、谁来分配不冲突的 Pod IP、跨节点的包走 overlay 隧道还是直接路由，这些全部被<strong>推给 CNI（Container Network Interface）插件层</strong>去解决。Flannel、Calico、Cilium 等插件各有实现：有的用 VXLAN 之类的 overlay 把 Pod 网络封装进隧道，有的依赖底层网络可路由而直接下发路由表，IPAM（IP 地址管理）也由它们负责。Kubernetes 核心只规定「结果必须满足三条公理」，把「怎么做到」连同全部复杂度外包给了 CNI。这也是为什么换一个 CNI 插件，集群的网络性能和可观测性会有显著差异。</p>
+
+      <h2 id="service"><span class="num">§4.2</span><span>Service：易逝 Pod 之上的稳定虚拟身份</span></h2>
+
+      <p class="one-liner">Pod 随时会被重建、IP 随之改变；Service 用 label selector 给一组 Pod 一个永不变的虚拟身份，背后由 EndpointSlice 维护当前就绪的 Pod IP 列表。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>扁平网络给了每个 Pod 一个 IP，但 Pod 是<em>易逝的</em>：滚动更新、崩溃重启、被调度器驱逐，每一次都会换一批 Pod、换一批 IP。如果调用方把后端 Pod 的 IP 写死，对端一重建就连不上了。需要一层间接——一个<em>稳定的</em>名字和 IP，把「这组提供某能力的 Pod」抽象出来，无论底下的 Pod 怎么换，前端始终对着这个稳定身份说话。Service 就是这层间接。</p>
+      </div>
+
+      <p>Service 的工作方式是一条小型控制循环。Service 对象上写着一个 <strong>label selector</strong>，比如 <code>app=web</code>。控制平面里的 EndpointSlice 控制器持续 watch 所有 Pod，把<em>同时满足两个条件</em>的 Pod 的 IP 收集起来：① 它的 label 匹配 selector，② 它已经<strong>就绪（Ready）</strong>。这份「当前就绪 Pod 的 IP 列表」被写进一个或多个 <strong>EndpointSlice</strong> 对象。Pod 增减、就绪状态变化，控制器就更新 EndpointSlice——又是一个 level-triggered 的 reconcile。</p>
+
+      <p><strong>回扣第 2 章。</strong> 第 2 章讲过 readiness 探针决定一个 Pod 是否「准备好接收流量」。这里就是它的兑现点：当一个 Pod 的 <strong>readiness 探针失败</strong>，控制器立刻把它的 IP 从 EndpointSlice 里<strong>摘掉</strong>；流量于是不再被导向这个 Pod。探针恢复成功，IP 再被加回去。Service 看上去稳定不变，底下的 EndpointSlice 却在随 Pod 的就绪状态实时增删——这正是「稳定虚拟身份」与「易逝后端」之间的那层缓冲。</p>
+
+      <div class="callout insight">
+        <span class="label">把概念钉死</span>
+        <p>Service 与 EndpointSlice 是<em>两个分工明确</em>的对象，别混成一个。Service 持有「身份」——稳定的名字、稳定的 ClusterIP、selector 规则；EndpointSlice 持有「当前现实」——此刻就绪的那批 Pod IP。Service 几乎从不变，EndpointSlice 随 Pod 起落不断变。下一节的 kube-proxy 正是同时 watch 这两者：从 Service 拿到「虚拟 IP 是多少」，从 EndpointSlice 拿到「该转发到哪些真实 IP」。</p>
+      </div>
+
+      <h2 id="clusterip-truth"><span class="num">§4.3</span><span>ClusterIP 的真相：内核里的一组 DNAT 规则</span></h2>
+
+      <p class="one-liner">ClusterIP 上没有任何进程在监听、也没有对应的网卡；它是 kube-proxy 写进内核的一组 DNAT 规则，发往它的包在内核被改写目标地址、转发到某个后端 Pod。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§4.2 给了 Service 一个稳定的 ClusterIP，但留了一个没回答的问题：当一个包发往这个 IP，<em>谁</em>来接、<em>怎么</em>送到后端 Pod？最自然的猜测是「ClusterIP 上跑着一个代理进程，它收下连接再转发」。这个猜测错了，而且错得很关键——理解它的真实机制，是本章的高潮，也是解释一连串怪象的钥匙。</p>
+      </div>
+
+      <p>真相是：<strong>ClusterIP 上什么都没有</strong>。没有进程 <code>bind</code> 在那个地址和端口上，集群里也<em>没有任何一块网卡</em>配着这个 IP。它纯粹是一个被登记在册的虚拟地址（从 Service CIDR 段里分配，详见官方的 ClusterIP allocation 文档）。真正让它「能用」的，是 <strong>kube-proxy</strong> 这个运行在<em>每个节点</em>上的控制器所做的事：它同时 watch Service（拿到 ClusterIP）和 EndpointSlice（拿到当前就绪的后端 Pod IP 列表），然后把一组形如「目标地址 = ClusterIP 的包，把目标地址<strong>改写</strong>成某个后端 Pod IP」的规则，写进节点的内核（iptables / IPVS / nftables，见 §4.4）。这种「改写目标地址」的操作叫 <strong>DNAT（Destination NAT，目标地址转换）</strong>。</p>
+
+      <p>于是一次「访问 ClusterIP」的真实经过是这样：你的 client Pod 发出一个目标地址为 ClusterIP（比如 <code>10.96.0.10</code>）的包；这个包在<em>本节点的内核协议栈里</em>撞上 kube-proxy 写的 DNAT 规则；内核当场把目标地址改写成某个后端 Pod 的真实 IP（比如 <code>10.1.1.7</code>），再按扁平网络把它路由过去。整个转发<em>发生在内核里、对应用透明</em>，没有用户态代理进程参与转包。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 350" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="client Pod 发往 ClusterIP 的包被内核 DNAT 规则改写目标地址，转发到三个候选后端 Pod 之一">
+          <defs>
+            <marker id="m43-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m43-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- client pod -->
+          <rect x="24" y="138" width="112" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="80" y="164" text-anchor="middle" class="node-label">client Pod</text>
+          <text x="80" y="182" text-anchor="middle" class="edge-label">curl ClusterIP</text>
+
+          <!-- arrow client -> kernel rules -->
+          <line x1="136" y1="168" x2="266" y2="168" class="diagram-ink" marker-end="url(#m43-ink)"/>
+          <text x="201" y="158" text-anchor="middle" class="edge-label">dst=10.96.0.10</text>
+
+          <!-- kernel DNAT rule box (protagonist) -->
+          <rect x="266" y="120" width="190" height="96" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="361" y="150" text-anchor="middle" class="node-label-accent">内核 DNAT 规则</text>
+          <text x="361" y="172" text-anchor="middle" class="edge-label">kube-proxy 写入</text>
+          <text x="361" y="192" text-anchor="middle" class="edge-label">iptables / IPVS</text>
+          <text x="361" y="208" text-anchor="middle" class="edge-label">改写 dst → Pod IP</text>
+
+          <!-- three backend pods -->
+          <rect x="572" y="44" width="124" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="634" y="66" text-anchor="middle" class="node-label">后端 Pod</text>
+          <text x="634" y="84" text-anchor="middle" class="edge-label">10.1.1.7</text>
+
+          <rect x="572" y="142" width="124" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="634" y="164" text-anchor="middle" class="node-label">后端 Pod</text>
+          <text x="634" y="182" text-anchor="middle" class="edge-label">10.1.1.8</text>
+
+          <rect x="572" y="240" width="124" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="634" y="262" text-anchor="middle" class="node-label">后端 Pod</text>
+          <text x="634" y="280" text-anchor="middle" class="edge-label">10.1.1.9</text>
+
+          <!-- arrows rule -> each backend (end at left edge x=572) -->
+          <line x1="456" y1="150" x2="572" y2="70" class="diagram-soft" marker-end="url(#m43-ink)"/>
+          <line x1="456" y1="168" x2="572" y2="168" class="diagram-accent" marker-end="url(#m43-verm)"/>
+          <line x1="456" y1="186" x2="572" y2="266" class="diagram-soft" marker-end="url(#m43-ink)"/>
+          <text x="520" y="150" text-anchor="middle" class="branch-label">选中一个</text>
+
+          <!-- bottom note -->
+          <text x="360" y="328" text-anchor="middle" class="edge-label">ClusterIP 上无人 listen · 无对应网卡 · 它就是这组转发规则</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>访问 ClusterIP 的真实路径。包发往 <code>10.96.0.10</code>，在内核里被 kube-proxy 写的 DNAT 规则改写目标地址，转发到三个就绪后端之一。<strong>注意</strong>：没有任何东西在 ClusterIP 上 <code>listen</code>，集群里也没有配着这个 IP 的网卡——ClusterIP 纯粹是内核里的一组转发规则，不是一个能被连接的实体。</figcaption>
+      </figure>
+
+      <p><strong>推论（这才是真正有用的部分）。</strong> 一旦接受「ClusterIP = 内核里的转发规则」，几个原本费解的现象立刻就说得通了：</p>
+
+      <ul>
+        <li><strong>后端 Pod 挂了，不是「在 ClusterIP 上连接被拒」。</strong>因为 ClusterIP 上本来就没人 listen，根本不存在「在 VIP 上接受或拒绝连接」这回事。后端不可用时发生的是另两种情况之一：要么 EndpointSlice 已经把坏 IP 摘掉、DNAT 规则随之更新，包被转给一个健康的后端；要么摘除还没完成、规则仍指向那个坏 IP，于是包被 DNAT 到一个<em>已经死掉的 Pod IP</em>——表现为连接超时或被那个 IP 拒绝，而<em>不是</em>「ClusterIP 拒绝了你」。错在过期的规则或选中了坏 IP，不在 VIP 本身。</li>
+        <li><strong>ping ClusterIP 往往不通，curl 却通。</strong>DNAT 规则通常只对特定协议和端口（TCP/UDP 的 Service 端口）生效；ICMP（ping 用的）没有对应规则，于是 ping 一个「不存在的接口」自然没有回应，而走 Service 端口的 TCP 连接却能被规则正确改写转发。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 把 ClusterIP 当成一台「机器」</span>
+        <p>新手常把 ClusterIP 想象成「Service 那台代理机的 IP」，于是去 ping 它、去 ClusterIP 上抓包找监听进程、把后端故障误读成「Service 宕了」。<strong>失败模式</strong>：基于这个错误心智去排障，方向全错。正确的心智是——ClusterIP 是一个<em>规则的入口地址</em>，排障要去看两样东西：EndpointSlice 里此刻有没有健康的后端 IP，以及节点上 kube-proxy 写的转发规则是否最新（§4.4 会讲它由哪种模式落地）。</p>
+      </div>
+
+      <h2 id="kube-proxy-modes"><span class="num">§4.4</span><span>kube-proxy 三种模式：规则用什么写进内核</span></h2>
+
+      <p class="one-liner">同一套「ClusterIP → 后端 Pod IP」的转发语义，kube-proxy 可以用 iptables、IPVS 或 nftables 三种内核机制落地；当前默认仍是 iptables。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§4.3 说 kube-proxy 把转发规则「写进内核」，但内核提供不止一种写规则的机制，它们在<em>规则数量随 Service 增长时的性能</em>上差异巨大。一个几千 Service 的大集群，用错机制会让规则匹配从 O(1) 退化成线性扫描，每个新连接的建立都被拖慢。理解三种模式的取舍，是给集群选对数据面的前提；而它们各自的成熟度和默认状态<em>正在变化</em>，记住时效尤其重要。</p>
+      </div>
+
+      <p>三种模式实现的转发语义完全一致——区别只在用哪种内核子系统去承载那些规则，以及随规则规模增长的性能曲线：</p>
+
+      <table class="compare-table">
+        <caption>kube-proxy 三种模式 + eBPF 路线（时效：截至 Kubernetes 1.33–1.35）</caption>
+        <thead>
+          <tr><th>模式</th><th>内核机制</th><th>大规模表现</th><th>当前状态</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>iptables</td>
+            <td>iptables 规则链（基于 netfilter）</td>
+            <td>规则随 Service 数线性增长，超大集群下匹配与更新变慢</td>
+            <td>当前<strong>默认</strong>，成熟、兼容性最广</td>
+          </tr>
+          <tr>
+            <td>IPVS</td>
+            <td>内核 IPVS（L4 负载均衡，哈希表）</td>
+            <td>规则查找接近 O(1)，适合大规模 Service</td>
+            <td>已在 <strong>1.35 弃用</strong>，新部署不应再选它</td>
+          </tr>
+          <tr>
+            <td>nftables</td>
+            <td>nftables（netfilter 的现代继任者）</td>
+            <td>更新与匹配比 iptables 高效，面向大规模</td>
+            <td><strong>1.33 起 stable</strong>，但<em>尚未成为默认</em></td>
+          </tr>
+          <tr>
+            <td>eBPF（Cilium 等）</td>
+            <td>eBPF 程序挂载到内核钩子</td>
+            <td>可绕开 iptables/nftables 规则链，高性能、强可观测</td>
+            <td>由 CNI 提供，<strong>整体替换</strong> kube-proxy</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>表里最容易记错时效的是后两行。<strong>IPVS 曾是大规模集群的推荐项</strong>，但它已经在 1.35 被弃用——如果凭旧印象「大集群就上 IPVS」，会选到一条正在退场的路。<strong>nftables 已在 1.33 转正为 stable</strong>，它是 iptables 的现代继任者、为大规模而生，但<em>默认模式仍然是 iptables</em>，要用 nftables 得显式配置。这两点合起来意味着：当下默认仍是 iptables，nftables 是经过深思熟虑后值得切换的现代选项，而 IPVS 不再是新部署的候选。</p>
+
+      <p>表的最后一行是另一条路线：<strong>eBPF</strong>（以 Cilium 为代表）。它不是 kube-proxy 的一种模式，而是用 eBPF 程序直接在内核钩子上实现 Service 转发，从而<em>整体替换掉 kube-proxy</em>，绕开 iptables/nftables 的规则链，换取更高性能和更强的网络可观测性。这条路线属于 CNI 的能力范畴，第 6 章会再展开。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个集群从几十个 Service 扩到上万个 Service，数据面用的是 iptables 模式。随着 Service 增多，新连接建立的延迟和 kube-proxy 同步规则的耗时为什么会变差？换成 nftables 会从哪里得到缓解？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>iptables 的规则是组织成链、按顺序匹配的</strong>，Service（及其后端）越多，链越长，一个包要匹配到对应规则平均扫过的规则数就越多，新连接建立因此变慢；同时每次 EndpointSlice 变动，kube-proxy 往往要重算并下发一大片规则，规模越大这次同步越慢，规则收敛有可见延迟。<strong>nftables 用更高效的数据结构组织规则、支持增量更新</strong>，匹配不再是长链顺序扫描、变更也不必整片重写，因此在大规模下匹配延迟和同步耗时都明显优于 iptables——这正是它被引入并转正的动机。<strong>结论</strong>：默认的 iptables 在中小规模够用，超大规模 Service 场景下 nftables 是更合身的现代选择（IPVS 虽也解决规模问题，但已弃用，不再推荐）。</p>
+        </details>
+      </div>
+
+      <h2 id="dns"><span class="num">§4.5</span><span>服务发现：CoreDNS 把名字解析到 ClusterIP</span></h2>
+
+      <p class="one-liner">CoreDNS 把 <code>service.namespace.svc.cluster.local</code> 解析到对应 Service 的 ClusterIP；跨 namespace 访问必须用完整域名（FQDN）。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>ClusterIP 虽稳定，但仍是一串数字、且在 Service 创建时才分配。应用不该把 ClusterIP 写死在配置里——需要一个<em>名字</em>层：用人能读、跨环境不变的名字去找 Service，由集群在运行时把名字解析成当前的 ClusterIP。这就是集群内 DNS 服务发现，承担者是 <strong>CoreDNS</strong>。</p>
+      </div>
+
+      <p>每个 Service 在集群 DNS 里都有一条记录，遵循固定格式：<code>&lt;service&gt;.&lt;namespace&gt;.svc.cluster.local</code>。CoreDNS 把这个名字解析成该 Service 的 ClusterIP——于是应用只要 <code>curl http://web.default.svc.cluster.local</code>，解析得到 ClusterIP，包再交给 §4.3 的 DNAT 规则转发到后端。名字这一层把「找到 Service」和「ClusterIP 具体是多少」彻底解耦。</p>
+
+      <p>有一条规则常被忽略、却是后面那个经典陷阱的根源：<strong>跨 namespace 访问必须带上 namespace（用 FQDN）。</strong> 同 namespace 内可以只写短名 <code>web</code>（DNS 搜索域会自动补全成本 namespace 下的 FQDN）；但要访问<em>另一个</em> namespace 里的 Service，短名补全不到那边去，必须显式写成 <code>web.other-ns</code> 或完整的 <code>web.other-ns.svc.cluster.local</code>。少写了 namespace，解析会落到本 namespace（本 namespace 下往往并没有那个 Service）而失败。</p>
+
+      <h2 id="expose"><span class="num">§4.6</span><span>暴露方式分工：ClusterIP / NodePort / LoadBalancer / Ingress</span></h2>
+
+      <p class="one-liner">三类 Service（ClusterIP、NodePort、LoadBalancer）解决「从哪一层把流量送进来」；Ingress 是 Service 之上的 L7 路由层，按 host/path 把多个服务收敛到一个入口——它不是一种 Service 类型。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前面讲的 ClusterIP 只在集群<em>内部</em>可达。但很多服务要被集群<em>外</em>的客户端访问——浏览器、移动端、外部系统。Kubernetes 提供了几种由内到外、层层加码的暴露方式；它们解决的问题不同、代价也不同，选错会直接体现在云账单和架构复杂度上。最容易混淆的是 Ingress 与三类 Service 的关系，必须厘清。</p>
+      </div>
+
+      <p>四种暴露方式，按「触达范围」从内到外排列；前三种是 Service 的 <code>type</code>，第四种是另一个维度的对象：</p>
+
+      <table class="compare-table">
+        <caption>四种暴露方式：层级、触达范围与代价</caption>
+        <thead>
+          <tr><th>方式</th><th>是什么</th><th>触达范围</th><th>典型代价 / 适用</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ClusterIP</td>
+            <td>Service 默认 type</td>
+            <td>仅集群内部</td>
+            <td>内部服务间调用，零外部暴露</td>
+          </tr>
+          <tr>
+            <td>NodePort</td>
+            <td>Service type</td>
+            <td>每个节点上开一个端口（30000–32767）</td>
+            <td>从任一节点 IP:端口进入；端口范围受限、不适合直接对公网</td>
+          </tr>
+          <tr>
+            <td>LoadBalancer</td>
+            <td>Service type</td>
+            <td>云厂商为<em>每个</em>该类 Service 分配一个外部 L4 IP</td>
+            <td>L4 直达；<strong>按服务计费</strong>，服务一多账单陡增</td>
+          </tr>
+          <tr class="selected">
+            <td>Ingress</td>
+            <td>Service 之上的 L7 层（<em>非</em> Service 类型）</td>
+            <td>一个入口，按 host/path 路由到多个后端 Service</td>
+            <td>HTTP 多服务收敛到单一入口，省外部 IP</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>前三行是一条递进的链：<strong>ClusterIP</strong> 把服务限制在集群内；<strong>NodePort</strong> 在每个节点上开一个高位端口，外部用「任一节点 IP + 该端口」即可进来，但端口范围有限、直接暴露给公网不优雅；<strong>LoadBalancer</strong> 让云厂商为这个 Service 分配一个外部 L4 IP（并通常在背后接到各节点的 NodePort），客户端直接访问这个 IP。LoadBalancer 最省心，但有个关键代价——<strong>云厂商通常按「每个 LoadBalancer」计费</strong>，每多一个这类 Service 就多一个外部负载均衡器、多一笔账。</p>
+
+      <p>第四行的 <strong>Ingress</strong> 是另一回事，也是最常被误解的一处：<strong>它不是一种 Service 类型</strong>。它是 Service <em>之上</em>的一层 <strong>L7（HTTP 层）路由</strong>，由一个 Ingress Controller（如 nginx-ingress）实现。Ingress 的价值在于<em>收敛</em>：用一个外部入口（通常背后只接<em>一个</em> LoadBalancer），按请求的 <strong>host</strong>（域名）和 <strong>path</strong>（路径）把流量分发到背后<em>多个</em>不同的 Service。<code>api.example.com</code> 路由到 api Service，<code>shop.example.com/cart</code> 路由到 cart Service——全部共用同一个入口地址和同一个外部负载均衡器。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="L7 的 Ingress 在上层按 host/path 扇出到多个 Service，下层并列三类 Service 暴露方式">
+          <defs>
+            <marker id="m46-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m46-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- L7 layer label -->
+          <text x="28" y="52" text-anchor="start" class="edge-label" font-weight="700" fill="#B73B2F">L7</text>
+          <!-- L4 layer label -->
+          <text x="28" y="232" text-anchor="start" class="edge-label" font-weight="700">L4 / type</text>
+
+          <!-- Ingress box (top, protagonist) -->
+          <rect x="250" y="28" width="200" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="350" y="54" text-anchor="middle" class="node-label-accent">Ingress (L7)</text>
+          <text x="350" y="74" text-anchor="middle" class="edge-label">按 host / path 路由</text>
+
+          <!-- three Services in a row -->
+          <rect x="60" y="208" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="232" text-anchor="middle" class="node-label">Service A</text>
+          <text x="135" y="250" text-anchor="middle" class="edge-label">ClusterIP</text>
+
+          <rect x="275" y="208" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="232" text-anchor="middle" class="node-label">Service B</text>
+          <text x="350" y="250" text-anchor="middle" class="edge-label">ClusterIP</text>
+
+          <rect x="490" y="208" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="565" y="232" text-anchor="middle" class="node-label">Service C</text>
+          <text x="565" y="250" text-anchor="middle" class="edge-label">ClusterIP</text>
+
+          <!-- fan-out arrows: Ingress bottom edge -> each Service top edge -->
+          <line x1="320" y1="88" x2="150" y2="208" class="diagram-accent" marker-end="url(#m46-verm)"/>
+          <line x1="350" y1="88" x2="350" y2="208" class="diagram-accent" marker-end="url(#m46-verm)"/>
+          <line x1="380" y1="88" x2="555" y2="208" class="diagram-accent" marker-end="url(#m46-verm)"/>
+
+          <text x="208" y="150" text-anchor="middle" class="edge-label">/api</text>
+          <text x="368" y="150" text-anchor="middle" class="edge-label">/shop</text>
+          <text x="500" y="150" text-anchor="middle" class="edge-label">/admin</text>
+
+          <!-- NodePort & LoadBalancer noted as peer entry types (bottom strip) -->
+          <rect x="60" y="296" width="270" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="195" y="323" text-anchor="middle" class="edge-label">NodePort：每节点开端口（30000–32767）</text>
+
+          <rect x="370" y="296" width="270" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="505" y="323" text-anchor="middle" class="edge-label">LoadBalancer：每服务一个外部 L4 IP</text>
+
+          <text x="350" y="118" text-anchor="middle" class="branch-label">一个入口 · 扇出到多个 Service</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.3</span>暴露方式分层。上层的 Ingress（L7）按 host/path 把一个入口的流量扇出到多个 ClusterIP Service；NodePort、LoadBalancer 则是 Service 自身的 type，是另一维度的 L4 入口方式。<strong>注意</strong>：Ingress 不是一种 Service 类型，而是 Service 之上的 L7 入口，把多个 Service 收敛到一个地址——它和 NodePort/LoadBalancer 不在同一层、不互相替代。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 给每个服务都开 LoadBalancer</span>
+        <p>把每一个需要对外的 HTTP 服务都设成 <code>type: LoadBalancer</code>，是云上最常见的烧钱姿势。<strong>失败模式</strong>：云厂商按「每个 LoadBalancer」计费，二十个对外服务就是二十个外部负载均衡器、二十笔费用，账单线性膨胀。<strong>正解</strong>：HTTP 类的多个服务应当走 <strong>Ingress</strong>——背后只用一个 LoadBalancer，由 Ingress Controller 按 host/path 分发到各 Service，外部 IP 与负载均衡器的数量从 N 降到 1。LoadBalancer 留给少数真正需要独立 L4 入口、或非 HTTP 协议的场景。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 「docker-compose 能跑、K8s 不行」</span>
+        <p>从 docker-compose 迁过来的应用，常把对端地址写成 <code>localhost</code>（或 <code>127.0.0.1</code>），以为这样能连到「同一组里的兄弟容器」。在 Kubernetes 里这会失败。<strong>失败模式</strong>：在 Pod 里，<code>localhost</code> 指的是<em>本 Pod</em>（同 Pod 内多个容器共享网络命名空间），它<em>到不了</em>另一个 Pod；compose 里那种「服务名即可互联」的便利，在 K8s 里不是默认提供的。<strong>正解</strong>：要访问别的 Pod，必须为目标显式建一个 Service，然后用它的 DNS 名访问（同 namespace 用短名 <code>db</code>，<em>跨 namespace 必须用 FQDN</em> <code>db.other-ns.svc.cluster.local</code>，见 §4.5）。把 <code>localhost</code> 改成 Service 的 DNS 名，是这类迁移的关键一步。</p>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">动手画一遍</span>
+        <p>不看本章，在纸上画出「一个 client Pod 访问某 Service 的 ClusterIP」的完整路径：从发包、到内核 DNAT 规则、到选中某个后端 Pod IP。画完翻回图 4.2 对照——你把「改写目标地址」这一步画在了哪里？是画成了一台独立的代理机，还是画成了内核里的一条规则？这个区别正是本章的高潮。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>扁平网络的三条公理分别是什么？<strong>为什么 Kubernetes 选扁平网络、而不是 Docker 单机那种端口映射？</strong>（从端口记账、冲突、NAT 抹掉源 IP 三方面答）</li>
+          <li>Service 和 EndpointSlice 各持有什么？一个 Pod 的 readiness 探针失败时，这两个对象里会发生什么变化？</li>
+          <li>「ClusterIP 上没有任何进程在监听」这句话为什么成立？由它可以直接推出「后端挂了不是在 ClusterIP 上连接被拒」——把这条推理补全。</li>
+          <li>kube-proxy 当前默认是哪种模式？IPVS 与 nftables 各自的<em>当前状态</em>是什么（哪个已弃用、哪个 stable 但未默认）？</li>
+        </ol>
+        <details>
+          <summary>查看参考答案</summary>
+          <p><strong>1.</strong> 三条公理：每个 Pod 一个独立可路由 IP；Pod 间通信不做 NAT；节点 agent 能直达所有 Pod。选它而非端口映射的原因——端口映射要为每个容器在宿主机上记一笔端口账（一台机仅 65535 个端口，规模大了记账与冲突都失控），常用端口还会被多个容器抢占；更要命的是 NAT 改写源地址、<em>抹掉真实来源 IP</em>，让依赖源 IP 的日志、ACL、限流全部失效。扁平网络让每个 Pod 像一台有自己 IP 的小 VM、用标准端口、保留源 IP，从根上消解这三类问题（代价是把实现复杂度推给 CNI 层）。</p>
+          <p><strong>2.</strong> Service 持有「稳定身份」：名字、ClusterIP、label selector；EndpointSlice 持有「当前现实」：此刻 label 匹配<em>且就绪</em>的那批 Pod IP。某 Pod 的 readiness 探针失败时，Service 本身<em>不变</em>，但控制器把该 Pod 的 IP 从 EndpointSlice 中<strong>摘掉</strong>，kube-proxy 随之更新转发规则、不再把流量导向它；探针恢复后 IP 被加回。</p>
+          <p><strong>3.</strong> 成立，是因为 ClusterIP 只是从 Service CIDR 分配的一个虚拟地址，集群里<em>没有任何网卡配着它</em>、也没有进程 <code>bind</code> 在它上面——它的「可用」完全来自 kube-proxy 写进内核的 DNAT 规则。推理补全：既然没人在 ClusterIP 上 listen，就不存在「在该地址上接受/拒绝连接」这一动作；后端不可用时，要么 EndpointSlice 已摘除坏 IP、规则把包转给健康后端，要么摘除尚未完成、规则把包 DNAT 到一个已死的<em>Pod IP</em>，表现为连接超时或<em>那个 Pod IP</em> 拒绝——错在过期规则或选中坏 IP，而非「ClusterIP 拒绝了连接」。</p>
+          <p><strong>4.</strong> 当前默认是 <strong>iptables</strong>。IPVS 已在 <strong>1.35 弃用</strong>，新部署不应再选；nftables 自 <strong>1.33 起 stable</strong>，是面向大规模的现代选项，但<em>尚未成为默认</em>，需显式配置。此外 eBPF（Cilium）走的是整体替换 kube-proxy 的另一条路线。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>curl 一个 ClusterIP，背后 3 个后端 Pod 刚崩了 1 个，会发生什么？</h3>
+        <p>一个 Service 背后有 3 个就绪后端 Pod，转发规则会把发往 ClusterIP 的连接分散到这 3 个。此刻其中 1 个 Pod 刚刚崩溃。你对着 ClusterIP 发起 <code>curl</code>，会看到什么结果？<strong>为什么这不是「在 ClusterIP 上连接被拒」？</strong> 想清楚后再展开提示。</p>
+        <details>
+          <summary>提示</summary>
+          <p>关键是两条时间线的<em>错位</em>。其一，崩溃的 Pod 要被从 EndpointSlice 摘除、kube-proxy 再据此更新内核里的 DNAT 规则——这需要时间（探测到不就绪、控制器更新 EndpointSlice、各节点 kube-proxy 同步规则）。其二，你的 <code>curl</code> 可能正好落在这段时间差里。</p>
+          <p>于是有两种结局：<strong>(a) 摘除已完成</strong>——DNAT 规则只剩 2 个健康 IP，连接被转给其中一个，<code>curl</code> 正常成功。<strong>(b) 摘除尚未完成</strong>——规则仍把这次连接 DNAT 到那个已死的 Pod IP，<code>curl</code> 表现为连接超时，或被那个 IP 所在节点回以拒绝。注意结局 (b) 里被拒/超时的是<em>那个具体的后端 Pod IP</em>，<strong>不是 ClusterIP</strong>——因为 ClusterIP 上从来没人 listen，它只是把你的包改写转发出去的规则入口。重试一次，落到健康后端的概率就回来了。把这条因果链和 §4.2 的「readiness 失败 → 摘除 EndpointSlice」、§4.3 的「ClusterIP = DNAT 规则」对上，整章就闭合了。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/services-networking/service/">Kubernetes Docs · Service</a>（Service 类型、selector 与 EndpointSlice、kube-proxy 模式的官方说明）</li>
+          <li><a href="https://kubernetes.io/docs/concepts/services-networking/cluster-ip-allocation/">Kubernetes Docs · Service ClusterIP allocation</a>（ClusterIP 如何从 Service CIDR 分配的权威细节）</li>
+          <li><a href="https://www.k8s.guide/insights/opinion/2026-03-12-kubernetes-flat-network-cni-ingress/">k8s.guide · Kubernetes 扁平网络、CNI 与 Ingress</a>（扁平网络为何这样设计、CNI 与 Ingress 的分工）</li>
+          <li><a href="https://home.robusta.dev/blog/kubernetes-service-vs-loadbalancer-vs-ingress">Robusta · Service vs LoadBalancer vs Ingress</a>（三者分工与选型代价的实务对比）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="03-scheduling.html">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 调度与资源</span>
+        </a>
+        <a class="next" href="05-storage-state.html">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 存储与状态</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#flat-network" data-toc-target="flat-network">4.1 扁平网络公理</a></li>
+        <li><a href="#service" data-toc-target="service">4.2 Service · 稳定身份</a></li>
+        <li><a href="#clusterip-truth" data-toc-target="clusterip-truth">4.3 ClusterIP 的真相</a></li>
+        <li><a href="#kube-proxy-modes" data-toc-target="kube-proxy-modes">4.4 kube-proxy 模式</a></li>
+        <li><a href="#dns" data-toc-target="dns">4.5 服务发现 DNS</a></li>
+        <li><a href="#expose" data-toc-target="expose">4.6 暴露方式分工</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

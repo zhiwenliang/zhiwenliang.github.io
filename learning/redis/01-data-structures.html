@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<!--
+  tech-tutorial · Redis 深度教程 · 01 五大类型与底层编码
+  Aesthetic: minimalist monochrome + single vermillion accent
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>五大类型与底层编码 · Redis 深度教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700;
+  font-size: 30px; line-height: 1.2; margin: 0 0 12px;
+  letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { font-size: 15.5px; line-height: 1.65; margin: 0; }
+
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em;
+  background: var(--bg-soft); padding: 1px 5px; border-radius: 2px;
+  color: var(--vermilion); border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms;
+  user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px;
+  color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* index landing: chapter directory cards */
+.toc-cards { display: grid; grid-template-columns: 1fr; gap: 0; margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.toc-cards a { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 14px 18px; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--rule); transition: background 150ms; }
+.toc-cards a:last-child { border-bottom: none; }
+.toc-cards a:hover { background: var(--bg-soft); }
+.toc-cards .n { font-family: var(--mono); font-size: 13px; color: var(--vermilion); font-weight: 700; padding-top: 2px; }
+.toc-cards .t { font-weight: 600; font-size: 15px; }
+.toc-cards .d { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; line-height: 1.5; }
+
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-data-structures.html" class="current">01 数据结构</a><span class="sep">—</span>
+    <a href="02-single-thread-and-io.html">02 内核模型</a><span class="sep">—</span>
+    <a href="03-persistence-and-memory.html">03 持久化</a><span class="sep">—</span>
+    <a href="04-caching-patterns.html">04 缓存工程</a><span class="sep">—</span>
+    <a href="05-distributed.html">05 分布式</a><span class="sep">—</span>
+    <a href="06-redis-for-agents.html">06 Agent</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Redis 深度教程 · 01</p>
+        <h1>五大类型与底层编码</h1>
+        <p class="recap">起点把 Redis 归结为两块基石；这一章拆第一块——每种数据类型在内存里到底用什么结构存，以及它为什么会随数据规模悄悄换一种存法。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>类型是对外的 API 契约，编码是它在内存里的具体实现；两者不是一回事</li>
+          <li>五大类型各自用哪些编码、在什么阈值从紧凑编码切到通用编码</li>
+          <li>编码退化的触发条件，以及它在内存与延迟上要付的代价</li>
+        </ul>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">本章 = 基石一</span>
+        <p>起点提出 Redis 的两块基石：<strong>为每种数据形态精选内存编码</strong>、<strong>单线程串行执行</strong>。本章就是基石一的展开。把「类型 / 编码」这层看穿，后面「大 key 为什么危险」「为什么 <code>HGETALL</code> 一个百万字段的 hash 会卡住整个实例」之类的问题，都会变成同一个机制的推论。</p>
+      </div>
+
+      <h2 id="encoding"><span class="num">1.1</span><span>类型之下还有编码</span></h2>
+      <p class="one-liner">类型是对外承诺的操作集合，编码是底层真正用的内存结构；同一类型会按数据量和数据形态在多种编码间自动切换。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>把「类型」和「编码」分开，Redis 才能在不改变命令语义的前提下，对小数据用极省内存的紧凑结构、对大数据换成查询更快的通用结构。同一个 <code>HSET</code>，背后可能是一段连续内存，也可能是一张哈希表——调用方完全无感。这层间接是后面一切内存与延迟分析的起点。</p>
+      </div>
+
+      <p>面试里说的「Redis 有五大数据类型」——String、Hash、List、Set、ZSet——指的是<strong>对外暴露的逻辑类型</strong>：每种类型承诺一组命令和复杂度（Hash 承诺 <code>O(1)</code> 取字段，ZSet 承诺按分数范围查）。但同一个逻辑类型，底层可以由不同的内存结构实现，这层实现叫 <strong>encoding（编码）</strong>。<code>OBJECT ENCODING</code> 命令能把它揭出来。</p>
+
+      <p>每个键值在内部都包成一个 <code>redisObject</code>（常简称 <code>robj</code>）：里面有 <code>type</code>（逻辑类型）、<code>encoding</code>（当前编码）、<code>refcount</code>（引用计数，给共享对象用）、以及指向真实数据的指针。<strong>类型由 API 决定，编码由数据当下的规模和形态决定</strong>，且只朝一个方向走：从紧凑编码升级到通用编码后，不会因为数据又变小而退回去。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">redis-cli · 同一类型，两种编码</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-encoding">复制</button></div>
+        <pre id="cb-encoding"><code class="language-bash">127.0.0.1:6379&gt; HSET u:1 name alice age 30
+(integer) 2
+127.0.0.1:6379&gt; OBJECT ENCODING u:1
+"listpack"                      # 小 hash：一段连续内存
+
+127.0.0.1:6379&gt; HSET u:1 bio "$(python3 -c 'print("x"*100)')"
+(integer) 1
+127.0.0.1:6379&gt; OBJECT ENCODING u:1
+"hashtable"                     # value 超过 64 字节，已升级成哈希表
+
+127.0.0.1:6379&gt; HDEL u:1 bio
+(integer) 1
+127.0.0.1:6379&gt; OBJECT ENCODING u:1
+"hashtable"                     # 删回去也不退化——升级是单向的</code></pre>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一个逻辑类型在阈值处从紧凑编码切换到通用编码">
+          <defs>
+            <marker id="ar1a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar1a-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- type box -->
+          <rect x="40" y="98" width="150" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="120" text-anchor="middle" class="node-label">Hash 类型</text>
+          <text x="115" y="138" text-anchor="middle" class="edge-label">API 契约</text>
+
+          <!-- listpack box (accent) -->
+          <rect x="300" y="34" width="180" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="390" y="56" text-anchor="middle" class="node-label-accent">listpack</text>
+          <text x="390" y="74" text-anchor="middle" class="edge-label">连续内存 · 省</text>
+
+          <!-- hashtable box -->
+          <rect x="300" y="162" width="180" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="390" y="184" text-anchor="middle" class="node-label">hashtable</text>
+          <text x="390" y="202" text-anchor="middle" class="edge-label">哈希表 · 查得快</text>
+
+          <!-- threshold note box -->
+          <rect x="556" y="98" width="150" height="54" rx="6" class="diagram-soft node-fill"/>
+          <text x="631" y="120" text-anchor="middle" class="node-label">阈值触发</text>
+          <text x="631" y="138" text-anchor="middle" class="edge-label">&gt;128 或 &gt;64B</text>
+
+          <!-- type -> listpack -->
+          <line x1="190" y1="118" x2="300" y2="70" class="diagram-ink" marker-end="url(#ar1a-ink)"/>
+          <text x="238" y="86" text-anchor="middle" class="edge-label">默认</text>
+          <!-- listpack -> hashtable (accent, the switch) -->
+          <line x1="390" y1="88" x2="390" y2="162" class="diagram-accent" marker-end="url(#ar1a-accent)"/>
+          <text x="448" y="128" text-anchor="middle" class="branch-label">越阈值</text>
+          <!-- threshold -> switch arrow region -->
+          <line x1="556" y1="125" x2="486" y2="125" class="diagram-soft" marker-end="url(#ar1a-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>逻辑类型固定，编码随阈值单向切换。<strong>注意</strong>：箭头只从 listpack 指向 hashtable，没有反向——数据删小后编码不会自动退回。</figcaption>
+      </figure>
+
+      <h2 id="string"><span class="num">1.2</span><span>String：int / embstr / raw</span></h2>
+      <p class="one-liner">String 是二进制安全的字节序列，但根据内容是否为整数、长度是否过短，分成 int、embstr、raw 三种编码，内存布局各不相同。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>String 是用得最多的类型，也最容易被当成「就是个字符串」。但一个纯整数计数器、一段 20 字节的短文本、一段 1KB 的 JSON，三者在内存里的开销和访问局部性差别很大。理解三种编码，才能解释为什么把整数存成字符串依然省、为什么短 value 比长 value 的相对开销低得多。</p>
+      </div>
+
+      <p>底层字符串结构叫 <strong>SDS（simple dynamic string，简单动态字符串）</strong>：在字节数组前面带上已用长度和容量，所以取长度是 <code>O(1)</code>，且能安全存任意二进制（不靠 <code>\0</code> 结尾）。三种编码的区别在于「整数特判」和「robj 与 SDS 是否一次分配」：</p>
+
+      <ul>
+        <li><strong>int</strong>：value 能解析成 long 时，直接把整数存进 <code>robj</code> 的指针位，不分配额外 SDS。<code>INCR</code> 类操作因此极省。</li>
+        <li><strong>embstr</strong>：短字符串（<strong>≤ 44 字节</strong>，Redis 3.2 之前是 39），把 <code>robj</code> 和 SDS <strong>一次性分配在一块连续内存</strong>里，只调一次 <code>malloc</code>、一次 <code>free</code>，CPU cache 友好。</li>
+        <li><strong>raw</strong>：长字符串，<code>robj</code> 和 SDS <strong>分两次分配</strong>，靠指针相连，分布在堆的不同位置。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 720 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="String 三种编码 int、embstr、raw 的内存布局对比">
+          <defs>
+            <marker id="ar1b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- int -->
+          <text x="40" y="34" class="node-label-accent">int</text>
+          <rect x="40" y="44" width="220" height="46" rx="5" class="diagram-ink node-fill"/>
+          <line x1="150" y1="44" x2="150" y2="90" class="diagram-ink"/>
+          <text x="95" y="71" text-anchor="middle" class="edge-label">robj 头</text>
+          <text x="205" y="71" text-anchor="middle" class="edge-label">long 值</text>
+          <text x="380" y="71" class="edge-label">整数直接进指针位，零额外分配</text>
+
+          <!-- embstr -->
+          <text x="40" y="128" class="node-label-accent">embstr ≤ 44B</text>
+          <rect x="40" y="138" width="320" height="46" rx="5" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <line x1="150" y1="138" x2="150" y2="184" class="diagram-ink"/>
+          <text x="95" y="165" text-anchor="middle" class="edge-label">robj 头</text>
+          <text x="255" y="165" text-anchor="middle" class="edge-label">SDS（字节串）</text>
+          <text x="460" y="165" text-anchor="middle" class="edge-label">一次 malloc · 连续</text>
+
+          <!-- raw -->
+          <text x="40" y="222" class="node-label-accent">raw &gt; 44B</text>
+          <rect x="40" y="232" width="150" height="46" rx="5" class="diagram-ink node-fill"/>
+          <text x="115" y="259" text-anchor="middle" class="edge-label">robj 头 + 指针</text>
+          <rect x="330" y="232" width="190" height="46" rx="5" class="diagram-ink node-fill"/>
+          <text x="425" y="259" text-anchor="middle" class="edge-label">SDS（独立分配）</text>
+          <line x1="190" y1="255" x2="330" y2="255" class="diagram-ink" marker-end="url(#ar1b-ink)"/>
+          <text x="260" y="247" text-anchor="middle" class="edge-label">指针</text>
+          <text x="556" y="259" text-anchor="middle" class="edge-label">两次 malloc</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>三种编码的内存布局递增。<strong>注意</strong>：embstr 与 raw 的真正差别不是长度本身，而是 robj+SDS 是「一次连续分配」还是「两次分散分配」——这决定了访问时的 cache 命中。</figcaption>
+      </figure>
+
+      <div class="callout example">
+        <span class="label">共享整数池</span>
+        <p>Redis 启动时预创建了 <strong>0–9999</strong> 这一万个整数对象常驻共享。任何键被设成这区间的整数，复用同一个 <code>robj</code>（<code>refcount</code> 累加），不再单独分配。所以海量「值是 0–9999 小整数」的 key 比想象中更省。但开了 <code>maxmemory</code> + LRU/LFU 淘汰策略时共享整数池会被关闭，因为共享对象无法记录独立的访问时间。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">版本变化 · 8.2</span>
+        <p>Redis 8.2 加宽了 <code>robj</code> 结构以容纳更多元数据，连带影响 embstr 的内存账本，使一部分原本算 embstr 的短串更早地落到 raw。具体阈值以所用版本的 <code>OBJECT ENCODING</code> 实测为准——这正是「涉及阈值就实测」原则的典型场景。</p>
+      </div>
+
+      <h2 id="hash"><span class="num">1.3</span><span>Hash：listpack → hashtable</span></h2>
+      <p class="one-liner">Hash 存字段到值的映射；字段少且值短时用 listpack（一段连续内存里顺序排放），超过阈值后转成真正的哈希表。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一个只有几个字段的对象（用户的 name/age/city），若直接开一张哈希表，光是桶数组和每个节点的指针开销就远超数据本身。listpack 把所有字段值顺序塞进一块连续内存，省下全部指针，代价是查找退化为顺序扫描——但字段少时扫描比哈希更快，且 cache 友好。这是「小数据用紧凑编码」最典型的体现。</p>
+      </div>
+
+      <p><strong>listpack（紧凑列表）</strong>是 Redis 7.0 引入、用来替代旧 <code>ziplist</code> 的连续内存结构：一块字节缓冲区，里面顺序排放每个 entry，每个 entry 自带长度信息，可以从两端遍历。它没有哈希表的桶，也没有链表的 next 指针，所以省内存；查找是 <code>O(N)</code> 顺序扫，但 N 小时极快。</p>
+
+      <p>切换阈值由两个配置控制，<strong>任一越界就升级为 hashtable</strong>：</p>
+
+      <table class="compare-table">
+        <caption>Hash 编码切换</caption>
+        <thead><tr><th>配置项</th><th>默认值</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><code>hash-max-listpack-entries</code></td><td>128</td><td>字段数超过即升级</td></tr>
+          <tr><td><code>hash-max-listpack-value</code></td><td>64</td><td>任一字段或值的字节长度超过即升级</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 编码会是什么</span>
+        <p>一个 hash 里塞了 200 个字段，每个值都很短（比如都是 <code>"1"</code>）。此时 <code>OBJECT ENCODING</code> 返回什么？为什么？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>返回 <code>hashtable</code>。字段数 200 已超过 <code>hash-max-listpack-entries</code> 默认的 128，触发升级——只要 entries 或 value 任一条件越界就转哈希表，与值本身是否短无关。即便随后 <code>HDEL</code> 删到只剩 2 个字段，编码仍是 <code>hashtable</code>，不会退回 listpack。</p>
+        </details>
+      </div>
+
+      <div class="callout example">
+        <span class="label">字段级 TTL · 7.4</span>
+        <p>Redis 7.4 起 Hash 支持给单个字段设过期（<code>HEXPIRE</code> / <code>HTTL</code> 等）。当一个 listpack 编码的 hash 被赋予字段级 TTL，它会转成专门的 <code>listpackex</code> 编码（在 listpack 基础上为每个字段附带过期时间）。这是「编码不只是大小函数，也随能力需求变化」的一例。</p>
+      </div>
+
+      <h2 id="list"><span class="num">1.4</span><span>List：quicklist</span></h2>
+      <p class="one-liner">List 是双端队列；现代实现是 quicklist——一个以 listpack 节点为元素的双向链表，兼顾两端操作快和内存紧凑。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>纯双向链表两端操作是 <code>O(1)</code>，但每个元素都要存两个指针，元素一多内存开销巨大且严重碎片化；纯 ziplist 是一整块连续内存，省内存但任何插入都要整体 <code>realloc</code> 并搬数据，大列表写入代价高。quicklist 把两者拼起来——外层链表保证两端增删快，每个节点内部是一段 listpack 保证局部紧凑，取了中间最优解。</p>
+      </div>
+
+      <p>早期 List 在「<code>linkedlist</code>（双向链表）」和「<code>ziplist</code>（紧凑列表）」之间切换。Redis 3.2 起统一为 <strong>quicklist</strong>：它是一个双向链表，但<strong>每个链表节点不是单个元素，而是一段 listpack</strong>（7.0 前是 ziplist）。于是大列表的内存被切成多个有界的连续块，既不像纯链表那样每元素都背指针，也不像单块 ziplist 那样一次 realloc 整条列表。</p>
+
+      <p>每个节点内 listpack 的大小由 <code>list-max-listpack-size</code> 控制，默认 <strong>-2</strong>。负数是按字节算的档位，<code>-2</code> 表示每个节点上限 <strong>8KB</strong>（-1=4KB，-3=16KB……）；正数则表示按元素个数限制。把单节点控制在几 KB，是在「节点太大则单次 realloc 贵」和「节点太小则退化回链表、指针开销回潮」之间的折中。</p>
+
+      <div class="callout insight">
+        <span class="label">命名变迁要记牢</span>
+        <p>面试高频陷阱：<code>ziplist</code> 在 Redis 7.0 整体改名为 <code>listpack</code>，并修了旧 ziplist 的连锁更新（cascade update）隐患。读 7.0 之前的老资料看到的 ziplist，对应今天的 listpack。quicklist 这个名字没变，但它的节点从 ziplist 换成了 listpack。</p>
+      </div>
+
+      <h2 id="set"><span class="num">1.5</span><span>Set：intset / listpack / hashtable</span></h2>
+      <p class="one-liner">Set 是无序去重集合；全是整数且数量不大时用 intset，含少量非整数成员时用 listpack，再大转 hashtable。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Set 的成员形态差异很大：可能是一批用户 ID（纯整数），也可能是一批标签字符串。Redis 为这两种形态各留了一种紧凑编码——纯整数用 intset（有序整数数组，二分查找），少量字符串用 listpack——只有规模真的上来才付出哈希表的指针开销。这是「按数据形态而非仅按大小精选编码」最清晰的例子。</p>
+      </div>
+
+      <p>Set 有三种编码，按形态和规模递进：</p>
+      <ul>
+        <li><strong>intset（整数集合）</strong>：成员全是整数且数量 ≤ <code>set-max-intset-entries</code>（默认 <strong>512</strong>）时使用。底层是一个<strong>升序排列的整数数组</strong>，按需用 int16 / int32 / int64 编码，查找走二分（<code>O(logN)</code>）。无指针、极紧凑。</li>
+        <li><strong>listpack</strong>：Redis 7.2 才为 Set 加入，用于「成员含非整数、但数量小」的情况——数量 ≤ <code>set-max-listpack-entries</code>（默认 <strong>128</strong>）且每个成员 ≤ <code>set-max-listpack-value</code>（默认 <strong>64</strong> 字节）。</li>
+        <li><strong>hashtable</strong>：超过上述任一阈值时使用，成员作为哈希表的 key（value 为空）。</li>
+      </ul>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 插入一个非整数后</span>
+        <p>一个 Set 当前是 <code>intset</code>（里面全是整数，比如 50 个用户 ID）。现在执行 <code>SADD</code> 加入一个字符串成员 <code>"guest"</code>。编码会怎样变？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>intset 只能存整数，加入非整数成员后它无法继续——编码立刻转换。转成什么取决于版本与规模：在 7.2+ 上，若转换后仍满足 listpack 的数量/长度阈值（≤128 个、成员 ≤64B），会先转成 <code>listpack</code>；若超出则直接转 <code>hashtable</code>。7.2 之前没有 Set 的 listpack 编码，会直接转 <code>hashtable</code>。和前面一样，这个转换是单向的。</p>
+        </details>
+      </div>
+
+      <h2 id="zset"><span class="num">1.6</span><span>ZSet：listpack → skiplist + dict</span></h2>
+      <p class="one-liner">ZSet 是按分数排序的去重集合；小时用 listpack，大时用 skiplist 与 dict 两个结构并存——一个负责范围/排名，一个负责按成员查分数。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>ZSet 要同时支持两类操作：<code>ZRANGEBYSCORE</code> 这种按分数顺序的范围/排名查询，和 <code>ZSCORE</code> 这种「给成员问分数」的点查。单一结构无法让两类都快——跳表擅长有序范围但点查要 <code>O(logN)</code>，哈希表擅长点查但完全无序。于是大 ZSet 同时维护两者，用空间换两种 <code>O(logN)</code>/<code>O(1)</code> 的最优查询。</p>
+      </div>
+
+      <p>小 ZSet 用 listpack（成员和分数成对顺序排放），阈值同样是 <strong>128 / 64</strong>（<code>zset-max-listpack-entries</code> / <code>zset-max-listpack-value</code>）。越界后转为重头戏的双结构：</p>
+      <ul>
+        <li><strong>skiplist（跳表）</strong>：一个按分数有序的多层链表。底层是一条按分数升序的链，上面叠加若干「跳跃层」做索引，查找/插入/删除均摊 <code>O(logN)</code>。它支撑 <code>ZRANGE</code> / <code>ZRANGEBYSCORE</code> / <code>ZRANK</code> 这类范围与排名操作。</li>
+        <li><strong>dict（哈希表）</strong>：成员 → 分数 的映射，让 <code>ZSCORE</code> 做到 <code>O(1)</code>。</li>
+      </ul>
+      <p>两者<strong>共享同一份成员对象</strong>（不重复存字符串），只是从两个角度索引同一批数据：一个排好序、一个建好哈希。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ZSet 大编码下 skiplist 与 dict 双结构并存">
+          <defs>
+            <marker id="ar1c-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar1c-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ops on top -->
+          <rect x="36" y="24" width="250" height="42" rx="5" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="161" y="50" text-anchor="middle" class="node-label-accent">ZRANGEBYSCORE · ZRANK</text>
+          <rect x="436" y="24" width="240" height="42" rx="5" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="556" y="50" text-anchor="middle" class="node-label-accent">ZSCORE member</text>
+
+          <!-- skiplist box -->
+          <rect x="36" y="120" width="250" height="100" rx="6" class="diagram-ink node-fill"/>
+          <text x="161" y="142" text-anchor="middle" class="node-label">skiplist 跳表</text>
+          <!-- mini skiplist levels -->
+          <line x1="60" y1="166" x2="262" y2="166" class="diagram-soft"/>
+          <line x1="60" y1="186" x2="262" y2="186" class="diagram-ink"/>
+          <circle cx="80" cy="186" r="4" class="diagram-ink node-fill"/>
+          <circle cx="140" cy="186" r="4" class="diagram-ink node-fill"/>
+          <circle cx="200" cy="186" r="4" class="diagram-ink node-fill"/>
+          <circle cx="245" cy="186" r="4" class="diagram-ink node-fill"/>
+          <circle cx="80" cy="166" r="4" class="diagram-ink node-fill"/>
+          <circle cx="200" cy="166" r="4" class="diagram-ink node-fill"/>
+          <text x="161" y="210" text-anchor="middle" class="edge-label">按分数有序 · O(logN)</text>
+
+          <!-- dict box -->
+          <rect x="436" y="120" width="240" height="100" rx="6" class="diagram-ink node-fill"/>
+          <text x="556" y="142" text-anchor="middle" class="node-label">dict 哈希表</text>
+          <text x="556" y="170" text-anchor="middle" class="edge-label">member → score</text>
+          <text x="556" y="200" text-anchor="middle" class="edge-label">点查 · O(1)</text>
+
+          <!-- shared members -->
+          <rect x="246" y="252" width="230" height="40" rx="5" class="diagram-soft node-fill"/>
+          <text x="361" y="277" text-anchor="middle" class="node-label">同一份成员对象（共享）</text>
+
+          <!-- op -> structure arrows -->
+          <line x1="161" y1="66" x2="161" y2="120" class="diagram-accent" marker-end="url(#ar1c-accent)"/>
+          <line x1="556" y1="66" x2="556" y2="120" class="diagram-accent" marker-end="url(#ar1c-accent)"/>
+          <!-- structures -> shared -->
+          <line x1="161" y1="220" x2="300" y2="252" class="diagram-ink" marker-end="url(#ar1c-ink)"/>
+          <line x1="556" y1="220" x2="422" y2="252" class="diagram-ink" marker-end="url(#ar1c-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>大 ZSet 用两个结构索引同一批成员。<strong>注意</strong>：两条朱红箭头说明两类查询各走各的结构——范围查走跳表、点查走哈希表，互不拖慢，代价是成员被两套索引各引用一次。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">为什么用跳表，不用平衡树（红黑树/AVL）</span>
+        <p>antirez（Redis 作者）给过三条理由：① <strong>实现与调试更简单</strong>——跳表靠随机层高维持平衡，没有平衡树繁琐的旋转；② <strong>范围扫描的缓存局部性更好</strong>——底层就是一条有序链表，<code>ZRANGE</code> 顺着走即可，平衡树中序遍历要在节点间反复跳；③ <strong>内存可调</strong>——通过调节「节点晋升到上一层」的概率 p，能在内存占用和查找速度之间权衡，比固定结构的平衡树更灵活。结论：在 ZSet 这种「范围查询是一等公民」的场景，跳表是工程上更合适的选择，而非性能上唯一可行的选择。</p>
+      </div>
+
+      <h2 id="selection"><span class="num">1.7</span><span>选型小结：选对类型，警惕退化</span></h2>
+      <p class="one-liner">先按操作需求选逻辑类型，再用阈值意识防止编码在不知不觉中退化成通用结构、把内存和延迟一起拉高。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>类型选错，再多调优也救不回来（拿 String 拼 JSON 当对象用，就丧失了字段级读写和过期）。编码退化则更隐蔽：业务跑着跑着，某个 hash 字段变长、某个 ZSet 成员变多，编码悄悄从 listpack 翻成 hashtable / skiplist，内存翻几倍、单命令延迟上升，监控上却只看到「内存涨了」。把阈值刻进脑子，是把这两类问题挡在设计阶段的唯一办法。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>五大类型编码总览（默认阈值，Redis 7.x）</caption>
+        <thead><tr><th>类型</th><th>紧凑编码</th><th>通用编码</th><th>关键阈值（默认）</th></tr></thead>
+        <tbody>
+          <tr><td>String</td><td>int / embstr</td><td>raw</td><td>embstr ≤ 44 字节</td></tr>
+          <tr><td>Hash</td><td>listpack</td><td>hashtable</td><td>128 条 / 值 64 字节</td></tr>
+          <tr><td>List</td><td colspan="2">quicklist（节点为 listpack）</td><td>节点 <code>-2</code> = 8KB</td></tr>
+          <tr><td>Set</td><td>intset / listpack</td><td>hashtable</td><td>intset 512 / listpack 128·64</td></tr>
+          <tr class="selected"><td>ZSet</td><td>listpack</td><td>skiplist + dict</td><td>128 条 / 值 64 字节</td></tr>
+        </tbody>
+      </table>
+
+      <p>记忆抓手：<strong>128 / 64 是 Hash、ZSet、Set-listpack 共用的那对阈值</strong>（条数 / 字节）；Set 的整数特例阈值是 512；List 按字节走 8KB 一节点。看到「值很大」或「成员很多」，就该警觉编码正在或即将翻成通用结构。</p>
+
+      <section class="self-check">
+        <h2 id="self-check"><span class="num">·</span><span>自测</span></h2>
+        <ol>
+          <li>类型（type）和编码（encoding）的区别是什么？为什么删掉数据后编码不会退回紧凑结构？</li>
+          <li>一个值为 <code>"12345"</code> 的 String，<code>OBJECT ENCODING</code> 返回 int 还是 embstr？把它改成 <code>"12345x"</code> 后又是什么？</li>
+          <li>ZSet 转成 skiplist 编码后，为什么还要同时维护一个 dict？只用跳表不行吗？</li>
+          <li>设计判别：要记录 1000 万用户的「是否在线」（一个布尔位）。用「每个用户一个 String key（值 0/1）」还是「一个 bitmap、用户 ID 作位偏移」？两者差在哪？</li>
+        </ol>
+        <details>
+          <summary>展开全部答案</summary>
+          <p><strong>1.</strong> 类型是对外的 API 契约（承诺的命令与复杂度），编码是它在内存里的具体实现结构，由数据当前的规模/形态决定。升级是单向的：从紧凑编码转到通用编码后，Redis 不做反向检测与回收（回退要重新扫描判断、且会反复抖动），所以删小后仍保持通用编码。</p>
+          <p><strong>2.</strong> <code>"12345"</code> 能解析成整数，返回 <code>int</code>；改成 <code>"12345x"</code> 后不再是整数，且长度 ≤ 44 字节，返回 <code>embstr</code>。</p>
+          <p><strong>3.</strong> 跳表按分数有序，<code>ZSCORE</code>（给成员问分数）在跳表里是 <code>O(logN)</code> 查找；额外维护的 dict 提供 member→score 的 <code>O(1)</code> 点查。两个结构共享同一份成员对象，分别服务「范围/排名」和「点查」两类操作，缺一类就慢一类。</p>
+          <p><strong>4.</strong> bitmap 完胜。bitmap 用 1 个 bit 表示 1 个用户，1000 万用户约 1.25MB 连续内存，且 <code>SETBIT</code>/<code>GETBIT</code> 是 <code>O(1)</code>、还能用 <code>BITCOUNT</code> 一次数出在线总数。string-per-user 则要 1000 万个独立 key，每个 key 都背一份 robj、SDS、以及全局哈希表里的 dictEntry 开销（每 key 几十字节量级），总内存到几百 MB，且无法一条命令聚合统计。差在「每 key 固定开销 × key 数」这一项。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>估算位图 vs 海量 key 的内存量级差</h3>
+        <p>用户签到场景：要记录 <strong>1 亿</strong>用户「今天是否签到」。方案 A 用一个 bitmap（<code>SETBIT sign:20260602 &lt;uid&gt; 1</code>）；方案 B 给每个签到用户建一个 String key（<code>SET sign:20260602:&lt;uid&gt; 1</code>）。估算两者的内存量级，并说出差距主要来自哪一项。</p>
+        <details>
+          <summary>提示（不给全解）</summary>
+          <p>方案 A：1 亿个 bit ≈ 1e8 / 8 字节，换算到 MB 是多少？（量级在十几 MB）。方案 B 的关键不在「值 1」本身——值小到可以忽略，真正吃内存的是<strong>每个 key 的固定开销</strong>：robj 头、key 字符串的 SDS、以及该 key 在全局 dict 里的 dictEntry（含指针与可能的 rehash 冗余）。把这份固定开销估成每 key 几十字节，乘以 1 亿，落在什么量级？两个量级一比，差距来自哪一项就一目了然了。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li><a href="https://redis.io/docs/latest/commands/object-encoding/">redis.io · OBJECT ENCODING</a>（官方命令文档）</li>
+          <li><a href="https://redis.io/docs/latest/develop/data-types/">redis.io · Data types</a>（官方类型总览）</li>
+          <li><a href="http://antirez.com/news/103">antirez · 跳表 / Redis 内部设计随笔</a>（作者视角，关于为何选跳表）</li>
+          <li><a href="https://redis.io/docs/latest/develop/data-types/hashes/#field-expiration">redis.io · Hash 字段级 TTL（7.4）</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="index.html">
+          <span class="label">← 上一章</span>
+          <span class="title">00 起点 · 把 Redis 当成可推导的系统</span>
+        </a>
+        <a class="next" href="02-single-thread-and-io.html">
+          <span class="label">下一章 →</span>
+          <span class="title">02 单线程与 IO 模型</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#encoding" data-toc-target="encoding">1.1 类型之下还有编码</a></li>
+        <li><a href="#string" data-toc-target="string">1.2 String 三编码</a></li>
+        <li><a href="#hash" data-toc-target="hash">1.3 Hash</a></li>
+        <li><a href="#list" data-toc-target="list">1.4 List · quicklist</a></li>
+        <li><a href="#set" data-toc-target="set">1.5 Set</a></li>
+        <li><a href="#zset" data-toc-target="zset">1.6 ZSet 双结构</a></li>
+        <li><a href="#selection" data-toc-target="selection">1.7 选型小结</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

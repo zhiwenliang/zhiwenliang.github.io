@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 内部机制 · RabbitMQ 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-model.html">01 模型</a><span class="sep">—</span>
+    <a href="02-reliability.html">02 可靠投递</a><span class="sep">—</span>
+    <a href="03-internals.html" class="current">03 内部机制</a><span class="sep">—</span>
+    <a href="04-selection.html">04 对标选型</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>内部机制：broker 到底怎么做到的</h1>
+        <p class="recap">上一章给出了可靠投递的三层防护，并把"classic 队列确认后仍可能丢"指向了 quorum——这一章下探一层，拆开帧、Erlang 进程、流控与 Raft，解释这些保证从何而来。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>AMQP 帧的字节结构：channel 多路复用为什么必须靠帧里的 2 字节编号</li>
+          <li>每个队列是一个 Erlang 进程：单队列的吞吐天花板，以及为什么加核救不了它</li>
+          <li>credit 流控与内存/磁盘告警：背压如何一路传导到 TCP，告警为什么阻塞所有 publisher</li>
+          <li>quorum 队列的 Raft 多副本，以及 Khepri 取代 Mnesia 后元数据存储的分区行为</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>AMQP 0-9-1 帧：channel 多路复用的根</span></h2>
+
+      <p class="one-liner">一条 TCP 上传输的最小单位是帧（frame）；每一帧都带 2 字节的 channel 编号，broker 靠交错这些帧、按编号还原，实现一条连接上多路 channel 并行。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><a href="01-model.html#s11">01 章 §1.1</a>给出了结论：一条 TCP、多个 channel、靠编号区分，同一 channel 串行所以不能跨线程。那一层是从 API 角度看的。这一节落到字节：channel 不是一条独立的 socket，而是同一条 TCP 字节流里被打上同一编号的那些帧。理解了帧，才理解为什么 channel 既能多路复用、又强制串行——两个性质来自同一个设计。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：一帧 = <strong>1 字节帧类型</strong> + <strong>2 字节 channel 编号</strong> + <strong>4 字节 payload 长度</strong> + payload + <strong>1 字节帧尾</strong>。帧尾固定是 <code>0xCE</code>（十进制 206）：解析器读完声明的长度后，下一个字节必须正好是 <code>0xCE</code>，否则判定字节流错位，直接断开整条连接——这是协议自带的成帧校验。帧类型只有四种：method（类型 1，一次 RPC，如 <code>Basic.Publish</code>）、content-header（类型 2，消息属性 + body 字节数）、content-body（类型 3，消息体原始字节）、heartbeat（类型 8，心跳）。</p>
+
+      <p><strong>一次逻辑 publish 不是一帧，而是一串</strong>：先一个 method frame（声明"这是一次 publish，发给哪个 exchange、什么 routing key"），紧接一个 content-header frame（带消息属性和总 body 大小），再接 1 个或多个 content-body frame（消息体）。消息体大于 <code>frame_max</code> 时被切成多个 body frame——<code>frame_max</code> 在 <code>connection.tune</code> 阶段由 client 与 broker 协商，默认约 131 KB。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一次 publish 由 method 帧、header 帧、body 帧依次组成，每帧带 channel 编号">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <text x="30" y="34" class="edge-label" font-weight="700">一次逻辑 publish（同一 channel 上严格有序）</text>
+
+          <!-- method frame -->
+          <rect x="30" y="56" width="150" height="92" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="105" y="80" text-anchor="middle" class="node-label-accent">method</text>
+          <text x="105" y="98" text-anchor="middle" class="edge-label">类型 1</text>
+          <text x="105" y="118" text-anchor="middle" class="edge-label">Basic.Publish</text>
+          <text x="105" y="136" text-anchor="middle" class="edge-label">exchange · key</text>
+
+          <!-- header frame -->
+          <rect x="220" y="56" width="150" height="92" rx="6" class="diagram-ink node-fill"/>
+          <text x="295" y="80" text-anchor="middle" class="node-label">content-header</text>
+          <text x="295" y="98" text-anchor="middle" class="edge-label">类型 2</text>
+          <text x="295" y="118" text-anchor="middle" class="edge-label">属性 · body 大小</text>
+
+          <!-- body frame 1 -->
+          <rect x="410" y="56" width="125" height="92" rx="6" class="diagram-ink node-fill"/>
+          <text x="472" y="80" text-anchor="middle" class="node-label">content-body</text>
+          <text x="472" y="98" text-anchor="middle" class="edge-label">类型 3</text>
+          <text x="472" y="118" text-anchor="middle" class="edge-label">消息体字节</text>
+
+          <!-- body frame n -->
+          <rect x="555" y="56" width="115" height="92" rx="6" class="diagram-soft node-fill"/>
+          <text x="612" y="80" text-anchor="middle" class="node-label">content-body</text>
+          <text x="612" y="98" text-anchor="middle" class="edge-label">类型 3</text>
+          <text x="612" y="118" text-anchor="middle" class="edge-label">体 &gt; frame_max</text>
+          <text x="612" y="136" text-anchor="middle" class="edge-label">才出现</text>
+
+          <line x1="180" y1="102" x2="220" y2="102" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="370" y1="102" x2="410" y2="102" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="535" y1="102" x2="555" y2="102" class="diagram-soft" marker-end="url(#ar-ink)"/>
+
+          <!-- channel id strip -->
+          <rect x="30" y="172" width="640" height="44" rx="6" class="diagram-soft node-fill"/>
+          <text x="350" y="190" text-anchor="middle" class="edge-label">每帧前缀都带同一个 2 字节 channel 编号 → broker 按编号归属到同一会话</text>
+          <text x="350" y="208" text-anchor="middle" class="edge-label">帧尾 0xCE（206）校验成帧；不匹配即断连</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>一次 publish 被拆成 method + content-header + 至少一个 content-body 帧，依次铺在同一 channel 上。<strong>注意</strong>：三类帧共享同一个 channel 编号，broker 据此把它们重组为一条消息；任何一帧被另一线程的帧插进来，重组就错位。</figcaption>
+      </figure>
+
+      <p><strong>channel 多路复用的实现，就是给每帧打编号再交错</strong>：channel 1 的 method 帧、channel 2 的 body 帧、channel 1 的 header 帧，可以在同一条 TCP 上首尾相接地传，broker 读到每帧前缀的编号，把它投递给对应的会话状态机。这正是应用<strong>避免"每个任务开一条 TCP 连接"</strong>的原因——几百个并发任务复用一条 TCP 上的几百个 channel，握手、文件描述符、内核缓冲都省下来。</p>
+
+      <p><strong>代价直接来自交错</strong>：同一 channel 上的帧严格按到达顺序处理——一个 channel 是串行的。所以一个 channel 不能被多个线程共享：线程 A 刚写完 method 帧、还没写 header 帧，线程 B 插进来写自己的 body 帧，编号一样、序列被打乱，broker 重组时把 B 的 body 当成 A 的消息体，或读到错误的帧尾直接断连。这把 <a href="01-model.html#s11">01 章 §1.1</a>"channel 不能跨线程"的结论落到了字节层面的因果。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>发一条 200 KB 的消息（frame_max 默认约 131 KB），这条消息在 TCP 上由几个帧组成？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>至少四个：1 个 method frame + 1 个 content-header frame + 2 个 content-body frame（200 KB 超过单帧上限，body 被切成两段）。注意 method 和 header 各自独立成帧、不受 frame_max 影响——被切分的只有消息体。若把 frame_max 调大到 256 KB，body 就只需 1 帧，但单帧内存占用随之上升，这是吞吐与内存的权衡。</p>
+        </details>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 成帧校验</span>
+        <p>帧尾那 1 个字节（<code>0xCE</code>）看似冗余，作用是<strong>廉价的损坏检测</strong>：长度字段说 payload 有 N 字节，解析器跳过 N 字节后必须撞上 <code>0xCE</code>；撞不上，说明长度被写错或字节流被污染，broker 不试图恢复，直接杀连接。AMQP 把"宁可断连也不处理半个坏帧"做成了协议级别的约束——这也是为什么 channel 上的协议错误往往表现为整条连接掉线，而不是单个 channel 报错。</p>
+      </div>
+
+      <h2 id="s32"><span class="num">3.2</span><span>每队列一个 Erlang 进程：单队列的吞吐天花板</span></h2>
+
+      <p class="one-liner">RabbitMQ 用 Erlang 写成，每个队列、每个 connection、每个 channel 都是一个独立的 Erlang 进程；一个队列的全部工作串行穿过它那一个进程邮箱，被钉在大约一个 scheduler/核上——单队列因此有一个换大机器也抬不动的吞吐上限。</p>
+
+      <div class="rationale">
+        <span class="label">为什么是 Erlang</span>
+        <p>RabbitMQ 跑在 BEAM（Erlang 虚拟机）上。BEAM 的进程不是操作系统线程，而是极轻量的用户态进程：创建一个只要微秒级、几百字节内存，一台机器可以同时跑几百万个。配上 supervision tree（监督树），一个进程崩溃只重启它自己，不波及 broker 整体。把"每个队列、每个连接、每个 channel 都做成一个进程"在别的语言里是奢侈，在 BEAM 上是惯用法——隔离性和容错就是这么来的。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：一个队列就是<strong>一个 gen_server 风格的 Erlang 进程</strong>（classic 队列是 <code>rabbit_amqqueue_process</code>，quorum 队列是 <code>rabbit_fifo</code> 状态机 + Ra 进程）。进程之间不共享内存，只靠消息传递：publish、ack、consumer 注册，全部变成发给该队列进程邮箱（mailbox）的 Erlang 消息，进程从邮箱里<strong>一次取一条、顺序处理</strong>。BEAM 的 scheduler 通常每个 CPU 核一个，一个进程在某一时刻只能跑在一个 scheduler 上——于是<strong>一个队列的全部吞吐被一个进程、约一个核所限定</strong>。</p>
+
+      <p><strong>这是 RabbitMQ 最具决定性的性能事实</strong>：单个队列的处理能力，被单进程、单核的串行邮箱框死。一条队列打满了一个核，换一台核更多、主频更高的机器——那一条队列<strong>快不了多少</strong>，因为瓶颈不是机器总算力，是单进程串行。扩展的唯一方向是<strong>更多队列 / 分片</strong>：把负载摊到多个队列进程上，让它们各占一个核并行跑（如 consistent-hash exchange 把消息按 key 散列到 N 个队列，或用 sharding 插件）。绝不是"加一台更大的机器"。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="每个队列是一个 Erlang 进程钉在一个核上，热队列瓶颈在单核而其他核空闲">
+          <defs>
+            <marker id="ar-ink2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="30" y="30" class="edge-label" font-weight="700">一台 4 核机器 · 一队列 = 一进程 = 钉在一个核</text>
+
+          <!-- core 1 HOT -->
+          <rect x="30" y="52" width="150" height="110" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="105" y="74" text-anchor="middle" class="node-label-accent">核 1</text>
+          <rect x="50" y="86" width="110" height="34" rx="5" class="diagram-accent node-fill" stroke-width="1.6"/>
+          <text x="105" y="108" text-anchor="middle" class="node-label-accent">队列 H 进程</text>
+          <text x="105" y="142" text-anchor="middle" class="branch-label">100% · 满载</text>
+
+          <!-- core 2 -->
+          <rect x="200" y="52" width="150" height="110" rx="8" class="diagram-ink node-fill"/>
+          <text x="275" y="74" text-anchor="middle" class="node-label">核 2</text>
+          <rect x="220" y="86" width="110" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="275" y="108" text-anchor="middle" class="node-label">队列 A 进程</text>
+          <text x="275" y="142" text-anchor="middle" class="edge-label">12% · 空闲</text>
+
+          <!-- core 3 -->
+          <rect x="370" y="52" width="150" height="110" rx="8" class="diagram-ink node-fill"/>
+          <text x="445" y="74" text-anchor="middle" class="node-label">核 3</text>
+          <rect x="390" y="86" width="110" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="445" y="108" text-anchor="middle" class="node-label">队列 B 进程</text>
+          <text x="445" y="142" text-anchor="middle" class="edge-label">8% · 空闲</text>
+
+          <!-- core 4 -->
+          <rect x="540" y="52" width="130" height="110" rx="8" class="diagram-ink node-fill"/>
+          <text x="605" y="74" text-anchor="middle" class="node-label">核 4</text>
+          <text x="605" y="112" text-anchor="middle" class="edge-label">空转</text>
+          <text x="605" y="142" text-anchor="middle" class="edge-label">0% · 闲置</text>
+
+          <!-- traffic into HOT queue -->
+          <rect x="60" y="222" width="90" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="246" text-anchor="middle" class="node-label">高流量</text>
+          <line x1="105" y1="222" x2="105" y2="162" class="diagram-accent" marker-end="url(#ar-verm2)"/>
+          <text x="180" y="196" text-anchor="start" class="branch-label">全压在队列 H 一个进程上</text>
+
+          <text x="350" y="296" text-anchor="middle" class="edge-label">加核 / 换更大机器 → 队列 H 仍只跑在一个核上，吞吐不变</text>
+          <text x="350" y="314" text-anchor="middle" class="branch-label">解法：把流量分片到多个队列，吃满多个核</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>四个队列进程分散在四个核上，但高流量全打到队列 H：它的单进程把核 1 打满，核 2/3/4 闲着也帮不上。<strong>注意</strong>：换更大的机器只会让其他核更闲，队列 H 的天花板纹丝不动——必须按 key 分片成多个队列才能横向吃满 CPU。</figcaption>
+      </figure>
+
+      <p><strong>场景走查</strong>：一个订单系统把全部订单事件发进单个 quorum 队列 <code>orders</code>。压测发现吞吐卡在某个数字，CPU 总利用率只有 30%，但 <code>rabbitmqctl</code> 显示 <code>orders</code> 队列进程的 reductions（Erlang 的 CPU 计量）持续打满。换 16 核机器，吞吐几乎不变。根因：单队列单进程的串行天花板。改法是用 consistent-hash exchange 按 <code>order_id</code> 把消息散到 8 个队列 <code>orders.0..7</code>，每个队列各占一个核并行消费——总吞吐随队列数近线性上升。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">分片：用 consistent-hash exchange 把单热队列摊成 N 个</span>
+          <span class="lang">bash</span>
+        </div>
+        <pre><code class="language-bash"># 启用一致性哈希 exchange 插件
+rabbitmq-plugins enable rabbitmq_consistent_hash_exchange
+
+# 声明一个 x-consistent-hash 类型的 exchange，按 routing key 哈希分流
+rabbitmqadmin declare exchange name=orders type=x-consistent-hash
+
+# 绑定 8 个队列，weight 写在 binding key 上（这里各为 1）
+# 消息按 order_id 哈希落到其中一个队列，8 个队列进程吃 8 个核
+for i in $(seq 0 7); do
+  rabbitmqadmin declare queue name=orders.$i queue_type=quorum
+  rabbitmqadmin declare binding source=orders destination=orders.$i routing_key=1
+done</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">反直觉 · 加核救不了单队列</span>
+        <p>"吞吐不够就升配机器"在 RabbitMQ 单队列上<strong>无效</strong>。瓶颈是一个 Erlang 进程的串行邮箱，不是机器总算力。更多核、更高主频，只让其他核更闲。能横向扩的只有<strong>队列数量</strong>：分片、多队列、多消费者。设计阶段就要问"这条队列的峰值会不会顶满一个核"，而不是上线后再加机器——加机器这条路对单队列是堵死的。这一点和 Kafka 靠 partition 数扩并行是同一思路，只是 RabbitMQ 的并行单元是"队列"。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>给单个队列<strong>加更多消费者</strong>，能突破它的吞吐天花板吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>只能缓解消费侧，突破不了队列本身的天花板。消息的<strong>路由、入队、出队调度、状态记账</strong>全在那一个队列进程里串行完成——加消费者只是让出队后的业务处理并行，队列进程本身仍是单核串行的瓶颈。生产侧（publish 进同一队列）更是完全不受益。真正横向扩的唯一办法是把消息分片到<strong>多个队列进程</strong>，让队列这一层本身并行起来；消费者数量是第二位的。</p>
+        </details>
+      </div>
+
+      <h2 id="s33"><span class="num">3.3</span><span>credit 流控与内存/磁盘告警：背压如何传导</span></h2>
+
+      <p class="one-liner">队列给它的发布 channel 发放 credit（额度），每条消息扣 1，队列把消息推向下游（持久化）后才补额度；额度耗尽 → channel 进程阻塞 → TCP 不再读 socket → 背压沿 TCP 直接顶住生产者。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>生产快、消费慢时，消息会在队列里堆积，最终吃光内存。最坏的做法是无限收下再 OOM 崩溃。RabbitMQ 用 credit-based flow control（基于额度的流控）做<strong>精准背压</strong>：哪条发布路径压垮了哪个队列，就只减速那条路径，不殃及无辜。这比"全局限速"或"丢消息"都更可控。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：每个 channel 进程向它要写入的队列进程持有一笔 <strong>credit</strong>。每发一条消息扣 1 个 credit。队列进程<strong>只有在把这条消息向下游推进之后</strong>（比如交给持久化层、写入 message store）才给该 channel 回补 credit。生产者快于队列处理速度时，credit 越扣越少，归零那一刻 channel 进程<strong>停止处理新的入站帧</strong> → 它不再从 TCP 连接读取字节 → socket 接收缓冲填满 → TCP 滑动窗口归零 → 生产者的 <code>send</code> 阻塞。背压就这样从队列一路逆向传到生产者的网络栈，<strong>不需要应用层协议参与</strong>，靠的是 TCP 自身的流控。</p>
+
+      <p><strong>这套机制是有靶向的</strong>：credit 是 channel ↔ 队列这一对之间的，只有压垮了某队列的那条发布路径会被减速。别的 channel、别的队列照常跑。这与下面要说的"告警"形成鲜明对比——告警是全局的核弹。</p>
+
+      <p><strong>内存高水位与磁盘告警是最后一道防线，不是日常流控</strong>。两条全局红线：</p>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 两类背压机制的作用域</caption>
+        <thead>
+          <tr><th>机制</th><th>触发条件</th><th>作用域 / 后果</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>credit 流控</td><td>某队列处理慢于其发布 channel</td><td><strong>靶向</strong>：只阻塞那一条 channel 的 TCP 读，其他连接无感</td></tr>
+          <tr><td>内存高水位告警</td><td>broker 内存用量超过 <code>vm_memory_high_watermark</code>（默认 RAM 的 0.6，即约 60%）</td><td><strong>全局</strong>：阻塞集群内<strong>所有</strong> publishing 连接，consumer 不受影响</td></tr>
+          <tr><td>磁盘告警</td><td>剩余磁盘低于 <code>disk_free_limit</code>（默认 50 MB）</td><td><strong>全局</strong>：同上，阻塞所有 publisher，直到磁盘回到阈值以上</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>底层机制（告警这一层）</strong>：内存或磁盘告警一旦触发，broker 给<strong>所有携带 publish 的连接</strong>下达 <code>channel.flow</code> / 直接停止读取，整个集群范围内的生产<strong>全部冻结</strong>，直到资源回落到阈值以下自动解除。关键的两点：① 告警<strong>只冻结 publisher，不动 consumer</strong>——让消费继续排空队列，是它能自愈的前提；② 告警<strong>只阻塞、不丢消息、也不把消息换页丢弃</strong>。它是"踩了急刹"，不是"扔货减重"。这与某些系统"内存满了就丢老消息"的策略截然不同。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>broker 内存触顶、所有 publisher 被告警冻结。此时消费者还能正常消费吗？这个设计为什么是对的？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>能。告警只阻塞 publisher，consumer 照常拉取并 ack。这是<strong>刻意</strong>的：内存压力来自堆积的消息，只有让消费继续、把队列排空，内存才会回落、告警才能解除。若把 consumer 也冻结，系统就死锁在高水位再也下不来。所以"冻结写、放行读"是自愈的唯一可行方向。副作用：生产端会经历一段 publish 卡住或 confirm 迟迟不返回——这正是 <a href="02-reliability.html#s21">02 章 §2.1</a> publisher confirms 在告警期间"长时间不 ack"的根因，不是消息丢了，是被刹住了。</p>
+        </details>
+      </div>
+
+      <p><strong>场景走查</strong>：消费者集体宕机，消息在队列里疯涨。先是 credit 流控把对应发布 channel 一条条减速（靶向）；堆积继续逼近 60% RAM，内存告警触发，<strong>整个集群</strong>所有生产连接被冻结，监控里 publish rate 瞬间归零、生产端线程卡在 <code>send</code> 上。运维重启消费者后队列开始排空，内存回落到水位线以下，告警自动解除，publish 恢复。全程<strong>没有一条消息丢失</strong>，代价是生产侧的一段冻结。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 两级背压的层次</span>
+        <p>把背压看成两级：第一级 credit 流控是<strong>外科手术</strong>——精确减速闯祸的那条路径，平时就在工作，多数人察觉不到；第二级内存/磁盘告警是<strong>全局熔断</strong>——第一级没拦住、资源真的逼近极限时,一把冻结所有写入保命。理解这个层次，就能解释一个常见困惑：为什么"只有几个队列在堆积，结果全集群的 publisher 都卡住了"——那是第二级告警被触发了，它从不区分是谁把内存吃满的。回看 <a href="01-model.html#s11">01 章 §1.1</a>说的"一条连接被阻塞，其上所有 channel 一起阻塞"，告警正是制造这种"一损俱损"的源头。</p>
+      </div>
+
+      <h2 id="s34"><span class="num">3.4</span><span>quorum 队列与 Raft：多副本一致性</span></h2>
+
+      <p class="one-liner">每个 quorum 队列本身就是一个 Raft 集群（建在 Ra 库上）：一个 leader、N 个 follower、一份复制的预写日志；publisher confirm 只在消息被提交到多数派（N/2 + 1）之后才返回。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><a href="02-reliability.html#s23">02 章 §2.3</a>指出 classic 队列即使返回了 confirm，落盘也可能在 fsync 之前发生在崩溃窗口里——确认了仍可能丢。要堵上这个窗口，需要的不是"写一份盘写得更勤",而是"<strong>把消息复制到多台机器、多数派都记下来才算数</strong>"。单机再可靠也扛不住整机宕机；多副本一致性才是。quorum 队列就是 RabbitMQ 对这个问题的答案，用的是工业界验证过的 Raft 共识算法。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：每个 quorum 队列是一个独立的 Raft 组，跑在 <strong>Ra</strong>（RabbitMQ 团队实现的 Raft 库）上。组里一个 <strong>leader</strong> 负责接收所有写入，N 个 <strong>follower</strong> 复制 leader 的<strong>预写日志</strong>（write-ahead log，每条消息是一条 log entry）。一条 publish 的流程：client 发给 leader → leader 追加到自己的 log → 并行复制给 followers → 当<strong>多数派</strong>（含 leader，共 N/2 + 1 个节点）都把这条 entry 写进各自的 log，这条 entry 被标记为 <strong>committed</strong> → leader 此时才向生产者回 <strong>confirm</strong>。confirm 的语义因此变成"已被多数派持久记录"，这正是 <a href="02-reliability.html#s23">02 章 §2.3</a>所指的那个 fsync/安全保证的来源。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Raft 多副本：一个 leader 两个 follower，多数派提交后才返回 confirm">
+          <defs>
+            <marker id="ar-ink3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- producer -->
+          <rect x="24" y="128" width="104" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="76" y="158" text-anchor="middle" class="node-label">Producer</text>
+
+          <line x1="128" y1="143" x2="228" y2="143" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="178" y="133" text-anchor="middle" class="edge-label">publish</text>
+
+          <!-- leader -->
+          <rect x="228" y="118" width="150" height="70" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="303" y="146" text-anchor="middle" class="node-label-accent">Leader</text>
+          <text x="303" y="166" text-anchor="middle" class="edge-label">写 log entry</text>
+
+          <!-- follower 1 -->
+          <rect x="468" y="46" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="543" y="72" text-anchor="middle" class="node-label">Follower 1</text>
+          <text x="543" y="90" text-anchor="middle" class="edge-label">复制 + 落盘</text>
+
+          <!-- follower 2 -->
+          <rect x="468" y="200" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="543" y="226" text-anchor="middle" class="node-label">Follower 2</text>
+          <text x="543" y="244" text-anchor="middle" class="edge-label">复制 + 落盘</text>
+
+          <line x1="378" y1="140" x2="468" y2="82"  class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="430" y="104" text-anchor="middle" class="edge-label">replicate</text>
+          <line x1="378" y1="166" x2="468" y2="224" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="430" y="206" text-anchor="middle" class="edge-label">replicate</text>
+
+          <!-- ack back from follower1 (majority reached: leader + 1) -->
+          <line x1="468" y1="92" x2="378" y2="150" class="diagram-soft" marker-end="url(#ar-ink3)"/>
+
+          <!-- confirm back to producer -->
+          <path d="M 228 168 C 150 200, 90 200, 76 178" class="diagram-accent" fill="none" marker-end="url(#ar-verm3)"/>
+          <text x="150" y="214" text-anchor="middle" class="branch-label">confirm</text>
+
+          <text x="350" y="296" text-anchor="middle" class="edge-label">3 副本，多数派 = 2（leader + 1 个 follower）记下日志</text>
+          <text x="350" y="314" text-anchor="middle" class="branch-label">→ entry committed → confirm 此刻才返回，不等第 3 个</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>3 副本 quorum 队列：leader 写入并向两个 follower 复制，只要多数派（2 个节点，leader + 任一 follower）落了日志，entry 即提交，confirm 立即返回。<strong>注意</strong>：confirm 在多数派提交后就返回，不必等最慢的第三个节点——这既是它比单机更安全的原因，也是它比 classic 队列延迟更高的原因。</figcaption>
+      </figure>
+
+      <p><strong>故障与恢复</strong>：leader 宕机，剩余 follower 通过 Raft 选举在数百毫秒内选出新 leader，队列继续可用——只要多数派节点还活着。一个宕机后重新加入的节点，<strong>从它自己 log 的 offset 处续传</strong>缺失的 entry，不需要全量重新同步。这套行为是 Raft 算法保证的，不是 RabbitMQ 自己拼的。</p>
+
+      <p><strong>这取代了 classic mirrored queues（镜像队列）</strong>。老的镜像队列用的是一套<strong>自研的链式复制协议</strong>——master 把消息异步推给 mirror，mirror 常常处于"未同步"（unsynchronised）状态，<strong>不是任何共识算法</strong>。网络分区下它的行为是<strong>未定义</strong>的：可能两边都自认 master，愈合时一边的数据被丢弃，造成<strong>真实的消息丢失</strong>。RabbitMQ 4.0 已彻底移除镜像队列（见 <a href="01-model.html#s15">01 章 §1.5</a>的过时配置警告）。quorum 队列把"多副本"从一个尽力而为的复制，升级成了有数学证明的多数派共识。</p>
+
+      <table class="compare-table">
+        <caption>表 3.2 · quorum 队列 vs 已移除的镜像队列</caption>
+        <thead>
+          <tr><th>维度</th><th>quorum 队列（Raft）</th><th>classic mirrored（已于 4.0 移除）</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>复制协议</td><td>Raft 共识，多数派提交</td><td>自研链式复制，异步、常不同步</td></tr>
+          <tr><td>分区行为</td><td>定义明确：少数派侧不可写，多数派继续</td><td>未定义，愈合时可能丢消息</td></tr>
+          <tr><td>confirm 语义</td><td>多数派持久记录后才返回</td><td>取决于 mirror 是否已同步，不确定</td></tr>
+          <tr><td>恢复</td><td>按 log offset 增量续传</td><td>常需全量重新同步</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">代价 · quorum 不是免费的</span>
+        <p>多数派复制要等网络往返，<strong>publish 延迟高于 classic 队列</strong>；每条消息在内存里维护一份索引（约 32 字节/条），<strong>深 backlog 下内存随消息数增长</strong>；quorum 队列<strong>总是持久的</strong>，没有"非持久 quorum 队列"这种东西。换来的是不丢消息与明确的分区语义。选型口径：要可靠性用 quorum（4.x 默认），明确可丢、要极致低延迟的临时流量才用 classic——这条权衡 <a href="04-selection.html#s42">04 章 §4.2</a>会和 Kafka 的副本机制并排再算一遍。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 5 副本的 quorum 队列，多数派是几个？同时挂掉 2 个节点，队列还能写吗？挂掉 3 个呢？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>多数派 = 5/2 + 1 = 3。挂 2 个，还剩 3 个 = 多数派，<strong>能写</strong>，confirm 正常返回。挂 3 个，只剩 2 个 &lt; 3，凑不齐多数派，队列<strong>停止接受写入</strong>（拒绝或阻塞），直到至少恢复到 3 个节点。这正是 Raft 的安全性所在：它宁可在少数派侧停写，也绝不在凑不齐多数的情况下确认——避免脑裂下的数据分叉。代价是可用性：副本越多越能容错，但"多数派"门槛也越高。生产上 quorum 队列通常配 3 或 5 副本，偶数副本不划算（4 副本的多数派也是 3，容错能力却和 3 副本一样只是多耗一份存储）。</p>
+        </details>
+      </div>
+
+      <h2 id="s35"><span class="num">3.5</span><span>Khepri 取代 Mnesia：元数据存储与消息存储</span></h2>
+
+      <p class="one-liner">集群元数据（vhost、队列定义、binding、权限）的存储从 Mnesia 换成了基于 Raft 的 Khepri；网络分区下只有多数派分区继续推进，少数派暂停并在愈合后追平——且这个行为刻意不可配置。</p>
+
+      <div class="rationale">
+        <span class="label">两类"存储"别混淆</span>
+        <p>RabbitMQ 里有两套独立的存储，常被搞混。一套是<strong>元数据存储</strong>（metadata store）：存的是集群拓扑——有哪些 vhost、队列、exchange、binding、用户权限，全集群必须看到一致的视图。另一套是<strong>消息存储</strong>（message store）：存的是消息体本身。前者关乎"集群对自己的认知一不一致"，后者关乎"消息字节存在哪"。这一节先讲元数据存储的世代更替，再讲消息存储的落盘细节。</p>
+      </div>
+
+      <h3>元数据存储：Mnesia → Khepri 的世代更替</h3>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<strong>Mnesia</strong> 是 Erlang 自带的分布式数据库，RabbitMQ 从诞生起一直用它存元数据。它的复制是<strong>点对点、无自动冲突解决</strong>的：网络分区时，两侧节点都还能各自写元数据（建队列、改 binding），愈合那一刻两份不一致的状态撞在一起，<strong>没有自动裁决谁对</strong>。官方给的两个缓解手段都不可靠——<code>pause_minority</code>（少数派暂停）在抖动网络里容易误判，<code>autoheal</code>（自动愈合）会挑一侧丢弃；而 <code>pause_minority</code> 触发恢复时甚至可能<strong>把整个元数据库 dump 出来再重灌一遍</strong>，代价高昂。</p>
+
+      <p><strong>Khepri</strong> 是 RabbitMQ 团队新写的元数据存储，同样建在 <strong>Ra</strong>（即 quorum 队列用的那个 Raft 库）之上——元数据的每一次变更都走 Raft，提交到多数派才生效。分区时的行为因此变得确定：<strong>只有多数派那一侧能继续修改元数据</strong>，少数派一侧<strong>暂停元数据写入</strong>，等网络愈合后从 Raft 日志追平。和 <code>pause_minority</code> 不同，这<strong>不是一个可调的策略</strong>，而是 Raft 内建的、唯一的行为。</p>
+
+      <table class="compare-table">
+        <caption>表 3.3 · Khepri 取代 Mnesia 的时间线（RabbitMQ 4.x）</caption>
+        <thead>
+          <tr><th>版本</th><th>时间</th><th>元数据存储状态</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>4.0</td><td>2024</td><td>Mnesia 仍为默认，Khepri 可选（experimental → 稳定演进中）</td></tr>
+          <tr><td>4.2</td><td>2025-10</td><td>Khepri 成为<strong>新节点默认</strong>元数据存储</td></tr>
+          <tr class="selected"><td>4.3</td><td>2026-04</td><td>Khepri 成为<strong>唯一</strong>存储，Mnesia 被完全移除</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · "少旋钮"本身就是特性</span>
+        <p>Khepri 的分区行为<strong>故意不可配置</strong>，这不是功能缺失，是设计取向。Mnesia 时代的 <code>pause_minority</code> / <code>autoheal</code> / <code>ignore</code> 三选一，把一个本该由共识算法保证的正确性问题，推给运维去赌——选错就丢数据。Khepri 直接用 Raft 的多数派规则<strong>消灭这个选择</strong>：少数派必停、多数派必进、愈合必追平，无旋钮可调也就无从配错。"fewer knobs"在这里是把"可能配错的自由"换成"默认就对的确定性"。对从 Kafka 来的工程师，这等价于把 ZooKeeper/KRaft 那种"元数据本来就该走共识"的直觉，落实到了 RabbitMQ 的集群层。</p>
+      </div>
+
+      <h3>消息存储：4 KB 阈值与那道性能悬崖</h3>
+
+      <p><strong>底层机制（比文档深一层）</strong>：消息体存哪，取决于它和 <code>queue_index_embed_msgs_below</code>（默认 <strong>4 KB</strong>）的大小关系。大于该阈值的消息，写进<strong>每 vhost 共享的 message store</strong>——一组引用计数的段文件（segment files），多个队列引用同一份消息体时靠 ref-count 共享，所有引用都 ack 后才回收。小于阈值的消息，<strong>直接内嵌进每队列的 queue index</strong>（队列索引）。queue index 本身记录每条消息的<strong>位置 + 投递/ack 状态</strong>，是队列的账本。</p>
+
+      <p><strong>这条 4 KB 线是一道真实的性能悬崖</strong>：小于 4 KB 的消息内嵌在索引里，<strong>无论 backlog 堆多深，单条消息占用的队列内存基本是常数</strong>——索引结构紧凑、可批量顺序刷盘。一旦消息超过 4 KB 走 message store，每条消息多一次间接引用、段文件的随机访问与回收开销随之而来。所以"把消息控制在 4 KB 以内"对深队列场景是实打实的优化，跨过这条线性能特征会变。（顺带：classic 队列那个"confirm 前未必 fsync"的窗口，<a href="02-reliability.html#s23">02 章 §2.3</a>所说，物理上就发生在这套 message store / queue index 的落盘时序里。）</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">查看与调整内嵌阈值（谨慎，影响内存与吞吐特征）</span>
+          <span class="lang">bash</span>
+        </div>
+        <pre><code class="language-bash"># 当前生效值（默认 4096 字节）
+rabbitmqctl eval 'application:get_env(rabbit, queue_index_embed_msgs_below).'
+# => {ok, 4096}
+
+# rabbitmq.conf 里调整：把 8 KB 以下的消息也内嵌进索引
+# 收益：更多小消息走常数内存路径；代价：索引变大、单段刷盘更重
+queue_index_embed_msgs_below = 8192</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>同一个队列里堆了一百万条 1 KB 的消息和一百万条 8 KB 的消息，两者对队列内存的占用模式有何本质不同？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>1 KB 的消息小于 4 KB，<strong>内嵌在 queue index</strong> 里——它们的内容随索引一起，单条占用近似常数，深 backlog 下队列内存增长平缓、可顺序刷盘。8 KB 的消息大于 4 KB，<strong>进共享 message store</strong>，索引里只留一个引用，消息体在段文件中，多一层间接、回收靠 ref-count，随机访问更多。本质区别：4 KB 线两侧是"内嵌常数开销"与"外置引用 + 段文件管理"两套不同的内存与 IO 模型。批量发小消息时把单条压到 4 KB 以内，能稳稳吃到内嵌路径的红利。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>一次逻辑 publish 在 TCP 上由哪几类帧组成？帧尾那 1 个字节（<code>0xCE</code>）有什么用？</li>
+          <li>一条队列把一台机器的某个核打满了，吞吐还不够。换一台核更多、主频更高的机器有用吗？为什么？正确的扩展方向是什么？</li>
+          <li>内存高水位告警触发时，broker 对 publisher 和 consumer 分别做什么？为什么要这样区别对待？它会丢消息吗？</li>
+          <li>（设计级）一个对延迟敏感、又要求绝对不丢的支付流水队列，应当怎样在 quorum 队列的"多数派复制"代价和可靠性之间取舍？副本数选 3 还是 5，依据是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>三类依次：一个 <strong>method frame</strong>（类型 1，声明 publish 的 exchange 和 routing key）+ 一个 <strong>content-header frame</strong>（类型 2，消息属性 + body 总大小）+ 一个或多个 <strong>content-body frame</strong>（类型 3，消息体；超过 frame_max 才会有多个）。<code>0xCE</code> 是帧尾标记，解析器读完声明长度后必须撞上它，否则判定成帧损坏、直接断开整条连接——廉价的损坏检测。</li>
+            <li><strong>基本没用</strong>。瓶颈是单个队列 = 单个 Erlang 进程 = 串行邮箱，约钉在一个 scheduler/核上；加核、提主频只让其他核更闲，那一条队列的天花板不动。正确方向是<strong>分片成多个队列</strong>（如 consistent-hash exchange 按 key 散列到 N 个队列），让多个队列进程各占一个核并行，总吞吐随队列数近线性扩展。</li>
+            <li>告警<strong>阻塞所有 publisher</strong>（集群范围），<strong>放行所有 consumer</strong>。这样区别对待是因为内存压力来自堆积的消息，只有让消费继续排空队列、内存回落，告警才能解除；若冻结消费就会死锁在高水位。它<strong>只阻塞、不丢消息、不换页丢弃</strong>——是急刹不是扔货。</li>
+            <li>设计级：可靠性优先选 quorum 队列（4.x 默认就是），接受多数派复制带来的延迟上浮——支付流水"不丢"的权重高于个位数毫秒的延迟。副本数选 <strong>3</strong> 起步：多数派 = 2，可容 1 个节点宕机，延迟代价适中。要求更高容错（容 2 个节点同时挂）才上 <strong>5</strong>（多数派 = 3），代价是每条消息多复制两份、写延迟更高。<strong>不选偶数</strong>：4 副本多数派也是 3，容错力与 3 副本相同却多耗一份存储与带宽。再叠加 02 章的 publisher confirms，确保 confirm 返回 = 多数派已持久记录，才算端到端不丢。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>诊断一个"全集群 publisher 卡死"的现场</h3>
+        <p>线上告警：所有生产服务的 publish 调用集体卡住、confirm 迟迟不返回，但消费者日志显示仍在正常消费、队列深度在缓慢下降。CPU 总利用率不高，只有少数几个队列在堆积。请按本章机制，<strong>分两级</strong>说明这是哪种背压、根因链条是什么、为什么消费者不受影响、运维该先看哪个指标来确认。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>这是<strong>第二级</strong>背压——内存（或磁盘）高水位告警，不是第一级 credit 流控（流控只会靶向减速个别 channel，不会让全集群一起卡）。链条：少数几个队列堆积 → broker 总内存逼近 <code>vm_memory_high_watermark</code>（约 60% RAM）→ 触发全局告警 → <strong>所有</strong> publishing 连接被冻结，于是连那些没在堆积的服务也 publish 卡住、confirm 不返回。消费者放行，所以队列深度仍在降。先看的指标：broker 的内存告警状态（<code>rabbitmqctl status</code> 里的 <code>alarms</code> / <code>memory</code>，或管理界面顶部的红色告警条）。确认是告警后，处置方向是加速消费排空、或临时调高水位争取时间，而不是去重启 publisher——publisher 没坏，是被刹住了。延伸想:为什么"少数队列堆积却拖垮全集群写入"在 Kafka 上不会以同样方式发生？</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.rabbitmq.com/docs/quorum-queues">Quorum Queues</a>（官方文档）</li>
+          <li><a href="https://www.rabbitmq.com/docs/flow-control">Flow Control（credit 流控与内存/磁盘告警）</a>（官方文档）</li>
+          <li><a href="https://www.rabbitmq.com/docs/metadata-store">Metadata Store / Khepri</a>（官方文档）</li>
+          <li><a href="https://www.rabbitmq.com/amqp-0-9-1-reference">AMQP 0-9-1 Protocol Reference（帧与 method 定义）</a>（官方）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-reliability.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 可靠投递</span>
+        </a>
+        <a href="04-selection.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 对标选型</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 AMQP 帧与多路复用</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 每队列一个 Erlang 进程</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 credit 流控与告警</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 quorum 队列与 Raft</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 Khepri 与消息存储</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  多 Agent 协作模式 教程 · 04 失败模式 04-pitfalls.html
+  极简单色 + 单一朱红强调（design system v0.3.2）
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>常见失败模式 · 多 Agent 协作模式 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article h4 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 14px;
+  margin: 16px 0 6px;
+  color: var(--ink-soft);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径"><a href="index.html">00 起点</a><span class="sep">—</span><a href="01-concepts.html">01 概念</a><span class="sep">—</span><a href="02-principles.html">02 原理</a><span class="sep">—</span><a href="03-practice.html">03 实操</a><span class="sep">—</span><a href="04-pitfalls.html" class="current">04 失败模式</a><span class="sep">—</span><a href="05-capstone.html">05 综合</a><span class="sep">—</span><a href="06-self-check.html">06 自测</a></nav>
+
+  <div class="page">
+    <article>
+
+      <!-- ════════════════════════════════════════════════════════
+           头部信息
+           ════════════════════════════════════════════════════════ -->
+      <header class="chapter-opener">
+        <p class="chapter-label">多 Agent · 04 失败模式</p>
+        <h1>常见失败模式</h1>
+        <p class="recap">上一章把多 agent 跑通了——这章按根因排出真实生产里最常击中多 agent 的 12 个失败模式。每个失败模式给出症状、回到 02 原理的根因、错误写法对正确写法的修复、以及设计层面如何避免再次触发。基于 2026-06 的框架格局（LangGraph / AutoGen-AG2 / CrewAI / OpenAI Agents SDK）。下文所有代码用来演示设计判断，均未在本机执行（标 2026-06）。</p>
+      </header>
+
+      <!-- ════════════════════════════════════════════════════════
+           本章你要建立的心智模型
+           ════════════════════════════════════════════════════════ -->
+      <section class="schema-panel">
+        <p class="label">本章你要建立的心智模型</p>
+        <ul>
+          <li>多 agent 的失败几乎都能追到四类根因：token 账没算、上下文隔离档位拧错、协调结构本身的代价、可观测与评估缺位——记根因比记症状省力</li>
+          <li>每个失败模式都有同一副骨架：症状（看得见的现象）→ 根因（02 章哪条原理被违反）→ 修复（错误写法换成正确写法）→ 如何避免再次触发（设计层面）</li>
+          <li>看到一段异常 trace，先归类到四个根因桶，再定位到具体失败模式——这是 06 章 trace 诊断题的核心动作</li>
+          <li>多数失败模式的最终修复不是「改一行代码」，而是「这个任务本就不该上多 agent」——诚实承认这一点是本章的底色</li>
+        </ul>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           失败模式因果分类图
+           ════════════════════════════════════════════════════════ -->
+      <figure>
+        <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="12 个失败模式按四类根因聚类：token 类、上下文类、协调类、可观测与评估类，分别回链 02 章对应原理节">
+          <text x="360" y="22" text-anchor="middle" class="node-label-accent">12 个失败模式 · 按根因聚成四类</text>
+
+          <!-- 桶 1：token 类 -->
+          <rect x="24" y="44" width="158" height="118" rx="6" class="diagram-ink node-fill"/>
+          <text x="103" y="66" text-anchor="middle" class="node-label" font-weight="700">token 类</text>
+          <text x="103" y="84" text-anchor="middle" class="edge-label" stroke="none">回链 §2.1 token 账</text>
+          <text x="103" y="104" text-anchor="middle" class="edge-label" stroke="none">陷阱 1 过早上多 agent</text>
+          <text x="103" y="122" text-anchor="middle" class="edge-label" stroke="none">陷阱 2 token 爆炸</text>
+          <text x="103" y="140" text-anchor="middle" class="edge-label" stroke="none">陷阱 7 协调轮次过多</text>
+
+          <!-- 桶 2：上下文类 -->
+          <rect x="194" y="44" width="158" height="118" rx="6" class="diagram-ink node-fill"/>
+          <text x="273" y="66" text-anchor="middle" class="node-label" font-weight="700">上下文类</text>
+          <text x="273" y="84" text-anchor="middle" class="edge-label" stroke="none">回链 §2.4 隔离旋钮</text>
+          <text x="273" y="104" text-anchor="middle" class="edge-label" stroke="none">陷阱 3 隔离过度</text>
+          <text x="273" y="122" text-anchor="middle" class="edge-label" stroke="none">陷阱 4 不隔离干扰</text>
+          <text x="273" y="140" text-anchor="middle" class="edge-label" stroke="none">陷阱 8 合并冲突</text>
+
+          <!-- 桶 3：协调类（朱红高亮：生产最致命之一） -->
+          <rect x="364" y="44" width="158" height="118" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="443" y="66" text-anchor="middle" class="node-label-accent">协调类</text>
+          <text x="443" y="84" text-anchor="middle" class="edge-label" stroke="none">回链 §2.2 / §2.3</text>
+          <text x="443" y="104" text-anchor="middle" class="edge-label" stroke="none">陷阱 5 supervisor 瓶颈</text>
+          <text x="443" y="122" text-anchor="middle" class="edge-label" stroke="none">陷阱 6 handoff 死循环</text>
+          <text x="443" y="140" text-anchor="middle" class="edge-label" stroke="none">陷阱 11 并行写冲突</text>
+
+          <!-- 桶 4：可观测与评估类 -->
+          <rect x="534" y="44" width="162" height="118" rx="6" class="diagram-ink node-fill"/>
+          <text x="615" y="66" text-anchor="middle" class="node-label" font-weight="700">可观测 / 评估</text>
+          <text x="615" y="84" text-anchor="middle" class="edge-label" stroke="none">回链 §2.5 边界</text>
+          <text x="615" y="104" text-anchor="middle" class="edge-label" stroke="none">陷阱 9 错误传播放大</text>
+          <text x="615" y="122" text-anchor="middle" class="edge-label" stroke="none">陷阱 10 缺可观测</text>
+          <text x="615" y="140" text-anchor="middle" class="edge-label" stroke="none">陷阱 12 评估困难</text>
+
+          <!-- 共同分母 -->
+          <rect x="234" y="208" width="252" height="48" rx="6" class="diagram-soft node-fill"/>
+          <text x="360" y="230" text-anchor="middle" class="node-label">共同分母 · 约 15× token</text>
+          <text x="360" y="248" text-anchor="middle" class="edge-label" stroke="none">放大了整个系统的失败面</text>
+
+          <!-- 四桶汇向共同分母（四条竖向略斜线，互不交叉） -->
+          <path class="diagram-ink" d="M 103 162 L 270 208" marker-end="url(#p4-ink)"/>
+          <path class="diagram-ink" d="M 273 162 L 320 208" marker-end="url(#p4-ink)"/>
+          <path class="diagram-accent" d="M 443 162 L 400 208" marker-end="url(#p4-accent)"/>
+          <path class="diagram-ink" d="M 615 162 L 450 208" marker-end="url(#p4-ink)"/>
+
+          <defs>
+            <marker id="p4-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="p4-accent" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+        </svg>
+        <figcaption><span class="fig-num">图 4.0</span>导读：12 个失败模式不是 12 件互不相干的事，而是<strong>四类根因</strong>各自的若干表现。<strong>注意</strong>：朱红高亮的「协调类」是生产里最难复现也最难定位的一类——它的症状（瓶颈、死循环、写冲突）往往要跨多份上下文才看得清。四桶最终都汇向同一个共同分母：02 章 <a href="02-principles.html#s21">§2.1</a> 那笔约 15× token 的账放大了整个系统的失败面。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">怎么读这一章</span>
+        <p>不必背 12 个失败模式——这是一份对症 reference，不是 quiz。读法只有一条：看到每个失败模式，先不看修复，先问自己<strong>「它属于哪个根因桶，回到 02 章哪一节」</strong>。把症状反向追到原理，是 06 章 trace 诊断题真正考的能力；而记住「错误写法长什么样」远不如记住「哪条原理被违反」省力。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           桶一 · token 类
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s41"><span class="num">4.1</span><span>陷阱 1：过早上多 agent（该用单 agent / workflow）</span></h2>
+
+      <p class="one-liner">把一个本可单 agent 或固定 workflow 解决的任务拆成多 agent——白白背上约 15× token，没换来任何并行价值。</p>
+
+      <p><strong>症状</strong>：一个查询走单 agent 串行只要几千 token、几秒钟，改成「supervisor + 3 个 subagent」后，token 账翻了十几倍、wall-clock 反而更慢（多了拆任务和汇总两次调用），结果质量却没变好。盯 trace 会看到 subagent 之间没有真正并行——后一个在等前一个的输出，或者它们查的是同一批东西。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s25">§2.5 何时不该用多 agent</a> 的三个「别用」信号——子任务强依赖、要共享大量中间态、步骤可预先枚举。多 agent 唯一值约 15× token（<a href="02-principles.html#s21">§2.1</a>）的理由是把 token 兑换成探索广度；强依赖或固定流程的任务并行不起来，这笔账就是纯亏损。这也是 01 章 <a href="01-concepts.html#s15">§1.5 单 agent + 工具 vs 多 agent 的分界</a> 要先建立的判断。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">over_eager_multiagent.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-41-1">复制</button>
+        </div>
+<pre id="cb-41-1"><code class="language-python"># ✗ 错误写法：固定流程硬塞成多 agent
+#   抽取 → 校验 → 转换 → 入库 是可预先枚举的步骤，
+#   每步依赖上一步，根本没有可并行的子任务
+crew = Crew(
+    agents=[extractor, validator, transformer, loader],
+    process=Process.hierarchical,        # 多一个 manager 调度，多两次 LLM 调用
+    manager_llm=ChatAnthropic(model="claude-opus-4-7"),
+)
+
+# ✓ 正确写法：固定路径用 workflow，模型只在确需判断处介入
+def pipeline(raw: str) -&gt; Record:
+    data = extract(raw)                  # 普通函数，零 LLM
+    if not validate(data):               # 普通函数
+        raise ValueError("校验不通过")
+    enriched = llm_transform(data)       # 仅这一步要模型自主判断
+    return load(enriched)                # 普通函数
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：上多 agent 前先过 <a href="02-principles.html#s25">§2.5</a> 的三问——子任务能并行吗、要不要持续共享大量中间态、步骤能不能提前画成流程图。三问里只要有一个指向「不能并行 / 要共享 / 可枚举」，默认退回单 agent 或固定 workflow。Anthropic 在《Building Effective Agents》里的原则是同一句：能用更简单的方案就别上 agent，能用单 agent 就别上多 agent。</p>
+
+      <h2 id="s42"><span class="num">4.2</span><span>陷阱 2：token 爆炸（没算约 15× 的账）</span></h2>
+
+      <p class="one-liner">该用多 agent，但没给 subagent 数量和上下文设预算——token 账从约 15× 失控成几十倍。</p>
+
+      <p><strong>症状</strong>：一个研究类任务用多 agent 是对的，但月底账单远超预期。盯 trace 会看到两类浪费叠在一起：subagent 数量随查询无脑增长（一个简单问题 spawn 出十几个 subagent），且每个 subagent 之间探索严重重叠（三个 subagent 查回几乎相同的资料）。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s21">§2.1 为什么多 agent 贵</a> 的三笔开销结构——每个 subagent 一份独立上下文、协调轮次本身要 token、探索重叠是纯浪费。约 15× 是「切得不重叠、数量受控」时的基准；一旦 subagent 数量不设上限、任务又没先切成不重叠的块，重叠开销会把这个倍数顶到几十倍。这正是 §2.1 预测题戳破的直觉：真正的杠杆不是「加 subagent 数量」，而是「token 花得有没有重叠」。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">token_budget.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-42-1">复制</button>
+        </div>
+<pre id="cb-42-1"><code class="language-python"># ✗ 错误写法：委派 prompt 不约束规模，subagent 数量随心所欲
+ORCHESTRATOR_PROMPT_BAD = """
+把这个问题拆成若干子任务，每个交给一个 subagent 去查。
+"""
+
+# ✓ 正确写法：按任务复杂度给 subagent 数量定上限 + 先切成不重叠的块
+ORCHESTRATOR_PROMPT = """
+先判断任务复杂度，再决定 subagent 数量：
+  - 简单事实查询：1 个 subagent。
+  - 多来源研究：最多 3 个 subagent。
+  - 任何单一查询都不要超过 5 个 subagent。
+切分时给每个 subagent 明确、互不重叠的子范围，
+不要让两个 subagent 查同一块——重叠的 token 是纯浪费。
+"""
+
+# 工程兜底：把 token 预算做成硬上限，超了就停而不是继续烧
+TOKEN_BUDGET = 200_000
+def spawn_subagents(tasks: list[Task]) -&gt; list[Finding]:
+    if estimate_tokens(tasks) &gt; TOKEN_BUDGET:
+        raise BudgetExceeded("拆得过细，先合并子任务再跑")
+    return run_parallel(tasks)
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：把约 15× token 当成一条要持续盯的预算线，而不是事后才看的账单。两个设计动作：一是委派 prompt 里写死 subagent 数量上限（按复杂度分档），二是切分时强制「不重叠」——先把任务切成互不相交的块，再谈加并行度。把 token 预算做成代码里的硬上限（超了抛异常），比依赖模型自觉省钱可靠。</p>
+
+      <h2 id="s47"><span class="num">4.3</span><span>陷阱 3：协调轮次过多 → 延迟（先放这里，因为它也是 token 类）</span></h2>
+
+      <p class="one-liner">每多一轮中心调度都是一次串行的 LLM 调用——轮次堆起来，延迟和 token 一起涨，并行省下的 wall-clock 被吃回去。</p>
+
+      <p><strong>症状</strong>：多 agent 系统单看每个 subagent 都不慢，但端到端延迟高得离谱。盯 trace 会看到大量时间花在 supervisor 反复「拆一点 → 等结果 → 再拆一点 → 再等」的串行往返上——subagent 的并行只省了执行段，调度段却被拉成一条长串行链。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s21">§2.1</a> 的第二笔开销「协调轮次本身要 token」与 <a href="02-principles.html#s23">§2.3 协调机制权衡</a>。中心调度的每一轮都是一次串行模型调用，且要把各路结果读进同一个上下文；轮次越多，token 和延迟同步线性增长。多 agent 的并行省的是 subagent 执行段的 wall-clock，省不了调度往返——协调轮次过多时，省下的被往返吃回去。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">flatten_coordination.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-47-1">复制</button>
+        </div>
+<pre id="cb-47-1"><code class="language-python"># ✗ 错误写法：supervisor 一次只派一个，串行往返 N 轮
+def supervisor_serial(state):
+    next_task = pick_one_unfinished(state)   # 每轮只挑一个
+    return Command(goto=route_for(next_task))  # 派一个，等回来，再来
+
+# ✓ 正确写法：一次性 fan-out 全部独立子任务，单轮调度
+from langgraph.types import Send
+def supervisor_fanout(state):
+    tasks = decompose(state["query"])        # 一次拆完
+    # 用 Send 在单轮里并行派发所有独立子任务，避免逐个往返
+    return [Send("worker", {"task": t}) for t in tasks]
+
+# 设计层：把「调度轮次上限」也当成预算
+MAX_COORDINATION_ROUNDS = 3
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：能一次性 fan-out 的独立子任务，就不要逐个串行往返——LangGraph 的 <code>Send</code> 让 supervisor 在单轮里并行派发。给协调轮次设一个上限（如 3 轮），超了就汇总现有结果或上报，而不是无限往返。深层判断回到 §2.3：如果一个任务天然需要很多轮中心来回，往往说明子任务其实强依赖——该考虑的是 <a href="02-principles.html#s25">§2.5</a> 的退回单 agent，而不是优化调度。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           桶二 · 上下文类
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s43"><span class="num">4.4</span><span>陷阱 4：上下文隔离过度 → 子 agent 缺信息</span></h2>
+
+      <p class="one-liner">隔离旋钮拧到「完全隔离」——subagent 各做各的，缺了改变彼此决策的那一小块共享前提。</p>
+
+      <p><strong>症状</strong>：并行 subagent 各自看自己那块都合理，拼到一起却互相打架。Cognition 的 Flappy Bird 例子是经典：一个 subagent 画了 Mario 像素风背景，另一个画了风格完全不搭的飞鸟——两个产物各自没错，合起来就是割裂的。汇总 agent 拿到风格冲突的 finding 无法调和。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s24">§2.4 通信与上下文隔离</a> 描述的「隔离过度」那一档。subagent 独立工作时会基于自己看到的那一小块做出<strong>隐含决策</strong>，而隐含决策需要共享前提才能彼此一致。隔离过度，subagent 在缺共享前提的情况下各做各的，汇总时无法对齐——这正是图 2.2 中间那一档的失败。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">context_sharing.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-43-1">复制</button>
+        </div>
+<pre id="cb-43-1"><code class="language-python"># ✗ 错误写法：每个 subagent 只拿到自己那一小块任务，完全隔离
+def dispatch_bad(subtasks):
+    return [worker.invoke({"task": t}) for t in subtasks]  # 无共享前提
+
+# ✓ 正确写法：把「会改变隐含决策」的那一小块前提，共享给每个 subagent
+SHARED_PREMISE = {
+    "整体目标": "做一个 Flappy Bird 风格的小游戏",
+    "美术风格": "Mario 像素风",      # ← 改变每个 subagent 隐含决策
+    "目标受众": "8-12 岁",
+    "语气口径": "活泼",
+}
+def dispatch(subtasks):
+    return [
+        worker.invoke({"task": t, "premise": SHARED_PREMISE})  # 前提随任务一起传
+        for t in subtasks
+    ]
+# 注意：只传「会改变决策」的前提；subagent 各自的中间草稿、原始材料
+# 仍留在隔离里，不互相传——那是私有上下文，传了就回到 token 爆炸。
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：用 §2.4 那条判别——<strong>会改变 subagent 隐含决策的，是共享前提，必须传</strong>（整体目标、统一口径、要对齐的接口约定、已定的全局约束）；<strong>只是某个 subagent 的工作过程，是私有上下文，不该传</strong>。把这一小段共享前提随任务一起下发，其余各自隔离。这一小块前提的 token 成本极低，却挡掉了最贵的失败——返工重写。</p>
+
+      <h2 id="s44"><span class="num">4.5</span><span>陷阱 5：不隔离 → context clash 互相干扰</span></h2>
+
+      <p class="one-liner">隔离旋钮拧到「全员共享一份历史」——A 的中间猜测污染 B 的判断，且 token 随历史平方级膨胀。</p>
+
+      <p><strong>症状</strong>：所有 subagent 共享同一份不断膨胀的对话历史，跑着跑着行为开始互相串味——B 突然采纳了 A 还没验证的中间结论，C 被前面 agent 的错误假设带偏。同时每个 agent 每一步都要把全部历史读一遍，token 用量随轮次平方级上涨。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s24">§2.4</a> 描述的「隔离过松」那一档，撞上 <strong>context clash</strong>（上下文互相干扰）。共享同一份历史时，A 的中间态会污染 B 的判断；且共享历史意味着每个 agent 每步都重读全部历史，token 平方级增长，直接放大 <a href="02-principles.html#s21">§2.1</a> 那笔账。这是隔离旋钮的另一端失手——和陷阱 4 正好相反方向。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">isolate_context.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-44-1">复制</button>
+        </div>
+<pre id="cb-44-1"><code class="language-python"># ✗ 错误写法：所有 subagent 读写同一份膨胀的 messages 历史
+def run_shared(state):
+    for agent in agents:
+        # 每个 agent 都看到、也追加到同一份全局历史
+        state["messages"] = agent.invoke(state["messages"])  # 平方级膨胀 + 互相污染
+    return state
+
+# ✓ 正确写法：每个 subagent 关进自己干净的上下文，只回传结论
+def run_isolated(state):
+    findings = []
+    for agent in agents:
+        # 各自一份隔离上下文：共享前提 + 自己的子任务，不读别人历史
+        local_ctx = {"premise": state["premise"], "task": agent.task}
+        result = agent.invoke(local_ctx)
+        findings.append(extract_conclusion(result))  # 只回传结论，不回灌过程
+    return {"findings": findings}
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：默认让每个 subagent 在自己干净的上下文里工作，回传的是结论而非整段过程——别把所有 agent 挂到同一份全局历史上。隔离不是「开 / 关」开关，是一根要调到「够用且不过量」的旋钮（§2.4）：先全隔离，再只把改变决策的那一小块前提加回去。陷阱 4 和陷阱 5 是同一根旋钮的两端，调试时永远先问「现在这档偏哪一端」。</p>
+
+      <h2 id="s48"><span class="num">4.6</span><span>陷阱 6：子 agent 结果合并冲突</span></h2>
+
+      <p class="one-liner">汇总阶段拿到多路 finding，但它们格式不一、口径不一、甚至互相矛盾——reducer 无法干净合并。</p>
+
+      <p><strong>症状</strong>：fan-out 的 subagent 各自返回结果，汇总 agent 试图合并时发现：同一个实体被五种不同写法列出（大小写、简称 vs 全称各不相同），或两路 finding 给出互相矛盾的结论，reducer 要么报错、要么硬拼出一份自相矛盾的输出。</p>
+
+      <p><strong>根因</strong>：这是陷阱 4（<a href="02-principles.html#s24">§2.4</a> 隔离过度）在汇总端的显形——subagent 各自对未声明的 implicit 决策（命名规范、结论口径）做了不同选择，没有共享 normalization 前提。深一层还连着 <a href="02-principles.html#s23">§2.3</a>：中心汇总点要承担「把异构结果对齐成一致输出」的职责，这个职责若没人显式设计，冲突就堆到 reducer 那一刻才爆发。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">reconcile_findings.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-48-1">复制</button>
+        </div>
+<pre id="cb-48-1"><code class="language-python">from pydantic import BaseModel
+
+# ✓ 1. 给 subagent 输出定结构，强制统一格式（消除「五种写法」）
+class Finding(BaseModel):
+    entity: str            # 统一用全称小写，prompt 里写死规范
+    claim: str
+    sources: list[str]
+    confidence: float      # 0-1，便于冲突时按可信度取舍
+
+# ✗ 错误写法：reducer 盲拼 free-form 文本
+def reduce_bad(findings: list[str]) -&gt; str:
+    return "\n".join(findings)   # 矛盾和重复原样堆进去
+
+# ✓ 2. reducer 显式处理冲突，而不是假装没有
+def reduce(findings: list[Finding]) -&gt; list[Finding]:
+    by_entity = group_by(findings, key=lambda f: f.entity.lower())
+    merged = []
+    for entity, group in by_entity.items():
+        if has_contradiction(group):
+            merged.append(pick_highest_confidence(group))  # 按 confidence 取舍
+        else:
+            merged.append(synthesize(group))
+    return merged
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：在 fan-out 之前就把两件事定下来——一是 subagent 输出的结构（用 Pydantic 之类定 <code>Finding</code> 形状，命名规范写进 prompt），二是冲突解决策略（矛盾时按 confidence 取舍、还是回到 subagent 复核）。把「对齐」当成汇总 agent 的显式职责去设计，而不是寄望 reducer 在最后一刻自动调和。源头仍是 §2.4 的共享前提：统一口径本就该作为前提下发。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           桶三 · 协调类
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s45"><span class="num">4.7</span><span>陷阱 7：supervisor 成瓶颈</span></h2>
+
+      <p class="one-liner">所有控制流都过中心节点——supervisor 自己成了串行瓶颈，subagent 再多也卡在它一个人手里。</p>
+
+      <p><strong>症状</strong>：supervisor 拓扑下，subagent 数量加上去了，吞吐却不涨。盯 trace 会看到 subagent 大量时间在「等 supervisor 派活 / 等 supervisor 收结果」上排队——中心节点每次只能处理一路交互，成了整个系统的串行咽喉。极端情况下 supervisor 还自己把 worker 的活干了（CrewAI hierarchical 的一个真实 bug：manager 借走 worker 的 tool 自己执行，worker 永不被调用）。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s22">§2.2 拓扑选择权衡</a> 揭示的 supervisor 拓扑代价——「所有控制流经过中心节点」既是它可控性强的来源，也是它可扩展性差的根。中心节点的处理能力是天花板，subagent 并行度再高也突破不了这个咽喉。这是拓扑四维取舍里「可控 ↔ 可扩展」那一维的典型失手。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">unblock_supervisor.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-45-1">复制</button>
+        </div>
+<pre id="cb-45-1"><code class="language-python"># ✗ 错误写法：supervisor 既调度又亲自干活，还逐路串行
+def supervisor_bad(state):
+    data = web_search(state["q"])        # 自己借用 worker 的 tool 干活
+    return summarize(data)               # worker 形同虚设
+
+# ✓ 正确写法 1：supervisor 只调度、不持有 worker 的执行 tool
+crew = Crew(
+    agents=[researcher, writer, qa],     # worker 必须都登记进来
+    process=Process.hierarchical,
+    manager_llm=ChatAnthropic(model="claude-opus-4-7"),
+    # 不给 manager 自带执行类 tool——它只负责 delegate
+)
+
+# ✓ 正确写法 2：让 supervisor 一次 fan-out，把串行咽喉摊平
+from langgraph.types import Send
+def supervisor(state):
+    return [Send("worker", {"task": t}) for t in decompose(state["q"])]
+
+# ✓ 正确写法 3：中心真成瓶颈时，部分交互改去中心 handoff（换拓扑）
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：先确保 supervisor 只做调度、不抢 worker 的活（CrewAI 里别让 manager 继承执行类 tool）。再用一次性 fan-out 把「逐路串行」摊平成「单轮并行」。如果中心节点确实是吞吐天花板，按 §2.2 的取舍考虑把部分交互改成去中心 handoff——但记住这是换拓扑（02 §2.2 说的「最贵改的决定」），且会引出下一个陷阱。</p>
+
+      <h2 id="s46"><span class="num">4.8</span><span>陷阱 8：去中心 handoff 死循环 / 踢皮球</span></h2>
+
+      <p class="one-liner">去中心交接里没人为整条链设统一终止条件——「a 交给 b、b 交回 a」的环没有任何一方负责打断。</p>
+
+      <p><strong>症状</strong>：swarm-handoff 拓扑下，控制权在 agent 之间反复横传却不收敛：a 觉得该交给 b，b 看了一眼觉得不归自己、交回 a，a 又交给 b……形成踢皮球的死循环；或者交接链跑飞、轮次无上限地涨，直到外部 quota 把它掐断。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s23">§2.3 协调机制权衡</a> 指出的去中心代价——中心调度里终止判断天然只有一处；去中心后，终止变成每个 agent 各自的局部判断，没有任何一方对「整条交接链何时停」负责。这正是 §2.3「去中心 → 失去全局终止权」的代价落地，也是 §2.2 里 mesh / 去中心拓扑最常见的失手。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">handoff_termination.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-46-1">复制</button>
+        </div>
+<pre id="cb-46-1"><code class="language-python"># ✗ 错误写法：每个 agent 各自决定交给谁，无全局终止、无环检测
+def agent_a(state):
+    if not_my_job(state):
+        return Command(goto="agent_b")   # 没人记录交接历史，b 又能交回来
+
+# ✓ 正确写法：给整条交接链装三层终止
+def make_agent(name, peers):
+    def node(state):
+        state["handoff_count"] = state.get("handoff_count", 0) + 1
+        # 层 1：全局交接次数硬上限
+        if state["handoff_count"] &gt; 8:
+            return Command(goto="finalize")        # 兜底收尾，不再横传
+        # 层 2：环检测——同一对 agent 反复互踢就打断
+        if seen_cycle(state["handoff_trace"], name):
+            return Command(goto="finalize")
+        target = decide_target(state, peers)
+        # 层 3：交接要带明确理由，避免「不归自己」式甩锅
+        state["handoff_trace"].append((name, target))
+        return Command(goto=target)
+    return node
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：去中心拓扑必须显式补上中心拓扑天然就有的那一处全局终止权——三层叠加：交接次数硬上限（兜底）、环检测（同一对 agent 反复互踢就打断）、交接要带明确去向理由（堵住「不归自己」的甩锅）。更根本的判断回到 §2.2：如果一个任务总是踢皮球，往往说明职责边界没划清，去中心拓扑本就不合适——该退回 supervisor 让终止判断回到一处。</p>
+
+      <h2 id="s411"><span class="num">4.9</span><span>陷阱 9：并行竞态 / 共享 state 写冲突</span></h2>
+
+      <p class="one-liner">两个并行节点同时写同一个 state 字段——LangGraph 默认对并发写未定义，直接抛 <code>INVALID_CONCURRENT_GRAPH_UPDATE</code>。</p>
+
+      <p><strong>症状</strong>：LangGraph 图编译通过，运行时在 fan-out 那一步抛 <code>INVALID_CONCURRENT_GRAPH_UPDATE</code>，报错指向两个并行 node 写了同一个 state key（最常见的是 <code>findings</code> 这类列表字段）。或者更隐蔽：没报错，但并行写互相覆盖，最后只剩一路结果（last-write-wins）。</p>
+
+      <p><strong>根因</strong>：违反 02 章 <a href="02-principles.html#s24">§2.4</a> 通信落到「共享 state」这种消息形状时的并发约束。LangGraph 对「多个节点并发写同一字段」默认不定义合并方式——字段必须用 <code>Annotated</code> 标一个 reducer（合并策略）才能并行写。这是「共享 state」通信方式的固有代价：共享带来并发，并发就要显式声明怎么合并。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">concurrent_state.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-411-1">复制</button>
+        </div>
+<pre id="cb-411-1"><code class="language-python">import operator
+from typing import Annotated, TypedDict
+
+# ✗ 错误写法：两个并行 node 都写 findings，没声明合并策略
+class BadState(TypedDict):
+    findings: list[str]      # 并行写 → INVALID_CONCURRENT_GRAPH_UPDATE
+
+# ✓ 正确写法：用 Annotated 标 reducer，声明并发写如何合并
+class GoodState(TypedDict):
+    findings: Annotated[list[str], operator.add]   # 多路结果做列表拼接
+
+# 需要更复杂的合并就自定义 reducer
+def merge_dicts(a: dict, b: dict) -&gt; dict:
+    return {**a, **b}
+
+class CustomState(TypedDict):
+    config: Annotated[dict, merge_dicts]
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：凡是会被多个并行节点写的 state 字段，定义时就用 <code>Annotated[T, reducer]</code> 标清合并策略——列表拼接用 <code>operator.add</code>，需要去重 / 取最新 / 字典合并就自定义 reducer。设计层面把它当成「共享 state 通信」的必填项：只要选了 fan-out + 共享 state（§2.4），并发写就是确定会发生的事，合并策略不能等运行时报错才补。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           桶四 · 可观测与评估类
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s49"><span class="num">4.10</span><span>陷阱 10：错误在 agent 间传播放大</span></h2>
+
+      <p class="one-liner">上游 agent 的一个小错被下游当成可靠输入接着用——错误沿调用链逐级放大，末端的产物离谱却查不出源头。</p>
+
+      <p><strong>症状</strong>：sequential 或 supervisor 链跑完，最终输出明显错误，但每个 agent 单看都「正常工作」。盯 trace 会发现上游某个 agent 输出了一个带瑕疵的中间结果（甚至是幻觉补的数据），下游 agent 没有任何校验就把它当事实，在它之上继续推理、继续放大——到末端已经面目全非。</p>
+
+      <p><strong>根因</strong>：这是 <a href="02-principles.html#s21">§2.1</a> 「15× token = 15× 失败面」的直接后果——更长的调用链意味着错误有更多级可以传播。更具体地连着 <a href="02-principles.html#s24">§2.4</a>：下游 agent 默认信任上游传来的上下文，不区分「这是已验证的结论」还是「这是上游的中间猜测」。没有节点间校验，单点错误就沿链放大成系统级错误。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">guard_propagation.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-49-1">复制</button>
+        </div>
+<pre id="cb-49-1"><code class="language-python">from pydantic import BaseModel, ValidationError
+
+# ✗ 错误写法：下游无条件信任上游输出
+def downstream_bad(upstream_output: str):
+    return build_on(upstream_output)     # 上游错了，这里跟着错并放大
+
+# ✓ 正确写法：节点间设校验关卡，错误就地拦截而非向下传
+class UpstreamResult(BaseModel):
+    value: float
+    confidence: float
+
+def downstream(raw: dict):
+    try:
+        result = UpstreamResult(**raw)           # 1. 结构校验
+    except ValidationError:
+        return escalate("上游输出结构不合法")     # 拦在这里，不向下传
+    if result.confidence &lt; 0.6:                  # 2. 可信度门槛
+        return escalate("上游可信度过低，需复核")
+    return build_on(result)                      # 通过校验才继续
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：在 agent 之间设校验关卡——下游接收上游输出时先做结构校验和可信度门槛，不合格就就地拦截或上报，而不是接着用。让每个 agent 的输出带上可信度信号（见陷阱 6 的 <code>Finding.confidence</code>），下游据此决定信不信。设计原则：链越长，越要在节点间「断点」校验，把单点错误挡在它发生的那一段，别让 15× 的失败面变成 15× 的放大器。</p>
+
+      <h2 id="s410"><span class="num">4.11</span><span>陷阱 11：缺可观测 → 无法定位哪个 agent 出错</span></h2>
+
+      <p class="one-liner">多 agent 跑出错误结果，却没有跨 agent 的统一 trace——根本看不出是哪个 subagent、哪一步、哪次工具调用出的问题。</p>
+
+      <p><strong>症状</strong>：系统输出明显不对，但排查时只能看到最终结果和零散的几条日志。每个 subagent 的输入、输出、工具调用、决策点分散在各自的上下文里，没有一条把它们串起来的 trace。定位一个错误要靠猜，复现更是碰运气——这在去中心拓扑里尤其致命，控制流是一张网而非一条线。</p>
+
+      <p><strong>根因</strong>：这是多 agent 相对单 agent 新增的固有难度，根在 <a href="02-principles.html#s21">§2.1</a> 的「调试要跨多份上下文」与 <a href="02-principles.html#s22">§2.2</a> 拓扑代价表里的「调试难度」那一维。单 agent 的行为可线性追踪；多 agent 把一次执行摊到 N 份独立上下文 + 多轮协调上，没有统一 trace 就等于把一个分布式系统当黑箱调试。可观测不是事后加的运维项，是多 agent 的设计前提。</p>
+
+      <h3>修复</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">observability.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-410-1">复制</button>
+        </div>
+<pre id="cb-410-1"><code class="language-python"># ✗ 错误写法：各 agent 各打各的 print，无关联
+def worker_bad(task):
+    print("working...")          # 哪个 worker？哪次运行？无从对应
+    return do(task)
+
+# ✓ 正确写法：给每次运行一个 trace_id，每个 agent 步骤都挂上去
+import uuid
+
+def run(query):
+    trace_id = str(uuid.uuid4())
+    log_event(trace_id, "orchestrator", "decompose", {"query": query})
+    findings = []
+    for i, task in enumerate(decompose(query)):
+        # 每个 subagent 的输入 / 输出 / 工具调用都带 (trace_id, agent_id, step)
+        log_event(trace_id, f"worker-{i}", "start", {"task": task})
+        result = worker.invoke(task)
+        log_event(trace_id, f"worker-{i}", "finish", {"output": result})
+        findings.append(result)
+    return findings
+# 生产里接 LangSmith / OpenTelemetry 这类，把分散步骤拼成一条可查的链
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：在搭多 agent 的第一天就把可观测当前提——给每次运行一个 <code>trace_id</code>，每个 subagent 的输入、输出、工具调用、路由决策都挂这个 id，让一次执行能在事后被还原成一条完整的链（生产里接 LangSmith / OpenTelemetry 之类）。判断标准很硬：如果你不能从 trace 里指出「哪个 agent、哪一步、为什么这么决定」，这个多 agent 系统就还不具备上线的可调试性。</p>
+
+      <h2 id="s412"><span class="num">4.12</span><span>陷阱 12：多 agent 评估困难</span></h2>
+
+      <p class="one-liner">多 agent 没有唯一正确答案、路径还不确定——用「比对标准输出」那套单点评估根本套不上。</p>
+
+      <p><strong>症状</strong>：想给多 agent 系统建评测，却发现无从下手：研究型任务没有唯一标准答案，同一个查询两次运行的路径和中间产物都不同，传统「输出 == expected」的断言全都失效。质量回归靠人工抽查，改一处 prompt 不知道整体是好了还是坏了。</p>
+
+      <p><strong>根因</strong>：这是 <a href="02-principles.html#s21">§2.1</a> 多 agent 本质（一台「token → 广度」兑换机）和 <a href="02-principles.html#s25">§2.5</a> 适用边界（研究 / 检索 / 覆盖面优先的开放任务）共同带来的——多 agent 擅长的恰恰是没有唯一解、过程不确定的任务，而这类任务天然反「单点精确比对」式评估。评估困难不是工具缺失，是任务性质决定的：路径不确定 + 答案非唯一，要换一套评估范式。</p>
+
+      <h3>修复</h3>
+
+      <table class="compare-table">
+        <caption>表 4.1 · 多 agent 评估的四种可落地手段</caption>
+        <thead>
+          <tr><th>手段</th><th>怎么做</th><th>适合评什么</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>LLM-as-judge + rubric</strong></td><td>用一个评判模型按事先写好的评分量表打分（覆盖度 / 准确性 / 一致性）</td><td>没有唯一答案的开放产物（研究报告、综述）</td></tr>
+          <tr><td><strong>端到端结果指标</strong></td><td>只评最终产物是否满足可观测的验收标准，不管中间路径</td><td>路径不确定但结果可判定（找全了几个目标）</td></tr>
+          <tr><td><strong>过程 trace 断言</strong></td><td>在统一 trace 上断言关键步骤（是否做了校验、是否超预算）</td><td>行为合规性（建立在陷阱 11 的可观测之上）</td></tr>
+          <tr class="selected"><td><strong>分层评估</strong></td><td>组件级评 subagent（可单点比对）+ 系统级评端到端（LLM-judge）</td><td>多数生产系统——把可精确评的和只能整体评的分开</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">eval_layered.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-412-1">复制</button>
+        </div>
+<pre id="cb-412-1"><code class="language-python"># ✗ 错误写法：对开放任务做单点精确比对
+def evaluate_bad(output, expected):
+    assert output == expected     # 路径 / 答案非唯一，必然脆断
+
+# ✓ 正确写法：分层——组件级精确比对 + 系统级 rubric 打分
+def evaluate(system, dataset):
+    # 1. 组件级：subagent 有确定输出的部分，照常断言
+    for case in dataset.component_cases:
+        assert system.subagent(case.input) == case.expected
+    # 2. 系统级：端到端开放产物，用 LLM-as-judge 按 rubric 打分
+    scores = []
+    for case in dataset.e2e_cases:
+        output = system.run(case.query)
+        scores.append(llm_judge(output, rubric=case.rubric))  # 覆盖度/准确/一致
+    return {"component_pass": True, "e2e_mean_score": mean(scores)}
+</code></pre>
+      </div>
+
+      <p><strong>如何避免再次触发</strong>：别拿单 agent 的「比对标准输出」去套多 agent。分层评估——能单点精确比对的组件（subagent 的确定性子能力）就照常断言；只能整体判断的端到端产物用 LLM-as-judge + rubric。这一切建立在陷阱 11 的可观测之上：没有统一 trace，过程断言无从谈起。评估范式要匹配任务性质（§2.5），而不是反过来逼任务去适应评估工具。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           反模式 + 什么时候不要用
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="antipatterns"><span class="num">·</span><span>几个反模式</span></h2>
+
+      <p>上面 12 个失败模式是具体症状；下面是更高一层、贯穿多个失败模式的设计反模式——它们不是单个 bug，而是一类会反复制造 bug 的思维习惯。</p>
+
+      <ul>
+        <li><strong>反模式 A · 「多 agent 总比单 agent 强」</strong>——把多 agent 当默认升级。这是陷阱 1 / 2 的共同源头。多 agent 是一台 token 兑换广度的机器，不是更聪明的脑子；不需要广度的任务上多 agent 纯亏 15×。</li>
+        <li><strong>反模式 B · 「subagent 越多越好」</strong>——把加并行度当增强手段。真正的杠杆是「token 花得有没有重叠」（§2.1），先切不重叠再谈加数量，否则只是为重复探索付钱（陷阱 2）。</li>
+        <li><strong>反模式 C · 「隔离 = 开 / 关」</strong>——把上下文隔离当布尔开关。它是一根连续旋钮（§2.4），两端都是失败：过松撞 context clash（陷阱 5），过度撞决策冲突（陷阱 4 / 8）。</li>
+        <li><strong>反模式 D · 「先跑通，可观测以后再加」</strong>——把 trace 当运维补丁。多 agent 是分布式系统，没有跨 agent 统一 trace 就等于黑箱调试（陷阱 11 / 12）；可观测是设计前提，不是事后项。</li>
+        <li><strong>反模式 E · 「下游默认信任上游」</strong>——节点间不设校验。链越长失败面越大（§2.1），单点错误会沿链放大（陷阱 10 / 6）；节点间断点校验不是冗余，是必需。</li>
+      </ul>
+
+      <h2 id="when-not"><span class="num">·</span><span>什么时候不要用多 agent（诚实段）</span></h2>
+
+      <p>这一章排了 12 个失败模式，但要诚实说一句：<strong>它们里有相当一部分的最优解不是「修好多 agent」，而是「这个任务本就不该上多 agent」</strong>。把这条放在章末，是因为它比任何单个修复都重要。</p>
+
+      <p>回到 02 章 <a href="02-principles.html#s25">§2.5</a> 的三个「别用」信号，遇到下面这些情况，第一反应是退回单 agent + 工具或一条固定 workflow，而不是去调拓扑、调隔离、调终止：</p>
+
+      <ul>
+        <li><strong>子任务强依赖</strong>——后一步必须等前一步结果。并行不起来，多 agent 唯一值 15× 的理由就不成立。走单 agent 串行，一条线程顺序累积上下文，后段天然看得见前段。</li>
+        <li><strong>要持续共享大量中间态</strong>——联合写一份前后必须严格一致的长文档、增量编辑同一份代码。这把隔离旋钮逼到两端都坏的死角（陷阱 4 与 5 同时压上来）。单 agent 一份累积上下文反而最自然。</li>
+        <li><strong>步骤可预先枚举</strong>——流程固定、可提前画成流程图。不需要模型在运行时自主决定下一步，一个代码编排的 workflow 更可控、可测、便宜（陷阱 1）。</li>
+        <li><strong>高频、低价值、答案唯一的查询</strong>——Anthropic 明确把这类列为不该用多 agent 的场景。烧 15× token 去并行一个有唯一答案的高频查询，经济上说不通。</li>
+      </ul>
+
+      <p>判断顺序固定：<strong>能用单次调用就不上 workflow，能用 workflow 就不上 agent，能用单 agent 就不上多 agent</strong>。多 agent 的复杂度只在「子任务独立可并行、且价值高到吃得下约 15× token」时才值得加。能识别「不该用」的这条边界，比会修这一章任何一个失败模式都更省钱。</p>
+
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上教程，把图 4.0 的四个根因桶默画出来——只画 4 个框 + 框里各塞 2-3 个失败模式编号就行。画完回到本章对照：你画的图里，<strong>「协调类」那个框</strong>有没有被你标成最难定位的一类？四个桶有没有都汇到「约 15× token」这个共同分母上？</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           self-check
+           ════════════════════════════════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          每题先把它归到四个根因桶之一，再定位到具体失败模式编号、说出回到 02 章哪一节。先合上教程答，写完再展开对照——直接点开等于把这一章当再读一遍。
+        </p>
+        <ol>
+          <li>一段 trace：LangGraph 图在 fan-out 那步抛 <code>INVALID_CONCURRENT_GRAPH_UPDATE</code>。这是哪个根因桶、哪个陷阱？<code>state</code> 该怎么改？</li>
+          <li>两个并行 subagent 给同一个产品页写文案，一个写得专业冷静、一个写得活泼口语，拼起来割裂。哪个陷阱？该共享的「够用前提」是哪一小块？</li>
+          <li>swarm-handoff 系统里 a 把任务交给 b、b 又交回 a，反复横传不收敛。哪个陷阱？根因回到 02 章哪条原理？三层修复是什么？</li>
+          <li>一个「抽取 → 校验 → 转换 → 入库」的固定流程被搭成了 CrewAI hierarchical，token 翻十几倍还更慢。哪个陷阱？正确做法是什么？</li>
+          <li>多 agent 研究系统输出明显不对，但每个 subagent 单看都「正常」，排查时只有零散日志、无法定位。这同时暴露了哪两个陷阱？它们的共同设计前提是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><strong>协调类 · 陷阱 9（并行写冲突）</strong>。<code>findings</code> 这类会被多个并行节点写的字段要标 reducer：<code>Annotated[list[str], operator.add]</code>，否则 LangGraph 对并发写未定义、直接抛异常。回到 <a href="02-principles.html#s24">§2.4</a>「共享 state」通信的并发约束。</li>
+            <li><strong>上下文类 · 陷阱 4（隔离过度）</strong>。完全隔离让两个 subagent 各做隐含决策却无共享前提。该共享的「够用前提」是那一小块会改变双方决策的东西——产品定位 / 目标受众 / 语气口径 / 关键术语；其余各自隔离。回到 <a href="02-principles.html#s24">§2.4</a> 图 2.2 中间档。</li>
+            <li><strong>协调类 · 陷阱 8（handoff 死循环 / 踢皮球）</strong>。根因：去中心后失去全局终止权，没人对整条交接链何时停负责（<a href="02-principles.html#s23">§2.3</a>）。三层修复：交接次数硬上限 + 环检测 + 交接带明确去向理由。更根本的解是退回 supervisor 把终止判断收回一处（<a href="02-principles.html#s22">§2.2</a>）。</li>
+            <li><strong>token 类 · 陷阱 1（过早上多 agent）</strong>。固定、可枚举、强依赖的流程不该上多 agent。正确做法：用代码编排的 workflow（普通函数串起来），只在确需模型自主判断的那一步用 LLM。回到 <a href="02-principles.html#s25">§2.5</a> 的三个「别用」信号。</li>
+            <li><strong>陷阱 11（缺可观测）+ 陷阱 10（错误传播放大）</strong>。没有跨 agent 统一 trace（陷阱 11）就无法定位是哪一步的错误沿链放大（陷阱 10）。共同设计前提：给每次运行一个 <code>trace_id</code>、每个 agent 步骤都挂上去——可观测是多 agent 的设计前提，不是事后补丁。回到 <a href="02-principles.html#s22">§2.2</a> 调试难度维 + <a href="02-principles.html#s21">§2.1</a>「15× 失败面」。</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           进阶挑战 · 刚好够不着
+           ════════════════════════════════════════════════════════ -->
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>读一段真实风格的 trace，找出同时存在的失败模式</h3>
+        <p>下面是一段简化的 trace（去掉细节）。识别<strong>至少 3 个</strong>同时存在的失败模式，各归到根因桶并给修复方向：</p>
+        <div class="code-block">
+          <div class="header">
+            <span class="filename">trace.log</span>
+            <span class="lang">log</span>
+            <button class="copy" data-copy-target="cb-challenge">复制</button>
+          </div>
+<pre id="cb-challenge"><code class="language-log">[t=0]  orchestrator: 对查询「列出主流 JS 框架」spawn 了 9 个 subagent
+[t=1]  worker-1: 搜 Google，返回 finding（5k token 原始 HTML 原样塞回）
+[t=2]  worker-2: 搜 Bing，返回 finding（4k token 原始 HTML）
+[t=3]  worker-3: 搜 Google，返回 finding（与 worker-1 几乎相同的结果）
+...
+[t=9]  worker-9: 返回结果
+[t=10] reducer: 合并 9 路 finding —— 同一个框架被五种不同写法列出
+[t=11] graph: 在 findings 字段抛 INVALID_CONCURRENT_GRAPH_UPDATE</code></pre>
+        </div>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>至少四个失败模式同时压在这段 trace 上，分属三个根因桶：</p>
+          <ul>
+            <li><strong>token 类 · 陷阱 2（token 爆炸）</strong>：「列出主流 JS 框架」是简单查询，9 个 subagent 远超需要；worker-1 和 worker-3 查回几乎相同结果，是纯重叠浪费。修复：按复杂度限 subagent 数量（这种查询 1-3 个够）+ 切不重叠。</li>
+            <li><strong>上下文类 · 陷阱 6（合并冲突）</strong>：同一框架五种写法——subagent 各自决定命名规范，无共享 normalization 前提。修复：定 <code>Finding</code> 结构 + 命名规范写进 prompt。</li>
+            <li><strong>协调类 · 陷阱 9（并行写冲突）</strong>：<code>findings</code> 字段没标 reducer，并行写抛异常。修复：<code>Annotated[list[str], operator.add]</code>。</li>
+            <li>潜在 <strong>token 类（牵涉上下文）</strong>：5k token 原始 HTML 原样回传，是 finding 没压缩成结论——放大了 §2.1 的账，也喂给 reducer 更多噪声。修复：subagent 只回传结论（框架名 + 来源），不回灌原始 HTML。</li>
+          </ul>
+          <p>这道题的意义不在数出几个，而在练「同一段 trace 上多个失败模式叠加」的拆解——先归桶，再逐个定位，最后才谈修复顺序。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           参考资料
+           ════════════════════════════════════════════════════════ -->
+      <footer class="references">
+        <h3>本章参考资料</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/engineering/built-multi-agent-research-system">How we built our multi-agent research system</a>（Anthropic Engineering，2025；约 15× token、80% 性能差异由 token 解释、过度 spawn 与不该用的场景）</li>
+          <li><a href="https://www.anthropic.com/research/building-effective-agents">Building Effective Agents</a>（Anthropic；简单优先、workflow 与 agent 的区分——陷阱 1 / 何时不该用的来源）</li>
+          <li><a href="https://cognition.ai/blog/dont-build-multi-agents">Don't Build Multi-Agents</a>（Cognition；隐含决策冲突、Flappy Bird 例子——陷阱 4 的来源）</li>
+          <li><a href="https://langchain-ai.github.io/langgraph/troubleshooting/errors/INVALID_CONCURRENT_GRAPH_UPDATE/">LangGraph · INVALID_CONCURRENT_GRAPH_UPDATE</a>（官方排错文档——陷阱 9 的来源）</li>
+          <li><a href="https://langchain-ai.github.io/langgraph/concepts/multi_agent/">LangGraph · Multi-agent Systems</a>（官方；supervisor / swarm / handoff 拓扑与 <code>Send</code> / <code>Command</code>）</li>
+          <li><a href="https://arxiv.org/abs/2503.13657">Why Do Multi-Agent LLM Systems Fail?（MAST）</a>（Cemri et al., 2025；多 agent 失败模式的系统性分类，本章根因聚类的参考）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-practice.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 实操</span>
+        </a>
+        <a href="05-capstone.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 综合</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 陷阱 1 · 过早上多 agent</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 陷阱 2 · token 爆炸</a></li>
+        <li><a href="#s47" data-toc-target="s47">4.3 陷阱 3 · 协调轮次过多</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.4 陷阱 4 · 隔离过度</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.5 陷阱 5 · 不隔离干扰</a></li>
+        <li><a href="#s48" data-toc-target="s48">4.6 陷阱 6 · 合并冲突</a></li>
+        <li><a href="#s45" data-toc-target="s45">4.7 陷阱 7 · supervisor 瓶颈</a></li>
+        <li><a href="#s46" data-toc-target="s46">4.8 陷阱 8 · handoff 死循环</a></li>
+        <li><a href="#s411" data-toc-target="s411">4.9 陷阱 9 · 并行写冲突</a></li>
+        <li><a href="#s49" data-toc-target="s49">4.10 陷阱 10 · 错误传播放大</a></li>
+        <li><a href="#s410" data-toc-target="s410">4.11 陷阱 11 · 缺可观测</a></li>
+        <li><a href="#s412" data-toc-target="s412">4.12 陷阱 12 · 评估困难</a></li>
+        <li><a href="#antipatterns" data-toc-target="antipatterns">· 反模式</a></li>
+        <li><a href="#when-not" data-toc-target="when-not">· 何时不用</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

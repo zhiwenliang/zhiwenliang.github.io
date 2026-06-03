@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>前沿 · RAG 检索增强生成 深潜</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; font-weight: 500; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+.path-list { list-style: none; padding: 0; margin: 16px 0; }
+.path-list li {
+  padding: 10px 0 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 15px;
+}
+.path-list .who {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--vermilion); letter-spacing: 0.04em;
+  margin-right: 10px;
+}
+.toc-files { list-style: none; padding: 0; margin: 16px 0; }
+.toc-files li { margin: 0 0 10px; }
+.toc-files a {
+  display: block; padding: 12px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-files a:hover { border-color: var(--vermilion); }
+.toc-files .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-files .t { font-weight: 600; }
+.toc-files .d { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-retrieval.html">02 检索</a><span class="sep">—</span>
+    <a href="03-quality.html">03 质量</a><span class="sep">—</span>
+    <a href="04-frontier.html" class="current">04 前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>前沿（带日期）：补漏斗短板，或把单次变成循环</h1>
+        <p class="recap">前三章把 RAG 钉成一条 <a href="01-concepts.html#s18">召回→精度漏斗</a>（单次：检索→重排→生成）。这一章只收 2024–2026 仍在剧烈变动的方向，每一个都对应一个判据：它要么<strong>补漏斗的某一段短板</strong>，要么<strong>把单次漏斗变成一个循环</strong>。每条主张都带日期或版本号——前沿的保质期很短，时点本身就是信息。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label" style="font-size:10px;font-weight:500;">本章你将建立的 schema</p>
+        <ul>
+          <li>每个前沿技术钉在漏斗的哪一段：索引 / 嵌入 / 检索 / 重排 / 整条循环 / 漏斗之前</li>
+          <li>Contextual Retrieval：在索引侧给 chunk 补回上下文（2024-09）</li>
+          <li>GraphRAG → LazyGraphRAG：改语料结构与检索单元，攻全局/多跳（v1.0 2024-12）</li>
+          <li>Agentic RAG：把整条漏斗包进 retrieve-评估-再决定 的控制循环（综述 2025-01）</li>
+          <li>视觉 / late-interaction：换嵌入单元，攻复杂 PDF 与 term-level 匹配（ColPali ICLR 2025）</li>
+          <li>long-context vs RAG：在漏斗之前加一道按查询分流（Self-Route 2024-07）</li>
+        </ul>
+      </section>
+
+      <p>沿用前几章的场景：公司内部问答助手，语料是员工手册 PDF。但这一章把它推到漏斗的边界——当用户不再问"住宿报销上限是多少"，而是问"总结整本手册关于差旅的所有规定"，或者干脆把手册换成几百份满是表格的扫描 PDF 时，单次漏斗会在哪一段崩，哪个前沿方向去补那一段。</p>
+
+      <div class="callout">
+        <span class="label">时点 · 2026-06</span>
+        <p>本章定稿于 2026-06-02。所述版本号、发布日期、基准数字均以该时点公开资料为准。RAG 前沿迭代以月计，读到本章时若已隔半年以上，<strong>把每条的日期当成"它至少在那时成立"的下界</strong>，而非现状。下面 4.6 会用 index 页的「现状速览」三桶（稳定 / 在变 / 已被取代）把全章重新定位一次。</p>
+      </div>
+
+      <h2 id="s41"><span class="num">4.1</span><span>Contextual Retrieval：在索引侧补回上下文</span></h2>
+      <p class="one-liner">在嵌入和 BM25 建索引之前，给每个 chunk 前置一段 50–100 token 的「situating context」——用一句话讲清这段 chunk 在原文里属于哪、指代什么——再去嵌入与索引。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<a href="01-concepts.html#s13">§1.3 分块</a> 与 <a href="03-quality.html#s32">§3.2 分块策略</a> 留下一个结构性缺口——一段被切出来的 chunk 丢了它的指代与上下文。手册里"上限是 800 元"这句，脱离了"一线城市差旅住宿"的语境后，它的嵌入向量既不锐利、BM25 也对不上查询里的城市档关键词。Contextual Retrieval（Anthropic，2024-09）的做法：拿整篇文档 + 这段 chunk 喂给一个廉价模型，让它生成一句 situating context（如"本段出自《差旅管理》第 3 章，规定一线城市住宿费上限"），拼到 chunk 前面，再分别做 contextual embedding 和 contextual BM25 两路索引。成本由 <strong>prompt caching</strong> 压下来——整篇文档在缓存里只付一次费，逐段生成 context 时复用，每百万 chunk 的一次性成本约 1.02 美元（按 Anthropic 2024-09 公布口径）。</p>
+
+      <div class="callout">
+        <span class="label">时点 · Anthropic 2024-09</span>
+        <p>基准（检索失败率，越低越好）：仅 contextual embeddings，失败 <strong>−35%</strong>（5.7% → 3.7%，top-20）；叠加 contextual BM25，<strong>−49%</strong>；再叠加重排，<strong>−67%</strong>。三档逐级下降，恰好对应漏斗里"索引修一段、检索修一段、重排再修一段"的叠加效果。</p>
+      </div>
+
+      <p><strong>补漏斗哪一段</strong>：<strong>索引侧</strong>。它不碰检索算法、不碰重排，只在 chunk 写进索引前把它"说清楚"。漏斗的入口质量上去了，后面每一阶的天花板随之抬高——这是为什么它和重排能叠加，而非二选一。</p>
+
+      <h2 id="s42"><span class="num">4.2</span><span>GraphRAG → LazyGraphRAG：改语料结构与检索单元</span></h2>
+      <p class="one-liner">GraphRAG（图谱增强检索）先从整个语料抽实体与关系、建一张知识图，再对图里的社区做分层摘要；查询时检索的不再是平铺的 chunk，而是图结构与社区摘要。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：平铺 chunk 检索有一类问题天生答不好——<strong>全局 / 多跳</strong>问题，例如"总结整个语料反复出现的主题""哪两个部门的政策互相冲突"。这类问题的答案不在任何单一 chunk 里，而<strong>分散在几十段、需要结构化聚合</strong>。<a href="01-concepts.html#s18">§1.8 漏斗</a> 的 top-k 检索只会捞回 k 段局部相关文本，拼不出全局图景。GraphRAG（Microsoft，开源 2024-07，v1.0.0 在 2024-12-11 发布）改的是<strong>检索单元的形态</strong>：用 LLM 把语料抽成「实体—关系」图，用社区检测把图切成层级化的社区，再为每个社区生成摘要；回答全局问题时直接 map-reduce 这些社区摘要，覆盖面来自图结构而非单次近邻搜索。</p>
+
+      <p>代价一直是建图——全量索引要对语料反复调用 LLM 抽取与摘要，成本远高于向量索引，这是它落地的主要阻碍。<strong>LazyGraphRAG</strong>（Microsoft 公布于 2024-11-25，2025 年并入 GraphRAG 主库）把这块修了：跳过昂贵的前置摘要，索引阶段只做与向量 RAG 同级的轻量处理，把图相关的 LLM 调用<strong>推迟到查询时按需做</strong>。其公布口径：索引成本约为 full GraphRAG 的 <strong>0.1%</strong>（与普通向量 RAG 持平），全局查询质量与 GraphRAG Global Search 相当。</p>
+
+      <div class="callout">
+        <span class="label">时点 · Microsoft</span>
+        <p>开源 2024-07（pre-release）→ v1.0.0 2024-12-11 → LazyGraphRAG 公布 2024-11-25、2025 年进主库并进入 Azure / Microsoft Discovery 预览。判据没变：<strong>全局/多跳问题</strong>才值得上图；单点事实查询用平铺 RAG 更省。</p>
+      </div>
+
+      <p><strong>补漏斗哪一段</strong>：<strong>改变语料结构 + 检索单元</strong>。它不是在原漏斗里换个更好的检索器，而是把"被检索的东西"从 chunk 换成图与社区摘要——漏斗的第一阶被换了底座。LazyGraphRAG 修的是这条路的成本，让判据从"全局问题 + 预算充足"放宽到"全局问题"。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>用户问 <em>"总结这 500 篇季度报告反复出现的共同主题"</em>，朴素 RAG（向量检索 top-k → 重排 → 生成）为什么力不从心？哪个前沿方向补这个？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>答案不落在任何单一 chunk 里，而是分散在 500 篇的几百段中、需要跨文档聚合。top-k 检索本质是"找最像查询的几段"，它捞回的是局部相关片段，无论 k 调多大都拼不出"反复出现"这种全局统计——加重排也没用，重排只在已召回的候选里重排序，召不全的东西排不出来。</p>
+          <p>对症的是 <strong>GraphRAG / LazyGraphRAG</strong>：先把语料抽成图、按社区分层摘要，全局问题走社区摘要的 map-reduce，覆盖面来自结构而非单次近邻。次选是 4.3 的 Agentic RAG，用多轮检索逐步聚合。</p>
+        </details>
+      </div>
+
+      <h2 id="s43"><span class="num">4.3</span><span>Agentic RAG：把单次漏斗变成控制循环</span></h2>
+      <p class="one-liner">Agentic RAG（智能体化检索增强）把一次性的"检索→重排→生成"换成一个 control loop：检索 → 对检索结果打分自评 → 据此决定重新检索 / 改写查询 / 直接作答 / 拒答 → 必要时再来一轮。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：前三章的漏斗是<strong>单次、开环</strong>的——检索一次，结果好坏照单全收，<a href="03-quality.html#s34">§3.4 失败模式</a> 里"召回了噪声""漏了关键证据""query 表述差导致检索偏"全部直接灌进生成，无人把关。Agentic RAG 在漏斗外面加一圈<strong>反馈控制</strong>，让系统先评估自己检索得好不好、再决定下一步，而不是盲目往下走。这条路线在 2025-01 由 Singh 等人的综述（arXiv 2501.09136，提交于 2025-01-15）系统化，把几条代表性做法归到一个谱系：</p>
+
+      <table class="compare-table">
+        <caption>Agentic RAG 三条代表路线（综述口径 2025-01）</caption>
+        <thead>
+          <tr><th>路线</th><th>循环里加了什么</th><th>对应补的漏斗短板</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Self-RAG</td>
+            <td>生成 reflection token 自反思：边检索边判断"要不要检索 / 这段证据相关吗 / 自己的输出有没有被证据支撑"</td>
+            <td>生成侧的 grounding 失配、无谓检索</td>
+          </tr>
+          <tr>
+            <td>CRAG（corrective）</td>
+            <td>先给检索质量打分，差则触发 web 搜索等外部兜底，再进生成</td>
+            <td>检索召回不足 / 召回噪声</td>
+          </tr>
+          <tr>
+            <td>Adaptive</td>
+            <td>按查询难度路由：简单直答、复杂走多跳检索循环</td>
+            <td>对所有查询用同一套重流程的浪费</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>何时值得</strong>：多跳问题（答案要跨几段逐步推）、高风险场景（法律 / 医疗 / 金融，错答代价高，宁可多检几轮或拒答）。<strong>代价</strong>：每多一轮就多一次检索延迟和一批自评 token——把单次的"一发命中"换成"多发校准",延迟与成本同步上升。这是本章<strong>概念上最关键的一次转变</strong>：从"把漏斗调得更准"到"把漏斗放进一个会自我纠错的循环里"。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左为单次线性漏斗检索重排生成，右为带反馈边的 Agentic 循环：生成前先自评，不合格回到重检索或改写">
+          <defs>
+            <marker id="b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="b-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="105" y="28" text-anchor="middle" class="edge-label" font-weight="700">单次漏斗</text>
+          <rect x="40" y="48" width="130" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="73" text-anchor="middle" class="node-label">检索</text>
+          <rect x="40" y="128" width="130" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="153" text-anchor="middle" class="node-label">重排</text>
+          <rect x="40" y="208" width="130" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="233" text-anchor="middle" class="node-label">生成</text>
+          <line x1="105" y1="88" x2="105" y2="128" class="diagram-ink" marker-end="url(#b-ink)"/>
+          <line x1="105" y1="168" x2="105" y2="208" class="diagram-ink" marker-end="url(#b-ink)"/>
+
+          <text x="490" y="28" text-anchor="middle" class="branch-label">Agentic 循环</text>
+          <rect x="425" y="48" width="130" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="490" y="73" text-anchor="middle" class="node-label">检索</text>
+          <rect x="425" y="128" width="130" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="490" y="148" text-anchor="middle" class="node-label-accent">自评打分</text>
+          <text x="490" y="163" text-anchor="middle" class="edge-label">证据够不够</text>
+          <rect x="425" y="208" width="130" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="490" y="233" text-anchor="middle" class="node-label">生成</text>
+          <line x1="490" y1="88" x2="490" y2="128" class="diagram-ink" marker-end="url(#b-ink)"/>
+          <line x1="490" y1="168" x2="490" y2="208" class="diagram-accent" marker-end="url(#b-acc)"/>
+          <text x="500" y="195" text-anchor="start" class="branch-label">合格</text>
+
+          <path d="M 555 148 C 660 148 660 60 557 64" class="diagram-accent" fill="none" marker-end="url(#b-acc)"/>
+          <text x="648" y="108" text-anchor="middle" class="branch-label">不合格</text>
+          <text x="648" y="126" text-anchor="middle" class="edge-label">重检索/改写</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>左：单次漏斗，检索一次、结果照单全收灌进生成。右：Agentic 循环，生成前先自评检索质量，<strong>不合格则回边重检索或改写查询</strong>，合格才作答。<strong>注意</strong>：Agentic 把"检索一次"变成"检索-自评-再决定"的循环——代价是每多一圈多一次延迟与一批 token。</figcaption>
+      </figure>
+
+      <h2 id="s44"><span class="num">4.4</span><span>视觉 / late-interaction：换嵌入与检索单元</span></h2>
+      <p class="one-liner">两条线都在改"被嵌入和被检索的单元"：ColBERT 用 late interaction（延迟交互）保留 per-token 多向量，找回 dense 单向量丢掉的 term-level 匹配；ColPali 直接把渲染后的 PDF 页面图像嵌入，绕过 OCR 与版面解析。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<a href="02-retrieval.html#s21">§2.1</a> 讲过 dense 检索的<strong>有损瓶颈</strong>——一段文本被压成<em>一个</em>定长向量，term-level 的精确匹配信息在压缩中被抹平。ColBERT 的 late interaction 改了这个压法：不把文档压成单向量，而是<strong>保留每个 token 一个向量</strong>，检索时对 query 的每个 token 取与文档 token 的最大相似度再求和（MaxSim）。"延迟"指交互发生在检索打分阶段、而非编码阶段——既保住了 term-level 的细粒度匹配，又比 <a href="02-retrieval.html#s24">§2.4 cross-encoder 重排</a>（query-doc 拼接逐词交互）便宜，因为文档向量仍可离线预算。</p>
+
+      <p><strong>ColPali</strong>（arXiv 2407.01449，发表为 ICLR 2025 poster）把这套搬到视觉：复杂 PDF（带表格、图、多栏版面）走传统"OCR + 解析 + 分块"链路又长又脆，<a href="03-quality.html#s34">§3.4</a> 把它列为一类典型失败。ColPali 让视觉-语言模型<strong>直接嵌入渲染后的页面图像</strong>，产出 per-patch 多向量，再用 late interaction 匹配——OCR/解析这一段被整体跳过。ColQwen2 是同族基于 Qwen2-VL 的实现，同走多向量 + late interaction 路线。</p>
+
+      <div class="callout">
+        <span class="label">时点 · 2024–2025</span>
+        <p>ColBERT late interaction 是更早的范式；ColPali（arXiv 2407.01449，2024-07 上传 / ICLR 2025）把它推到视觉文档检索，并随论文公开 ViDoRe 基准与模型权重。判据：语料里有大量<strong>视觉密集型文档</strong>（扫描件、表格、图表 PDF）时，ColPali 这类把"页面当图像直接嵌入"的路线，比先 OCR 再嵌入更稳。</p>
+      </div>
+
+      <p><strong>补漏斗哪一段</strong>：<strong>嵌入 / 索引单元</strong>。ColBERT 把单向量换成多向量、找回 §2.1 丢掉的精确匹配；ColPali 把"文本 chunk"换成"页面图像"、专治 §3.4 的复杂 PDF 失败。两者都没动检索-重排-生成的骨架，只换了喂进去的最小单元。</p>
+
+      <h2 id="s45"><span class="num">4.5</span><span>long-context vs RAG：在漏斗之前加一道分流</span></h2>
+      <p class="one-liner">2024 年炒作的「RAG 已死、直接塞 1M 上下文」，到 2025–26 共识反转为：两者互补、按查询路由——在漏斗之前先判断"这条查询要不要进漏斗"。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：长上下文模型把"检索"外包给了模型自身的注意力，看似可省掉整条漏斗。但两个事实没消失：质量在约 500K token 之后下滑（context rot，Chroma 2025 在 GPT-4.1 / Claude Opus 4 / Gemini 2.5 等 18 个前沿模型上均测到逐增量退化），且 <strong>lost-in-the-middle</strong>（Liu 等 2023，arXiv 2307.03172）的 U 形注意力偏置仍在——关键证据落在上下文中段时检索准确率显著掉。一个反直觉的观察：<strong>更多上下文反而更糟</strong>——精选 48K token 的输入，F1 比全量塞 117K token 高出约 13 分。塞满 ≠ 答好。</p>
+
+      <p><strong>Self-Route</strong>（arXiv 2407.16833，2024-07）给出工程化的折中：先让模型自评"靠现有检索片段能不能答"，能答就走 RAG、不能才升级到长上下文全量。其公布口径：长上下文与 RAG 的预测在<strong>超过 60% 的查询上完全一致</strong>——这部分查询用 RAG 不损质量、只省钱；整体成本相比纯长上下文降 <strong>65%</strong>（Gemini-1.5-Pro）/ <strong>39%</strong>（GPT-4o），质量与纯长上下文持平。配套的提法是 <strong>context engineering</strong>（上下文工程，约 2025-08 成为通行术语）：把检索 + 组装 + 推理当一条流水线统一设计，RAG 与长上下文是其中两个可按查询切换的档位，而非你死我活。企业侧的落点同向——2025 年 RAG 部署不降反增（多家行业报告口径约 +280%），原因正是长上下文没能替代它、而是和它分工。</p>
+
+      <div class="callout">
+        <span class="label">时点 · 2024→2026 的反转</span>
+        <p>2024 上半年：「1M 上下文让 RAG 过时」。2024-07：Self-Route 给出按查询路由的量化证据。2025–26 共识：长上下文与 RAG 互补、按查询分流；context engineering 成为统一框架。<strong>判据轴</strong>：单条查询的"答案是否集中在可被检索的少数片段里"——集中则 RAG，弥散且总量可控则长上下文，难判则交给 Self-Route 这类自路由。</p>
+      </div>
+
+      <p><strong>补漏斗哪一段</strong>：<strong>漏斗之前</strong>。它不改漏斗内部任何一阶，而是在最前面加一道分流闸——先问"这条查询要不要进漏斗"，再决定走 RAG、走长上下文、还是两者混合。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>同一个模型、同一篇长文档，为什么"精选 48K token"喂进去，反而可能比"全量 117K token"答得更准？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>因为更多上下文同时引入更多无关 token，触发两个退化：一是 context rot——输入越长、单位信息被稀释，模型在长输入上的输出质量逐增量下滑；二是 lost-in-the-middle——关键证据被埋在中段时，U 形注意力让它更难被用上。精选 48K 把信噪比拉高、把关键证据顶到模型注意力更强的位置，于是 F1 反超约 13 分。这也是 §4.5 共识"塞满 ≠ 答好""按查询路由"的直接证据。</p>
+        </details>
+      </div>
+
+      <h2 id="s46"><span class="num">4.6</span><span>综合 + 现状速览回顾</span></h2>
+      <p>把 4.1–4.5 钉回同一条漏斗：每个前沿不是孤立的新名词，而是落在漏斗某一段（或漏斗之外）的一块补丁。下图把它们的位置一次性标出。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="前沿映射漏斗：Contextual Retrieval 钉在索引，ColPali 钉在嵌入索引，GraphRAG 改语料结构与检索，Agentic 包住整条循环，routing 在漏斗之前分流">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- routing: before the funnel -->
+          <rect x="270" y="20" width="220" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="40" text-anchor="middle" class="node-label-accent">分流 routing</text>
+          <text x="380" y="56" text-anchor="middle" class="edge-label">要不要进漏斗 · Self-Route</text>
+          <line x1="380" y1="64" x2="380" y2="96" class="diagram-accent" marker-end="url(#m-acc)"/>
+          <text x="500" y="46" text-anchor="start" class="branch-label">漏斗之前</text>
+
+          <!-- funnel stages -->
+          <rect x="290" y="96" width="180" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="120" text-anchor="middle" class="node-label">索引</text>
+          <text x="380" y="137" text-anchor="middle" class="edge-label">分块 + 嵌入</text>
+
+          <rect x="290" y="176" width="180" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="200" text-anchor="middle" class="node-label">检索</text>
+          <text x="380" y="217" text-anchor="middle" class="edge-label">召回</text>
+
+          <rect x="310" y="256" width="140" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="282" text-anchor="middle" class="node-label">重排</text>
+
+          <rect x="320" y="330" width="120" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="356" text-anchor="middle" class="node-label">生成</text>
+
+          <line x1="380" y1="146" x2="380" y2="176" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="380" y1="226" x2="380" y2="256" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="380" y1="300" x2="380" y2="330" class="diagram-ink" marker-end="url(#m-ink)"/>
+
+          <!-- left annotations: pinned to stages -->
+          <text x="250" y="116" text-anchor="end" class="branch-label">Contextual</text>
+          <text x="250" y="132" text-anchor="end" class="edge-label">补回上下文</text>
+          <line x1="256" y1="120" x2="290" y2="120" class="diagram-accent" marker-end="url(#m-acc)"/>
+
+          <text x="250" y="190" text-anchor="end" class="branch-label">ColPali</text>
+          <text x="250" y="206" text-anchor="end" class="edge-label">嵌入页面图像</text>
+          <line x1="256" y1="196" x2="290" y2="196" class="diagram-accent" marker-end="url(#m-acc)"/>
+
+          <!-- right annotation: GraphRAG re-bases corpus + retrieval -->
+          <text x="510" y="150" text-anchor="start" class="branch-label">GraphRAG</text>
+          <text x="510" y="166" text-anchor="start" class="edge-label">改语料结构</text>
+          <text x="510" y="182" text-anchor="start" class="edge-label">+ 检索单元</text>
+          <path d="M 506 162 C 480 150 470 175 470 196" class="diagram-accent" fill="none" marker-end="url(#m-acc)"/>
+
+          <!-- Agentic: wraps the whole funnel loop -->
+          <rect x="276" y="86" width="208" height="300" rx="12" class="diagram-soft"/>
+          <text x="236" y="372" text-anchor="end" class="branch-label">Agentic 循环</text>
+          <path d="M 450 356 C 600 356 600 200 472 198" class="diagram-accent" fill="none" marker-end="url(#m-acc)"/>
+          <text x="612" y="276" text-anchor="middle" class="edge-label">自评→重检索</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>前沿映射漏斗：Contextual Retrieval 钉在<strong>索引</strong>、ColPali 钉在<strong>嵌入/索引单元</strong>、GraphRAG 改<strong>语料结构与检索单元</strong>、routing 在<strong>漏斗之前</strong>分流、Agentic（虚线框）<strong>包住整条循环</strong>并加反馈边。<strong>注意</strong>：除 Agentic 外，每个前沿只动漏斗的一段；Agentic 是唯一把整条单次漏斗变成循环的那一类。</figcaption>
+      </figure>
+
+      <p>用 index 页的「现状速览」三桶把全章重新定位，每条带日期：</p>
+
+      <table class="compare-table">
+        <caption>现状速览三桶（截至 2026-06）</caption>
+        <thead>
+          <tr><th>桶</th><th>条目（带日期）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>已稳定</td>
+            <td>retrieve-then-generate + 分块 + 向量检索（约 2023 落定）；hybrid + cross-encoder rerank（已成默认）；评估三件套 context precision / recall / faithfulness（约 2024 成型，见 <a href="03-quality.html#s34">第 3 章</a>）。</td>
+          </tr>
+          <tr class="selected">
+            <td>在变</td>
+            <td>本章 4.1–4.5：Contextual Retrieval（2024-09）、GraphRAG→LazyGraphRAG（v1.0 2024-12 / Lazy 2024-11）、Agentic RAG（综述 2025-01）、视觉/late-interaction（ColPali ICLR 2025）、long-context vs RAG 路由（Self-Route 2024-07，context engineering 约 2025-08）。</td>
+          </tr>
+          <tr>
+            <td>已被取代</td>
+            <td>「RAG 已死、直接塞 1M 上下文」→ 按查询路由（2024-07 起反转）；纯固定分块 → 语义/上下文分块（见 <a href="03-quality.html#s32">§3.2</a>）；纯 dense → hybrid（见 <a href="02-retrieval.html#s21">§2.1</a>）。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 一条贯穿全章的判据</span>
+        <p>把任何"RAG 新方法"丢进这套坐标只需问两句：<strong>它补的是漏斗哪一段</strong>（索引 / 嵌入 / 检索 / 重排 / 生成 / 漏斗之前），还是<strong>它把单次漏斗变成了循环</strong>。前者是局部增益、可与其他段叠加（Contextual + rerank 的 −67% 就是叠加）；后者是结构变更、换来纠错能力但付出延迟与 token。日期则告诉判据：这套定位至少在标注的时点成立。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>Contextual Retrieval 在漏斗的哪一段动手？它给每个 chunk 加了什么、为什么这样能和重排叠加而非二选一？</li>
+          <li>GraphRAG 把"被检索的单元"从什么换成了什么？LazyGraphRAG 修的是它的哪一个具体短板（给出量级）？</li>
+          <li>Agentic RAG 相对单次漏斗，结构上多了什么？它把延迟和 token 换成了什么能力？</li>
+          <li>（跨章）什么场景下你会放弃 RAG、直接用长上下文？什么场景反过来坚持 RAG？做这个决定的那条轴是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><strong>索引侧</strong>。在 chunk 嵌入与建 BM25 索引前，前置一段 50–100 token 的 situating context（讲清这段出自哪、指代什么），分两路做 contextual embedding 与 contextual BM25。它抬高的是漏斗入口质量，不碰检索算法也不碰重排，所以与重排正交可叠加——Anthropic 2024-09 口径：embeddings −35%、+BM25 −49%、+rerank −67%，逐级叠加。</li>
+            <li>从<strong>平铺 chunk</strong> 换成<strong>知识图 + 社区摘要</strong>（实体/关系图，分层社区摘要），攻全局/多跳问题。LazyGraphRAG（2024-11 公布）修的是<strong>建图索引成本</strong>：把前置摘要推迟到查询时，索引成本降到约 full GraphRAG 的 <strong>0.1%</strong>、与向量 RAG 持平，全局质量相当。</li>
+            <li>多了一圈<strong>反馈控制循环</strong>：检索后先自评（Self-RAG 的 reflection token / CRAG 的检索质量打分 / Adaptive 的难度路由），不合格则重检索、改写或拒答，合格才生成。它把单次"一发命中"换成多轮校准——付出每轮的检索延迟与自评 token，换来对多跳与高风险场景的纠错与拒答能力。</li>
+            <li>判据轴是<strong>"答案是否集中在可被检索的少数片段里"</strong>。集中（如单点事实、明确出处）→ RAG 更省更准，且可溯源；弥散但总量可控、或检索召不全又恰好放得进窗口 → 长上下文。难判时交给 Self-Route 这类自路由（2024-07，>60% 查询两者预测一致、成本降 65%/39%）。反例提醒：塞满 ≠ 答好——精选 48K 比全量 117K 高约 13 F1。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>单点准、跨文档归纳总漏——加 rerank 没用</h3>
+        <p>你的 RAG 在"单点事实查询"（报销上限是多少、某条款第几页）上很准，但凡是"跨多份文档归纳"（总结所有部门差旅政策的共性、找出互相冲突的条款）就总是漏关键面。你先加了重排，没用。问题出在漏斗哪一段？哪个前沿方向对症？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>重排只在<em>已召回</em>的候选里重排序——召不全的东西它排不出来，所以对"漏"无能为力。跨文档归纳的答案<strong>分散在多段、需要结构化聚合</strong>，单次 top-k 检索天生捞不全这种全局信息。往 4.2 的 <strong>GraphRAG / LazyGraphRAG</strong> 想（改检索单元为图 + 社区摘要，攻全局/多跳）；若问题还需多步推理与冲突比对，再叠 4.3 的 <strong>Agentic RAG</strong>（多轮检索逐步聚合 + 自评）。这不是调参问题，是漏斗第一阶的<em>检索单元</em>选错了。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/news/contextual-retrieval">Anthropic — Introducing Contextual Retrieval</a>（2024-09；situating context + prompt caching，检索失败 −35% / −49% / −67%）</li>
+          <li><a href="https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/">Microsoft Research — GraphRAG: Unlocking LLM discovery on narrative private data</a>（开源 2024-07，v1.0.0 2024-12-11；LazyGraphRAG 公布 2024-11-25、索引成本约 0.1%）</li>
+          <li><a href="https://arxiv.org/abs/2501.09136">Singh et al. — Agentic Retrieval-Augmented Generation: A Survey on Agentic RAG</a>（arXiv 2501.09136，2025-01-15；Self-RAG / CRAG / Adaptive 谱系）</li>
+          <li><a href="https://arxiv.org/abs/2407.01449">Faysse et al. — ColPali: Efficient Document Retrieval with Vision Language Models</a>（arXiv 2407.01449，2024-07 / ICLR 2025 poster；多向量 late interaction + 页面图像嵌入）</li>
+          <li><a href="https://arxiv.org/abs/2407.16833">Li et al. — Retrieval Augmented Generation or Long-Context LLMs? (Self-Route)</a>（arXiv 2407.16833，2024-07；成本 −65% Gemini-1.5-Pro / −39% GPT-4o，>60% 查询两者预测一致）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-quality.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 质量与评估</span>
+        </a>
+        <a href="05-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 自测题库</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 Contextual Retrieval</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 GraphRAG / Lazy</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.3 Agentic RAG</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.4 视觉 / late-interaction</a></li>
+        <li><a href="#s45" data-toc-target="s45">4.5 long-context vs RAG</a></li>
+        <li><a href="#s46" data-toc-target="s46">4.6 综合 + 现状速览</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

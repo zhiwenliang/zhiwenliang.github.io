@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>00 起点 · Kafka Streams 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html" class="current">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">00 · 起点 / Entry</p>
+        <h1>Kafka Streams：把流处理架在消费组之上</h1>
+        <p class="recap">Kafka Streams 没有独立集群——它是嵌进你 Java 应用的一个库，把流处理建在消费组、本地状态和 changelog 日志这三块基石上。这套教程讲透它的机制、失败模式与取舍，目标是系统理解 + 中高级面试。</p>
+        <p class="recap" style="margin-top:8px;">
+          <strong>基于版本</strong>：Apache Kafka 4.3（2026-05），Java DSL ·
+          <strong>阅读时间</strong>：约 2–3 小时 ·
+          <strong>代码验证状态</strong>：示例基于 kafka-streams 4.x，未在本机逐一运行。
+        </p>
+      </header>
+
+      <!-- ── 1. 适合谁 ─────────────────────────────────────── -->
+      <h2 id="for-whom"><span class="num">01</span><span>适合谁</span></h2>
+      <p>面向<strong>懂核心 Kafka、但没用过 Streams</strong> 的 Java 后端工程师。具体说，三条前置能力：</p>
+      <ul>
+        <li><strong>学过主 Kafka 教程或等同基础</strong>：能讲清分区、消费组、offset、副本各自是什么——读得懂 <a href="../kafka/index.html">主 Kafka 教程</a> 里"分区日志 + 消费组"那条主线，本教程不重讲这些。</li>
+        <li><strong>能读写 Java、用过 Kafka 客户端</strong>：看得懂泛型签名如 <code>KStream&lt;String, Long&gt;</code>、lambda、链式调用；在本机用 <code>KafkaConsumer</code> 起过一个消费组读消息。</li>
+        <li><strong>理解有状态服务的基本难题</strong>：知道"进程挂了本地内存就没了"意味着什么，能想象一个聚合计数器要怎么在重启后恢复——本教程把这个难题的 Streams 解法讲到底。</li>
+      </ul>
+
+      <!-- ── 2. 不适合谁 ───────────────────────────────────── -->
+      <h2 id="not-for-whom"><span class="num">02</span><span>不适合谁</span></h2>
+      <p>三类读者在别处能拿到更对口的资源：</p>
+      <ul>
+        <li><strong>没碰过 Kafka 的零基础读者</strong>：这里不从分区、消费组讲起。先看
+          <a href="../kafka/index.html">主 Kafka 教程</a> 把"Kafka 是一条分区日志"这条主线打通，再回来——Streams 的容错、缩放、EOS 全是从那条主线推导出来的。</li>
+        <li><strong>只想要 API 速查的读者</strong>：要查 <code>aggregate</code> 的重载或某个配置项，直接读
+          <a href="https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html">官方 DSL 文档</a>
+          比这套教程快——这里讲的是"为什么这么设计"，不是方法字典。</li>
+        <li><strong>已经专精 Flink / Spark Streaming 的读者</strong>：你已有流处理的心智模型，要的是差异点和迁移指南，而非从概念建起。直接对照
+          <a href="https://kafka.apache.org/documentation/streams/">Streams 文档</a> 找"库 vs 独立集群""changelog 复制 vs checkpoint"这两处关键差异即可。</li>
+      </ul>
+
+      <!-- ── 3. 读完之后你能做到什么 ───────────────────────── -->
+      <h2 id="outcomes"><span class="num">03</span><span>读完之后你能做到什么</span></h2>
+      <p>
+        你能把任意一个 Streams 算子的行为追溯到"它跑在消费组上、状态是一条 changelog 日志"这条主线——面试被问"有状态算子怎么容错"时，能说出 changelog 回放 + standby 副本，而不是含糊地说"框架自动处理"。
+      </p>
+      <p>落到可验证的能力，读完这套教程之后：</p>
+      <ul>
+        <li><strong>区分</strong> KStream / KTable / GlobalKTable 三者，并讲清各自背后是"追加账本 / 每 key UPSERT changelog / 每实例全分区副本"，以及什么场景该选哪个。</li>
+        <li><strong>推导</strong>一个有状态 task 在实例故障后如何恢复——本地 RocksDB 怎么由 compacted changelog 重建，standby 副本在哪一步把分钟级恢复压到秒级。</li>
+        <li><strong>诊断</strong>一个 join 静默无输出的故障，定位到共分区要求（相同分区数 + 相同分区方式）被破坏，并给出修复路径。</li>
+        <li><strong>判断</strong>一个场景该用 Kafka Streams、原生 consumer、还是 Flink，讲出判据（要不要状态/窗口/join/EOS、是不是以 Kafka 为源汇、要不要独立集群）。</li>
+        <li><strong>说清</strong> <code>exactly_once_v2</code> 的真实边界——它只在单个 Kafka 集群内把 offset 提交、状态写、输出 produce 绑进一个事务，不覆盖数据库写、HTTP 调用这些外部副作用。</li>
+      </ul>
+
+      <!-- ── 4. 一句话本质 ─────────────────────────────────── -->
+      <section class="schema-panel" id="essence">
+        <p class="label">一句话本质</p>
+        <p style="font-size:16px; font-weight:500; margin:0 0 10px; line-height:1.55;">
+          Kafka Streams 没有独立集群——它是嵌进你应用的库，把流处理架在消费组之上：task=分区，缩放和再平衡都是消费组那套。有状态算子的状态存在本地 RocksDB，但真相源是一条 Kafka changelog 日志，所以"流"和"表"只是同一条日志的两种视图。
+        </p>
+        <p style="font-size:14.5px; color:var(--ink-soft); margin:0; line-height:1.6;">
+          这一句承接主教程的"Kafka 是日志"。容错（changelog 回放）、缩放（task = 分区上限）、EOS（事务）全由它推导。中高级面试里能不能把 Streams 框成"消费组 + 本地状态 + changelog 日志"、而不是"又一个流处理引擎"，就是区分背题和真懂的分水岭。
+        </p>
+      </section>
+
+      <!-- ── 5. 现状速览 ───────────────────────────────────── -->
+      <h2 id="currency"><span class="num">04</span><span>现状速览（截至 2026-06）</span></h2>
+      <div class="callout">
+        <span class="label">什么定论、什么在动、什么已被取代</span>
+        <p><strong>稳定（已 GA、可放心用）</strong>：版本化状态存储（KIP-889，3.5 GA，每 key 存多版本、支持 <code>get(key, asOf)</code> 与正确的乱序处理）、交互式查询 IQv2（KIP-796）、外键 join（KIP-213，2.4）、EOS v2（<code>exactly_once_v2</code>，3.0 起默认）、机架感知 standby（KIP-925，3.2）。</p>
+        <p><strong>近 12 个月的变化</strong>：<strong>KIP-1071 Streams 再平衡协议</strong>把 task 分配从客户端移到 <strong>broker 端 group coordinator</strong>，<strong>4.2 起新集群默认开</strong>（broker + client ≥ 4.2，feature <code>streams.version=1</code>）；它<strong>仍不支持</strong> static membership、在线 classic→streams 迁移、运行中改 topology。最新 4.3（2026-05）加 KIP-1035（StateStore 自己管 changelog offset，恢复更快）。</p>
+        <p><strong>已淘汰</strong>：eos-v1（<code>exactly_once</code>）→ <code>exactly_once_v2</code>；IQv1 → IQv2；<strong>streams-scala 4.3 已弃用、5.0 移除</strong>（Java DSL 不受影响）。</p>
+        <p><strong>运行要求</strong>：Streams + Clients 需 Java 11，Broker 需 Java 17（4.0 起）。</p>
+      </div>
+
+      <!-- ── 6. 流畅感警告 ─────────────────────────────────── -->
+      <h2 id="fluency-trap"><span class="num">05</span><span>读之前：三个假象</span></h2>
+      <div class="callout warning">
+        <span class="label">流畅感不等于学会</span>
+        <p>Streams 的 DSL 读起来像在写集合操作（<code>map</code> / <code>filter</code> / <code>groupBy</code> / <code>count</code>），正因为眼熟，三种"感觉良好"会骗过你——它们都是假象：</p>
+        <p>· <strong>"我读得很顺"</strong>——顺，多半是因为 DSL 长得像 Java Stream，链式调用一眼能扫过去。但能读懂 <code>groupByKey().count()</code> 这行，不等于能说出这背后建了一个 RocksDB、一条 changelog topic、并把状态绑进了消费组。</p>
+        <p>· <strong>"我做题很快"</strong>——快，多半是碰上了套路题（"KStream 和 KTable 区别？追加 vs 更新"）。换成"两个 topic join 为什么零输出、还不报错"这种，速度立刻说明不了理解。</p>
+        <p>· <strong>"我没卡壳"</strong>——没卡壳，多半是还没碰到真正的 schema：把 Streams 当"另一个流处理引擎"时一路通畅，直到遇到"它凭什么没有独立集群""状态在本地 RocksDB 那进程挂了怎么办"才会卡——那一卡，才是开始学的地方。</p>
+      </div>
+
+      <!-- ── 7. 概念地图 ───────────────────────────────────── -->
+      <h2 id="concept-map"><span class="num">06</span><span>概念地图</span></h2>
+      <p>这张图是后面六章挂载细节的骨架。中心是<strong>一个嵌入式库</strong>——它没有自己的集群，其余所有角色都围绕这个事实展开。特别留意那条朱红副线：状态虽在本地 RocksDB，真相源却是 Kafka 里的一条 changelog 日志。</p>
+
+      <figure>
+        <svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Kafka Streams 概念地图：以嵌入式库为中心，KStream/KTable/GlobalKTable、Topology、Task=Partition、Window/Time、EOS v2、State Store 环绕；State Store 持久化到 Changelog topic 用朱红副线强调真相源在 Kafka">
+          <defs>
+            <marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrow-vermilion" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== Central hub: Streams app = embedded library ===== -->
+          <rect x="345" y="242" width="210" height="76" rx="8"
+                class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="450" y="272" text-anchor="middle" class="node-label-accent" font-size="14">Streams 应用</text>
+          <text x="450" y="294" text-anchor="middle" class="node-label-accent" font-size="14">= 嵌入式库</text>
+
+          <!-- ===== Top: KStream / KTable / GlobalKTable ===== -->
+          <rect x="320" y="40" width="260" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="450" y="64" text-anchor="middle" class="node-label">KStream / KTable / GlobalKTable</text>
+          <text x="450" y="84" text-anchor="middle" class="edge-label">流、表两种视图</text>
+          <!-- spoke: bottom edge of top box (y=98) → top edge of hub (y=242) -->
+          <line x1="450" y1="98" x2="450" y2="242" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+          <text x="450" y="175" text-anchor="middle" class="edge-label">流表对偶</text>
+
+          <!-- ===== Top-right: Topology ===== -->
+          <rect x="650" y="118" width="220" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="760" y="142" text-anchor="middle" class="node-label">Topology 拓扑</text>
+          <text x="760" y="162" text-anchor="middle" class="edge-label">source→processor→sink</text>
+          <!-- spoke: left edge of box (x=650,y=176 corner area) → top-right corner of hub (555,242) -->
+          <line x1="650" y1="176" x2="556" y2="244" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+          <text x="636" y="208" text-anchor="middle" class="edge-label">编译为</text>
+
+          <!-- ===== Right: Task = Partition ===== -->
+          <rect x="650" y="252" width="220" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="760" y="276" text-anchor="middle" class="node-label">Task = Partition</text>
+          <text x="760" y="296" text-anchor="middle" class="edge-label">并行单位，缩放上限</text>
+          <!-- spoke: left edge of box (x=650) → right edge of hub (x=555) -->
+          <line x1="650" y1="281" x2="555" y2="281" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+
+          <!-- ===== Bottom-right: Window / Time ===== -->
+          <rect x="650" y="386" width="220" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="760" y="410" text-anchor="middle" class="node-label">Window / Time</text>
+          <text x="760" y="430" text-anchor="middle" class="edge-label">event-time + stream-time</text>
+          <!-- spoke: left edge of box (x=650,y=386 corner area) → bottom-right corner of hub (555,318) -->
+          <line x1="650" y1="386" x2="556" y2="316" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+          <text x="636" y="352" text-anchor="middle" class="edge-label">有状态算子用</text>
+
+          <!-- ===== Bottom: EOS v2 ===== -->
+          <rect x="330" y="462" width="240" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="450" y="486" text-anchor="middle" class="node-label">EOS v2（事务）</text>
+          <text x="450" y="506" text-anchor="middle" class="edge-label">read-process-write 原子</text>
+          <!-- spoke: top edge of box (y=462) → bottom edge of hub (y=318) -->
+          <line x1="450" y1="462" x2="450" y2="318" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+          <text x="450" y="395" text-anchor="middle" class="edge-label">端到端</text>
+
+          <!-- ===== Left: State Store (RocksDB) ===== -->
+          <rect x="30" y="252" width="220" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="276" text-anchor="middle" class="node-label">State Store</text>
+          <text x="140" y="296" text-anchor="middle" class="edge-label">本地 RocksDB</text>
+          <!-- spoke: right edge of box (x=250) → left edge of hub (x=345) -->
+          <line x1="250" y1="281" x2="345" y2="281" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+          <text x="297" y="273" text-anchor="middle" class="edge-label">有状态算子用</text>
+
+          <!-- ===== Top-left: Changelog topic (vermilion sub-line, truth source) ===== -->
+          <rect x="30" y="110" width="220" height="58" rx="6" class="diagram-accent node-fill"/>
+          <text x="140" y="134" text-anchor="middle" class="node-label-accent">Changelog topic</text>
+          <text x="140" y="154" text-anchor="middle" class="edge-label">真相源在 Kafka</text>
+          <!-- vermilion sub-line: from State Store top edge (140,252) up to Changelog bottom edge (140,168) -->
+          <line x1="140" y1="252" x2="140" y2="168" class="diagram-accent" marker-end="url(#arrow-vermilion)"/>
+          <text x="140" y="210" text-anchor="middle" class="branch-label">持久化到</text>
+        </svg>
+        <figcaption><span class="fig-num">图 0.1</span>Kafka Streams 的概念地图——所有角色都挂在"嵌入式库"这个中心事实上。
+          <strong>注意</strong>三点：① 没有独立集群，库就跑在消费组上；② 状态在本地 RocksDB，但真相源是那条朱红的 changelog 日志；③ 流和表只是同一条日志的两种视图。</figcaption>
+      </figure>
+
+      <!-- ── 8. 学习路径建议 ───────────────────────────────── -->
+      <h2 id="paths"><span class="num">07</span><span>学习路径建议</span></h2>
+      <p>顶部那条 breadcrumb 是完整线性路径。但按你的目的，可以走不同子路径：</p>
+      <ul>
+        <li><strong>吃透原理应付面试</strong>：<code>01 概念</code> → <code>02 原理</code> → <code>06 自测</code>。概念建词汇表，原理讲机制与取舍，自测用三层梯度题逼出"强答案必须包含什么"。跳过实操与综合不影响理解主线。</li>
+        <li><strong>动手搭一个流处理应用</strong>：<code>01</code> → <code>02</code> → <code>03 实操</code> → <code>04 陷阱</code> → <code>05 综合</code>。从概念到 Java DSL worked→partial→open 三阶，再过一遍生产失败模式，最后用实时订单分析把所有机制串起来。</li>
+        <li><strong>读懂别人的 Streams 代码</strong>：<code>01</code> → <code>02</code> → <code>04 陷阱</code>。先建概念和机制的心智模型，再直奔陷阱章——别人代码里那些 <code>selectKey</code>、<code>Materialized</code>、<code>num.standby.replicas</code> 的写法，多半是在绕开某个失败模式，对照陷阱章一眼看懂动机。</li>
+      </ul>
+
+      <!-- ── 9. 目录 ───────────────────────────────────────── -->
+      <h2 id="toc"><span class="num">08</span><span>目录</span></h2>
+      <nav aria-label="章节目录">
+        <ul>
+          <li><a href="01-concepts.html">01 · 核心概念</a>——应用即库、KStream/KTable/GlobalKTable、流表对偶、topology、stateless vs stateful：建立 Streams 的词汇表。</li>
+          <li><a href="02-principles.html">02 · 工作原理</a>——状态存储 + changelog、再平衡缩放、repartition、窗口与时间、join 与共分区、EOS v2：每个机制配备选方案对比表。</li>
+          <li><a href="03-practice.html">03 · 上手实操</a>——kafka-streams 依赖 + 本地 broker，Java DSL 从 worked example 到 partial 到开放练习三阶递进。</li>
+          <li><a href="04-pitfalls.html">04 · 常见陷阱</a>——状态恢复卡顿、join 静默无输出、容器 OOMKilled、迟到事件消失：每条按症状→根因→修复展开。</li>
+          <li><a href="05-capstone.html">05 · 综合实战</a>——实时订单分析项目，强制你判别"这里该用第 1 章的 X 还是第 2 章的 Y"。</li>
+          <li><a href="06-self-check.html">06 · 自测题库</a>——概念层 / 原理层 / 应用判别层三层梯度题，附"面试强答案必须包含什么"。</li>
+        </ul>
+      </nav>
+
+      <!-- ── 10. 学完之后 ──────────────────────────────────── -->
+      <h2 id="next-steps"><span class="num">09</span><span>学完之后</span></h2>
+      <p>这套教程把 Streams 框成"消费组 + 本地状态 + changelog 日志"。在这个 schema 上，下一步可以往这几个方向加东西：</p>
+      <ul>
+        <li><strong><a href="../kafka-connect/index.html">Kafka Connect 子教程</a></strong>——在你的 schema 上补"数据怎么进出 Kafka"这一层：source/sink 连接器把外部系统接成 topic，正好喂给 Streams 处理、再写回去。</li>
+        <li><strong>ksqlDB</strong>——在 Streams 之上加一层 SQL。它把 <code>CREATE TABLE ... AS SELECT</code> 编译成 Streams topology，让你用 SQL 表达同样的流表对偶——理解了 Streams 再看它，等于看懂了它的底座。</li>
+        <li><strong>Flink 对比</strong>——补上"独立集群 + checkpoint"这一套对照物：Flink 是有调度器的独立集群、用 checkpoint 容错，与 Streams 的"库 + changelog 复制"形成最清晰的取舍对比，是面试 discrimination 题的高频考点。</li>
+        <li><strong>Schema Registry</strong>——在 serde 这一层加"契约管理"：Avro/Protobuf + 兼容模式解决 schema 漂移，正好补上陷阱章里 serde 崩溃那条的系统性解法。</li>
+      </ul>
+
+      <!-- ── 参考资料 ──────────────────────────────────────── -->
+      <footer class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/streams/">Kafka Streams 官方文档</a>（官方，权威定义与 API）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071：Streams Rebalance Protocol</a>（设计文档，理解 4.2 起 broker 端 task 分配的动机）</li>
+          <li><a href="https://developer.confluent.io/courses/kafka-streams/internals/">developer.confluent.io · Kafka Streams Internals</a>（维护方课程，task 模型与状态恢复的内部机制）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="../kafka/index.html" class="prev">
+          <span class="label">← 主教程</span>
+          <span class="title">Apache Kafka 教程</span>
+        </a>
+        <a href="01-concepts.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#for-whom" data-toc-target="for-whom">01 适合谁</a></li>
+        <li><a href="#not-for-whom" data-toc-target="not-for-whom">02 不适合谁</a></li>
+        <li><a href="#outcomes" data-toc-target="outcomes">03 能做到什么</a></li>
+        <li><a href="#essence" data-toc-target="essence">一句话本质</a></li>
+        <li><a href="#currency" data-toc-target="currency">04 现状速览</a></li>
+        <li><a href="#fluency-trap" data-toc-target="fluency-trap">05 三个假象</a></li>
+        <li><a href="#concept-map" data-toc-target="concept-map">06 概念地图</a></li>
+        <li><a href="#paths" data-toc-target="paths">07 学习路径</a></li>
+        <li><a href="#toc" data-toc-target="toc">08 目录</a></li>
+        <li><a href="#next-steps" data-toc-target="next-steps">09 学完之后</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

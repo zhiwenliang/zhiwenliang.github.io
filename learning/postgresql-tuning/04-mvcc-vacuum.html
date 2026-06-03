@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 MVCC、VACUUM 与表膨胀 · PostgreSQL 调优教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-diagnosis.html">01 诊断</a><span class="sep">—</span>
+    <a href="02-planner.html">02 优化器</a><span class="sep">—</span>
+    <a href="03-indexing.html">03 索引</a><span class="sep">—</span>
+    <a href="04-mvcc-vacuum.html" class="current">04 MVCC</a><span class="sep">—</span>
+    <a href="05-config.html">05 配置</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04 · 核心观念 ②</p>
+        <h1>MVCC 与 VACUUM:每次写都在留下旧版本</h1>
+        <p class="recap">前三章默认"表里的行就在那儿、统计信息能反映现实"。这一章揭开 PostgreSQL 写入的真相——每次写都在制造旧版本,VACUUM 是清道夫——表膨胀、长事务的危害、freeze 都从这一条事实派生。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的心智模型</p>
+        <ul>
+          <li>核心观念:<code>UPDATE</code> = 写新版本 + 留死元组,<code>DELETE</code> = 打删除标记;靠每个版本的 <code>xmin</code> / <code>xmax</code> + 事务快照判断可见性</li>
+          <li>死元组的定义与表膨胀:对所有活跃事务都不再可见的旧版本,堆积起来就是膨胀</li>
+          <li>VACUUM 回收死元组占用的空间,但<strong>留给本表复用、不还盘给操作系统</strong></li>
+          <li>HOT 更新:未改被索引列时,新版本不建索引项,显著减少索引维护</li>
+          <li>autovacuum 触发公式与调优;freeze 与事务 ID wraparound</li>
+          <li>可见性映射(visibility map)如何把这一章连回第 03 章的 index-only scan</li>
+        </ul>
+      </section>
+
+      <h2 id="s41"><span class="num">4.1</span><span>核心观念:每次写都留下旧版本</span></h2>
+
+      <p class="one-liner"><code>UPDATE</code> 不原地修改,而是写入一个新行版本,旧版本变成死元组(dead tuple);<code>DELETE</code> 只是给行打上删除标记。</p>
+
+      <div class="rationale">
+        <span class="label">为什么它是核心</span>
+        <p>从 MySQL(InnoDB)过来的工程师,脑子里的图像是"<code>UPDATE</code> 把行就地改了,旧值进 undo log,提交后 undo 很快被清掉"。PostgreSQL 的存储模型完全不同:它不就地改,而是把<strong>新版本作为一条新元组</strong>写进堆(heap),旧元组原地留着、只是被标记为已被某事务取代。这套机制叫 MVCC(多版本并发控制)。理解它是关键,因为后面所有现象——表为什么会膨胀、长事务为什么危险、为什么删了一半数据文件却没变小——全都是这一条事实的直接推论。</p>
+      </div>
+
+      <p>每个行版本(tuple)在堆里都带两个隐藏的系统字段:</p>
+      <ul>
+        <li><strong><code>xmin</code></strong>:创建这个版本的事务 ID(XID)。</li>
+        <li><strong><code>xmax</code></strong>:删除或取代这个版本的事务 ID;若该版本还"活着",<code>xmax</code> 为 0。</li>
+      </ul>
+
+      <p>于是同一逻辑行的多个版本会在堆里<strong>共存</strong>:一次 <code>UPDATE</code> 把旧版本的 <code>xmax</code> 设为当前事务 ID,同时插入一个 <code>xmin</code> 为当前事务 ID 的新版本。<code>DELETE</code> 更简单——只设旧版本的 <code>xmax</code>,不插入新版本。<strong>真正的物理删除不在 <code>DELETE</code> 这一刻发生,而是后来由 VACUUM 完成。</strong></p>
+
+      <figure>
+        <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一行被 UPDATE 两次后,堆里存在三个版本,前两个成为死元组">
+          <defs>
+            <marker id="mv-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <text x="40" y="28" text-anchor="start" class="edge-label">同一逻辑行 id=7 的堆内三个版本(被 UPDATE 两次)</text>
+
+          <!-- version 1 (dead) -->
+          <rect x="40" y="56" width="180" height="74" rx="6" class="diagram-ink node-fill"/>
+          <text x="130" y="80" text-anchor="middle" class="node-label">版本 v1</text>
+          <text x="130" y="100" text-anchor="middle" class="edge-label">xmin=100 xmax=105</text>
+          <text x="130" y="118" text-anchor="middle" class="branch-label">DEAD</text>
+
+          <line x1="220" y1="93" x2="260" y2="93" class="diagram-ink" marker-end="url(#mv-ar)"/>
+          <text x="240" y="84" text-anchor="middle" class="edge-label">改</text>
+
+          <!-- version 2 (dead) -->
+          <rect x="260" y="56" width="180" height="74" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="80" text-anchor="middle" class="node-label">版本 v2</text>
+          <text x="350" y="100" text-anchor="middle" class="edge-label">xmin=105 xmax=109</text>
+          <text x="350" y="118" text-anchor="middle" class="branch-label">DEAD</text>
+
+          <line x1="440" y1="93" x2="480" y2="93" class="diagram-ink" marker-end="url(#mv-ar)"/>
+          <text x="460" y="84" text-anchor="middle" class="edge-label">改</text>
+
+          <!-- version 3 (live) -->
+          <rect x="480" y="56" width="180" height="74" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="570" y="80" text-anchor="middle" class="node-label-accent">版本 v3</text>
+          <text x="570" y="100" text-anchor="middle" class="edge-label">xmin=109 xmax=0</text>
+          <text x="570" y="118" text-anchor="middle" class="node-label-accent">LIVE</text>
+
+          <!-- bracket: dead tuples -->
+          <path d="M 40 150 L 40 162 L 440 162 L 440 150" class="diagram-soft"/>
+          <text x="240" y="184" text-anchor="middle" class="edge-label">两个死元组 → 等 VACUUM 回收其空间</text>
+
+          <!-- note: live -->
+          <path d="M 480 150 L 480 162 L 660 162 L 660 150" class="diagram-soft"/>
+          <text x="570" y="184" text-anchor="middle" class="edge-label">当前唯一可见版本</text>
+
+          <text x="350" y="234" text-anchor="middle" class="node-label">物理上三条元组都还在堆里占空间</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>一行 <code>UPDATE</code> 两次,堆里留下三个版本。<strong>注意</strong>:<code>UPDATE</code> 在物理层面是"插入新版本 + 标记旧版本",不是"覆盖"。前两个版本立刻变成<em>占着空间</em>的死元组,直到 VACUUM 来回收——这就是表膨胀的微观起点。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 一条边界声明</span>
+        <p>"留旧版本"不是设计缺陷,是 MVCC 换来并发读写不互相阻塞的代价(§4.2 解释为什么)。代价的另一面是:写多的表会持续制造死元组,必须有人定期清。这个"人"就是 VACUUM。<strong>这一章的全部内容,本质上是这一笔交易的账单与还款方式。</strong></p>
+      </div>
+
+      <h2 id="s42"><span class="num">4.2</span><span>可见性:快照决定你看到哪个版本</span></h2>
+
+      <p class="one-liner">每个事务按自己的快照,只看到 <code>xmin</code> 已提交且早于快照、且(<code>xmax</code> 未提交或晚于快照)的那个版本。</p>
+
+      <p>同一行有多个版本,一个事务<em>该</em>看到哪个?答案藏在它启动时(或语句开始时)拿到的一个<strong>快照</strong>里。快照记录了"此刻哪些事务已提交、哪些还在进行"。判定一个版本对当前事务是否可见,规则可以简化成两句:</p>
+      <ul>
+        <li>它的 <code>xmin</code> 对应的事务<strong>已提交</strong>,且在当前事务的快照之前——这个版本对它"已经存在"。</li>
+        <li>它的 <code>xmax</code> 为空,或对应事务<strong>尚未提交 / 晚于当前快照</strong>——这个版本对它"还没被删"。</li>
+      </ul>
+      <p>两条同时成立,这个版本才对当前事务可见。这正是 MVCC 的卖点:<strong>读不阻塞写、写不阻塞读</strong>——读事务沿着快照找到属于自己的旧版本,完全不必等正在改这一行的写事务提交。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两个事务各按自己的快照,看到同一行的不同版本">
+          <defs>
+            <marker id="vis-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="vis-ar-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- two versions in the middle -->
+          <rect x="270" y="118" width="160" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="142" text-anchor="middle" class="node-label">旧版本 v1</text>
+          <text x="350" y="162" text-anchor="middle" class="edge-label">xmin=100 xmax=120</text>
+
+          <rect x="270" y="206" width="160" height="60" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="350" y="230" text-anchor="middle" class="node-label-accent">新版本 v2</text>
+          <text x="350" y="250" text-anchor="middle" class="edge-label">xmin=120 xmax=0</text>
+
+          <!-- txn A : old snapshot -->
+          <rect x="30" y="40" width="210" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="64" text-anchor="middle" class="node-label">事务 A · 快照在 XID 120 前</text>
+          <text x="135" y="84" text-anchor="middle" class="edge-label">看不到 120 的修改</text>
+          <line x1="240" y1="86" x2="268" y2="140" class="diagram-ink" marker-end="url(#vis-ar)"/>
+          <text x="232" y="120" text-anchor="end" class="edge-label">看到 v1</text>
+
+          <!-- txn B : new snapshot -->
+          <rect x="460" y="40" width="210" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="565" y="64" text-anchor="middle" class="node-label">事务 B · 快照在 XID 120 后</text>
+          <text x="565" y="84" text-anchor="middle" class="edge-label">已提交的修改可见</text>
+          <line x1="460" y1="86" x2="432" y2="228" class="diagram-accent" marker-end="url(#vis-ar-acc)"/>
+          <text x="468" y="150" text-anchor="start" class="branch-label">看到 v2</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>同一行、同一时刻,两个事务看到不同版本。<strong>注意</strong>:事务 A 拿着一个老快照,合法地看到旧版本 v1——这意味着只要 A 还活着,v1 就<em>不能</em>被回收。这条约束是 §4.5 表膨胀和长事务危害的根。</figcaption>
+      </figure>
+
+      <h3>死元组的精确定义</h3>
+      <p>有了可见性规则,就能精确定义<strong>死元组(dead tuple)</strong>:一个旧版本,如果对<em>所有</em>当前活跃事务都不再可见——也就是没有任何快照还需要它——它就是死元组,可以被安全回收。注意"对所有活跃事务"这个限定:只要还有一个老事务的快照仍能看到它,它就<strong>不是</strong>死元组,VACUUM 不能动它。</p>
+
+      <div class="callout warning">
+        <span class="label">关键连接 · 长事务 → 膨胀(全章最重要的一条因果)</span>
+        <p>一个长时间不提交的事务,会一直持有它启动时的<strong>老快照</strong>。VACUUM 判定死元组时必须保守:任何"这个老事务仍能看到"的旧版本,都<strong>不能</strong>回收。于是只要这个长事务挂着,期间所有表产生的死元组都被"钉住",无法清理 → 死元组持续堆积 → 表膨胀。这把第 01 章 <code>wait_event</code> 里的 <code>Lock</code> / 长事务,和本章的膨胀,接成了同一条链:<em>一个忘记提交的事务,既能堵住锁,又能在背后悄悄把表撑大。</em></p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 BI 工具开了一个事务跑大报表,跑了 40 分钟还没结束。这 40 分钟里,一张高频更新的 <code>orders</code> 表产生的死元组,能被 autovacuum 回收吗?为什么?</p>
+        <details>
+          <summary>展开答案(先想一步再点)</summary>
+          <p>不能(至少回收不掉那些报表事务仍能看到的版本)。报表事务持有一个 40 分钟前的老快照,VACUUM 必须假设它还会读到那时可见的旧版本,因此把这些死元组全部跳过。结果:<code>orders</code> 在这 40 分钟里只进不清,膨胀。</p>
+          <p>排查时,<code>SELECT * FROM pg_stat_activity WHERE state &lt;&gt; 'idle' ORDER BY xact_start;</code> 找最老的 <code>xact_start</code>;治理长事务(超时、拆事务、只读副本跑报表)往往比拼命调 autovacuum 更治本。</p>
+        </details>
+      </div>
+
+      <h2 id="s43"><span class="num">4.3</span><span>VACUUM:回收死元组(并喂养优化器)</span></h2>
+
+      <p class="one-liner">VACUUM 扫描表,把对所有事务都不可见的死元组占用的空间标记为可重用。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它(比文档深一层)</span>
+        <p>文档会说"VACUUM 回收死元组占用的空间"。容易被误解的是"回收"二字——它<strong>不等于把磁盘还给操作系统</strong>。下面这条澄清是本节的核心,也是面试高频追问。</p>
+      </div>
+
+      <h3>关键澄清:普通 VACUUM 不缩小文件</h3>
+      <p>普通 <code>VACUUM</code> 把死元组占的空间标记为<strong>该表后续可重用</strong>(记进表的空闲空间映射 free space map)。同一张表之后的 <code>INSERT</code> / <code>UPDATE</code> 会优先填进这些空洞。但表的物理文件<strong>不会变小、空间不还给操作系统</strong>——磁盘占用维持在历史峰值。所以"删了一半数据,<code>df</code> 看磁盘却没降"不是 bug,是预期行为。</p>
+
+      <table class="compare-table">
+        <caption>表 4.1 · 两种 VACUUM 的本质区别</caption>
+        <thead>
+          <tr><th>命令</th><th>做什么</th><th>锁</th><th>磁盘空间</th><th>何时用</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>VACUUM</code>(普通)</td><td>标记死元组空间为本表可重用</td><td>轻量,<strong>不阻塞读写</strong></td><td>不缩小文件,留给本表复用</td><td>日常;通常交给 autovacuum</td></tr>
+          <tr><td><code>VACUUM FULL</code></td><td>重写整张表到新文件,挤掉所有空洞</td><td><code>ACCESS EXCLUSIVE</code>,<strong>锁住整表</strong></td><td>缩小文件、归还操作系统</td><td>已严重膨胀且能停机;生产慎用</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · VACUUM FULL 会锁死整张表</span>
+        <p><code>VACUUM FULL</code> 确实能把膨胀的表重写紧凑、把空间还给操作系统,但它持有 <code>ACCESS EXCLUSIVE</code> 锁——执行期间这张表<strong>读写全部阻塞</strong>,大表会锁住几十分钟。生产环境别直接对热表跑。在线替代是扩展 <code>pg_repack</code>:它在后台重建表、只在最后一瞬间做一次极短的切换,几乎不阻塞业务。</p>
+      </div>
+
+      <h3>VACUUM 顺带做的三件事</h3>
+      <p>除了回收空间,一次 VACUUM(或 autovacuum)还会:</p>
+      <ul>
+        <li><strong>更新统计信息</strong>(autovacuum 会捎带触发 ANALYZE)——直接喂养 <a href="02-planner.html#s22">第 02 章</a>讲的优化器代价估算。VACUUM 跟不上,统计也容易跟不上,优化器就开始估错。</li>
+        <li><strong>更新可见性映射</strong>(visibility map):把"整页都是对所有事务可见的活元组"的数据页标为 all-visible。<a href="03-indexing.html#s33">第 03 章的 index-only scan</a> 正是靠这个标记决定能不能免回表——页没被标 all-visible,index-only scan 就退化成要回堆。</li>
+        <li><strong>freeze 老行</strong>:把足够老的行版本标记为"对所有事务永远可见",防止事务 ID 回绕(§4.6)。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 把三章接起来</span>
+        <p>VACUUM 不只是"清垃圾"。它同时维护着<strong>第 02 章的统计信息</strong>和<strong>第 03 章 index-only scan 依赖的可见性映射</strong>。所以"autovacuum 没跟上"的后果是复合的:表膨胀(本章)+ 统计过期导致选错计划(02)+ 本可免回表的扫描退化(03)。一个被忽视的 autovacuum,能同时点燃三章里的问题。</p>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">现状 · PG 17(2024-09)的 VACUUM 内存改进</span>
+        <p>PG 17 把 VACUUM 记录待清理死元组 TID 的数据结构换成了 <strong>TidStore</strong>,移除了沿用多年的<strong>1GB 死元组内存上限</strong>。此前 <code>maintenance_work_mem</code> 调再大,单轮 VACUUM 最多也只用 1GB 存 TID,大表往往要多轮扫描索引;现在 <code>maintenance_work_mem</code> 能被充分利用,大表 VACUUM 的索引清理轮数显著减少、更快完成。升级到 17+ 的大库,这是一项几乎白拿的收益。</p>
+      </div>
+
+      <h2 id="s44"><span class="num">4.4</span><span>HOT 更新:UPDATE 的省钱路径</span></h2>
+
+      <p class="one-liner">如果一次 <code>UPDATE</code> 没有修改任何被索引的列、且当前堆页有空闲空间,新版本就放在同一页、且不新建任何索引项。</p>
+
+      <p>这条路径叫 <strong>HOT(Heap-Only Tuple)</strong>。回想 §4.1:普通 <code>UPDATE</code> 要插入新版本,并为<em>每一个</em>索引都加一条指向新版本的索引项——表上有 5 个索引,一次 <code>UPDATE</code> 就要动 5 个索引。HOT 把这笔开销省掉:新版本通过页内的一条指针链接到旧版本,索引项仍指向旧位置、顺着链就能找到新版本,因此<strong>无需触碰任何索引</strong>。</p>
+
+      <p>HOT 触发有两个硬条件,缺一不可:</p>
+      <ul>
+        <li>这次 <code>UPDATE</code> <strong>没有改任何被索引的列</strong>(改了 <code>status</code>,而 <code>status</code> 上没索引——可以;改了建有索引的 <code>email</code>——不行)。</li>
+        <li>旧版本所在的<strong>堆页还有空闲空间</strong>容纳新版本。</li>
+      </ul>
+
+      <p>第二个条件给了一个可调旋钮:<code>fillfactor</code>。它让 PostgreSQL 在每个数据页里<strong>故意留白</strong>(默认表是 100,即填满;设成 90 表示每页只填 90%、留 10% 给后续更新)。频繁更新的表把 <code>fillfactor</code> 调到 90 左右,新版本更容易挤进同一页 → HOT 命中率上升。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">fillfactor.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-fillfactor">复制</button>
+        </div>
+<pre id="cb-fillfactor"><code class="language-sql">-- 为高频更新的表留出页内空间,促成 HOT 更新
+ALTER TABLE counters SET (fillfactor = 90);
+-- 重写后生效(对已有数据)
+VACUUM FULL counters;   -- 注意会锁表;或用 pg_repack
+
+-- 观察 HOT 命中:n_tup_hot_upd 占 n_tup_upd 越高越好
+SELECT relname, n_tup_upd, n_tup_hot_upd
+FROM pg_stat_user_tables
+WHERE relname = 'counters';</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">连接 03 · "索引拖慢写入"的另一面</span>
+        <p>第 03 章讲过"每个索引都会拖慢写入"。HOT 给出了机制层面的解释:只要 <code>UPDATE</code> 不碰被索引的列,就能走 HOT、零索引维护;但<strong>一旦改了任何一个被索引的列,HOT 立刻失效,所有索引都要加新项</strong>。所以在频繁更新的表上,给一个"经常被改的列"建索引,代价远不止"多一个索引"——它会让该表大量 <code>UPDATE</code> 从 HOT 跌回全索引维护。建索引前先问:这列会不会被高频 <code>UPDATE</code>?</p>
+      </div>
+
+      <h2 id="s45"><span class="num">4.5</span><span>表膨胀:诊断与处理</span></h2>
+
+      <p class="one-liner">死元组堆积,使表和索引占用的空间远超实际有效数据,这就是膨胀(bloat)。</p>
+
+      <p>膨胀是前几节的必然产物:写产生死元组(§4.1),长事务或滞后的 autovacuum 让死元组清不掉(§4.2),而普通 VACUUM 又不缩小文件(§4.3)。结果是一张逻辑上只有 1GB 有效数据的表,物理上占了 5GB。</p>
+
+      <h3>诊断:先看 pg_stat_user_tables</h3>
+      <p>第一手信号来自系统视图 <code>pg_stat_user_tables</code>:<code>n_dead_tup</code>(死元组数)、<code>n_live_tup</code>(活元组数)、<code>last_autovacuum</code>(上次自动清理时间)。死元组占比高、且 <code>last_autovacuum</code> 很久以前(或为空),就是膨胀正在发生的直接证据。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">bloat-check.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-bloat">复制</button>
+        </div>
+<pre id="cb-bloat"><code class="language-sql">SELECT relname,
+       n_live_tup,
+       n_dead_tup,
+       round(n_dead_tup * 100.0 / nullif(n_live_tup + n_dead_tup, 0), 1) AS dead_pct,
+       last_autovacuum
+FROM pg_stat_user_tables
+ORDER BY n_dead_tup DESC
+LIMIT 5;</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">bloat-out.txt</span>
+          <span class="lang">output</span>
+          <button class="copy" data-copy-target="cb-bloatout">复制</button>
+        </div>
+<pre id="cb-bloatout"><code class="language-bash">   relname   | n_live_tup | n_dead_tup | dead_pct |        last_autovacuum
+-------------+------------+------------+----------+-------------------------------
+ counters    |     120000 |    4830000 |    97.6  | 2026-05-30 02:11:09   -- 三天前
+ orders      |    9800000 |     410000 |     4.0  | 2026-06-02 06:30:55
+ audit_log   |   30000000 |        120 |     0.0  | 2026-06-02 07:01:12</code></pre>
+      </div>
+
+      <ul>
+        <li><strong><code>counters</code></strong>:活元组 12 万,死元组却有 483 万——<code>dead_pct=97.6%</code>。这张表 97% 以上的元组都是垃圾,且 <code>last_autovacuum</code> 停在三天前,autovacuum 明显没跟上。典型的高频更新计数器表膨胀(正是本章末尾挑战题的原型)。</li>
+        <li><strong><code>orders</code></strong>:死元组占比 4%、当天清过——健康。</li>
+      </ul>
+      <p>需要精确的膨胀字节数(而非比例估计)时,装扩展 <code>pgstattuple</code>:<code>SELECT * FROM pgstattuple('counters');</code> 会给出活/死元组的确切字节、空闲空间占比。</p>
+
+      <h3>膨胀的后果:连回第 01 章的页读</h3>
+      <p>膨胀不是"占点磁盘"那么轻。一张膨胀的表,同样的数据散落在更多的数据页里:</p>
+      <ul>
+        <li><strong>顺序扫描要读更多页</strong>:有效数据没变,但 <code>Seq Scan</code> 必须读完所有膨胀的页。这直接体现在 <a href="01-diagnosis.html#s13">第 01 章 <code>BUFFERS</code></a> 的 <code>read</code> 数变大。</li>
+        <li><strong>缓存命中率下降</strong>:页变多,<code>shared_buffers</code> 装不下,更多页要从磁盘读(连第 05 章)。</li>
+        <li><strong>索引也膨胀</strong>:索引同样积累指向死元组的项,变大、变深,查找变慢。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 700 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="膨胀的形成与回收:写入累积死元组,VACUUM 把空间标记为可重用而非缩小文件">
+          <defs>
+            <marker id="bl-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- stage 1 -->
+          <text x="100" y="30" text-anchor="middle" class="edge-label">① 持续写入</text>
+          <rect x="40" y="44" width="120" height="150" rx="5" class="diagram-ink node-fill"/>
+          <rect x="48" y="52" width="104" height="26" class="node-fill-accent" stroke="none"/>
+          <text x="100" y="70" text-anchor="middle" class="edge-label">live</text>
+          <rect x="48" y="82" width="104" height="100" fill="#F4F4F4" stroke="none"/>
+          <text x="100" y="120" text-anchor="middle" class="edge-label">dead</text>
+          <text x="100" y="140" text-anchor="middle" class="edge-label">dead</text>
+          <text x="100" y="160" text-anchor="middle" class="edge-label">dead</text>
+
+          <line x1="170" y1="119" x2="210" y2="119" class="diagram-ink" marker-end="url(#bl-ar)"/>
+
+          <!-- stage 2 : VACUUM -->
+          <text x="320" y="30" text-anchor="middle" class="edge-label">② VACUUM 标记可重用</text>
+          <rect x="220" y="44" width="200" height="150" rx="5" class="diagram-ink node-fill"/>
+          <rect x="228" y="52" width="184" height="26" class="node-fill-accent" stroke="none"/>
+          <text x="320" y="70" text-anchor="middle" class="edge-label">live</text>
+          <rect x="228" y="82" width="184" height="100" fill="none" stroke="#A3A3A3" stroke-dasharray="3 3"/>
+          <text x="320" y="128" text-anchor="middle" class="edge-label">空闲空间(本表可复用)</text>
+          <text x="320" y="148" text-anchor="middle" class="edge-label">文件大小不变</text>
+
+          <line x1="430" y1="119" x2="470" y2="119" class="diagram-ink" marker-end="url(#bl-ar)"/>
+
+          <!-- stage 3 : reuse -->
+          <text x="580" y="30" text-anchor="middle" class="edge-label">③ 新写入填回空洞</text>
+          <rect x="480" y="44" width="160" height="150" rx="5" class="diagram-ink node-fill"/>
+          <rect x="488" y="52" width="144" height="26" class="node-fill-accent" stroke="none"/>
+          <text x="560" y="70" text-anchor="middle" class="edge-label">live</text>
+          <rect x="488" y="82" width="144" height="44" class="node-fill-accent" stroke="none"/>
+          <text x="560" y="108" text-anchor="middle" class="edge-label">新 live(复用)</text>
+          <rect x="488" y="130" width="144" height="52" fill="none" stroke="#A3A3A3" stroke-dasharray="3 3"/>
+          <text x="560" y="160" text-anchor="middle" class="edge-label">剩余空闲</text>
+
+          <text x="350" y="230" text-anchor="middle" class="node-label">普通 VACUUM 让空间"可重用",而不是"还给 OS"</text>
+          <text x="350" y="256" text-anchor="middle" class="branch-label">文件要变小,只能 VACUUM FULL / pg_repack 重写</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.3</span>膨胀的形成与普通 VACUUM 的回收边界。<strong>注意</strong>:第 ② 步后文件大小没变,空间只是被腾成"本表可复用"。若写入速率赶不上腾出的速度(或长事务钉住死元组),文件就只能一路向峰值增长——这就是膨胀失控的样子。</figcaption>
+      </figure>
+
+      <h3>处理:三个层次</h3>
+      <ul>
+        <li><strong>治本:让 autovacuum 跟上</strong>(§4.6)。绝大多数膨胀的根因是 autovacuum 对这张表太迟钝,调参后稳态膨胀会回落到可接受区间。</li>
+        <li><strong>已严重膨胀、需立刻回收磁盘:</strong><code>VACUUM FULL</code>(锁表,停机窗口内用)或 <code>pg_repack</code>(在线、几乎不阻塞)。</li>
+        <li><strong>设计层面:</strong>对天然高频更新的表,用 HOT 友好设计(§4.4)从源头减少死元组与索引维护。</li>
+      </ul>
+
+      <h2 id="s46"><span class="num">4.6</span><span>autovacuum 调优 + freeze/wraparound</span></h2>
+
+      <p class="one-liner">autovacuum 是后台进程,按一条公式自动判断"这张表的死元组够多了,该清了"——公式默认值对大表偏迟钝,这是膨胀的头号配置原因。</p>
+
+      <h3>触发公式</h3>
+      <p>对每张表,autovacuum 在死元组数超过下面这个阈值时触发清理:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">autovacuum-formula.txt</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="cb-formula">复制</button>
+        </div>
+<pre id="cb-formula"><code class="language-bash">vacuum 触发阈值
+  = autovacuum_vacuum_threshold              (默认 50)
+  + autovacuum_vacuum_scale_factor (默认 0.2) × 表的行数(reltuples)
+
+例:一张 1000 万行的表
+  = 50 + 0.2 × 10,000,000
+  = 2,000,050  → 要积累约 200 万死元组才触发一次 autovacuum</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">痛点 · 默认 0.2 对大表太迟钝</span>
+        <p>那个 <code>scale_factor = 0.2</code> 意味着:表要积累<strong>相当于自身 20% 的死元组</strong>才会被清。小表无所谓,但一张一亿行的表,就要堆到 2000 万死元组才触发——这期间表已经明显膨胀、查询已经变慢。修法:对大表<strong>单独调小</strong> <code>scale_factor</code>(如 0.01,即 1%),或改用按行数的绝对阈值(PG 13+ 支持每表覆盖)。下面是按表覆盖的写法:</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">tune-autovacuum.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-tune">复制</button>
+        </div>
+<pre id="cb-tune"><code class="language-sql">-- 对一张高频更新的大表,让 autovacuum 更积极
+ALTER TABLE orders SET (
+  autovacuum_vacuum_scale_factor = 0.01,   -- 1% 死元组就清,而非默认 20%
+  autovacuum_vacuum_threshold    = 1000
+);</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">现状 · PG 18 给公式封顶</span>
+        <p>PG 18 新增参数 <code>autovacuum_vacuum_max_threshold</code>(默认 <strong>1 亿行</strong>),给上面的线性公式加了一个<strong>绝对上限</strong>:死元组一旦达到这个数就触发,不再等"20% 比例"。这正面解决了"超大表用比例公式触发太晚"的老问题——以前要靠手动调 <code>scale_factor</code>,现在默认就有兜底。升级到 18 的大库可以少操一份心。</p>
+      </div>
+
+      <h3>freeze 与事务 ID wraparound</h3>
+      <p>事务 ID(XID)是 <strong>32 位</strong>的,约 21 亿个值用完后会<strong>回绕(wraparound)</strong>归零。可见性判断依赖"当前 XID 与版本 <code>xmin</code> 的大小关系",一旦 XID 回绕,"过去"和"未来"会错乱,本该可见的老数据会突然变得不可见——这是会丢数据的灾难级故障。</p>
+      <p>防回绕的机制就是 <strong>freeze</strong>:VACUUM 把足够老的行版本标记为"已冻结",即<strong>对所有事务永远可见</strong>,从此不再参与 XID 大小比较,把它们"移出"回绕的威胁。参数 <code>autovacuum_freeze_max_age</code>(默认 <strong>2 亿</strong>)控制:一张表最老的未冻结 XID 距今超过这个年龄,就强制触发一次 freeze 用的 autovacuum——<em>即使你把 autovacuum 关了也照样跑</em>。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · vacuum-or-die</span>
+        <p>如果 freeze 长期跟不上(常因 autovacuum 被关、或长事务持续阻止冻结),XID 年龄逼近回绕极限时,PostgreSQL 会<strong>强制数据库进入只读</strong>、拒绝新写入,直到你跑 VACUUM 把年龄降下来。这就是俗称的 "vacuum-or-die"。线上见到日志里 <code>database is not accepting commands to avoid wraparound</code> 就是它——此时唯一出路是赶紧 VACUUM(freeze)。预防:别关 autovacuum,盯住长事务和 <code>SELECT datname, age(datfrozenxid) FROM pg_database;</code>。</p>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">现状 · PG 19(2026 进入 beta)缓解回绕风险</span>
+        <p>回绕风险的两个长期痛点正在被 PG 19 处理:其一,<strong>64 位 MultiXact 成员</strong>——把另一处 32 位计数器(用于多事务行锁)扩到 64 位,大幅推后另一类回绕;其二,<strong>并行 autovacuum 索引清理</strong>,让大表的 freeze/清理能用多核加速、更难落后。这些是 PG 19+/即将到来的特性,现网 13–17 仍要靠 §4.6 的调参和长事务治理来防回绕。</p>
+      </div>
+
+      <h3>关键参数速查</h3>
+      <table class="compare-table">
+        <caption>表 4.2 · 关键 autovacuum 参数 × 默认 × 何时调</caption>
+        <thead>
+          <tr><th>参数</th><th>默认</th><th>作用</th><th>何时调</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td><code>autovacuum_vacuum_scale_factor</code></td><td>0.2</td><td>触发阈值里的"比例项"</td><td>大表调小(0.01~0.05),最常调的旋钮</td></tr>
+          <tr><td><code>autovacuum_vacuum_threshold</code></td><td>50</td><td>触发阈值里的"常数项"</td><td>小表/想要绝对下限时配合调</td></tr>
+          <tr><td><code>autovacuum_vacuum_max_threshold</code></td><td>1 亿(PG 18+)</td><td>给比例公式封顶的绝对上限</td><td>PG 18+ 超大表,通常用默认即可</td></tr>
+          <tr><td><code>autovacuum_freeze_max_age</code></td><td>2 亿</td><td>强制 freeze 的 XID 年龄上限</td><td>写入极猛、逼近回绕时调小以更早冻结</td></tr>
+          <tr><td><code>autovacuum_naptime</code></td><td>1 min</td><td>两轮检查之间的休眠</td><td>更新极频繁的库可调短</td></tr>
+          <tr><td><code>autovacuum_max_workers</code></td><td>3</td><td>同时清理的 worker 数</td><td>表多、单轮清不完时调大</td></tr>
+          <tr><td><code>maintenance_work_mem</code></td><td>64 MB</td><td>单次 VACUUM 可用内存(连 <a href="05-config.html#s52">05 章</a>)</td><td>大表 VACUUM 慢时调大(PG 17+ 受益最明显)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 本章的一条主线</span>
+        <p>把六节收成一句话:<strong>写制造死元组(§4.1)→ 可见性 + 长事务决定哪些能清(§4.2)→ VACUUM 清但不还盘(§4.3)→ HOT 从源头少造垃圾(§4.4)→ 清不及时就膨胀(§4.5)→ autovacuum 调参 + freeze 兜底(§4.6)。</strong>排查一张"越用越慢、越来越大"的表,顺着这条链走一遍,根因几乎总在其中某一环。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程,把答案写下来再对照。这一章的题大多没有"背一下就行"的答案,需要你把因果链走一遍。
+        </p>
+        <ol>
+          <li>PostgreSQL 里一条 <code>UPDATE</code> 在物理层面做了什么?为什么说它会"留下旧版本"?<code>xmin</code> / <code>xmax</code> 各记什么?</li>
+          <li>一张表 <code>DELETE</code> 掉了 90% 的行,跑完普通 <code>VACUUM</code> 后,操作系统看到的文件大小会变小吗?为什么?要真正回收磁盘该怎么办、代价是什么?</li>
+          <li>一个 BI 报表事务开了 30 分钟没提交。请把它和"另一张高频更新表的膨胀"用一条因果链连起来——为什么前者会导致后者?</li>
+          <li>一张表上某列被高频 <code>UPDATE</code>。给这列建索引,除了"多一个索引要维护",还会带来什么更大的写入代价?用 HOT 解释。</li>
+        </ol>
+        <details>
+          <summary>答案(先做完再展开)</summary>
+          <ol>
+            <li>它<strong>插入一个新行版本</strong>,并把旧版本的 <code>xmax</code> 设为当前事务 ID(不就地覆盖)。旧版本仍物理留在堆里,成为死元组。<code>xmin</code> = 创建该版本的事务 ID;<code>xmax</code> = 删除/取代该版本的事务 ID(活着时为 0)。</li>
+            <li><strong>不会变小</strong>。普通 <code>VACUUM</code> 只把死元组空间标记为<em>本表可重用</em>(进 free space map),不缩小文件、不还操作系统。要真正回收磁盘:<code>VACUUM FULL</code>(重写整表、归还空间,但持 <code>ACCESS EXCLUSIVE</code> 锁、锁住整表)或在线的 <code>pg_repack</code>。</li>
+            <li>长事务持有一个 30 分钟前的<strong>老快照</strong>;VACUUM 判定死元组时必须保守,任何"这个老事务仍能看到"的旧版本都不能回收。于是这 30 分钟里高频更新表产生的死元组全被"钉住"、清不掉 → 只进不清 → 膨胀。即:长事务通过"钉住老快照"间接撑大了另一张毫不相关的表。</li>
+            <li>它会让该表大量 <code>UPDATE</code> 失去走 <strong>HOT</strong> 的资格。HOT 要求"未修改任何被索引列",一旦这个高频更新列被索引,每次改它都不能 HOT → 必须为<em>所有</em>索引各加一条新项 + 制造死元组。写入代价从"零索引维护"跳到"全索引维护",远不止多一个索引那么简单。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一张每秒上千次 UPDATE 的计数器表,膨胀严重、查询变慢</h3>
+        <p>线上一张 <code>counters</code> 表(几行到几万行,每行一个计数,业务每秒 <code>UPDATE ... SET count = count + 1</code> 上千次)。最近这张<em>很小</em>的表,简单的按主键查询却越来越慢,磁盘占用涨到几个 GB。请列出你的<strong>诊断步骤</strong>,并给出<strong>至少两种</strong>修复方向。</p>
+        <details>
+          <summary>提示(卡住再展开)</summary>
+          <p><strong>诊断:</strong>① <code>pg_stat_user_tables</code> 看 <code>counters</code> 的 <code>n_dead_tup</code> / <code>n_live_tup</code> 和 <code>last_autovacuum</code>——通常会看到死元组远超活元组、autovacuum 落后;② <code>n_tup_hot_upd</code> vs <code>n_tup_upd</code> 看 HOT 命中率是不是很低;③ 用 <code>pgstattuple</code> 量化膨胀字节;④ <code>pg_stat_activity</code> 按 <code>xact_start</code> 找有没有长事务。</p>
+          <p><strong>修复方向(任选两个以上):</strong>(a) 把这张表的 <code>autovacuum_vacuum_scale_factor</code> 调到极小(如 0.01)+ 调小 <code>autovacuum_naptime</code>,让清理跟上每秒上千的死元组;(b) HOT 友好设计 + 降 <code>fillfactor</code> 到 90,让新版本留在同页、走 HOT;(c) 已经膨胀的存量用 <code>pg_repack</code> 在线重写(别用 <code>VACUUM FULL</code> 锁热表)。</p>
+          <p><strong>两个隐藏因素(题眼):</strong>其一,如果有<strong>长事务</strong>持着老快照,调多猛的 autovacuum 都清不掉被钉住的死元组——先排查 <code>xact_start</code>;其二,若计数列恰好<strong>被索引</strong>(或表上有其它索引、且更新碰到了被索引列),每次 <code>UPDATE</code> 都无法 HOT、还要维护索引,膨胀和慢会雪上加霜——检查这列是不是不必要地建了索引。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/current/routine-vacuuming.html">Routine Vacuuming</a>(官方:VACUUM、autovacuum、freeze 与 wraparound)</li>
+          <li><a href="https://www.postgresql.org/docs/current/mvcc.html">Concurrency Control / MVCC</a>(官方:多版本、快照、可见性)</li>
+          <li><a href="https://www.postgresql.org/docs/current/storage-hot.html">Heap-Only Tuples (HOT)</a>(官方:HOT 触发条件)</li>
+          <li><a href="https://www.postgresql.org/docs/current/runtime-config-autovacuum.html">Automatic Vacuuming 配置参数</a>(官方:各 autovacuum 参数)</li>
+          <li><a href="https://www.postgresql.org/docs/17/release-17.html">PostgreSQL 17 Release Notes</a>(官方:VACUUM TidStore,移除 1GB 死元组内存上限)</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-indexing.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 索引</span>
+        </a>
+        <a href="05-config.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 配置与资源</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 每次写都留旧版本</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 可见性与快照</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.3 VACUUM 回收</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.4 HOT 更新</a></li>
+        <li><a href="#s45" data-toc-target="s45">4.5 表膨胀诊断</a></li>
+        <li><a href="#s46" data-toc-target="s46">4.6 autovacuum 与 freeze</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

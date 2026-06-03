@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update <title>
+    3. Update the .learning-path breadcrumb (mark current chapter with .current)
+    4. Fill in <article> with chapter content using the reusable HTML
+       snippets defined in references/tutorial_template.md
+    5. Update sticky TOC links (aside.toc-sidebar > ul) to match in-article anchors
+    6. Update prev/next nav at bottom
+
+  Class names you'll use (full reference in tutorial_template.md):
+    .learning-path   .chapter-opener (now uses .chapter-label, not .numeral)
+    .schema-panel   .one-liner   .rationale   .annotations
+    .code-block (with .header > .filename .lang .copy)
+    .callout (.warning .tip .example .insight — only .warning shows accent)
+    .compare-table (tr.selected)
+    figure > svg > figcaption (figcaption > .fig-num)
+    .predict   details > summary
+    .self-check   .challenge   .references   .chapter-nav
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 · Agent 架构与多智能体 · AI Agent 面试通关</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-llm-prompt.html">01 LLM/Prompt</a><span class="sep">—</span>
+    <a href="02-rag.html">02 RAG</a><span class="sep">—</span>
+    <a href="03-agent-arch.html" class="current">03 Agent 架构</a><span class="sep">—</span>
+    <a href="04-engineering.html">04 工程化</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>Agent 架构与多智能体：把 LLM 塞进一个循环</h1>
+        <p class="recap">前两章备好了零件：会调工具的 LLM（01 章 Function Calling）和会补知识的检索（02 章 RAG）。这一章把它们组装进一个自主循环，得到 Agent——并算清这个循环带来的成本、延迟、失控三笔账。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你要建立的心智模型</p>
+        <ul>
+          <li>Anthropic 对 Agent 与 Workflow 的分界，以及怎么判断该不该上 Agent</li>
+          <li>ReAct / Plan-and-Execute / Reflection 各自的循环结构与取舍</li>
+          <li>记忆系统怎么分层（短期/长期、情景/语义/程序性），跨会话怎么做</li>
+          <li>多智能体的真实代价（约 15× token）与 MCP 解决的工程问题</li>
+        </ul>
+      </section>
+
+      <p>把前两章的零件平铺在桌上：一个会按 token 计费、会调工具、会被检索喂上下文的 LLM。它仍然是<strong>一次性</strong>的——输入进、输出出，没有「自己再想一步」的能力。Agent 就是给这台机器接上一根反馈线：把它的输出重新喂回输入，让它在一个循环里自己决定下一步做什么，直到任务完成。这一根反馈线带来了全部的威力，也带来了全部的麻烦——本章的每道面试题，深层都在问同一件事：这个循环的代价你算不算得清。</p>
+
+      <!-- ============ 3.1 ============ -->
+      <h2 id="s1"><span class="num">3.1</span><span>Agent vs Workflow（Anthropic 的分界）</span></h2>
+
+      <p class="one-liner">区别不在用没用 LLM，而在「谁来决定下一步」：路径写死在代码里的是 Workflow，模型自己决定的是 Agent。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要这条分界</span>
+        <p>「Agent」这个词被用滥了——一个调一次 LLM 的脚本也敢叫 Agent。Anthropic 在《Building Effective Agents》（2024-12）里把这团模糊一刀切开：两者都属于 <em>agentic systems</em>，但 workflow 是「LLM 与工具通过<strong>预定义代码路径</strong>编排」，agent 是「LLM <strong>自主决定流程与工具用法</strong>、自己掌控如何完成任务」。这条线决定了一个系统可不可控、好不好调试、贵不贵——面试官问「这是 Agent 吗」，考的就是能不能用这条线归类。</p>
+      </div>
+
+      <p>判据落到一个具体问题上：<strong>控制流由谁写</strong>。如果「检索→总结→翻译」这条路径是工程师在代码里用 if/else 和函数调用钉死的，那它是 workflow——LLM 只是被调用的算子，跑多少步、跑哪几步在运行前就确定了。如果是 LLM 在运行时自己输出「我下一步要调检索」「现在该调计算器」「够了，收尾」，控制流由模型动态生成，那它才是 agent。Anthropic 给出一条反直觉的工程建议：<strong>能用 workflow 就别上 agent</strong>。多数生产场景任务边界清晰、路径可枚举，预定义路径更可控、更便宜、更好测；agent 的自主性是为「无法预先枚举步骤」的任务保留的。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 400" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Workflow 与 Agent 的谱系对比：左侧固定路径，右侧带回环的自主循环，底层共享增强型 LLM">
+          <defs>
+            <marker id="ar31-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar31-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="ar31-soft" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- left: workflow -->
+          <text x="160" y="28" text-anchor="middle" class="node-label" font-weight="700">Workflow · 预定义代码路径</text>
+          <rect x="40" y="48" width="100" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="90" y="73" text-anchor="middle" class="node-label">检索</text>
+          <line x1="140" y1="68" x2="180" y2="68" class="diagram-ink" marker-end="url(#ar31-ink)"/>
+          <rect x="182" y="48" width="100" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="232" y="73" text-anchor="middle" class="node-label">总结</text>
+          <line x1="160" y1="88" x2="160" y2="120" class="diagram-ink" marker-end="url(#ar31-ink)"/>
+          <text x="232" y="108" text-anchor="middle" class="edge-label" font-size="10">路径在代码里钉死</text>
+          <rect x="110" y="122" width="100" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="160" y="147" text-anchor="middle" class="node-label">翻译 → 输出</text>
+
+          <!-- right: agent -->
+          <text x="530" y="28" text-anchor="middle" class="node-label-accent" font-weight="700">Agent · LLM 自主决定下一步</text>
+          <rect x="455" y="60" width="150" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="530" y="80" text-anchor="middle" class="node-label-accent">LLM 决策</text>
+          <text x="530" y="98" text-anchor="middle" class="edge-label" font-size="10">下一步调什么？</text>
+          <!-- forward to action -->
+          <line x1="530" y1="108" x2="530" y2="142" class="diagram-accent" marker-end="url(#ar31-acc)"/>
+          <text x="545" y="128" class="edge-label" font-size="10">行动</text>
+          <rect x="455" y="144" width="150" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="530" y="169" text-anchor="middle" class="node-label">工具 / 环境</text>
+          <!-- loop-back arrow: route right-side down then up, no crossing forward arrow -->
+          <path d="M 605 164 L 655 164 L 655 84 L 607 84" class="diagram-accent" fill="none" marker-end="url(#ar31-acc)"/>
+          <text x="672" y="126" text-anchor="middle" class="branch-label" font-size="10" transform="rotate(90 672 126)">观察回喂</text>
+
+          <!-- shared foundation -->
+          <rect x="120" y="300" width="460" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="324" text-anchor="middle" class="node-label" font-weight="700">增强型 LLM</text>
+          <text x="350" y="344" text-anchor="middle" class="edge-label">= LLM + 检索 + 工具 + 记忆</text>
+          <line x1="160" y1="162" x2="230" y2="298" class="diagram-soft" marker-end="url(#ar31-soft)"/>
+          <line x1="530" y1="184" x2="470" y2="298" class="diagram-soft" marker-end="url(#ar31-soft)"/>
+          <text x="350" y="240" text-anchor="middle" class="edge-label">两者都建立在同一块积木上</text>
+
+          <!-- divider -->
+          <line x1="350" y1="44" x2="350" y2="200" class="diagram-soft"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>Workflow 与 Agent 都搭在「增强型 LLM」这块积木上，区别只在上层控制流。<strong>注意</strong>：区别不在「用没用 LLM」，而在「谁来决定下一步」——路径写死的是 Workflow，模型自己决定的是 Agent。右侧那根回喂箭头（观察重新进入 LLM）就是把 Workflow 变成 Agent 的唯一结构差异。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 3.1 · Workflow vs Agent 的取舍</caption>
+        <thead>
+          <tr><th>维度</th><th>Workflow（预定义路径）</th><th>Agent（自主循环）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>控制流由谁定</td><td>工程师在代码里写死</td><td>LLM 运行时动态生成</td></tr>
+          <tr><td>可控 / 可测</td><td>高，路径可枚举、可单测</td><td>低，每次运行路径都不固定</td></tr>
+          <tr><td>成本 / 延迟</td><td>可预估，调用次数固定</td><td>不可预估，循环步数不定、token 易膨胀</td></tr>
+          <tr><td>适合的任务</td><td>步骤可预先枚举的（多数生产场景）</td><td>步骤无法预知、需运行时探索的</td></tr>
+          <tr class="selected"><td>Anthropic 的默认建议</td><td>优先用它——更可控更便宜</td><td>仅当 workflow 确实表达不了任务时才上</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>上 Agent 等于用「可控性、成本可预估性、可测试性」三样换「灵活性」。换之前先问：这个任务的步骤真的无法预先枚举吗？很多被包装成 Agent 的系统，拆开看其实是固定三步——那本该是 workflow，套上 Agent 外壳只是徒增 token 与不可控。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个客服系统：先分类用户意图，再按意图路由到「查订单 / 退款 / 转人工」三条固定处理链。这是 Agent 还是 Workflow？面试官追问「为什么很多生产场景反而更适合 Workflow」，怎么答？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>这是 <strong>Workflow</strong>（具体说是 routing 模式）：意图分类后走哪条链，是代码里 if/else 钉死的，LLM 只负责「分类」这一个算子，没有「自己决定下一步」。</p>
+          <p>很多生产场景更适合 Workflow，因为：①任务边界清晰、步骤能枚举——客服的处理路径就那么几条；②可控性是生产硬需求，Workflow 每条路径可单测、行为可预测，Agent 每次运行路径都可能不同、难回归；③成本可预估，Workflow 调用次数固定，Agent 的循环步数不定、token 会膨胀。<strong>判断该不该上 Agent 的标准</strong>：任务的步骤能不能预先枚举？能枚举就用 Workflow；只有当「下一步做什么」必须在运行时根据中间结果才能决定、且路径组合爆炸到没法写死时，自主循环才划算。</p>
+        </details>
+      </div>
+
+      <!-- ============ 3.2 ============ -->
+      <h2 id="s2"><span class="num">3.2</span><span>增强型 LLM 与工具循环（最小积木）</span></h2>
+
+      <p class="one-liner">增强型 LLM = LLM + 检索 + 工具 + 记忆；Agent 就是把这块积木套进一个「调用→观察→再调用」的循环。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>裸 LLM 无状态、知识有截止日期、不能与外界交互——它只会生成文本。要让它去「做事」，得先给它三样增强：检索（补它不知道的知识，02 章）、工具（让它能调 API、查数据库、跑代码，01 章 Function Calling）、记忆（让它跨轮次记住状态）。Anthropic 把这个组合叫<strong>增强型 LLM（augmented LLM）</strong>，并明确它是所有 agentic system 的<strong>最小积木</strong>——无论 workflow 还是 agent，底座都是它。先理解这块积木，上层的 ReAct、Plan、多 Agent 才有地方挂。</p>
+      </div>
+
+      <p>积木本身还不是 Agent——它只是一台「能力更强的一次性机器」。把它变成 Agent，靠的是外面那个循环：LLM 输出一个动作（调哪个工具、传什么参数）→ 执行得到观察结果 → 把结果拼回上下文 → LLM 据此再决定下一步。循环的终止条件由 LLM 自己判断（「信息够了，输出最终答案」）或由外部熔断（步数上限、超时）。3.3 的 ReAct 就是这个循环最经典的一种组织方式；3.4 的 Plan-and-Execute 是另一种。它们的差异不在积木，而在「循环怎么转」。</p>
+
+      <table class="compare-table">
+        <caption>表 3.2 · 增强型 LLM 的三样增强各解决什么</caption>
+        <thead>
+          <tr><th>增强项</th><th>裸 LLM 的缺陷</th><th>对应章节</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>检索</td><td>知识有截止日期、私有知识不知道、会幻觉</td><td>02 章 RAG</td></tr>
+          <tr><td>工具</td><td>不能与外界交互、不会算数、读不到实时数据</td><td>01 章 Function Calling</td></tr>
+          <tr><td>记忆</td><td>无状态，跨轮次 / 跨会话不记得</td><td>本章 3.6</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 循环才是分水岭</span>
+        <p>面试里有人把「调了 Function Calling 的 LLM」直接叫 Agent——这不准确。调一次工具、拿到结果就返回，那只是「带工具的单次调用」。只有当工具结果<strong>回喂、且 LLM 据此决定要不要再调</strong>，循环成立，才是 Agent。增强型 LLM 是名词（积木），Agent 是动词（让积木在循环里转起来）。</p>
+      </div>
+
+      <!-- ============ 3.3 ============ -->
+      <h2 id="s3"><span class="num">3.3</span><span>ReAct：推理-行动-观察</span></h2>
+
+      <p class="one-liner">ReAct = Reasoning + Acting：让 LLM 交织地「想一步、做一步、看一眼结果」，把推理和工具调用拧在同一个循环里。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>纯推理（Chain-of-Thought）的问题是<strong>不接地</strong>：模型在脑内一路推下去，没法核对外部事实，错了也不自知，越推越离谱。纯行动（只调工具、不推理）的问题是<strong>没规划</strong>：不知道为什么调、调完该干嘛。ReAct（Yao 等，2022）把两者缝起来——推理迹用来「诱导、跟踪、更新行动计划，并处理异常」（reason-to-act），行动用来「把外部信息拉进推理」（act-to-reason）。靠接地它胜过纯 CoT，靠规划它胜过纯行动。论文里 ALFWorld 提升 +34%、WebShop +10%。这是目前最主流的 Agent 范式，LangGraph 的默认 agent 就是它。</p>
+      </div>
+
+      <p>循环的一轮长这样：<strong>Thought</strong>（模型想：我现在缺什么、下一步该调谁）→ <strong>Action</strong>（输出一个工具调用，如 <code>search("张三 2023 论文")</code>）→ <strong>Observation</strong>（工具返回结果，被拼回上下文）→ 回到 Thought（基于新观察再想）。如此往复，直到模型在某轮 Thought 里判断「信息够了」，输出 <strong>Final Answer</strong>。关键机制是：<strong>每一轮的 observation 都会回喂进上下文</strong>，模型下一轮的推理是看着累积的全部观察做的——这让它能纠错（上一步查错了，这步换个 query），也让它能分解多跳问题（先查 A，拿到 A 再查 B）。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">react_loop.py</span>
+          <span class="lang">Python · 演示用（未在本机执行）</span>
+          <button class="copy" data-copy-target="code-react">复制</button>
+        </div>
+<pre id="code-react"><code class="language-python"># 最小 ReAct 循环骨架 —— 演示思路，省略了 prompt 模板与解析细节
+def react(question, tools, llm, max_steps=8):
+    scratchpad = ""                       # 累积的 Thought/Action/Observation
+    for step in range(max_steps):         # ← 步数上限：防死循环的第一道闸
+        # LLM 看着 question + 历史 scratchpad，产出下一步
+        output = llm(prompt(question, scratchpad, tools))
+
+        if "Final Answer:" in output:     # ← 模型自己判断该收尾了
+            return output.split("Final Answer:")[-1].strip()
+
+        thought, action, args = parse(output)   # 解析出 Thought / 要调的工具 / 参数
+        observation = tools[action](args)       # 真正执行工具，接地到外部世界
+
+        # 关键：把这一轮的观察回喂进 scratchpad，下一轮推理能看到
+        scratchpad += f"Thought: {thought}\nAction: {action}({args})\n"
+        scratchpad += f"Observation: {observation}\n"
+
+    return "达到步数上限，未得出答案"          # ← 熔断兜底，不让它无限转
+</code></pre>
+      </div>
+      <div class="annotations">
+        <span class="line-ref">L4</span>步数上限是防死循环的第一道闸。
+        <span class="line-ref">L7</span>终止由模型自己判断——这也是它永远不收尾的根源。
+        <span class="line-ref">L13</span>observation 回喂是 ReAct 的核心，也是 token 膨胀的源头。
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 560 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ReAct 循环：Thought 到 Action 到 Observation 再回到 Thought 的闭环，满足条件后产出 Final Answer">
+          <defs>
+            <marker id="ar32-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="ar32-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- Thought (top) -->
+          <rect x="200" y="30" width="160" height="52" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="280" y="52" text-anchor="middle" class="node-label-accent">Thought</text>
+          <text x="280" y="70" text-anchor="middle" class="edge-label">缺什么？下一步调谁</text>
+
+          <!-- Action (right) -->
+          <rect x="380" y="160" width="160" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="460" y="182" text-anchor="middle" class="node-label">Action</text>
+          <text x="460" y="200" text-anchor="middle" class="edge-label">调用工具</text>
+
+          <!-- Observation (bottom) -->
+          <rect x="200" y="290" width="160" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="280" y="312" text-anchor="middle" class="node-label">Observation</text>
+          <text x="280" y="330" text-anchor="middle" class="edge-label">工具返回结果</text>
+
+          <!-- Thought -> Action (forward, top-right) -->
+          <path d="M 360 68 Q 440 100 450 158" class="diagram-accent" fill="none" marker-end="url(#ar32-acc)"/>
+          <!-- Action -> Observation (forward, bottom-right) -->
+          <path d="M 450 212 Q 430 270 362 300" class="diagram-accent" fill="none" marker-end="url(#ar32-acc)"/>
+          <!-- Observation -> Thought (loop-back on the LEFT, clearly separated from forward arrows) -->
+          <path d="M 200 312 Q 90 290 90 186 Q 90 80 198 60" class="diagram-accent" fill="none" marker-end="url(#ar32-acc)"/>
+          <text x="78" y="190" text-anchor="middle" class="branch-label" transform="rotate(-90 78 190)">观察回喂上下文</text>
+
+          <!-- Final Answer exit (from Thought, to the right) -->
+          <line x1="360" y1="46" x2="460" y2="46" class="diagram-ink" stroke-dasharray="4 3" marker-end="url(#ar32-ink)"/>
+          <text x="410" y="36" text-anchor="middle" class="edge-label" font-size="10">信息够了</text>
+          <rect x="460" y="26" width="96" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="508" y="51" text-anchor="middle" class="node-label" font-size="12">Final<tspan> Answer</tspan></text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>ReAct 的三段闭环——前向箭头走右侧（Thought→Action→Observation），回喂箭头单独走左侧、与前向箭头不交叉。<strong>注意</strong>：observation 每轮回喂进上下文——这既是 ReAct 强的原因（接地、纠错），也是它 token 膨胀、易死循环的原因。虚线那条「信息够了→Final Answer」由模型自己判断，没有外部熔断时它会永远不走这条线。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 3.3 · ReAct vs 纯 CoT vs 纯行动</caption>
+        <thead>
+          <tr><th>范式</th><th>怎么工作</th><th>短板</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>纯 CoT（只推理）</td><td>脑内一路推到底，不碰外部</td><td>不接地，事实错了不自知</td></tr>
+          <tr><td>纯行动（只调工具）</td><td>反复调工具，不显式推理</td><td>没规划，不知道为什么调、调完干嘛</td></tr>
+          <tr class="selected"><td>ReAct（推理+行动交织）</td><td>想一步、做一步、看一眼，观察回喂</td><td>token 膨胀、错误累积、易死循环</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>observation 回喂是双刃：上下文每轮变长，<strong>token 随步数线性甚至更快膨胀</strong>，长任务会撑爆窗口；模型还会<strong>错误累积</strong>（一步判断错，后续都基于错的观察推）或<strong>死循环</strong>（反复调同一个工具、永远不输出 Final Answer）。工程上必须配：步数上限、循环检测（识别重复 Action）、超时熔断、以及兜底的人工接管。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 ReAct Agent 处理「比较 A、B、C 三款产品的价格和评分」，它反复调 <code>search("A 价格")</code>、<code>search("A 价格")</code>、<code>search("A 价格")</code>……卡住了。根因是什么？怎么从机制上止损？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>根因通常是：①工具返回的 observation 没被模型有效吸收（结果为空 / 格式模型读不懂 / 被截断），于是它每轮都觉得「还没拿到」又重试；②prompt 没引导它「拿到 A 就去查 B」，缺全局规划，陷在单步。</p>
+          <p>止损手段（对应「Agent 死循环怎么办」这道高频追问）：<strong>步数上限</strong>（max_steps，硬熔断）、<strong>循环检测</strong>（检测连续相同的 Action+args 就中断或强制换策略）、<strong>超时熔断</strong>（总时长/总 token 上限）、<strong>人工兜底</strong>（触发熔断后转人工或返回「无法完成」而非空转）。更治本的是换范式——这种「步骤可预先规划」的比较任务，Plan-and-Execute（3.4）先列出「查 A、查 B、查 C、对比」再执行，比 ReAct 边走边想更稳、更省 token。</p>
+        </details>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 推理模型如何改写这笔账（2026）</span>
+        <p>推理模型（extended thinking / test-time reasoning，如 o 系列、GPT-5.x 思考模式、Claude 扩展思考）把多步推理收进了模型<strong>内部</strong>——输出前先生成一段会计费、也增加延迟的推理 token。这改写了"要不要自己搭 ReAct / Plan 脚手架"这笔账：纯<em>想</em>的问题（数学、规划、代码推导）可以让模型在内部思考，省掉外部循环的多次往返；但凡要<em>接地</em>到外部世界（查库、调 API、读实时数据）的任务，仍然需要 ReAct 式的工具循环——推理模型替代不了"行动"那一半。中高级判断：先分清这道题缺的是"想得更深"还是"够到外部信息"——前者交给推理模型，后者才上 Agent 脚手架；代价分别是推理 token 与循环往返，都不是免费的。</p>
+      </div>
+
+      <!-- ============ 3.4 ============ -->
+      <h2 id="s4"><span class="num">3.4</span><span>Plan-and-Execute：先规划后执行</span></h2>
+
+      <p class="one-liner">先让 LLM 一次性把所有步骤规划好，再逐步执行；执行偏离时才回头 replan——用「规划/执行分离」换更少的 LLM 调用与全局视角。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>ReAct 每一步都要调一次 LLM 来「想下一步」——任务越长，调用越多，token 与延迟越高，而且它<strong>短视</strong>：每步只看眼前，缺全局视角，容易在多步任务里走弯路。Plan-and-Execute 把「想」和「做」拆开：开头调一次（或少数几次）LLM 产出<strong>完整计划</strong>（步骤 1…N），然后按计划执行——执行阶段大多不需要再调昂贵的规划模型。结果是调用更少、更便宜更快，且有一份显式的全局计划可审查、可干预。</p>
+      </div>
+
+      <p>结构是「Planner → Executor →（必要时）Re-planner」：Planner 看任务输出步骤列表；Executor 逐条执行（每条是一次工具调用或一个子 ReAct）；执行中如果发现现实和计划对不上（某步失败、拿到的结果推翻了前提），触发 <strong>replan</strong>——把已完成的结果和新情况交回 Planner 重新规划剩余步骤。它不是「计划一次就一条道走到黑」，replan 正是它应对环境变化的机制。</p>
+
+      <table class="compare-table">
+        <caption>表 3.4 · ReAct vs Plan-and-Execute（本章必答取舍之一）</caption>
+        <thead>
+          <tr><th>维度</th><th>ReAct（边想边做）</th><th>Plan-and-Execute（先规划后执行）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>LLM 调用次数</td><td>每步一次，多</td><td>规划一次 + 执行少调，少（更便宜更快）</td></tr>
+          <tr><td>全局视角</td><td>短视，每步只看眼前</td><td>有显式全局计划</td></tr>
+          <tr><td>适应环境变化</td><td>强，每步都能根据新观察调整</td><td>弱，计划僵化；靠 replan 补救</td></tr>
+          <tr><td>可审查 / 可干预</td><td>难，路径运行时才展开</td><td>易，计划是显式产物，可人工过目</td></tr>
+          <tr class="selected"><td>什么时候选它</td><td>步骤难预知、强依赖中间结果探索</td><td>步骤大体可预先规划、想省 token / 要全局最优</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>计划是开头一次性定的——<strong>环境一变，计划就僵</strong>。如果执行到第 3 步发现第 1 步的前提已不成立，没有 replan 机制就会一条错路走到底。所以 Plan-and-Execute 的工程难点在「<strong>什么时候该 replan</strong>」：太频繁就退化回 ReAct（失去省 token 的意义），太迟钝就在错误计划上空耗。常见触发条件：某步执行失败、观察结果与计划假设冲突、或执行了 K 步仍未逼近目标。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>Plan-and-Execute 执行到一半，发现前提变了（例如计划假设「文件存在」，第 2 步却报文件已被删）。该怎么 replan，又怎么避免 replan 太频繁退化成 ReAct？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>replan 的做法：把「原计划 + 已完成步骤的结果 + 触发 replan 的具体偏差」一起交回 Planner，让它<strong>只重规划剩余部分</strong>（保留已成功的步骤，不推倒重来），产出新的剩余步骤列表，Executor 继续。</p>
+          <p>避免退化成 ReAct 的关键是<strong>设好 replan 的触发阈值</strong>，别每步都回头问 Planner：只在「步骤执行失败、观察与计划假设明确冲突、或连续 K 步未逼近目标」这类硬信号下才 replan。如果发现 replan 频率高到接近「每步一次」，说明这个任务本身步骤难预知——那它本就更适合 ReAct，选错范式了。</p>
+        </details>
+      </div>
+
+      <!-- ============ 3.5 ============ -->
+      <h2 id="s5"><span class="num">3.5</span><span>Reflection 与五种工作流模式</span></h2>
+
+      <p class="one-liner">Reflection：让 Agent 对自己的输出做口头自我批评、把批评存进记忆、在重试时据此改进——本质是「拿额外的 LLM 调用换质量」。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>LLM 第一次的输出常常「差一点」——代码跑不过、答案漏了条件。Reflexion（Shinn 等，2023）的做法：让模型<strong>用自然语言批评自己刚才哪里错了</strong>（口头自我反思），把这段批评存进情景缓冲（episodic buffer），当作一种「语义梯度」——下一次重试时把它读回来，据此改进。这对应 Anthropic 的 <em>evaluator-optimizer</em> 工作流：一个角色生成、一个角色评判，迭代到满足标准。它在「有清晰评判标准、且值得多花几次调用换质量」的任务上有效。</p>
+      </div>
+
+      <p>Reflection 之外，Anthropic 在《Building Effective Agents》里把工程上真正常用的组织方式归纳为<strong>五种工作流模式</strong>——多数生产系统用的是这些，而非完全自主的 agent。把它们当成一张「先于上 Agent 该考虑的备选清单」：</p>
+
+      <table class="compare-table">
+        <caption>表 3.5 · Anthropic 的五种工作流模式</caption>
+        <thead>
+          <tr><th>模式</th><th>怎么组织</th><th>适用</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Prompt chaining</td><td>固定子任务串成链，前一步输出喂下一步</td><td>任务能稳定拆成固定子步骤；拿延迟换准确</td></tr>
+          <tr><td>Routing</td><td>先分类，再把输入分派给专才 / 便宜模型</td><td>输入类别清晰、各类该用不同处理</td></tr>
+          <tr><td>Parallelization</td><td>sectioning（拆独立子任务并行）/ voting（同任务多跑取投票）</td><td>子任务独立可并行，或要多次采样投票 / 加护栏</td></tr>
+          <tr><td>Orchestrator-workers</td><td>主控动态拆解子任务、分派给 worker、汇总</td><td>子任务<strong>无法预先枚举</strong>、需运行时拆</td></tr>
+          <tr class="selected"><td>Evaluator-optimizer</td><td>生成→评判→改进的迭代回路（Reflection 的工程形态）</td><td>有清晰评判标准、值得多花调用迭代</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · orchestrator-workers vs parallelization</span>
+        <p>两者都「并行多个子任务」，差别在<strong>子任务从哪来</strong>：parallelization 的子任务是<strong>预先定好</strong>的（开发者知道要把文档切成 5 段并行处理）；orchestrator-workers 的子任务是<strong>主控运行时动态拆</strong>的（拆几个、拆什么事先不知道）。前者是 workflow，后者已经带 agent 的自主性——这也正是「单 Agent 编排 vs 固定并行」的分界，面试常借这两个模式考你对自主性的理解。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>Reflection / evaluator-optimizer 每迭代一轮就<strong>多一组生成 + 评判的调用</strong>，token 和延迟成倍涨。它只在「评判标准明确、且质量提升值这个钱」时划算——评判标准模糊时，模型的自我批评本身就不可靠，越反思越跑偏。别把 Reflection 当默认开关。</p>
+      </div>
+
+      <!-- ============ 3.6 ============ -->
+      <h2 id="s6"><span class="num">3.6</span><span>记忆系统（短期 / 长期）</span></h2>
+
+      <p class="one-liner">短期记忆 = 上下文窗口里的 scratchpad（模型唯一能直接推理的东西）；长期记忆 = 外部存储，按情景 / 语义 / 程序性分层，用时检索回上下文。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>LLM 无状态——一次调用只看得见这次塞进上下文的内容。要让 Agent 在多轮对话里记得三步前说过什么、在跨会话里记得用户上周的偏好，就得有记忆系统。核心约束有一条要记牢：<strong>模型唯一能直接推理的，只有上下文窗口里的东西</strong>。长期记忆存得再多，不检索回上下文，模型就「看不见」。所以记忆系统的真正工作不是「存」，而是「在对的时机把对的东西捞回上下文」。</p>
+      </div>
+
+      <p><strong>短期记忆</strong>是当前上下文窗口里的对话历史 / scratchpad——它就是 3.3 那个 ReAct 累积的 thought-observation 串。它直接可推理，但容量受窗口限制，且每轮都在烧 token。<strong>长期记忆</strong>放在外部（向量库 / KV / 数据库），容量无限但必须检索才用得上。长期记忆按认知科学的三分法组织：</p>
+
+      <figure>
+        <svg viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Agent 记忆系统分层：短期记忆在上下文窗口内，长期记忆分情景、语义、程序性三类，通过检索回喂上下文">
+          <defs>
+            <marker id="ar36-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="ar36-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- short-term: context window (top) -->
+          <rect x="190" y="24" width="300" height="62" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="340" y="48" text-anchor="middle" class="node-label-accent">短期记忆 = 上下文窗口</text>
+          <text x="340" y="68" text-anchor="middle" class="edge-label">scratchpad · 模型唯一能直接推理的</text>
+
+          <!-- LONG label -->
+          <text x="40" y="200" class="edge-label" font-weight="700">长期</text>
+          <text x="40" y="216" class="edge-label" font-weight="700">记忆</text>
+
+          <!-- three long-term stores (bottom row) -->
+          <rect x="100" y="220" width="160" height="62" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="244" text-anchor="middle" class="node-label">情景 episodic</text>
+          <text x="180" y="264" text-anchor="middle" class="edge-label">过往交互记录</text>
+
+          <rect x="280" y="220" width="160" height="62" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="244" text-anchor="middle" class="node-label">语义 semantic</text>
+          <text x="360" y="264" text-anchor="middle" class="edge-label">事实 / 偏好 · 向量库</text>
+
+          <rect x="460" y="220" width="160" height="62" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="244" text-anchor="middle" class="node-label">程序性 procedural</text>
+          <text x="540" y="264" text-anchor="middle" class="edge-label">技能 · 权重/系统提示</text>
+
+          <!-- retrieve arrows up (accent) and write arrows down (ink) -->
+          <line x1="180" y1="220" x2="240" y2="90" class="diagram-accent" marker-end="url(#ar36-acc)"/>
+          <line x1="360" y1="220" x2="345" y2="90" class="diagram-accent" marker-end="url(#ar36-acc)"/>
+          <line x1="540" y1="220" x2="445" y2="90" class="diagram-accent" marker-end="url(#ar36-acc)"/>
+          <text x="250" y="150" text-anchor="middle" class="branch-label" font-size="10" transform="rotate(-66 250 150)">检索回喂</text>
+          <!-- write-back (dashed, from context down to semantic) -->
+          <line x1="300" y1="86" x2="320" y2="218" class="diagram-soft" marker-end="url(#ar36-ink)"/>
+          <text x="430" y="150" text-anchor="middle" class="edge-label" font-size="10">写入：摘要 / 抽取偏好</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3 附</span>记忆两层：短期在窗口内可直接推理，长期分三类存在外部、靠检索回喂。<strong>注意</strong>：所有长期记忆都得<strong>检索回上下文</strong>（朱红箭头）模型才看得见——「存了」不等于「记得」。三类的差别是内容性质：episodic 是「发生过什么」，semantic 是「无时间性的事实/偏好」，procedural 是「会做什么」（常固化在权重 / 系统提示 / 工具注册表里，而非检索）。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 3.6 · 长期记忆三分（认知科学借来的）</caption>
+        <thead>
+          <tr><th>类型</th><th>存什么</th><th>典型载体</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>情景 episodic</td><td>过往具体交互（上次对话、上次操作）</td><td>向量库 / 会话日志</td></tr>
+          <tr><td>语义 semantic</td><td>无时间性的事实、用户偏好</td><td>向量库（最常见）</td></tr>
+          <tr><td>程序性 procedural</td><td>「怎么做」的技能</td><td>模型权重 / 系统提示 / 工具注册表</td></tr>
+        </tbody>
+      </table>
+
+      <p>工程落地上，LangGraph 用 <strong>checkpointing</strong>（持久化到 Postgres / Redis / SQLite）把对话状态存盘，实现「续上一次会话」；LangMem 之类在其上加带命名空间的长期记忆。记忆系统的设计三问：<strong>写入时机</strong>（每轮都写还是会话结束才摘要写）、<strong>检索召回</strong>（用什么 query 捞、捞回几条）、<strong>压缩摘要</strong>（旧历史怎么压缩以免撑爆窗口）。</p>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>记忆不是「越多越好」。检索回来的记忆<strong>挤占上下文窗口</strong>（和当前任务争 token），召回不准还会塞进噪声、误导模型；写入太频繁则放大延迟与存储成本。跨会话记忆尤其要管「<strong>该不该记、记多久、谁能读</strong>」——把用户敏感信息长期存进向量库，是隐私与合规的雷区。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个多轮 Agent 聊到第 50 轮，上下文眼看要爆窗口。同时面试官追问「跨会话记忆怎么做」。两个问题怎么答？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p><strong>上下文爆了怎么办</strong>：①滑动窗口——只保留最近 N 轮原文；②摘要压缩——把更早的历史用 LLM 压成一段摘要顶在前面（拿信息损失换 token）；③外置——把早期对话写入长期记忆（向量库），需要时再按相关性检索回来，而不是全量留在窗口里。三者常组合用：近期保原文 + 远期存摘要 + 关键事实进长期记忆。</p>
+          <p><strong>跨会话记忆怎么做</strong>：会话结束时把关键信息（用户偏好=语义记忆、这次发生了什么=情景记忆）写入外部存储；新会话开始时，按当前用户 / 话题检索回相关记忆，拼进系统提示或上下文开头。LangGraph 的 checkpointing 负责「同一会话续上」，命名空间化的长期记忆（如 LangMem）负责「跨会话记得这个用户」。核心仍是那条铁律——长期记忆必须<strong>检索回上下文</strong>模型才用得上。</p>
+        </details>
+      </div>
+
+      <p>记忆只是“管理放进窗口的内容”这件事的一个侧面。把它推到一般情形——<strong>每一步该让模型看到什么、看不到什么</strong>——就是 <a href="#s9">§3.9</a> 要讲的上下文工程。</p>
+
+      <!-- ============ 3.7 ============ -->
+      <h2 id="s7"><span class="num">3.7</span><span>多智能体：何时该上、代价是什么</span></h2>
+
+      <p class="one-liner">多个 Agent 分工协作，靠角色分工 + 上下文隔离 + 并行换能力上限；代价是约 15× 的 token 与协调/调试难度——只在任务价值高且能拆成独立并行子任务时划算。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>单个 Agent 有两个天花板：上下文窗口装不下超大任务，以及一个角色很难同时擅长「搜索 + 编码 + 审校」。多智能体用分工破这两个天花板——主管（orchestrator）拆任务，多个子代理各管一块、各自带独立上下文并行干。Anthropic 的研究系统给了硬数据：Opus 主管 + 3–5 个 Sonnet 子代理并行，比单 Opus <strong>+90.2%</strong>。但同一篇报告也给了反面数据：约 <strong>80% 的性能差异由 token 用量解释</strong>，且多智能体烧<strong>约 15× 普通 chat 的 token</strong>。所以它不是「更高级所以更好」，而是一笔要算清的账。</p>
+      </div>
+
+      <p>多智能体的强项是<strong>广度优先</strong>：任务能切成多条<strong>互相独立、可并行</strong>的探索路径（如「同时调研 5 家公司的财报」），每条超出单个上下文窗口。它的<strong>死穴</strong>是需要大量<strong>共享中间上下文</strong>或<strong>步骤强依赖</strong>的任务——Anthropic 直言「LLM 还不擅长实时协调与委派」，子代理之间传递上下文有损耗，一步失败就让整体崩。编排模式有几种：supervisor / hierarchical（主管派活）、network（代理互相调用）、sequential（流水线）、handoff（OpenAI Agents SDK，一个代理显式把控制权连同上下文转交另一个）。</p>
+
+      <table class="compare-table">
+        <caption>表 3.7 · 单 Agent vs 多 Agent（本章必答取舍之一）</caption>
+        <thead>
+          <tr><th>维度</th><th>单 Agent</th><th>多 Agent</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>能力上限</td><td>受单上下文 + 单角色限制</td><td>高，分工 + 并行突破上限</td></tr>
+          <tr><td>token 成本</td><td>基准</td><td>约 15× —— 仅高价值任务划算</td></tr>
+          <tr><td>协调 / 调试</td><td>简单，单条轨迹好追</td><td>难，跨代理通信、错误难定位</td></tr>
+          <tr><td>擅长的任务形态</td><td>串行、上下文需共享</td><td>广度优先、独立可并行的子任务</td></tr>
+          <tr class="selected"><td>需大量共享上下文 / 步骤强依赖时</td><td>更合适</td><td><strong>不适合</strong>——协调损耗 + 一步崩全盘</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>约 15× token 只是显性成本。隐性代价更难受：<strong>协调开销</strong>（代理间传上下文有损、主管要花调用去拆解与汇总）、<strong>调试难</strong>（一次失败要在多条交织轨迹里定位是哪个代理哪一步出的错）、<strong>错误跨代理传播</strong>（子代理的错误观察被主管当真，污染全局）。上多智能体前先确认任务能拆成独立并行块——拆不开就别上，单 Agent + 好的工具更省心。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个任务需要多个 Agent 共享大量中间上下文（每个 Agent 的产出都要喂给下一个、且彼此频繁互相依赖），该上多智能体吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p><strong>不该。</strong>这正是多智能体的死穴场景。Anthropic 明确指出多智能体擅长的是「广度优先、子任务<strong>独立可并行</strong>」的任务；而「需大量共享上下文或多步互相依赖」的任务<strong>不适合</strong>——理由：①代理间传递上下文有损耗，频繁共享会持续丢信息；②「LLM 还不擅长实时协调委派」，强依赖链条下一步失败可能让整体崩；③还要白白多付约 15× 的 token。</p>
+          <p>这种任务更适合<strong>单 Agent</strong>（所有中间结果都在同一个上下文里，无传递损耗、好调试），或拆成<strong>Plan-and-Execute 的串行流水线</strong>（显式计划 + 顺序执行）。判据一句话：<strong>子任务能不能独立并行？</strong> 能并行才考虑多 Agent；要频繁共享上下文，多 Agent 是负优化。追问「Agent 间怎么编排」答 supervisor / network / sequential / handoff；「错误怎么跨 Agent 控制」答每个子代理的输出要校验后再汇总、主管对子代理结果做可信度判断、失败子任务可重派或降级。</p>
+        </details>
+      </div>
+
+      <!-- ============ 3.8 ============ -->
+      <h2 id="s8"><span class="num">3.8</span><span>MCP：工具接入的标准协议</span></h2>
+
+      <p class="one-liner">MCP（Model Context Protocol，Anthropic 2024-11）= 「AI 的 USB-C」：用 JSON-RPC 标准化 Agent 与工具/数据源的接入，让工具写一次、任何 MCP 客户端复用。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>没有 MCP 时，每个应用要接每个工具都得写一套专用胶水——M 个应用 × N 个工具 = M×N 套各不相同的对接代码，新增一个就要再写一排。这是<strong>工程层的集成爆炸</strong>。MCP 把对接抽象成一个标准协议：工具方实现一次 MCP server，应用方实现一次 MCP client，双方就能互通。M×N 套胶水塌缩成 <strong>M+N</strong> 次实现。这是「USB-C」类比的本意——统一接口，谁插谁都通。</p>
+      </div>
+
+      <p>架构是三层：<strong>host</strong>（用户面对的应用，如 IDE、Claude Desktop）→ <strong>client</strong>（host 内部为每个 server 维护一条 1:1 连接）→ <strong>server</strong>（暴露能力的一方）。server 暴露三类 primitives：<strong>tools</strong>（可执行函数）、<strong>resources</strong>（上下文数据，如文件 / 数据库记录）、<strong>prompts</strong>（可复用的提示模板）；client 侧也有 primitives：roots（文件系统边界）、sampling（让 server 反向请求 LLM 补全）。传输层两种：<strong>stdio</strong>（本地进程）和 <strong>HTTP/SSE</strong>（远程）。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="MCP 把 M 个应用乘 N 个工具的硬连接乱麻，收敛成经标准接口的 M 加 N 次实现">
+          <defs>
+            <marker id="ar38-soft" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+            <marker id="ar38-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- LEFT: M×N tangle -->
+          <text x="160" y="26" text-anchor="middle" class="node-label" font-weight="700">没有 MCP · M×N 套胶水</text>
+          <!-- 3 apps left column -->
+          <rect x="40" y="50" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="75" y="72" text-anchor="middle" class="node-label" font-size="12">App 1</text>
+          <rect x="40" y="120" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="75" y="142" text-anchor="middle" class="node-label" font-size="12">App 2</text>
+          <rect x="40" y="190" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="75" y="212" text-anchor="middle" class="node-label" font-size="12">App 3</text>
+          <!-- 3 tools right column -->
+          <rect x="210" y="50" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="245" y="72" text-anchor="middle" class="node-label" font-size="12">工具 A</text>
+          <rect x="210" y="120" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="245" y="142" text-anchor="middle" class="node-label" font-size="12">工具 B</text>
+          <rect x="210" y="190" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="245" y="212" text-anchor="middle" class="node-label" font-size="12">工具 C</text>
+          <!-- tangle: 9 lines (each app to each tool) -->
+          <line x1="110" y1="67" x2="210" y2="67" class="diagram-soft"/>
+          <line x1="110" y1="67" x2="210" y2="137" class="diagram-soft"/>
+          <line x1="110" y1="67" x2="210" y2="207" class="diagram-soft"/>
+          <line x1="110" y1="137" x2="210" y2="67" class="diagram-soft"/>
+          <line x1="110" y1="137" x2="210" y2="137" class="diagram-soft"/>
+          <line x1="110" y1="137" x2="210" y2="207" class="diagram-soft"/>
+          <line x1="110" y1="207" x2="210" y2="67" class="diagram-soft"/>
+          <line x1="110" y1="207" x2="210" y2="137" class="diagram-soft"/>
+          <line x1="110" y1="207" x2="210" y2="207" class="diagram-soft"/>
+          <text x="160" y="250" text-anchor="middle" class="edge-label" font-size="10">9 套专用对接，新增即再写一排</text>
+
+          <!-- divider -->
+          <line x1="330" y1="40" x2="330" y2="270" class="diagram-soft"/>
+
+          <!-- RIGHT: M+N via MCP hub -->
+          <text x="530" y="26" text-anchor="middle" class="node-label-accent" font-weight="700">经 MCP · M+N 次实现</text>
+          <!-- 3 apps -->
+          <rect x="400" y="50" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="435" y="72" text-anchor="middle" class="node-label" font-size="12">App 1</text>
+          <rect x="400" y="120" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="435" y="142" text-anchor="middle" class="node-label" font-size="12">App 2</text>
+          <rect x="400" y="190" width="70" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="435" y="212" text-anchor="middle" class="node-label" font-size="12">App 3</text>
+          <!-- MCP hub -->
+          <rect x="520" y="108" width="76" height="92" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="558" y="148" text-anchor="middle" class="node-label-accent">MCP</text>
+          <text x="558" y="168" text-anchor="middle" class="edge-label" font-size="10">标准接口</text>
+          <!-- 3 tools -->
+          <rect x="630" y="50" width="60" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="660" y="72" text-anchor="middle" class="node-label" font-size="12">A</text>
+          <rect x="630" y="137" width="60" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="660" y="159" text-anchor="middle" class="node-label" font-size="12">B</text>
+          <rect x="630" y="224" width="60" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="660" y="246" text-anchor="middle" class="node-label" font-size="12">C</text>
+          <!-- apps -> hub (3 lines, each ends on hub left edge) -->
+          <line x1="470" y1="67" x2="518" y2="120" class="diagram-accent" marker-end="url(#ar38-acc)"/>
+          <line x1="470" y1="137" x2="518" y2="150" class="diagram-accent" marker-end="url(#ar38-acc)"/>
+          <line x1="470" y1="207" x2="518" y2="185" class="diagram-accent" marker-end="url(#ar38-acc)"/>
+          <!-- hub -> tools (3 lines, each ends on tool left edge) -->
+          <line x1="596" y1="130" x2="628" y2="72" class="diagram-accent" marker-end="url(#ar38-acc)"/>
+          <line x1="596" y1="154" x2="628" y2="154" class="diagram-accent" marker-end="url(#ar38-acc)"/>
+          <line x1="596" y1="178" x2="628" y2="238" class="diagram-accent" marker-end="url(#ar38-acc)"/>
+          <text x="530" y="290" text-anchor="middle" class="edge-label" font-size="10">各实现一次即互通</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>左边 M 应用各自硬连 N 工具是 M×N 套胶水（9 条乱线）；右边经 MCP 标准接口，应用与工具各实现一次即互通，塌缩成 M+N。<strong>注意</strong>：MCP 解决的是工程层的集成爆炸，不是模型层的「想调什么」——后者是 Function Calling 的活。这张图里 MCP 是个「适配中枢」，它不替模型决定调谁，只让「调得通」这件事不必重复造轮子。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 3.8 · Function Calling vs MCP（本章必答取舍之一）</caption>
+        <thead>
+          <tr><th>维度</th><th>Function Calling</th><th>MCP</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>属于哪一层</td><td>模型层</td><td>工程 / 集成层</td></tr>
+          <tr><td>解决什么</td><td>模型「想调什么、参数填什么」的输出格式</td><td>工具「怎么被标准接入、发现、复用」的协议</td></tr>
+          <tr><td>形态</td><td>模型输出的结构化调用意图（JSON）</td><td>JSON-RPC 协议 + host/client/server 架构</td></tr>
+          <tr><td>复用性</td><td>每个应用各自定义函数 schema</td><td>一次实现、任何 MCP 客户端复用</td></tr>
+          <tr class="selected"><td>二者关系</td><td>决定「调谁」（大脑的意图）</td><td>负责「调得通」（接线的标准）——互补不互斥</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 别把 FC 和 MCP 对立起来</span>
+        <p>面试常设的陷阱是让你「二选一」——其实它们在<strong>不同层、互补</strong>。一次工具调用里：Function Calling 让模型<strong>产出</strong>「我要调 search、参数是 X」这个意图；MCP 负责把这个意图<strong>路由</strong>到一个标准化的 search server 并拿回结果。没有 FC，模型不知道要调什么；没有 MCP，每个工具的接入都得重写胶水。生产里两者同时在场。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">带来的代价 / 安全</span>
+        <p>MCP 把外部 server 接进 Agent，等于<strong>扩大了攻击面</strong>：恶意或被污染的 server 可以返回带 prompt 注入的 resource、或暴露危险 tool。所以 MCP 的安全机制要点：server 的<strong>能力授权与用户确认</strong>（高危 tool 调用前要批准）、client 用 <strong>roots</strong> 限定文件系统边界、对 server 返回内容做注入防御、远程 server 要鉴权与传输加密。把任意第三方 MCP server 无脑接进生产 Agent，是典型失败模式。</p>
+      </div>
+
+      <!-- ============ 3.9 ============ -->
+      <h2 id="s9"><span class="num">3.9</span><span>上下文工程：长程 Agent 的头号失败模式</span></h2>
+
+      <p class="one-liner">上下文工程 = 主动管理“到底把什么放进上下文窗口”。长程 Agent 出问题，多半不是模型不行，而是 token 越堆越多把它拖垮——这是 2026 最被强调的工程能力。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§3.3 说过 ReAct 每轮把 observation 回喂、上下文线性膨胀；§3.6 的记忆检索又往里塞。Agent 跑得越久，窗口里堆的无关历史、旧工具输出、过期观察越多。实测一个在干净 prompt 上能拿 <strong>98.1</strong> 分的模型，把同样的信息散落进多轮 Agent 运行后会掉到 <strong>64.1</strong>——业界叫它 <strong>context rot</strong>（上下文腐化）。所以“放进窗口的是什么”本身就是一等工程问题：prompt engineering 之后是 context engineering。</p>
+      </div>
+
+      <p>主流框架把上下文管理拆成<strong>四个动作</strong>，各治一种失败：</p>
+
+      <table class="compare-table">
+        <caption>表 3.9 · 上下文工程四杠杆，各治一种失败模式</caption>
+        <thead><tr><th>动作</th><th>做什么</th><th>治哪种失败</th></tr></thead>
+        <tbody>
+          <tr><td>write 写出</td><td>把该留的事实 / 进展写到窗口外的存储（记忆、草稿）</td><td>context poisoning：幻觉状态被反复带进后续</td></tr>
+          <tr class="selected"><td>select 选取</td><td>每一步只把当前真正需要的工具、上下文捞进来</td><td>context confusion：工具 / 信息过载，模型选错</td></tr>
+          <tr><td>compress 压缩</td><td>对累积历史做摘要 / 折叠（compaction）</td><td>context distraction：旧历史堆积，稀释当前任务</td></tr>
+          <tr><td>isolate 隔离</td><td>把独立子任务交给 subagent，各用干净上下文</td><td>context clash：多路信息混在一起互相干扰</td></tr>
+        </tbody>
+      </table>
+
+      <p>两条最常被追问的具体技术：</p>
+      <p><strong>compaction（压缩 / 摘要折叠）</strong>：历史快撑爆窗口时，用 LLM 把旧历史摘成一段短摘要顶上去。代价是<em>有损</em>（摘错就丢了关键信息）且<em>阻塞</em>（要等这次摘要调用返回）。进阶做法 <strong>context-folding</strong> 把已完成的子任务“折叠”成结论、只留活跃上下文，实测能用约 <strong>10×</strong> 更小的活跃上下文逼近 ReAct 基线。</p>
+      <p><strong>记忆即工具（memory-as-tools）</strong>：把 §3.6 的长期记忆从“后台自动塞”升级成模型<em>主动调用</em>的工具——把 store / retrieve / update / summarize / discard 五个动作都做成函数，让模型自己决定何时写、何时捞、何时丢。好处是写入和召回都受控、可追溯，不再无脑往窗口里灌。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="上下文随轮次膨胀：朴素累积撑爆窗口，compaction 周期性折叠把上下文压回低位">
+          <defs>
+            <marker id="ce-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+          <line x1="72" y1="44" x2="72" y2="250" class="diagram-ink"/>
+          <line x1="72" y1="250" x2="600" y2="250" class="diagram-ink" marker-end="url(#ce-ink)"/>
+          <text x="30" y="150" text-anchor="middle" class="edge-label" transform="rotate(-90 30 150)">上下文 token 量</text>
+          <text x="336" y="288" text-anchor="middle" class="edge-label">Agent 运行轮次 →</text>
+          <line x1="72" y1="74" x2="600" y2="74" class="diagram-soft"/>
+          <text x="596" y="68" text-anchor="end" class="edge-label">窗口上限</text>
+          <polyline points="96,240 340,150 478,78 590,78" class="diagram-ink" fill="none"/>
+          <text x="470" y="64" text-anchor="end" class="edge-label">朴素：历史全留 → 撑爆</text>
+          <polyline points="96,240 200,130 206,206 312,126 318,200 430,122 436,196 548,134" class="diagram-accent" fill="none"/>
+          <text x="300" y="232" text-anchor="start" class="branch-label">compaction：周期性折叠 → 稳住</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.9</span>朴素累积（黑线）把每轮历史全留，上下文单调上涨直到撑爆窗口；compaction（红线）周期性把旧历史折叠成摘要，把活跃上下文压回低位、稳在窗口内。<strong>注意</strong>：长程 Agent 的瓶颈常在这条曲线，不在模型本身——换更大模型治不了 context rot。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">洞察 · context engineering 是新的 prompt engineering</span>
+        <p>初级想“prompt 怎么写”，中高级想“这一步该让模型<strong>看到</strong>什么、<strong>看不到</strong>什么”。同样的工具和模型，上下文管得好不好，能在长任务上拉开 30 多分的差距（98 → 64 那条）。面试聊 Agent 可靠性时，能主动提 context rot + 四杠杆，是明确的中高级信号。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 Agent 任务跑到第 40 步开始“失忆 / 抓不住重点”，但单看模型在短 prompt 上表现很好。最该先怀疑什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>先怀疑 <strong>context rot</strong>，不是模型变笨。长程运行里窗口被几十轮工具输出、旧观察、检索回来的记忆塞满，关键信息要么被挤出窗口、要么落在中部被 Lost-in-the-Middle（§1.3）忽略。对策按四杠杆来：<strong>select</strong> 每步只取真正需要的工具 / 上下文（别把几十个工具定义全塞）、<strong>compress</strong> 对旧历史做 compaction、<strong>isolate</strong> 把独立子任务拆给 subagent 各用干净上下文、<strong>write</strong> 把该留的事实写进外部记忆而非全堆窗口。根因是上下文管理，换个更大模型解决不了。</p>
+        </details>
+      </div>
+
+      <!-- ============ 3.10 ============ -->
+      <h2 id="s10"><span class="num">3.10</span><span>Computer Use / GUI agents</span></h2>
+
+      <p class="one-liner">Computer Use = 让 Agent 通过<strong>截图 + 鼠标键盘动作</strong>直接操作图形界面，把“没有 API 的软件”也变成可调用的工具。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Function Calling（§1.6）和 MCP（§3.8）都要求目标系统<em>暴露了接口</em>。但大量真实软件没有 API——老旧的企业系统、只有网页的后台、桌面应用。Computer Use 让模型像人一样“看屏幕、点按钮”，把这部分系统也纳入 Agent 的行动范围。代表能力：Anthropic Computer Use、OpenAI 的计算机操作 Agent 等。</p>
+      </div>
+
+      <p>机制上它<strong>仍是 ReAct 循环</strong>，只是 observation 和 action 换了形态：模型拿到一张<strong>截图</strong>（多模态输入）→ 输出一个<strong>动作</strong>（点击坐标 (x, y) / 输入文本 / 滚动 / 按键）→ runtime 执行后回传<em>新截图</em> → 模型据此再决策。把 <a href="#s3">§3.3</a> 那张图里的“工具返回文本”换成“返回截图”，闭环不变。</p>
+
+      <table class="compare-table">
+        <caption>表 3.10 · Computer Use vs API / MCP——优先级</caption>
+        <thead><tr><th>接入方式</th><th>适用</th><th>代价</th></tr></thead>
+        <tbody>
+          <tr class="selected"><td>API / Function Calling / MCP</td><td>目标系统有接口——首选</td><td>需要对方暴露接口</td></tr>
+          <tr><td>Computer Use（截图 + 动作）</td><td>没有 API 的网页 / 桌面 / 老系统，兜底手段</td><td>慢、脆（UI 一变就失效）、安全风险大</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 慢、脆，且把安全风险放大</span>
+        <p>三个现实代价：①<strong>慢</strong>——每步要截图 + 多模态推理 + 渲染，比调 API 慢一个量级；②<strong>脆</strong>——UI 一改版、按钮一挪位，写死的视觉定位就失效；③<strong>安全被放大</strong>——一个能读屏、能点任何东西的 Agent，正好凑齐 §4.5 的<strong>致命三件套</strong>（不可信输入 + 私有数据 + 对外通道），被间接注入一句“把数据发出去”后果严重。所以 Computer Use 必须配最小权限、沙箱、高危动作人工确认（HITL）。有 API / MCP 能用时，永远优先用接口，别上 Computer Use。</p>
+      </div>
+
+      <!-- ============ 面试题检索 ============ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>面试题检索</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上正文，把答案在心里过一遍或写下来，再点开对照。直接展开等于把这一章又读了一遍——记不住。标「高频」的是社招中高级几乎必问的。
+        </p>
+        <ol>
+          <li><strong>[高频]</strong> Agent 和 Workflow / 单纯 LLM 调用有什么区别？
+            <details>
+              <summary>展开答案</summary>
+              <p>三者都属 agentic system，区别在「谁决定下一步」：<strong>单纯 LLM 调用</strong>是一次性输入输出，无循环；<strong>Workflow</strong>是 LLM 与工具通过<strong>预定义代码路径</strong>编排，流程在运行前钉死，可控、可测、成本可预估；<strong>Agent</strong>是 LLM <strong>自主决定流程与工具用法</strong>，带规划 + 工具 + 记忆 + 反思的自主循环，灵活但不可控、贵、难调试。很多生产场景混合最优。</p>
+              <p><strong>追问：为什么很多生产场景反而更适合 Workflow？</strong> 因为多数任务步骤可预先枚举，预定义路径更可控（可单测、行为可预测）、更便宜（调用次数固定）、更好回归。Agent 的自主性是为「步骤无法预先枚举」的任务保留的。<strong>怎么判断该不该上 Agent？</strong> 一句话判据：任务的步骤能不能预先枚举？能枚举用 Workflow；只有「下一步做什么」必须运行时根据中间结果决定、且路径组合爆炸到没法写死时，才上 Agent。</p>
+            </details>
+          </li>
+          <li><strong>[高频]</strong> Agent 有哪些工作模式？分别适用什么？
+            <details>
+              <summary>展开答案</summary>
+              <p><strong>ReAct</strong>（思考-行动-观察交织，每轮观察回喂）——步骤难预知、需边走边探索；<strong>Plan-and-Execute</strong>（先一次性规划再执行，省 token、有全局视角）——步骤大体可预先规划；<strong>Reflection</strong>（自我反思、迭代改进）——有清晰评判标准、值得多花调用换质量；<strong>Multi-Agent</strong>（多角色分工并行）——任务可拆成独立并行子任务且价值高。</p>
+              <p><strong>追问：Agent 死循环怎么办？</strong> 步数上限（max_steps 硬熔断）、循环检测（识别重复 Action 就中断/换策略）、超时熔断（总时长/总 token 上限）、人工兜底（触发熔断后转人工或返回「无法完成」而非空转）。</p>
+            </details>
+          </li>
+          <li><strong>[高频]</strong> 详细解释 ReAct。
+            <details>
+              <summary>展开答案</summary>
+              <p>ReAct = Reasoning + Acting，把推理和行动拧进一个循环：<strong>Thought</strong>（想：缺什么、下一步调谁）→ <strong>Action</strong>（输出工具调用）→ <strong>Observation</strong>（工具返回，拼回上下文）→ 回到 Thought，直到模型判断信息够了输出 Final Answer。核心机制是<strong>每轮 observation 回喂上下文</strong>，让模型能接地、纠错、分解多跳问题。靠接地胜过纯 CoT，靠规划胜过纯行动；LangGraph 默认就是这个范式。</p>
+              <p><strong>追问：ReAct 缺点？</strong> token 随步数膨胀、错误累积（一步错后续基于错的推）、可能死循环。<strong>vs Plan-and-Execute 怎么取舍？</strong> ReAct 每步调一次 LLM、灵活适应变化但贵且短视；Plan-and-Execute 规划一次再执行、省 token 有全局视角但计划僵化。步骤可预先规划选后者，步骤难预知选前者。</p>
+            </details>
+          </li>
+          <li><strong>[高频]</strong> Agent 的记忆系统怎么设计？
+            <details>
+              <summary>展开答案</summary>
+              <p><strong>短期记忆</strong>=对话上下文 / scratchpad，是模型唯一能直接推理的东西，受窗口限制、烧 token；<strong>长期记忆</strong>=向量库 / 外部存储，容量无限但必须检索回上下文才用得上，按认知科学三分：<strong>情景 episodic</strong>（过往交互）、<strong>语义 semantic</strong>（无时间性的事实/偏好，常向量库）、<strong>程序性 procedural</strong>（技能，在权重/系统提示/工具注册表）。设计三问：写入时机、检索召回、压缩摘要。LangGraph 用 checkpointing 持久化。</p>
+              <p><strong>追问：跨会话记忆怎么做？</strong> 会话结束写关键信息（偏好=语义、发生了什么=情景）入外部存储，新会话按用户/话题检索回来拼进上下文。<strong>上下文爆了怎么办？</strong> 滑动窗口（留最近 N 轮）+ 摘要压缩（早期历史压成摘要）+ 外置长期记忆（按需检索）。铁律：长期记忆不检索回上下文模型就看不见。</p>
+            </details>
+          </li>
+          <li><strong>[高频]</strong> MCP 是什么协议？解决什么？和 Function Calling 本质区别？
+            <details>
+              <summary>展开答案</summary>
+              <p>MCP = Model Context Protocol（Anthropic 2024-11），用 JSON-RPC 标准化 Agent 与工具/数据源的接入，让工具可发现、可复用，把 M 应用×N 工具的集成爆炸（M×N 套胶水）收敛成 <strong>M+N</strong> 次实现（「AI 的 USB-C」）。架构：host（应用）→ client（1:1 连接管理）→ server（能力）；server primitives = tools / resources / prompts；传输 = stdio（本地）/ HTTP-SSE（远程）。</p>
+              <p><strong>本质区别</strong>：Function Calling 是<strong>模型层</strong>「想调什么、参数填什么」的输出格式（决定调谁）；MCP 是<strong>工程层</strong>「工具怎么标准接入」的协议（负责调得通）。二者互补不互斥，生产里同时在场。<strong>追问：MCP 安全机制？</strong> 高危 tool 调用前用户确认、client 用 roots 限定文件边界、对 server 返回做注入防御、远程 server 鉴权 + 传输加密。<strong>追问：MCP 和 A2A 什么关系？</strong>（2025–2026 面试一旦问到 MCP 常跟这一刀）A2A（Agent-to-Agent 协议）管的是「Agent ↔ Agent」的互操作——能力发现、任务委托；MCP 管的是「Agent ↔ 工具/数据源」。两者不同层、互补：A2A 对接同伴 Agent，MCP 对接工具。</p>
+            </details>
+          </li>
+          <li>多智能体什么时候值得上？
+            <details>
+              <summary>展开答案</summary>
+              <p>值得上：任务能拆成<strong>独立可并行</strong>的子任务（广度优先）、需要多角色分工、需要上下文隔离，且任务价值高足以摊薄成本。代价：通信开销、协调难、调试难、约 <strong>15× token</strong>（Anthropic 数据：约 80% 性能差异由 token 用量解释）。<strong>不适合</strong>：任务需大量共享中间上下文或步骤强依赖时——代理间传上下文有损、LLM 还不擅长实时协调委派、一步失败可能整体崩。</p>
+              <p><strong>追问：Agent 间怎么编排？</strong> supervisor/hierarchical（主管派活）、network（互相调用）、sequential（流水线）、handoff（显式转移控制权并带上下文，如 OpenAI Agents SDK）。<strong>错误怎么跨 Agent 控制？</strong> 子代理输出校验后再汇总、主管对子结果做可信度判断、失败子任务可重派或降级。</p>
+            </details>
+          </li>
+          <li><strong>[高频]</strong> 怎么保证 Agent 行为安全、可控？
+            <details>
+              <summary>展开答案</summary>
+              <p><strong>最小权限</strong>（只给完成任务必需的工具/数据访问）、高危操作走 <strong>Human-in-the-Loop 审批</strong>、<strong>Prompt 注入防御</strong>（隔离不可信输入、对工具返回内容做净化）、操作<strong>可回滚 / 沙箱</strong>（在隔离环境执行、可撤销）、<strong>行为审计</strong>（全程记录调用轨迹便于追责）。</p>
+              <p><strong>追问：Agent 误删数据怎么防？</strong> 高危操作前强制<strong>确认</strong>、先 <strong>dry-run</strong> 预演影响再真执行、用<strong>权限边界</strong>限制可触达范围、对可执行操作设<strong>白名单</strong>（只允许列表内的动作），删除类操作走软删除 / 可恢复路径。</p>
+            </details>
+          </li>
+          <li>Plan-and-Execute 相比 ReAct 的优劣？
+            <details>
+              <summary>展开答案</summary>
+              <p><strong>优</strong>：先一次性规划再执行，减少 LLM 调用 / token（执行阶段大多不必再调昂贵规划模型），有显式全局计划、可审查可干预、全局视角避免短视。<strong>劣</strong>：计划是开头定的，<strong>僵化</strong>，环境变化时难适应，依赖 replan 补救。</p>
+              <p><strong>追问：执行到一半前提变了怎么 replan？</strong> 把「原计划 + 已完成步骤结果 + 触发偏差」交回 Planner，只重规划剩余部分（保留已成功步骤），Executor 继续。注意设好触发阈值（只在步骤失败、观察与假设冲突、连续 K 步未逼近目标时 replan），否则 replan 太频会退化成 ReAct。</p>
+            </details>
+          </li>
+          <li>RAG 和 Agent 什么关系？Agentic RAG 是什么？
+            <details>
+              <summary>展开答案</summary>
+              <p>关系：Agent 把 <strong>RAG 当成它的一个工具</strong>（检索是 Agent 工具箱里的一项，对应 3.2 增强型 LLM 的「检索」增强）。<strong>Agentic RAG</strong>：让 Agent <strong>动态决定</strong>要不要检索、检索几次、要不要改写 query 重检索，而不是固定「检索一次→生成」。代表变体：<strong>Self-RAG</strong>（模型自评是否需要检索、检索结果是否相关/有用）、<strong>Corrective RAG（CRAG）</strong>（评估检索质量，差就触发纠正性动作如改 query / 转网络搜索）。</p>
+              <p><strong>追问：复杂度更高，什么时候值得？</strong> 当查询多样、单次检索常不够（多跳问题、需要判断「这题到底要不要查」）、对答案质量要求高且容忍更高延迟/成本时值得；简单事实问答用固定 RAG 更省。</p>
+            </details>
+          </li>
+          <li><strong>[高频]</strong> 长程 Agent 跑久了效果变差，但模型本身没问题。怎么回事？怎么治？
+            <details>
+              <summary>展开答案</summary>
+              <p>多半是 <strong>context rot</strong>：窗口被几十轮工具输出 / 旧观察 / 检索记忆塞满，关键信息被挤出或落在中部被忽略（§1.3）——干净 prompt 98 分的模型，长程散落后能掉到 60 分上下。这是上下文管理问题，不是换大模型能解决的。按<strong>上下文工程四杠杆</strong>治：select（每步只取需要的工具 / 上下文）、compress（对旧历史做 compaction 摘要 / 折叠）、isolate（独立子任务交 subagent 用干净上下文）、write（关键事实写进外部记忆而非全堆窗口）。</p>
+              <p><strong>追问：compaction 的代价是什么？</strong> 有损（摘要难免丢信息）+ 阻塞（要等摘要这次调用返回）；context-folding 这类做法用更小的活跃上下文缓解。</p>
+            </details>
+          </li>
+          <li>什么是 Computer Use？它和 Function Calling / MCP 是什么关系？
+            <details>
+              <summary>展开答案</summary>
+              <p>Computer Use 让 Agent 通过<strong>截图 + 鼠标键盘动作</strong>操作 GUI，机制仍是 ReAct 循环（observation = 截图，action = 点击 / 输入）。它和 Function Calling / MCP 是<strong>互补的兜底</strong>：有 API / 接口就用 FC / MCP（快、稳）；只有没接口的网页 / 桌面 / 老系统才上 Computer Use。代价是慢、脆（UI 一变就失效）、且把安全风险放大——能读屏能乱点的 Agent 正好凑齐致命三件套（§4.5），必须配最小权限 + 沙箱 + HITL。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个你会坚持用 Agent（而非 Workflow）的具体场景</h3>
+        <p>Anthropic 在《Building Effective Agents》里建议多数场景先用 workflow 而不是 agent。请给出一个你会<strong>坚持</strong>用 Agent 的具体场景，并说明它满足了什么条件——让 workflow 确实表达不了。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>回到 3.1 的判据：Agent 的自主性只为「步骤无法预先枚举」的任务买单。找一个<strong>路径在运行前无法枚举、必须根据中间结果才能决定下一步</strong>的任务。比如「开放式代码调试」：报错信息要跑了才知道，下一步查哪个文件、改哪行，完全取决于上一步的观察——没法预先画出固定流程图，每个 bug 的探索路径都不同。检验你的场景是否合格，问三件事：①步骤能预先枚举吗（能 → 该用 workflow）？②下一步是否真的依赖运行时才产生的中间结果？③这个任务的价值是否撑得起不可控 + token 膨胀的代价？三条都站得住，才是 Agent 的正当场景。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a>（Agent vs Workflow 分界、增强型 LLM、五种工作流模式的权威来源）</li>
+          <li><a href="https://www.anthropic.com/engineering/built-multi-agent-research-system">Anthropic — How we built our multi-agent research system</a>（多智能体 +90.2%、约 15× token、80% 性能差异由 token 解释）</li>
+          <li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a>（Yao 等，2022）</li>
+          <li><a href="https://arxiv.org/abs/2303.11366">Reflexion: Language Agents with Verbal Reinforcement Learning</a>（Shinn 等，2023）</li>
+          <li><a href="https://modelcontextprotocol.io">Model Context Protocol 官方文档</a> · <a href="https://langchain-ai.github.io/langgraph/">LangGraph 文档</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-rag.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · RAG 与知识库</span>
+        </a>
+        <a href="04-engineering.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 工程化与全栈落地</span>
+        </a>
+      </nav>
+
+
+
+
+
+
+
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">3.1 Agent vs Workflow</a></li>
+        <li><a href="#s2" data-toc-target="s2">3.2 增强型 LLM 与工具循环</a></li>
+        <li><a href="#s3" data-toc-target="s3">3.3 ReAct：推理-行动-观察</a></li>
+        <li><a href="#s4" data-toc-target="s4">3.4 Plan-and-Execute</a></li>
+        <li><a href="#s5" data-toc-target="s5">3.5 Reflection 与五种工作流</a></li>
+        <li><a href="#s6" data-toc-target="s6">3.6 记忆系统</a></li>
+        <li><a href="#s7" data-toc-target="s7">3.7 多智能体</a></li>
+        <li><a href="#s8" data-toc-target="s8">3.8 MCP 协议</a></li>
+        <li><a href="#s9" data-toc-target="s9">3.9 上下文工程</a></li>
+        <li><a href="#s10" data-toc-target="s10">3.10 Computer Use</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">面试题检索</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

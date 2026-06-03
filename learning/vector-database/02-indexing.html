@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>索引原理 · 向量数据库 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" integrity="sha384-rCCjoCPCsizaAAYVoz1Q0CmCTvnctK0JkfCSjx7IIxexTBg+uCKtFYycedUjMyA2" crossorigin="anonymous">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-indexing.html" class="current">02 索引</a><span class="sep">—</span>
+    <a href="03-systems.html">03 生产</a><span class="sep">—</span>
+    <a href="04-landscape.html">04 选型</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>索引原理：在三角里选一个点</h1>
+        <p class="recap">上一章定义了向量、相似度度量与 recall@k。这一章回答一个尖锐的问题：当数据到了亿级，怎么在不暴力扫全量的前提下找到最近邻——以及为此付出什么代价。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章骨架</p>
+        <ul>
+          <li>为什么精确 KNN 在亿级不可行——维度灾难如何摧毁所有树形索引。</li>
+          <li>IVF / HNSW / PQ / DiskANN 各自的运行机制、可调旋钮、以及"带来的代价"。</li>
+          <li>recall × 延迟 × 内存 三角作为统一框架：选索引 = 选你愿意牺牲哪个角。</li>
+        </ul>
+      </section>
+
+      <p>整章只有一个核心主张：<strong>所有 ANN 索引都是 recall × 延迟 × 内存 这个三角里的一个点</strong>。每一种索引——IVF、HNSW、PQ、DiskANN——都是为了往某个角靠拢，而代价是远离另一个角。读完后，面对一个陌生索引或一组陌生参数，能力不是背它的定义，而是定位它在三角里的位置、说出它牺牲了什么。先把这张图刻进脑子。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 470" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="recall、延迟、内存三角，各类索引按其擅长的角分布其中">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- triangle -->
+          <path d="M 360 60 L 90 410 L 630 410 Z" class="diagram-ink" stroke-width="1.6"/>
+
+          <!-- corner labels -->
+          <text x="360" y="44" text-anchor="middle" class="node-label-accent">recall</text>
+          <text x="360" y="34" text-anchor="middle" class="edge-label">召回质量</text>
+          <text x="64" y="430" text-anchor="middle" class="node-label-accent">延迟</text>
+          <text x="64" y="446" text-anchor="middle" class="edge-label">快</text>
+          <text x="656" y="430" text-anchor="middle" class="node-label-accent">内存</text>
+          <text x="656" y="446" text-anchor="middle" class="edge-label">省</text>
+
+          <!-- Flat: recall corner (accent emphasis) -->
+          <rect x="312" y="92" width="96" height="34" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="114" text-anchor="middle" class="node-label-accent">Flat</text>
+
+          <!-- HNSW: recall+latency edge, far from memory corner -->
+          <rect x="190" y="270" width="108" height="34" rx="6" class="diagram-ink node-fill"/>
+          <text x="244" y="292" text-anchor="middle" class="node-label">HNSW</text>
+
+          <!-- IVF: middle, slight latency/memory lean -->
+          <rect x="318" y="248" width="96" height="34" rx="6" class="diagram-ink node-fill"/>
+          <text x="366" y="270" text-anchor="middle" class="node-label">IVF</text>
+
+          <!-- IVFPQ: memory corner -->
+          <rect x="476" y="346" width="104" height="34" rx="6" class="diagram-ink node-fill"/>
+          <text x="528" y="368" text-anchor="middle" class="node-label">IVFPQ</text>
+
+          <!-- DiskANN: memory corner, slightly inside -->
+          <rect x="436" y="300" width="116" height="34" rx="6" class="diagram-ink node-fill"/>
+          <text x="494" y="322" text-anchor="middle" class="node-label">DiskANN</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>没有索引能同时占满三角，选索引 = 选你愿意牺牲哪个角。Flat 死守 recall 角（牺牲延迟与内存）；HNSW 贴在 recall–延迟边上、远离内存角（吃 RAM 换速度与召回）；IVFPQ 与 DiskANN 压向内存角（牺牲一档 recall 换得起十亿级）。</figcaption>
+      </figure>
+
+      <h2 id="why-not-scale"><span class="num">00</span><span>为什么精确 KNN 不 scale</span></h2>
+
+      <p class="one-liner">暴力最近邻在小数据上是对的答案，在亿级上是不可能的答案——而高维度让所有"聪明"的树形索引退化回暴力。</p>
+
+      <p>精确 K 近邻（brute-force KNN）的机制只有一句话：对每个 query，逐一计算它到全部 N 个库向量的距离，排序取前 k。每次距离计算要遍历 d 个维度，于是单 query 的复杂度是 <code>O(N·d)</code>。在 N=100 万、d=768 的规模上，每次查询要做约 7.7 亿次乘加，单机可以扛；到 N=10 亿，每次查询变成约 7700 亿次浮点运算，且光是把向量装进内存就要 <code>1e9 × 768 × 4 字节 ≈ 3 TB</code>（float32）。这不是"慢一点"，是从根上做不到在线服务。</p>
+
+      <h3>维度灾难：树形索引为什么失败</h3>
+      <p>低维空间（2D、3D）有成熟的精确加速结构——KD-tree、ball-tree、R-tree——靠递归切分空间，把搜索从 <code>O(N)</code> 降到 <code>O(log N)</code>。它们的前提是"能用一个边界把远的点整片剪掉"。高维空间摧毁这个前提：当维度升到几百，<strong>所有点对之间的距离趋于相等</strong>——最近邻距离与最远邻距离的比值趋近 1。直观地说，高维球壳的体积几乎全部集中在表面附近，任意两个随机点都"几乎一样远"。</p>
+      <p>后果是 KD-tree 的剪枝条件几乎永远不成立：每次想剪掉一个分支，超球与超平面总是相交，于是回溯访问几乎所有节点，复杂度退化回 <code>O(N)</code>——而且常数比纯暴力还大（多了树遍历的指针跳转开销）。这就是<strong>整个领域的分水岭</strong>：精确树法在高维失败，于是只剩两条路——要么放弃精确（近似最近邻 ANN，用图法/量化法换概率正确），要么放弃稠密遍历（也是 ANN）。本章后面的全部索引都是 ANN，没有一个保证返回真正的最近邻。</p>
+
+      <div class="rationale">
+        <span class="label">Mechanism · 为什么是图与量化胜出</span>
+        <p>距离趋同破坏的是"用边界剪枝"的能力，但没有破坏"沿着邻接关系走向更近的点"这件事。图法（HNSW、DiskANN）放弃剪枝、改用导航：从一个入口点顺着边贪心地往目标靠。量化法（PQ）则放弃存全精度、改用近似距离。两者都不依赖维度灾难所摧毁的那个假设，所以它们 scale，而 KD-tree 不行。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>既然暴力 KNN 在大数据上不可行，那它是不是永远该被索引取代？什么场景下建索引反而是错的决定？</p>
+        <details>
+          <summary>展开</summary>
+          <p>暴力（Flat）在两个条件同时成立时是最优解：<strong>N 很小（万级以下）</strong>且<strong>要求 recall = 1.0</strong>。原因有三：① 建任何近似索引都有构建开销与内存开销，N 小的时候这笔投入收不回；② 近似索引牺牲 recall，而很多场景（小型知识库、精排候选集打分）不能容忍漏检；③ 现代 SIMD（AVX-512）让暴力距离计算快到离谱，万级向量的暴力扫描往往就是亚毫秒。所以"先上索引"是一个常见的过度工程——先问 N 有多大、recall 要求多高，再决定要不要索引。</p>
+        </details>
+      </div>
+
+      <h2 id="ivf"><span class="num">01</span><span>IVF：先聚类，再只看几个桶</span></h2>
+
+      <p class="one-liner">把向量空间预先切成若干区域，查询时只进最相关的几个区域扫描——用"少看一些"换速度。</p>
+
+      <p>IVF（Inverted File，倒排文件索引）的机制分建索引与查询两步。<strong>建索引期</strong>：对全集做一次 k-means 聚类，得到 <code>nlist</code> 个质心；这些质心把空间划分成 <code>nlist</code> 个 Voronoi cell（每个点归属于离它最近的质心）；然后为每个 cell 维护一张倒排表，记录落在该 cell 里的所有向量。<strong>查询期</strong>：先做一次"粗筛"——计算 query 到全部 <code>nlist</code> 个质心的距离，挑出最近的 <code>nprobe</code> 个 cell；再做"精排"——只在这 <code>nprobe</code> 个 cell 的倒排表里暴力扫描。如果 <code>nprobe</code> 远小于 <code>nlist</code>，扫描量就从 N 降到约 <code>N · nprobe / nlist</code>。</p>
+
+      <figure>
+        <svg viewBox="0 0 560 420" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一个被六个质心划分成 Voronoi cell 的方形区域，query 落在 cell 边界，真近邻在相邻未探测的 cell 里">
+          <defs>
+            <marker id="ar-ink2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="ar-verm2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- region border -->
+          <rect x="40" y="40" width="400" height="320" class="diagram-ink" stroke-width="1.4"/>
+
+          <!-- cell boundaries (approximate voronoi via straight cuts) -->
+          <line x1="240" y1="40" x2="240" y2="200" class="diagram-soft"/>
+          <line x1="40" y1="160" x2="240" y2="200" class="diagram-soft"/>
+          <line x1="240" y1="200" x2="440" y2="150" class="diagram-soft"/>
+          <line x1="240" y1="200" x2="200" y2="360" class="diagram-soft"/>
+          <line x1="240" y1="200" x2="430" y2="300" class="diagram-soft"/>
+
+          <!-- centroids -->
+          <circle cx="140" cy="100" r="4" class="diagram-ink node-fill"/>
+          <text x="140" y="88" text-anchor="middle" class="edge-label">c1</text>
+          <circle cx="340" cy="95" r="4" class="diagram-ink node-fill"/>
+          <text x="340" y="83" text-anchor="middle" class="edge-label">c2</text>
+          <circle cx="120" cy="280" r="4" class="diagram-ink node-fill"/>
+          <text x="120" y="268" text-anchor="middle" class="edge-label">c3</text>
+          <circle cx="320" cy="300" r="4" class="diagram-ink node-fill"/>
+          <text x="320" y="288" text-anchor="middle" class="edge-label">c4 (邻)</text>
+          <circle cx="380" cy="215" r="4" class="diagram-ink node-fill"/>
+          <text x="392" y="212" class="edge-label">c5</text>
+
+          <!-- query near boundary in c2's cell -->
+          <circle cx="282" cy="200" r="5" class="diagram-accent" fill="#B73B2F"/>
+          <text x="282" y="186" text-anchor="middle" class="branch-label">query</text>
+
+          <!-- true nearest neighbor just across boundary in c4 cell -->
+          <circle cx="296" cy="228" r="4" class="diagram-ink" fill="#0A0A0A"/>
+          <line x1="287" y1="205" x2="291" y2="222" class="diagram-accent" marker-end="url(#ar-verm2)"/>
+
+          <!-- annotation block on right -->
+          <text x="470" y="150" class="edge-label">nprobe=1</text>
+          <text x="470" y="170" class="edge-label">只探</text>
+          <text x="470" y="186" class="edge-label">query 所在</text>
+          <text x="470" y="202" class="edge-label">cell</text>
+          <text x="470" y="230" class="branch-label">真近邻</text>
+          <text x="470" y="248" class="edge-label">在 c4</text>
+          <text x="470" y="264" class="edge-label">未探测</text>
+          <text x="470" y="280" class="branch-label">→ 漏检</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>nprobe=1 时边界查询会漏掉隔壁 cell 的真近邻。query 落在自己 cell 的边缘，它的真正最近邻恰好在相邻 cell（c4）里；只探测一个 cell 就永远看不到它。调大 nprobe 把相邻 cell 也纳入，是 IVF 用召回换延迟的唯一旋钮。</figcaption>
+      </figure>
+
+      <h3>nprobe：召回与延迟的直接拨杆</h3>
+      <p><code>nprobe</code> 是 IVF 最重要的查询期旋钮，它直接坐落在三角的 recall–延迟边上。<code>nprobe=1</code> 最快，但有一个结构性失败模式——<strong>边缘漏检</strong>：query 落在某个 cell 的边界附近，它真正的最近邻却在隔壁 cell 里（见图 2.2）；只探测 query 所在的那一个 cell，隔壁那个真近邻永远不会被看到。调大 <code>nprobe</code> 会把相邻的 cell 也纳入扫描，召回随之上升，但扫描量与延迟同步上升。<code>nprobe</code> 一路调到等于 <code>nlist</code> 时，IVF 就退化成全量暴力——recall=1.0，但也失去了全部加速。</p>
+
+      <div class="rationale">
+        <span class="label">旋钮 · 建期 vs 查询期</span>
+        <p><strong>nlist（建期）</strong>：质心数量，经验值取 <code>√N</code> 量级（百万级数据取 1k–4k）。nlist 越大，每个 cell 越小、精排越快，但粗筛阶段要比对的质心更多、且更容易边缘漏检（需要更大 nprobe 补偿）。<strong>nprobe（查询期）</strong>：探测多少个最近 cell，不改索引、随查询调，是线上换 recall↔延迟 的拨杆。两者分工清晰：nlist 定"格子多细"，nprobe 定"看几个格子"。</p>
+      </div>
+
+      <h3>IVF + PQ：把 cell 内的向量压成码</h3>
+      <p>纯 IVF 的倒排表里存的还是全精度向量，内存占用与暴力相当（Sift1M 上约 520MB）。生产里 IVF 几乎总和 PQ（下一节）组合成 <strong>IVFPQ</strong>：cell 内不存原始向量，而存 PQ 压缩码，内存可降一到两个数量级，于是单机能扛十亿级。代价是 recall 再损一档——PQ 的近似距离叠加 IVF 的边缘漏检，两层近似累积。</p>
+
+      <div class="callout">
+        <span class="label">实测量级 · Sift1M (100 万 × 128 维)</span>
+        <p>纯 IVF：recall 0.7–0.95、单 query 1–9ms、内存约 520MB（随 nprobe 在 recall 与延迟间滑动）。IVFPQ：内存可压到几十 MB 量级、可扩到十亿级，recall 比纯 IVF 再低一档。<em>数量级参考，非本地复现。</em></p>
+      </div>
+
+      <p><strong>带来的代价：</strong>IVF 的 recall 上限被聚类质量锁死——k-means 的边界是静态的，边缘漏检无法靠查询期完全消除，只能用更大的 nprobe 缓解，而那直接吃延迟。IVF 还需要一次全集训练（k-means）才能建索引，数据分布漂移后质心会失准、召回静默下降，需要周期性重训。相比之下图法（HNSW）无需训练、增量插入更友好——这是 HNSW 成为默认而 IVF 退居"内存敏感/超大规模"场景的原因之一。</p>
+
+      <h2 id="hnsw"><span class="num">02</span><span>HNSW：跳表思想叠在邻近图上</span></h2>
+
+      <p class="one-liner">把"高速公路 + 乡间小路"的分层导航搬到向量空间——顶层大跨步逼近，底层小步精定位，近似对数复杂度。</p>
+
+      <p>HNSW（Hierarchical Navigable Small World）是当前事实上的默认索引，几乎所有向量库的首选。它的结构是<strong>把跳表（skip list）的思想叠加在一张邻近图上</strong>，形成多层结构：底层（layer 0）是一张包含全部点的邻近图，每个点连着若干个近邻；往上每一层都是下层的稀疏子集，层级越高点越少、边越长（长程边）。每个新插入的点，按指数分布随机抽一个"最高层数"——绝大多数点只在底层，少数点穿透到高层充当长程枢纽。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 440" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="HNSW 三层结构，顶层稀疏长程边，中层较密，底层最密含全部点，一条搜索路径从顶层进入逐层下降收敛">
+          <defs>
+            <marker id="ar-ink3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="ar-verm3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- layer labels -->
+          <text x="44" y="70" class="edge-label">L2 稀疏</text>
+          <text x="44" y="210" class="edge-label">L1 较密</text>
+          <text x="44" y="360" class="edge-label">L0 全点</text>
+
+          <!-- entry point label -->
+          <text x="150" y="44" text-anchor="middle" class="branch-label">入口</text>
+          <line x1="150" y1="48" x2="150" y2="62" class="diagram-accent" marker-end="url(#ar-verm3)"/>
+
+          <!-- LAYER 2 (top, sparse: 2 nodes, one long edge) y~80 -->
+          <line x1="150" y1="80" x2="470" y2="80" class="diagram-ink"/>
+          <circle cx="150" cy="80" r="7" class="diagram-ink node-fill"/>
+          <circle cx="470" cy="80" r="7" class="diagram-ink node-fill"/>
+
+          <!-- accent: long-range hop across L2, then drop -->
+          <line x1="159" y1="80" x2="461" y2="80" class="diagram-accent"/>
+          <line x1="470" y1="87" x2="470" y2="213" class="diagram-accent" marker-end="url(#ar-verm3)"/>
+          <text x="488" y="150" class="branch-label">降层</text>
+
+          <!-- LAYER 1 (middle, denser: 3 nodes) y~220 -->
+          <line x1="150" y1="220" x2="320" y2="220" class="diagram-ink"/>
+          <line x1="320" y1="220" x2="470" y2="220" class="diagram-ink"/>
+          <circle cx="150" cy="220" r="6" class="diagram-ink node-fill"/>
+          <circle cx="320" cy="220" r="6" class="diagram-ink node-fill"/>
+          <circle cx="470" cy="220" r="6" class="diagram-ink node-fill"/>
+
+          <!-- greedy hop within L1 toward target then drop -->
+          <line x1="461" y1="220" x2="329" y2="220" class="diagram-accent"/>
+          <line x1="320" y1="227" x2="320" y2="353" class="diagram-accent" marker-end="url(#ar-verm3)"/>
+          <text x="338" y="290" class="branch-label">降层</text>
+
+          <!-- LAYER 0 (bottom, densest: 5 nodes, all points) y~360 -->
+          <line x1="110" y1="360" x2="215" y2="360" class="diagram-ink"/>
+          <line x1="215" y1="360" x2="320" y2="360" class="diagram-ink"/>
+          <line x1="320" y1="360" x2="400" y2="360" class="diagram-ink"/>
+          <line x1="400" y1="360" x2="510" y2="360" class="diagram-ink"/>
+          <circle cx="110" cy="360" r="5" class="diagram-ink node-fill"/>
+          <circle cx="215" cy="360" r="5" class="diagram-ink node-fill"/>
+          <circle cx="320" cy="360" r="5" class="diagram-ink node-fill"/>
+          <circle cx="400" cy="360" r="5" class="diagram-ink node-fill"/>
+          <circle cx="510" cy="360" r="5" class="diagram-ink node-fill"/>
+
+          <!-- converge to target at L0 -->
+          <line x1="320" y1="360" x2="394" y2="360" class="diagram-accent"/>
+          <circle cx="400" cy="360" r="6" class="diagram-accent" fill="#B73B2F"/>
+          <text x="400" y="392" text-anchor="middle" class="branch-label">命中</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>顶层长程边负责"大跨步"，底层稠密负责"精定位"。搜索从顶层入口出发，在每一层贪心走到局部最近点，再降到下一层；越往下图越密、步长越短，最终在底层用大候选堆收敛到目标。少数高层点是穿透多层的长程枢纽。</figcaption>
+      </figure>
+
+      <h3>搜索过程：greedy best-first 逐层下降</h3>
+      <p>查询从顶层的固定入口点开始：在当前层做贪心 best-first 搜索——不断移动到比当前更接近 query 的邻居，直到走到一个局部最近点（没有邻居更近了）；然后<strong>以这个点为入口降到下一层</strong>，重复。越往下层越密，搜索步长越来越细。到了 layer 0，用一个大小为 <code>ef_search</code> 的动态候选堆做最后收敛——维护一个候选集，持续扩展直到堆里前 k 个稳定下来。整个过程跳过了大量无关区域，复杂度近似对数级 <code>O(log N)</code>。</p>
+
+      <div class="rationale">
+        <span class="label">旋钮 · 三个参数各管一段</span>
+        <p><strong>M（建期）</strong>：每个节点的最大边数（度），典型 16–64。M 越大图越密，同 recall 下导航更稳、recall 上限更高，但内存（要存更多邻接）和建索引时间都升。<strong>ef_construction（建期）</strong>：建图时每步保留的候选宽度，越大建出的图质量越高、建得越慢。<strong>ef_search（查询期）</strong>：layer 0 收敛时的候选堆大小，<em>直接</em>在 recall↔延迟 间换——这是线上最常调的拨杆，调大召回升、延迟升。</p>
+      </div>
+
+      <h3>为什么 HNSW 是默认</h3>
+      <p>原因只有一句：<strong>在相同 recall 下，HNSW 的延迟与吞吐通常优于所有其它索引</strong>。它不需要训练（不像 IVF 的 k-means），支持增量插入，且查询期只用一个 <code>ef_search</code> 就能平滑地在 recall–延迟边上滑动。在 ann-benchmarks 这类公开基准上，HNSW 在 recall–QPS 曲线的高召回区段长期领先。</p>
+
+      <p><strong>带来的代价（一）吃 RAM：</strong>HNSW 把<strong>全精度向量 + 每个点 M 条邻接边全部驻留内存</strong>。邻接信息本身就是一笔可观开销，叠加原始向量后，总内存通常是裸向量的 1.5–2 倍。这就是图 2.1 里 HNSW 远离"内存"角的原因——它用 RAM 买速度和召回。亿级数据上这意味着上百 GB 内存，成本陡增（这正是下文 DiskANN 存在的理由）。</p>
+
+      <p><strong>带来的代价（二）删除难：</strong>删一个点会切断图的连通性，原本经它中转的路径随之断掉，召回受损。工程上的常规做法是 <strong>tombstone 软删除</strong>——标记为已删但保留在图里、查询时过滤掉，再周期性地重建索引把墓碑真正清除。频繁增删的场景下，HNSW 的图会逐渐劣化，重建是必须的运维动作。</p>
+
+      <div class="callout insight">
+        <span class="label">前沿争议 · 2024</span>
+        <p>论文《Down with the Hierarchy: the "H" in HNSW stands for Hubs》(2024) 提出一个反直觉结论：在高维数据上，HNSW 的分层结构（那个 "H"）对性能贡献甚微——真正起导航作用的是图里自然涌现的少数高连通度 <strong>hub 节点</strong>，去掉分层、保留单层图加 hub，性能几乎不变。这说明 HNSW 的"魔法"更多来自小世界图本身，而非分层。DiskANN 的单层 Vamana 图（下文）某种程度上是这一观察的印证。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>HNSW 的 <code>ef_search</code> 和 IVF 的 <code>nprobe</code> 都是"查询期换 recall↔延迟"的旋钮。它们换的是同一种东西吗？背后的机制差别在哪？</p>
+        <details>
+          <summary>展开</summary>
+          <p>表面效果一样（调大都是召回升、延迟升），但机制不同。<code>nprobe</code> 控制的是<strong>扫描范围的宽度</strong>——看几个 cell，本质是"多看一些候选区域来对抗边缘漏检"，是一种空间覆盖。<code>ef_search</code> 控制的是<strong>图搜索时的候选堆深度</strong>——保留多少个待扩展候选来对抗"贪心走进局部最优、错过真近邻"，是一种搜索回溯的容量。一个对抗聚类边界的硬切分，一个对抗贪心导航的早停。理解这层差别，才能在调参时知道自己在补哪种漏检。</p>
+        </details>
+      </div>
+
+      <h2 id="pq"><span class="num">03</span><span>PQ 与量化家族：把向量压成字节</span></h2>
+
+      <p class="one-liner">不改变"找最近邻"这件事，只把向量本身压缩——用近似的距离换断崖式的内存下降。</p>
+
+      <p>PQ（Product Quantization，乘积量化）是把内存往下压的主力机制。它的做法：把 D 维向量切成 <code>m</code> 段连续的子向量；对每一段子空间<strong>独立</strong>跑一次 k-means，训出 <code>2^nbits</code> 个质心（<code>nbits=8</code> 即每段 256 个码本条目）；然后每段只存"离它最近的那个质心的 ID"，占 1 个字节。举例：128 维向量切成 m=8 段、每段 nbits=8，原始 <code>128 × 4 = 512</code> 字节被压成 <code>8 × 1 = 8</code> 字节，约 64× 压缩。"乘积"二字来自这里——整个空间被表示成 m 个子空间码本的笛卡尔积，<code>256^8</code> 种组合用 8 字节就能编码。</p>
+
+      <h3>ADC：query 不量化，查表累加</h3>
+      <p>压缩后怎么算距离？用 <strong>ADC（Asymmetric Distance Computation，非对称距离计算）</strong>：query 向量<strong>不</strong>量化，保持全精度。查询时先为 query 预计算一张距离表——它的每个子段到对应子空间 256 个质心的距离，得到一张 <code>m × 256</code> 的表。之后计算 query 到任意库向量的距离，就退化成<strong>按库向量的 m 个码 ID 查表、累加</strong>，m 次查表加法即可。"非对称"指的就是 query 全精度、库向量量化这种不对称——它比"两边都量化"的对称方式更准，因为 query 侧没有量化误差。</p>
+
+      <h3>量化家族的其它成员</h3>
+      <p>PQ 是表达力最强但也最复杂的量化。还有两个更简单的表亲，生产里用得同样多：</p>
+      <ul>
+        <li><strong>Scalar quantization（标量量化，SQ）</strong>：最朴素——按每一维的 <code>min/max</code> 把 float32 线性映射到 int8，4× 压缩，recall 损失极小（int8 的 256 级对大多数 embedding 足够）。几乎是免费的内存优化，很多库默认开。</li>
+        <li><strong>Binary quantization（二值量化，BQ）</strong>：最激进——每一维只取符号（正→1，负→0），float32 变 1 bit，32× 压缩；距离用 Hamming 距离算，检索快可达 40×。单看精度它损失巨大，但靠 <strong>oversampling + rescore</strong> 救回来：先用二值码超量召回（取比 k 多几倍的候选），再用保留的全精度向量对这批候选重新精确打分排序，recall 能拉回约 0.98。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">关键洞察 · recall 挂在 rescore 上</span>
+        <p>量化方法宣称的"实际 recall"几乎都不是压缩码本身的功劳，而是<strong>挂在 rescore 这一步</strong>：用压缩码快速圈出一批候选，再用原始（或更高精度）向量对候选重排。没有 rescore 的纯二值/纯 PQ 检索，recall 会惨不忍睹；有了 rescore，同一套压缩码就能逼近全精度。所以看到"binary quantization 召回 0.98"这种数字，要立刻反问：oversampling 倍数是多少、rescore 用的是什么精度的向量——召回是在那里产生的，不在量化里。</p>
+      </div>
+
+      <p><strong>带来的代价：</strong>纯 PQ 的 recall 可以掉到约 50%——量化误差让"哪个更近"的判断频繁出错。所以 <strong>PQ 几乎从不单独使用</strong>，总是配 IVF（成 IVFPQ，先用 IVF 缩小范围再 PQ 算距离）或配图法（DiskANN 用 PQ 码在内存里粗筛、SSD 上的全精度向量做 rescore）。此外 PQ 需要训练码本，和 IVF 一样面临分布漂移失准的问题。量化的统一代价可以归成一句：<strong>所有量化都在用"距离的精度"换"存储的体积"，而把精度补回来的唯一办法是保留一份高精度向量做 rescore——那份向量又得占地方。</strong></p>
+
+      <h2 id="diskann"><span class="num">04</span><span>DiskANN / Vamana：把图放到 SSD 上</span></h2>
+
+      <p class="one-liner">让图和全精度向量躺在 SSD、内存只放压缩码——用"磁盘 IO 换内存成本"，把十亿级拉进单机预算。</p>
+
+      <p>DiskANN 存在的理由，直接来自 HNSW 的代价：HNSW 把全精度向量加图全压在 RAM 里，十亿级要上百 GB 内存，贵得离谱。DiskANN 的机制是<strong>分层存储</strong>——把图结构和全精度向量放到 SSD 上，内存里只保留每个向量的 PQ 压缩码。查询时用内存里的 PQ 码做快速粗筛（沿图导航时用近似距离决定走向），需要精确判断时才去 SSD 读对应的全精度向量做 rescore。结果是单机 64GB RAM + 一块 NVMe SSD 就能跑 10 亿个点，recall@1 > 95%、延迟 < 5ms。</p>
+
+      <h3>Vamana 图与 α：故意留长程边</h3>
+      <p>DiskANN 用的图叫 <strong>Vamana</strong>，它是<strong>单层扁平图</strong>（不像 HNSW 那样分层）。它的核心创新是建图时 RobustPrune 剪枝里的 <code>α</code> 参数。剪枝决定每个节点保留哪些边：HNSW 的剪枝隐含 <code>α=1</code>（偏向保留短边、剪掉被"遮挡"的长边）；Vamana 用 <code>α>1</code>（典型 1.2）<strong>放松剪枝条件，故意保留更多长程边</strong>。多保留长程边的效果是<strong>图的直径变小</strong>——任意两点之间的跳数更少，于是 beam search 用更少的跳数就能收敛。</p>
+
+      <div class="rationale">
+        <span class="label">Mechanism · 为什么磁盘场景偏偏要小直径</span>
+        <p>在内存里跑图（HNSW），瓶颈是算力（距离计算）；在 SSD 上跑图（DiskANN），瓶颈换成了 <strong>磁盘随机读的次数</strong>——每多走一跳就多一次 SSD 随机 IO，而 SSD 随机读比内存慢几个数量级。Vamana 用 α>1 把图直径压小、减少跳数，本质是在<strong>减少 SSD 随机读次数</strong>。HNSW 不在乎这点（内存里多跳几下无所谓），DiskANN 把它当成头等设计目标。同一个"图导航"，因为底层介质不同，最优结构就不同。</p>
+      </div>
+
+      <div class="rationale">
+        <span class="label">旋钮 · Vamana 三参数</span>
+        <p><strong>R（度）</strong>：每节点最大边数，类比 HNSW 的 M。<strong>L（beam/搜索宽度）</strong>：beam search 的候选束宽，类比 ef_search，查询期换 recall↔延迟。<strong>α（建期直径）</strong>：剪枝松紧，>1 留更多长程边、压小直径、减少 SSD 跳数；这是 Vamana 区别于 HNSW 的关键旋钮。</p>
+      </div>
+
+      <p><strong>带来的代价：</strong>DiskANN 把延迟从"内存级"抬到"SSD 级"——虽然靠小直径把单机十亿级压进 5ms，但这仍比纯内存 HNSW 的亚毫秒慢一截，且强依赖 SSD 性能（机械盘上不可用，云上要选高 IOPS 卷）。它换来的是内存成本的断崖式下降。在图 2.1 里 DiskANN 和 IVFPQ 一起压向"内存"角，区别在 DiskANN 用图导航+SSD rescore 守住了更高的 recall。<strong>选 DiskANN 的判据很清晰：数据量大到 HNSW 的内存账单不可接受，且能接受毫秒级（而非亚毫秒）延迟。</strong></p>
+
+      <h2 id="lsh"><span class="num">05</span><span>LSH：为什么基本被淘汰</span></h2>
+
+      <p class="one-liner">用一族哈希让近向量高概率撞同一个桶——思路优雅，但在高维高召回需求下打不过图法。</p>
+
+      <p>LSH（Locality-Sensitive Hashing，局部敏感哈希）的机制：设计一族特殊的哈希函数，使得<strong>距离近的向量有较高概率被映射到同一个桶</strong>（与普通哈希刻意打散相反）。建索引时把所有向量哈希进桶，几乎是瞬时的；查询时只算 query 所在桶（及少数邻桶）里的向量距离。理论上很美——亚线性查询、建索引极快。</p>
+
+      <p><strong>为什么被取代：</strong>要达到高 recall，单个哈希撞桶的概率不够，必须用<strong>很长的签名 + 很多张哈希表</strong>来提升命中概率，这导致内存急剧膨胀；而且它同样受维度灾难拖累（高维下"近的撞桶"这件事本身就变难）。更致命的是它的<strong>概率性</strong>——同一个 query 的性能不可预测，召回波动，不像 HNSW 那样行为确定、可在 recall–延迟边上精确调节。在同等 recall 目标下，HNSW 延迟更低、内存更省、行为可复现，于是 LSH 在通用向量检索里基本退场。</p>
+
+      <p><strong>残留价值：</strong>LSH 没有完全消失——它的<strong>建索引极快、写入便宜</strong>，在某些写多读少、对召回要求不高、或需要快速去重/近似匹配的场景仍有用武之地。但作为"在线高召回最近邻检索"的主力，它已被图法取代。</p>
+
+      <h2 id="triangle"><span class="num">06</span><span>统一框架：在三角里推理一次</span></h2>
+
+      <p class="one-liner">前面五种机制的全部旋钮，最终都服务于同一个动作——在 recall × 延迟 × 内存 三角里把你的点放到正确位置。</p>
+
+      <p>把图 2.1 落到一个具体场景上推一遍。<strong>需求</strong>：1000 万条 768 维向量，延迟预算 20ms（P99），内存预算 8GB。该选哪个索引？不背结论，用前面的旋钮一步步推。</p>
+
+      <div class="callout example">
+        <span class="label">推理 · 1000 万 × 768 维 / 20ms / 8GB</span>
+        <p><strong>第一步，算裸向量内存</strong>：<code>1e7 × 768 × 4 字节 ≈ 30.7 GB</code>（float32）。光裸向量就 4× 超了 8GB 预算——这一步就否决了任何"全精度驻内存"的方案，包括<strong>纯 HNSW 与纯 IVFFlat</strong>。三角的"内存"角已经成为硬约束。</p>
+        <p><strong>第二步，看内存约束逼向哪里</strong>：要塞进 8GB，必须量化。两条路：① <strong>HNSW + scalar quantization</strong>（int8，4×）把向量压到约 7.7GB，再加图的邻接开销会逼近上限，配合 <code>halfvec</code>（fp16，2×）或更激进的量化可落进预算，且守住低延迟与高 recall；② <strong>IVFPQ</strong>，PQ 压到几 GB 内绰绰有余，但 recall 要靠 rescore 兜。</p>
+        <p><strong>第三步，看延迟约束</strong>：20ms 对 1000 万规模相当宽松，HNSW 在这个量级的查询通常是个位数毫秒，延迟角完全不紧张——所以不必为省延迟牺牲别的。<strong>结论</strong>：优先 <strong>HNSW + 量化（scalar/fp16）</strong>，用 <code>ef_search</code> 把 recall 顶到需要的水平；若量化后内存仍超或未来要扩到亿级，再退向 <strong>IVFPQ 或 DiskANN</strong> 换更狠的压缩。三个约束里，<strong>内存是这道题的紧约束</strong>，它决定了"必须量化"，而延迟宽松给了 HNSW 发挥空间。</p>
+      </div>
+
+      <p>这就是整章的方法论：<strong>先看哪个角是硬约束，让它筛掉一批索引；再看剩下的旋钮能不能把另外两个角调到达标。</strong>没有"最好的索引"，只有"在你这三个预算下、紧约束允许的索引"。下面这张总表把六种索引在三角里的位置一次性列清。</p>
+
+      <table class="compare-table">
+        <caption>索引总对比 · 六种索引在三角里的定位</caption>
+        <thead>
+          <tr>
+            <th>索引</th><th>recall</th><th>延迟</th><th>内存</th><th>关键旋钮</th><th>何时用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Flat（暴力）</td>
+            <td>1.0（精确）</td>
+            <td>高（O(N·d)）</td>
+            <td>高（全精度驻留）</td>
+            <td>无</td>
+            <td>N &lt; 1 万且要 recall=1.0；精排候选打分</td>
+          </tr>
+          <tr>
+            <td>IVF（IVFFlat）</td>
+            <td>0.7–0.95 可调</td>
+            <td>中（nprobe 控）</td>
+            <td>高（≈暴力）</td>
+            <td>nlist（建）· nprobe（查）</td>
+            <td>需快于暴力、内存够、可接受重训</td>
+          </tr>
+          <tr>
+            <td>IVFPQ</td>
+            <td>中偏低（再损一档）</td>
+            <td>中</td>
+            <td>很低（压缩码）</td>
+            <td>nlist · nprobe · m · nbits</td>
+            <td>十亿级、内存吃紧、可配 rescore</td>
+          </tr>
+          <tr class="selected">
+            <td>HNSW</td>
+            <td>高（同延迟最优）</td>
+            <td>低（≈对数级）</td>
+            <td>高（1.5–2× 原始）</td>
+            <td>M · ef_construction · ef_search</td>
+            <td>通用默认；内存够、要低延迟高召回</td>
+          </tr>
+          <tr>
+            <td>DiskANN（Vamana）</td>
+            <td>高（&gt;95%@1）</td>
+            <td>中（SSD，~5ms）</td>
+            <td>很低（仅 PQ 码驻内存）</td>
+            <td>R · L · α</td>
+            <td>十亿级、内存预算紧、可接受毫秒级</td>
+          </tr>
+          <tr>
+            <td>LSH</td>
+            <td>低且波动</td>
+            <td>中（不可预测）</td>
+            <td>高（多表膨胀）</td>
+            <td>签名长度 · 表数量</td>
+            <td>基本淘汰；写多读少/快速去重的残留场景</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="label">收束 · 一句话记忆</span>
+        <p>Flat 守 recall 角；HNSW 占 recall–延迟边、用 RAM 买单；IVF 用 nprobe 在边上滑；IVFPQ / DiskANN 压向内存角、用 rescore 把 recall 捞回来；LSH 出局。任何新索引来了，先问它把自己摆在三角的哪个角、牺牲了哪一个。</p>
+      </div>
+
+      <section class="self-check">
+        <h2 id="self-check">自测</h2>
+        <p><em>先合上屏幕，在脑子里或纸上把每题答完，再展开对照。能复述出"机制"而非"结论"才算过。</em></p>
+        <ol>
+          <li>
+            <strong>为什么 KD-tree 在 768 维上会退化成近似线性扫描？</strong>这和"图法 / 量化法胜出"是同一个原因吗？
+            <details>
+              <summary>展开</summary>
+              <p>维度灾难：高维下所有点对距离趋同（最近邻/最远邻距离比 → 1），KD-tree 赖以剪枝的"用边界整片剪掉远点"的前提失效，超球与超平面几乎总相交，回溯访问几乎所有节点 → 退化回 O(N) 且常数更大。这正是图法（沿邻接导航，不依赖剪枝）与量化法（近似距离）胜出的根因——它们都不依赖被维度灾难摧毁的那个剪枝假设。</p>
+            </details>
+          </li>
+          <li>
+            <strong>IVF 的 nprobe=1 在什么情况下会漏掉真正的最近邻？</strong>调大 nprobe 为什么能缓解，代价是什么？
+            <details>
+              <summary>展开</summary>
+              <p>边缘漏检：query 落在它所属 cell 的边界附近，真近邻却在相邻 cell 里；nprobe=1 只扫 query 所在 cell，隔壁的真近邻永远看不到。调大 nprobe 把更多相邻 cell 纳入扫描，召回上升；代价是扫描量与延迟同步上升，nprobe→nlist 时退化为全量暴力。</p>
+            </details>
+          </li>
+          <li>
+            <strong>HNSW 为什么吃 RAM、又为什么删除困难？</strong>这两个代价分别来自结构的哪一部分？
+            <details>
+              <summary>展开</summary>
+              <p>吃 RAM：全精度向量 + 每个点 M 条邻接边全部驻内存，总量约裸向量的 1.5–2×——代价来自"图的邻接信息也要常驻"。删除难：删点会切断图连通性、断掉经它中转的路径、损召回——代价来自"导航依赖图的连通"。常规解法是 tombstone 软删 + 周期重建。</p>
+            </details>
+          </li>
+          <li>
+            <strong>跨机制综合题：为什么纯 PQ 很少单独使用，几乎总要配 IVF 或图法？</strong>
+            <details>
+              <summary>展开</summary>
+              <p>两个独立理由叠加。① 精度：纯 PQ 的量化误差让距离判断频繁出错，recall 可掉到约 50%，单用不可接受；要把召回补回来必须 rescore，而 rescore 需要一份高精度向量和一批候选——候选从哪来？② 候选来源：PQ 本身只压缩向量、不缩小搜索范围，仍要遍历全部码做 ADC；配 IVF（先聚类粗筛缩范围）或配图（DiskANN 用图导航选候选）才能既缩范围又压内存，再用全精度向量 rescore 把 recall 拉回。所以 PQ 是"压缩器"，必须挂在一个"候选生成器 + rescore"的管线里才有用。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <div class="challenge">
+        <span class="label">想一想 · 刚好够不着</span>
+        <h3>内存超预算 3×，且 99% 查询带高基数过滤，先动哪个？</h3>
+        <p>线上 HNSW 索引内存超预算 3×，同时 99% 的查询都带一个<strong>高基数 metadata 过滤</strong>（例如 <code>tenant_id = ?</code>，每个值只命中极小一部分数据）。在「调 HNSW 参数」「换 IVFPQ」「换 DiskANN」三者之间，先动哪个？为什么过滤这件事会改变答案？</p>
+        <details>
+          <summary>提示</summary>
+          <p>先把两个问题拆开：内存超 3× 是<strong>容量问题</strong>，高基数过滤是<strong>访问模式问题</strong>，最优解可能不是"调索引"而是"换数据组织方式"。高基数过滤的关键陷阱：HNSW 上做过滤会遇到"过滤后图连通性被破坏 → 召回崩"或"post-filter 后候选不够"的失败模式（这是 03 生产章的主题）。而高基数、低选择率的过滤字段，往往更适合<strong>按该字段分区/分片</strong>（每个 tenant 一个小索引），这同时缓解内存（每个分片单独可放、可量化）和过滤（过滤变成选分片，不再污染图搜索）。所以"先动哪个"的答案很可能是：先按 tenant_id 物理分区，再在每个分片内决定 HNSW+量化还是 DiskANN——纯调参或盲目换索引都没触及"过滤模式"这个真正的紧约束。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/1603.09320">Malkov &amp; Yashunin — Efficient and robust ANN search using HNSW (arXiv 1603.09320)</a>（HNSW 原始论文）</li>
+          <li><a href="https://www.pinecone.io/learn/series/faiss/hnsw/">Pinecone Learn — HNSW 索引详解</a> 与 <a href="https://www.pinecone.io/learn/series/faiss/product-quantization/">Product Quantization 详解</a>（机制级科普）</li>
+          <li><a href="https://proceedings.neurips.cc/paper/2019/hash/09853c7fb1d3f8ee67a61b6bf4a7f8e6-Abstract.html">DiskANN: Fast Accurate Billion-point ANN Search on a Single Node (NeurIPS 2019)</a>（Vamana / α 剪枝）</li>
+          <li><a href="https://qdrant.tech/articles/binary-quantization/">Qdrant — Binary Quantization（oversampling + rescore 实测）</a></li>
+          <li><a href="https://milvus.io/docs/index.md">Milvus — IVF / IVF_PQ 索引文档与博客</a>（nlist/nprobe/m 旋钮）</li>
+          <li><a href="https://arxiv.org/abs/2412.01940">Down with the Hierarchy: the "H" in HNSW stands for Hubs (2024)</a>（分层贡献的前沿争议）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="01-concepts.html">
+          <span class="label">← 上一章</span>
+          <span class="title">01 概念地基</span>
+        </a>
+        <a class="next" href="03-systems.html">
+          <span class="label">下一章 →</span>
+          <span class="title">03 生产工程</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#why-not-scale" data-toc-target="why-not-scale">00 精确 KNN 不 scale</a></li>
+        <li><a href="#ivf" data-toc-target="ivf">01 IVF 倒排文件</a></li>
+        <li><a href="#hnsw" data-toc-target="hnsw">02 HNSW 分层图</a></li>
+        <li><a href="#pq" data-toc-target="pq">03 PQ 与量化家族</a></li>
+        <li><a href="#diskann" data-toc-target="diskann">04 DiskANN / Vamana</a></li>
+        <li><a href="#lsh" data-toc-target="lsh">05 LSH 为何淘汰</a></li>
+        <li><a href="#triangle" data-toc-target="triangle">06 三角统一框架</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

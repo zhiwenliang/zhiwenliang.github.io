@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 检索与一致性 · Milvus 深潜教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale {
+  background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft);
+  margin: 16px 0; font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink { stroke: var(--ink); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill { fill: var(--bg); }
+.node-fill-accent { fill: var(--vermilion-soft); }
+.node-label { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-architecture.html">02 架构</a><span class="sep">—</span>
+    <a href="03-index-internals.html">03 索引</a><span class="sep">—</span>
+    <a href="04-search-and-consistency.html" class="current">04 检索·一致性</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>检索与一致性：把写路径和索引接成读路径</h1>
+        <p class="recap">02 章拆开了写路径——数据按 shard 哈希进 vchannel、落 WAL、攒成 segment；03 章拆开了单个 segment 内部的索引怎么把“扫全部”变成“扫一小部分”。这一章把两者合成：一次 search 如何扇出到所有相关 segment、各自检索、再多级归并成最终 top-k，然后讲清楚一致性级别到底在控制什么——它不是“强/弱”开关，而是给一个时间戳选值。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>读路径：search → proxy 扇出 → 流式节点查 growing 段 / query node 查 sealed 段 → 段级检索 → 每分片 reduce → proxy 跨分片 merge → top-k。</li>
+          <li>扇出的代价：段越多、扇出越宽、归并越重——把 02 的 compaction 和 03 的 nprobe/ef 接到这条读路径上。</li>
+          <li>过滤与裁剪：标量 filter、partition key 裁剪、过滤比如何左右索引选择，以及“带过滤的 ANN 为什么更难”。</li>
+          <li>一致性机制：TSO 与 guarantee timestamp，四个级别 = 给 guarantee timestamp 选四个不同的值，默认 Bounded。</li>
+        </ul>
+      </section>
+
+      <p>前三章是零件，这一章是装配。读路径不是一个新机制，而是 01 的“没有整表大索引、每段各建索引”和 02 的“proxy 无状态、segment 是统一调度单元”两条事实的<strong>直接推论</strong>。把这条推论走完，一致性、过滤、归并代价就都落到同一张图上。代码片段只用来让概念落地，<strong>未在本机运行</strong>。</p>
+
+      <h2 id="s41"><span class="num">4.1</span><span>读路径：一次 search 的扇出与归并</span></h2>
+      <p class="one-liner">一次检索 = 把查询广播到所有相关 segment、各跑一次检索、再分两级把结果归并成最终 top-k。</p>
+
+      <div class="rationale">
+        <span class="label">为什么是这个形状</span>
+        <p>01 §1.1 / §1.6 定下一条事实：一张 collection 没有“整表一个大索引”，索引是每个 sealed segment 各建一份。既然检索结构散落在多个 segment 上，一次查询就无法“查一个索引”了事——它必须扫遍所有相关 segment，再把各段的局部 top-k 合并成全局 top-k。读路径的形状，是物理组织逼出来的。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：一次 <code>search</code> 落到无状态的 <strong>proxy</strong>（02 §2.2 的入口），proxy 把它<strong>扇出</strong>到两类执行者——<strong>流式节点</strong>负责本分片的 <strong>growing 段</strong>（还没 sealed、没索引，只能<strong>暴力扫</strong>，回指 01 §1.4），<strong>query node</strong> 负责已加载的 <strong>sealed 段</strong>（走 03 的向量索引）。每个 segment 各自独立跑一次检索，吐出自己的局部 top-k。然后归并分两级：<strong>每个分片内部先 reduce</strong>，把该分片下所有 segment 的局部 top-k 合并成分片级 top-k；<strong>proxy 再跨分片 merge</strong>，把各分片结果合成全局 top-k 返回。proxy 做最终跨分片归并这件事来自 02 §2.2——proxy 无状态，归并是纯计算，不依赖本地数据，所以哪个 proxy 都能做。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="读路径扇出与归并:proxy 向下分两路,左路流式节点扫 growing 段暴力,右路 query node 扫 sealed 段走索引,各自结果先每分片 reduce 再回到 proxy 跨分片 merge">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- proxy top -->
+          <rect x="270" y="20" width="180" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="41" text-anchor="middle" class="node-label">Proxy（无状态）</text>
+          <text x="360" y="59" text-anchor="middle" class="edge-label">接收 search · 扇出</text>
+
+          <!-- fan-out arrows from proxy to two executors -->
+          <line x1="300" y1="70" x2="150" y2="118" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="420" y1="70" x2="570" y2="118" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="208" y="98" text-anchor="middle" class="edge-label">广播</text>
+          <text x="512" y="98" text-anchor="middle" class="edge-label">广播</text>
+
+          <!-- left: streaming node -->
+          <rect x="40" y="120" width="220" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="150" y="142" text-anchor="middle" class="node-label-accent">流式节点</text>
+          <text x="150" y="160" text-anchor="middle" class="edge-label">扫 growing 段 · 暴力</text>
+
+          <!-- right: query node -->
+          <rect x="460" y="120" width="220" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="570" y="142" text-anchor="middle" class="node-label">Query node</text>
+          <text x="570" y="160" text-anchor="middle" class="edge-label">扫 sealed 段 · 走索引</text>
+
+          <!-- segments under each -->
+          <line x1="100" y1="174" x2="100" y2="206" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="200" y1="174" x2="200" y2="206" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <rect x="58"  y="208" width="84" height="44" rx="5" class="diagram-ink node-fill"/>
+          <rect x="158" y="208" width="84" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="100" y="234" text-anchor="middle" class="edge-label">growing 段</text>
+          <text x="200" y="234" text-anchor="middle" class="edge-label">growing 段</text>
+
+          <line x1="520" y1="174" x2="520" y2="206" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="620" y1="174" x2="620" y2="206" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <rect x="478" y="208" width="84" height="44" rx="5" class="diagram-ink node-fill"/>
+          <rect x="578" y="208" width="84" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="520" y="234" text-anchor="middle" class="edge-label">sealed 段</text>
+          <text x="620" y="234" text-anchor="middle" class="edge-label">sealed 段</text>
+
+          <!-- per-shard reduce -->
+          <line x1="100" y1="252" x2="140" y2="290" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="200" y1="252" x2="160" y2="290" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <rect x="58" y="292" width="184" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="150" y="313" text-anchor="middle" class="node-label">每分片 reduce</text>
+          <text x="150" y="331" text-anchor="middle" class="edge-label">合段内 top-k</text>
+
+          <line x1="520" y1="252" x2="560" y2="290" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="620" y1="252" x2="580" y2="290" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <rect x="478" y="292" width="184" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="570" y="313" text-anchor="middle" class="node-label">每分片 reduce</text>
+          <text x="570" y="331" text-anchor="middle" class="edge-label">合段内 top-k</text>
+
+          <!-- merge at proxy -->
+          <line x1="150" y1="340" x2="290" y2="382" class="diagram-accent" marker-end="url(#m-accent)"/>
+          <line x1="570" y1="340" x2="430" y2="382" class="diagram-accent" marker-end="url(#m-accent)"/>
+          <rect x="245" y="384" width="230" height="28" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="403" text-anchor="middle" class="node-label-accent">跨分片 merge → 最终 top-k</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>一次检索要扫遍很多 segment 再两级归并，不存在“整表一个索引”一查了事（回指 01 §1.6）。<strong>注意</strong>：growing 段走暴力、sealed 段走索引，是两条不同的检索路径；左右对称扇出、向中间汇聚，归并先在每个分片内做、最后由 proxy 跨分片合成。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">一句话钉住</span>
+        <p>读路径 = <strong>段级并行检索 + 多级归并</strong>。把它和 02 的写路径对照：写是“一条数据按哈希进一个 shard 的一条流”，读是“一个查询扇出到所有 shard 的所有段再收回来”。写收敛、读扇出——这是同一套 segment 组织在两个方向上的镜像。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>同一个 query node 上加载了同一分片的 5 个 sealed segment。一次 <code>limit=10</code> 的检索，这台 query node 该返回多少个候选给上层 reduce？返回 10 个够吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>每个 segment 各自返回自己的 top-10，所以这台 query node 手里有 5 × 10 = 50 个候选；它先做一次段内 reduce，得到这台节点的 top-10 再往上交。<strong>关键</strong>：单个 segment 只返回 top-10 不足以保证全局正确——设想全局第 10 名恰好是某个 segment 的第 1 名，而另一个 segment 的第 2~10 名全都更靠前。所以每个 segment 必须返回至少 <code>limit</code> 个候选，归并层才能在并集上重排出正确的全局 top-k。这就是为什么“段越多，每层要搬运和重排的候选越多”——直接引出 4.2 的代价。</p>
+        </details>
+      </div>
+
+      <h2 id="s42"><span class="num">4.2</span><span>段扇出与归并的代价</span></h2>
+      <p class="one-liner">段越多，扇出越宽、每层归并要重排的候选越多——这是 02 的 compaction 为什么重要、03 的查询旋钮在哪里起作用的交汇点。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要盯住它</span>
+        <p>4.1 的读路径里，延迟由两部分组成：<strong>每个 segment 上检索花多久</strong>，和<strong>把多少个 segment 的结果归并起来</strong>。前者由 03 的旋钮控制，后者由 segment 数量控制。段数失控时，归并这部分会从可忽略变成主导项。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：扇出宽度 ≈ 相关 segment 总数。两个方向会把它推大。其一，<strong>sealed 段碎片化</strong>：手动 flush 过频（01 §1.5 的警告）或写入模式零碎，会留下大量小 sealed 段，每个都要被派去检索、都要贡献一份 top-k 进归并——这正是 02 §2.5 里 compaction 存在的理由：把小段合并成大段，直接削窄扇出。其二，<strong>growing 段堆积</strong>：写得快但 sealed + indexed 跟不上时，流式节点上挂着一批 growing 段，它们只能<strong>暴力扫</strong>（01 §1.4），段越多暴力扫的总量越大，直接拖慢这一路。</p>
+
+      <p>把 03 的旋钮接到这里：<code>nprobe</code>（IVF，扫多少个簇）和 <code>ef</code>（HNSW，候选队列多大）决定<strong>每个 segment 上</strong>检索的召回与延迟（03 §3.8）。它们是<strong>段级</strong>参数——调大 <code>ef</code>，是让<em>每一个</em> segment 都搜得更狠，代价随段数线性放大。所以“调召回”和“控段数”是两件必须一起看的事：旋钮决定单段成本，compaction 决定段数，二者相乘才是这一路的总延迟。</p>
+
+      <div class="callout warning">
+        <span class="label">失败模式 · 串起 02</span>
+        <p>“检索越来越慢”常常不是索引的锅，而是段数失控：要么小 sealed 段没被 compaction 及时合并（扇出过宽），要么 growing 段没及时 sealed+indexed（暴力扫面积过大）。诊断时先看段数和段状态分布，再去动 03 的 <code>nprobe</code>/<code>ef</code>——否则只是在每个失控的段上加更多功。</p>
+      </div>
+
+      <h2 id="s43"><span class="num">4.3</span><span>过滤与分区裁剪</span></h2>
+      <p class="one-liner">标量过滤和 partition 裁剪都在“缩小要检索的数据”，但裁剪只在查询显式带上分区维度时才生效。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>实战里的检索几乎都带条件:“某租户的、最近 7 天的、status=active 的”相似文档。把无关数据挡在检索之外有两个层次——partition 裁剪在<strong>段级</strong>把整批 segment 排除（最省），标量 filter 在<strong>段内</strong>把不满足条件的 entity 滤掉。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：<code>partition key</code> 裁剪（01 §1.2）是最廉价的一层——查询带上分区维度，调度器直接<strong>不把</strong>无关 partition 的 segment 派给执行者，那些段连碰都不碰。标量 <code>filter</code> 表达式则在每个被检索的段<strong>内部</strong>生效。最反直觉的一点在这里:<strong>带过滤的 ANN 比纯 ANN 更难，不是更简单</strong>。图索引（HNSW）靠在邻接图上贪心游走找近邻；过滤会让游走<strong>踩空</strong>——途经的节点大量不满足条件，图的连通性被打断，要么走更多步、要么提前陷入候选不足。聚类索引（IVF）同理：簇内满足过滤的候选凑不满 topK，被迫去扫更多簇。过滤比（满足条件的占比）越低，这种打断越严重。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="分区裁剪:一个 collection 的四个按日期分的 partition,查询带最近 3 天条件,命中的两个 partition 高亮,其余两个被裁掉灰显">
+          <defs>
+            <marker id="m-accent2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <rect x="40" y="20" width="280" height="42" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="180" y="40" text-anchor="middle" class="node-label-accent">查询 filter: date ≥ 今天-3</text>
+          <text x="180" y="56" text-anchor="middle" class="edge-label">显式带上分区维度 → 触发裁剪</text>
+
+          <!-- partitions row -->
+          <text x="350" y="110" text-anchor="middle" class="edge-label">collection 的 4 个 partition（按日期）</text>
+
+          <rect x="40"  y="128" width="140" height="62" rx="6" class="diagram-soft node-fill"/>
+          <text x="110" y="155" text-anchor="middle" class="edge-label" fill="#A3A3A3">P: 5 天前</text>
+          <text x="110" y="173" text-anchor="middle" class="edge-label" fill="#A3A3A3">裁掉 · 不碰</text>
+
+          <rect x="195" y="128" width="140" height="62" rx="6" class="diagram-soft node-fill"/>
+          <text x="265" y="155" text-anchor="middle" class="edge-label" fill="#A3A3A3">P: 4 天前</text>
+          <text x="265" y="173" text-anchor="middle" class="edge-label" fill="#A3A3A3">裁掉 · 不碰</text>
+
+          <rect x="365" y="128" width="140" height="62" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="435" y="155" text-anchor="middle" class="node-label-accent">P: 2 天前</text>
+          <text x="435" y="173" text-anchor="middle" class="edge-label">命中 · 检索</text>
+
+          <rect x="520" y="128" width="140" height="62" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="590" y="155" text-anchor="middle" class="node-label-accent">P: 今天</text>
+          <text x="590" y="173" text-anchor="middle" class="edge-label">命中 · 检索</text>
+
+          <line x1="180" y1="62" x2="435" y2="124" class="diagram-accent" marker-end="url(#m-accent2)"/>
+          <line x1="220" y1="62" x2="585" y2="124" class="diagram-accent" marker-end="url(#m-accent2)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>命中的 partition（accent）进入检索，其余被裁掉（虚线灰显）连段都不加载。<strong>注意</strong>：裁剪靠查询<strong>显式带上分区维度</strong>才生效（回指 01 §1.2）——不带条件，4 个 partition 全扫，裁剪等于没设。</figcaption>
+      </figure>
+
+      <p>过滤比反过来左右<strong>索引选型</strong>，这是 03 §3.9 留下的前向引用，现在收回：<strong>图索引（HNSW）在过滤比 &lt; 85% 时通常更优</strong>——它对“滤掉一部分”相对鲁棒，剩下的候选仍能在图上连通；而 <strong>IVF 在 85~95% 的高过滤比叠加大 topK（&gt; 2000）时反而更优</strong>——此时几乎不滤，IVF 扫整簇的简单结构没有图游走被打断的损耗，大 topK 下吞吐占优。换句话说，“选哪个索引”不只看数据规模，还要看<strong>查询长什么样</strong>：过滤比和 topK 是和规模并列的输入。</p>
+
+      <div class="callout insight">
+        <span class="label">把三件事钉在一起</span>
+        <p>partition 裁剪、标量 filter、索引选型不是三个独立选项，而是同一个目标“少检索、检索得准”的三个层次：裁剪在段级砍掉整批，filter 在段内砍掉行，索引决定砍剩下的怎么搜得快。设计时从外往里走——先看能不能用 partition key 裁掉大头，再看过滤比落在哪个区间该配哪种索引。</p>
+      </div>
+
+      <h2 id="s44"><span class="num">4.4</span><span>一致性机制：TSO 与 guarantee timestamp</span></h2>
+      <p class="one-liner">一致性级别不是“强/弱”开关，而是给检索的 guarantee timestamp 取哪个值——一条连续的光谱。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>01 §1.7 给了四档的名字和默认值（Bounded），但没说它们底下是同一个机制。分布式下“刚写的立刻可见”要付延迟代价（等所有写入对齐）；把这个取舍参数化，让能容忍滞后的场景用一点新鲜度换吞吐。参数化的载体，就是 guarantee timestamp。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：02 §2.2 里 <strong>MixCoord</strong> 兼任<strong>时间戳预言机（TSO oracle）</strong>——它派发全局单调递增的 <strong>TSO</strong> 时间戳。02 §2.4 的写路径里，<strong>每条写入都带一个 TSO</strong>。读路径这边，<strong>每次检索带一个 guarantee timestamp</strong>，语义是:“返回结果前，必须看到所有 TSO ≤ 这个时刻的写入”。执行者（query node / 流式节点）会<strong>等到本地已消费的数据追上 guarantee ts 才开始检索</strong>。于是四个一致性级别，本质是给 guarantee timestamp 选四个不同的值：</p>
+
+      <ul>
+        <li><strong>Strong</strong> = guarantee ts 取<strong>最新时刻</strong>（向 MixCoord 要当前 TSO）。要求看到此刻为止的全部数据 → 执行者得等本地数据完全对齐，<strong>最慢</strong>。</li>
+        <li><strong>Bounded</strong> = guarantee ts 取<strong>最新时刻减一个容忍窗口</strong>（默认）。允许漏掉最近这个窗口内的写入 → 不必等最新，<strong>有界滞后</strong>。</li>
+        <li><strong>Session</strong> = guarantee ts 取<strong>本 client 最后一次写入的 TSO</strong>。只保证看到自己这个会话写过的东西 → <strong>read-your-writes</strong>，但不保证看到别人刚写的。</li>
+        <li><strong>Eventually</strong> = <strong>不卡</strong> guarantee ts（取 0 / 最早）。执行者拿到什么就搜什么，不等待 → <strong>最快</strong>，无新鲜度保证。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一致性时间线:水平时间轴上三个写入事件 w1 w2 w3 各带 TSO,四条 guarantee timestamp 标记 Strong 在 t3 看到全部 Bounded 在 t3 减容忍窗口看到 w1w2 Session 取本会话最后写 Eventually 不卡">
+          <defs>
+            <marker id="m-axis" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- axis -->
+          <line x1="40" y1="150" x2="690" y2="150" class="diagram-ink" marker-end="url(#m-axis)"/>
+          <text x="690" y="172" text-anchor="end" class="edge-label">TSO 时间 →</text>
+
+          <!-- write events as ticks above axis -->
+          <line x1="150" y1="142" x2="150" y2="158" class="diagram-ink"/>
+          <line x1="330" y1="142" x2="330" y2="158" class="diagram-ink"/>
+          <line x1="510" y1="142" x2="510" y2="158" class="diagram-ink"/>
+          <text x="150" y="132" text-anchor="middle" class="node-label">w1@t1</text>
+          <text x="330" y="132" text-anchor="middle" class="node-label">w2@t2</text>
+          <text x="510" y="132" text-anchor="middle" class="node-label">w3@t3</text>
+
+          <!-- Eventually: far left, no wait -->
+          <line x1="70" y1="60" x2="70" y2="200" class="diagram-soft"/>
+          <text x="70" y="50" text-anchor="middle" class="edge-label" fill="#A3A3A3">Eventually</text>
+          <text x="70" y="218" text-anchor="middle" class="edge-label" fill="#A3A3A3">不卡 · 任意子集</text>
+
+          <!-- Bounded: t3 minus window, sees w1 w2 (default) -->
+          <line x1="420" y1="56" x2="420" y2="204" class="diagram-accent"/>
+          <text x="420" y="46" text-anchor="middle" class="node-label-accent">Bounded（默认）</text>
+          <text x="420" y="222" text-anchor="middle" class="branch-label">= t3 − Δ · 见 w1,w2</text>
+
+          <!-- Session: at the client's own last write (place at w2 as example) -->
+          <line x1="330" y1="76" x2="330" y2="186" class="diagram-ink"/>
+          <text x="245" y="252" text-anchor="middle" class="edge-label">Session = 本会话最后写</text>
+
+          <!-- Strong: at t3, sees all, waits -->
+          <line x1="510" y1="56" x2="510" y2="204" class="diagram-ink"/>
+          <text x="585" y="76" text-anchor="middle" class="node-label">Strong</text>
+          <text x="595" y="252" text-anchor="middle" class="edge-label">= t3 · 见全部 · 等待</text>
+
+          <!-- window bracket between bounded and t3 -->
+          <line x1="420" y1="270" x2="510" y2="270" class="diagram-soft"/>
+          <text x="465" y="288" text-anchor="middle" class="edge-label" fill="#A3A3A3">容忍窗口 Δ</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.3</span>四个级别 = 在同一条时间轴上给 guarantee timestamp 选不同的落点。<strong>注意</strong>：默认的 Bounded 落在 t3 减一个容忍窗口 Δ 处，看到的是一份<strong>略旧</strong>的快照（漏掉最近的 w3）；Strong 落在最新 t3 要等全部对齐，Eventually 不卡、看到的是任意子集。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">比文档深一层</span>
+        <p>官方文档把四档列成并列选项，容易让人以为是四个独立机制。底下其实是<strong>一个</strong>机制 + <strong>一个</strong>可调的值：guarantee timestamp 在时间轴上滑动。Strong 滑到最右（最新、最慢），Eventually 滑到最左（不等、最快），Bounded 和 Session 在中间各取一个有意义的点。理解成“连续光谱上的四个采样”，比背四条定义更经得起追问。</p>
+      </div>
+
+      <h2 id="s45"><span class="num">4.5</span><span>四个级别的代价对比</span></h2>
+      <p class="one-liner">同一条光谱上,越靠“看到最新”越慢、越靠“不等待”越快——按场景对新鲜度的真实需求来选。</p>
+
+      <p>把四个采样点摊成一张对照表。默认是 <strong>Bounded</strong>（不是 Strong）——这是从关系库迁移过来最反直觉的一点（01 §1.7 已埋）：默认给的是有界滞后，不是 read-your-writes。</p>
+
+      <table class="compare-table">
+        <caption>表 4.1 · 四个一致性级别 = guarantee timestamp 的四种取值（默认 Bounded 标记）</caption>
+        <thead><tr><th>级别</th><th>能看到多新</th><th>延迟代价</th><th>典型场景</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Strong</strong></td><td>此刻为止<strong>全部</strong>写入（guarantee ts = 最新 TSO）</td><td>最高：等本地数据完全对齐才检索</td><td>金融 / 强读写一致：写完必须立刻被任何读看到</td></tr>
+          <tr class="selected"><td><strong>Bounded</strong></td><td>略旧快照，漏掉最近容忍窗口 Δ 内的写入</td><td>中等且有界：不等最新，滞后有上限</td><td>RAG 离线灌库后查、推荐召回——容忍秒级滞后换吞吐（默认）</td></tr>
+          <tr><td><strong>Session</strong></td><td>本 client 自己写的一定可见，别人的不保证</td><td>低：只需追上自己最后写入的 TSO</td><td>刚写入要立刻自查、写后读的交互式流程</td></tr>
+          <tr><td><strong>Eventually</strong></td><td>任意子集，无顺序保证</td><td>最低：完全不等待</td><td>日志 / 监控类：能查到就行，不在乎漏掉最新几条</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">search_consistency.py · 示例，未在本机验证</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="c-consistency">复制</button>
+        </div>
+<pre id="c-consistency"><code class="language-python"># 一致性级别按次设置:同一 collection 不同查询可用不同级别
+# 不指定则用 collection 默认(Bounded) —— 注意默认不是 Strong
+res = client.search(
+    collection_name="docs",
+    data=[query_vector],
+    limit=10,
+    filter='tenant == "acme" and date >= "2026-05-27"',  # 标量过滤 + 可触发 partition 裁剪
+    search_params={"metric_type": "COSINE", "params": {"ef": 64}},  # ef 是段级旋钮(03)
+    consistency_level="Session",   # 写后要自查 → Session;要绝对最新 → Strong(付延迟)
+)
+</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 设计题</span>
+        <p>一个客服系统:坐标系用 Milvus 存历史工单向量。坐席提交一张新工单后，<strong>立刻</strong>要在“相似历史工单”里看到自己刚提交的这张（用于去重提示）；但对别的坐席几秒前提交的工单晚一点看到没关系。选哪个一致性级别？为什么不选 Strong？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>选 <strong>Session</strong>。需求精确命中它的语义:“本 client 自己写的一定可见”——坐席读到自己刚写的那张工单即可，别的坐席的写入允许滞后。</p>
+          <p>不选 <strong>Strong</strong> 的原因:Strong 要求看到<em>所有</em>人此刻为止的全部写入,执行者得等本地数据完全对齐,延迟最高;而需求里“别人的工单晚点看到没关系”说明根本不需要全局最新。用 Strong 是为用不到的保证付延迟。也不选 Bounded——它连“自己刚写的”都不保证可见（落在容忍窗口里就被漏掉），去重提示会失灵。</p>
+        </details>
+      </div>
+
+      <h2 id="s46"><span class="num">4.6</span><span>跨概念综合：一个 RAG 场景同时拍三个板</span></h2>
+      <p class="one-liner">真实选型不是孤立调一个参数,而是一致性、索引、partition 三者在同一个场景里相互牵制。</p>
+
+      <p>场景:一个企业知识库 RAG。文档块<strong>持续增量写入</strong>（每天新增、偶尔重灌某个空间的文档），同时<strong>在线检索</strong>（用户提问 → 召回相关块喂给大模型）。数据按<strong>空间/租户</strong>天然分组,规模到千万级向量。把前面所有零件摊开,同时拍三个板:</p>
+
+      <h3>板一:一致性级别 → Bounded</h3>
+      <p>RAG 召回容忍秒级滞后——用户提问时,刚灌进去几秒的某个块晚一点可见,不影响答案质量。<strong>Bounded</strong>（默认）正合适:用有界滞后换检索吞吐。<em>例外</em>:如果产品要“刚上传的文档立刻能被同一用户问到”,那条交互路径单独用 <strong>Session</strong>——按次设置,不必整个 collection 改默认（呼应 4.5 的“一致性级别按次设”）。</p>
+
+      <h3>板二:索引 → 看过滤比和 topK，不只看规模</h3>
+      <p>千万级规模两种主流索引都扛得住,真正的决定因素是<strong>查询形态</strong>（4.3 收回的 03 §3.9）。RAG 召回通常带过滤(按空间、按文档类型)但过滤比不会太低,且 topK 一般不大(几十)。这落在<strong>图索引(HNSW)更优</strong>的区间——过滤比 &lt; 85% 且小 topK,HNSW 对过滤鲁棒、延迟低。只有当某些查询变成“几乎不过滤 + 超大 topK(&gt;2000)”时,IVF 才反超。</p>
+
+      <h3>板三:partition → 用空间/租户做 partition key</h3>
+      <p>数据天然按空间分组,且检索几乎总带空间条件——这正是 <strong>partition key</strong> 的理想场景(01 §1.2)。按空间设 partition key,查询带上空间维度就<strong>段级裁掉</strong>其他空间的全部 segment(4.3 图 4.2),把扇出宽度从“全库段数”压到“本空间段数”。</p>
+
+      <div class="callout insight">
+        <span class="label">三者如何相互影响</span>
+        <p>三个板不是独立的:<strong>partition 裁剪</strong>先把扇出压窄,直接减轻 4.2 的归并代价,也让 4.4 的 guarantee ts 等待面更小(要对齐的段更少);<strong>索引选型</strong>决定裁剪后每个段搜得多快;<strong>一致性级别</strong>决定要不要为新鲜度多等。一个例子串起来:重灌某空间文档时会产生一批 growing 段和待 compaction 的小段(4.2),此时该空间的检索若用 Strong 会等这批数据全部对齐(4.4)、又因小段多而扇出宽(4.2)——三处代价叠加。改用 Bounded + 等 compaction 收敛,延迟立刻回落。这种“一处变动牵动三处”的推演,正是 05 章选型辨析的预演。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>一次 <code>search</code> 从 proxy 出发到返回 top-k，中间经过哪两类执行者、各负责哪种 segment？归并分哪两级、分别在哪里做？</li>
+          <li>“检索越来越慢”，在动 <code>nprobe</code>/<code>ef</code> 之前应该先排查什么？为什么 02 的 compaction 与这件事直接相关？</li>
+          <li>四个一致性级别底下其实是同一个机制。这个机制是什么？四个级别分别给它的那个值取了什么？默认是哪个？</li>
+          <li><strong>设计题</strong>：一个推荐系统,离线批量灌入物料向量(每小时一批),在线高 QPS 召回,容忍分钟级新鲜度滞后。一致性级别选哪个?如果改成“用户刚收藏的物料要立刻出现在他自己的推荐里”,这条路径又该选哪个?</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>经过<strong>流式节点</strong>(查本分片 growing 段、暴力扫)和 <strong>query node</strong>(查 sealed 段、走索引)。归并两级:先<strong>每分片 reduce</strong>把段内 top-k 合并,再由 <strong>proxy 跨分片 merge</strong>成全局 top-k。</li>
+            <li>先排查<strong>段数与段状态</strong>:小 sealed 段是否堆积(扇出过宽)、growing 段是否没及时 sealed+indexed(暴力扫面积大)。compaction 的作用就是合并小段、削窄扇出(02 §2.5);段数失控时,调 <code>nprobe</code>/<code>ef</code> 只是在每个失控段上加更多功。</li>
+            <li>机制是 <strong>guarantee timestamp</strong>(“看到所有 TSO ≤ 该时刻的写入”,TSO 由 MixCoord 这个 oracle 派发)。Strong = 最新 TSO(等全部对齐);Bounded = 最新减容忍窗口;Session = 本 client 最后写入的 TSO;Eventually = 不卡(取最早)。默认 <strong>Bounded</strong>。</li>
+            <li>常规召回选 <strong>Bounded</strong>:容忍分钟级滞后换高 QPS 吞吐,默认即可。“刚收藏要立刻出现在自己推荐里”这条路径单独用 <strong>Session</strong>(read-your-writes),按次设置,不动 collection 默认。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把读路径、归并代价、一致性叠在一条时间线上推</h3>
+        <p>一个 collection:4 个 shard,按租户做 partition key。某租户刚通过一次大批量 <code>insert</code> 灌入 200 万条向量,此刻这批数据大部分还在 growing 段、少量 sealed 但尚未 indexed。紧接着该租户发起一次带租户过滤的检索,<code>limit=50</code>,一致性用了默认 Bounded。</p>
+        <p>(a) 这次检索的扇出会落到哪些执行者、扫哪些段?为什么这次会明显比平时慢?(b) 如果把一致性临时改成 Strong,延迟会怎样变化,为什么?(c) 要把这次检索的延迟降下来,在“立刻”和“等一会儿”两个时间尺度上,各有什么手段?</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>(a) partition key 裁剪只留本租户的段(4.3),但本租户这批新数据大量在 growing 段→流式节点要<strong>暴力扫</strong>(4.1/4.2);少量 sealed 但没 indexed 的也走不了索引。扇出虽被裁剪压窄,但段都是“慢段”。(b) Strong 把 guarantee ts 推到最新 TSO,执行者要等这 200 万条全部对齐才开始检索(4.4)——在数据正流入时,这个等待会更长。(c)“立刻”:降不了暴力扫的本质,但可以把 <code>limit</code>/旋钮收一收减轻单段成本,或确认查询确实带了租户条件让裁剪生效;“等一会儿”:等 growing 段 sealed+indexed、等 compaction 把小段合并(4.2),走上索引后这批段的检索成本数量级下降。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://milvus.io/docs/consistency.md">Consistency Level</a>（官方，四档定义与 guarantee timestamp 机制）</li>
+          <li><a href="https://milvus.io/docs/single-vector-search.md">Single-Vector Search</a>（官方，search 参数与一致性级别用法）</li>
+          <li><a href="https://milvus.io/docs/filtered-search.md">Filtered Search</a>（官方，标量过滤与过滤比对索引的影响）</li>
+          <li><a href="https://milvus.io/docs/timestamp.md">Timestamp in Milvus</a>（官方，TSO 与 guarantee/service timestamp）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-index-internals.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 索引内核</span>
+        </a>
+        <a href="05-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 自测与辨析</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 读路径</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 扇出与归并代价</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.3 过滤与分区裁剪</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.4 TSO 与 guarantee ts</a></li>
+        <li><a href="#s45" data-toc-target="s45">4.5 四级别代价对比</a></li>
+        <li><a href="#s46" data-toc-target="s46">4.6 跨概念综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

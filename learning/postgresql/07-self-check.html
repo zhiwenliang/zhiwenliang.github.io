@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自测 · PostgreSQL 核心机制教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; line-height: 1.6; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav a.full { grid-column: 1 / -1; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-storage.html">01 存储</a><span class="sep">—</span>
+    <a href="02-mvcc.html">02 MVCC</a><span class="sep">—</span>
+    <a href="03-vacuum-wal.html">03 回收·WAL</a><span class="sep">—</span>
+    <a href="04-indexes.html">04 索引</a><span class="sep">—</span>
+    <a href="05-planner.html">05 规划器</a><span class="sep">—</span>
+    <a href="06-vs-mysql.html">06 对比MySQL</a><span class="sep">—</span>
+    <a href="07-self-check.html" class="current">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">第 07 章</p>
+        <h1>自测</h1>
+        <p class="recap">前六章把"堆 → 行版本 → 死元组 → VACUUM → 索引 → 规划器"这条因果链铺开了——这一章检验一件事：遇到一个没见过的现象，你能不能把多章的机制接起来用。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">这一章怎么用</p>
+        <p>题目分三层：概念层（回忆"是什么"）、原理层（讲清"为什么"）、应用判别层（在场景里判断"该用哪一章的机制"）。最后一层是这份教程真正的目标——能迁移，才算学会。</p>
+      </section>
+
+      <p style="color: var(--ink-soft); font-style: italic;">所有答案集中在本页最末一个折叠块里。<strong>先合上前面的章节，把答案写在纸上或编辑器里，写完再展开对照。</strong>直接展开答案，等于把这一章当成又读了一遍——那不会留下任何东西。</p>
+
+      <h2 id="gradient"><span class="num">§</span><span>三层梯度：你现在在哪一层</span></h2>
+
+      <p>下面这张图是这套题的结构。能答对底层不代表学会了；真正的标志是能爬到顶层——把陌生场景拆回到某几章的机制上。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三层学习梯度金字塔：概念层、原理层、应用判别层">
+          <defs>
+            <marker id="up-arrow" viewBox="0 0 10 10" refX="5" refY="1"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 10 L 5 0 L 10 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- left vertical "harder upward" arrow -->
+          <line x1="78" y1="338" x2="78" y2="70" class="diagram-accent" marker-end="url(#up-arrow)"/>
+          <text x="78" y="362" text-anchor="middle" class="branch-label">越往上越难</text>
+          <text x="78" y="378" text-anchor="middle" class="edge-label">越接近真正学会</text>
+
+          <!-- bottom band (widest): 概念层 -->
+          <polygon points="193,234 487,234 566,326 114,326" class="diagram-ink node-fill"/>
+          <text x="340" y="276" text-anchor="middle" class="node-label">概念层 · 回忆</text>
+          <text x="340" y="296" text-anchor="middle" class="edge-label">xmin/xmax、ctid、TOAST、默认隔离级别是什么</text>
+
+          <!-- middle band: 原理层 -->
+          <polygon points="266,140 414,140 487,234 193,234" class="diagram-ink node-fill"/>
+          <text x="340" y="180" text-anchor="middle" class="node-label">原理层 · 为什么</text>
+          <text x="340" y="200" text-anchor="middle" class="edge-label">读不阻塞写、HOT、bitmap、回卷</text>
+
+          <!-- top band: 应用判别层 -->
+          <polygon points="340,58 414,140 266,140" class="diagram-accent node-fill-accent"/>
+          <text x="340" y="118" text-anchor="middle" class="node-label-accent">应用判别层</text>
+          <text x="340" y="134" text-anchor="middle" class="edge-label">这个场景该用哪一章</text>
+        </svg>
+        <figcaption><span class="fig-num">图 7.1</span>三层梯度。<strong>注意</strong>：题量底层多、顶层少，但权重相反——顶层的判别题决定你是否真的把这份教程读进去了，底层答得再快也只是回忆。</figcaption>
+      </figure>
+
+      <h2 id="concept-layer"><span class="num">§ 1</span><span>概念层 · 对应第 1–2 章</span></h2>
+      <p>每题一句话能答完。卡住就回 <a href="01-storage.html">第 1 章</a> / <a href="02-mvcc.html">第 2 章</a>。</p>
+      <section class="self-check" style="border-top: none; padding-top: 0; margin-top: 8px;">
+        <ol>
+          <li>一个 heap tuple 的隐藏列 <code>xmin</code> 和 <code>xmax</code> 分别记录什么？<small><a href="01-storage.html#hidden-columns">§1.4</a></small></li>
+          <li><code>ctid</code> 是什么？把一行 <code>UPDATE</code> 一次后，旧版本的 <code>ctid</code> 会改变吗？<small><a href="01-storage.html#tuple">§1.3</a></small></li>
+          <li>一行大约超过多大会触发 TOAST？大字段被怎么处理？<small><a href="01-storage.html#toast">§1.5</a></small></li>
+          <li>PostgreSQL 的默认事务隔离级别是哪一个？<small><a href="02-mvcc.html#isolation">§2.3</a></small></li>
+          <li>用一句话定义"死元组"。它被回收前还占用什么？<small><a href="02-mvcc.html#dead-tuple">§2.4</a></small></li>
+          <li>8KB Page 内部，line pointer 数组和 tuple 数据各自从页的哪一端开始生长？<small><a href="01-storage.html#page">§1.2</a></small></li>
+        </ol>
+      </section>
+
+      <h2 id="principle-layer"><span class="num">§ 2</span><span>原理层 · 对应第 2–5 章</span></h2>
+      <p>每题要讲到机制，不能只给结论。</p>
+      <section class="self-check" style="border-top: none; padding-top: 0; margin-top: 8px;">
+        <ol>
+          <li>为什么 PostgreSQL 的"读不阻塞写、写不阻塞读"？用 <code>xmin</code>/<code>xmax</code> 加快照说明，不要只说"因为 MVCC"。</li>
+          <li>HOT 更新成立需要同时满足哪两个条件？破坏其中之一会带来什么后果？</li>
+          <li>普通 <code>VACUUM</code> 和 <code>VACUUM FULL</code>，在"是否把空间还给操作系统"和"加什么锁"两点上分别有什么区别？</li>
+          <li>事务 ID 回卷为什么是灾难性的？"冻结"（freeze）如何防止它？</li>
+          <li>可见性图（visibility map）被哪两个机制同时用到？分别用它来做什么？</li>
+          <li>bitmap heap scan 为什么在"中等选择性"时胜过 index scan 和 seq scan？讲它对 IO 做了什么。</li>
+          <li><code>WAL</code> 让一次 <code>COMMIT</code> 只需要等什么落盘，而不必等什么落盘？</li>
+          <li>在 <code>EXPLAIN ANALYZE</code> 里，某节点 estimated rows 和 actual rows 差了几个数量级，这通常指向什么根因？会引发什么连锁后果？</li>
+        </ol>
+      </section>
+
+      <h2 id="discrimination"><span class="num">§ 3</span><span>应用判别层 · 跨章场景</span></h2>
+      <p>这一层是这份教程的重心。每个场景都<strong>故意</strong>横跨多章——先判断它牵涉哪几章的机制，再给诊断/方案。没有"标准答案模板"，看你能不能把因果链接起来。</p>
+
+      <section class="self-check" style="border-top: none; padding-top: 0; margin-top: 8px;">
+        <ol>
+          <li><strong>场景 A（牵涉第 2、3、5 章）</strong>：一张订单表，应用每天 <code>DELETE</code> 一批旧行、<code>INSERT</code> 一批新行，行数基本不变，但一个月内磁盘占用涨了 5 倍，<code>count(*)</code> 也越来越慢。给出你的诊断顺序：该看哪些指标、为什么跑了普通 <code>VACUUM</code> 占用还是没降、根因出在哪里。</li>
+          <li><strong>场景 B（牵涉第 2、4 章）</strong>：一个每秒更新多次的 <code>last_seen timestamptz</code> 列，产品要求支持按它做范围查询。直接加 B-tree 索引后，写入吞吐掉了一半。解释机制根因，并给出两种不同取舍的方案。</li>
+          <li><strong>场景 C（牵涉第 3、5 章）</strong>：同一条两表 <code>JOIN</code>，数据量小时毫秒返回，涨到百万行后突然慢到几十秒。<code>EXPLAIN ANALYZE</code> 显示某节点 <code>estimated rows=1</code> 而 <code>actual rows=800000</code>。判断规划器多半选了哪种 join、为什么选错、两种修法。</li>
+          <li><strong>场景 D（牵涉第 3、4 章）</strong>：一个报表查询只 <code>SELECT</code> 两个列，且这两列都在一个覆盖索引里，但 <code>EXPLAIN</code> 显示走的是 Index Scan 而非 Index Only Scan，且 <code>Heap Fetches</code> 很高。这张表刚批量导入完。解释为什么没走 index-only，怎么让它走。</li>
+          <li><strong>场景 E（牵涉第 1、2、6 章）</strong>：一个团队从 MySQL（InnoDB）迁到 PostgreSQL，原表用 UUID 主键、依赖 RR 隔离级别、用 <code>INSERT ... ON DUPLICATE KEY UPDATE</code>。逐条说明：迁到 PG 后哪一项行为会变、哪一项必须改写、哪一项反而从负担变成无负担，并各自说出机制原因。</li>
+        </ol>
+      </section>
+
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上整份教程，在纸上或 Excalidraw 里凭记忆重画 <a href="index.html#map">起点页那张概念地图</a>——只画中心节点 + 5 个外围节点 + 边上的动词就够。画完回到 index 对照，重点检查一件事：<strong>你有没有把"可见性图"同时连到 VACUUM 和 index-only scan？</strong>如果漏了这条枢纽连接，回 <a href="03-vacuum-wal.html#visibility-map">§3.5</a> 和 <a href="04-indexes.html#index-only-scan">§4.7</a> 各读一遍。</p>
+      </div>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把"一次 UPDATE"讲到底</h3>
+        <p>用一段连贯的话，追踪一条 <code>UPDATE orders SET amount=... WHERE id=42</code> 在 PG 内部从头到尾发生了什么：从 WAL、到堆里的新旧版本、到索引是否更新（HOT 与否）、到这次更新在何时对其它事务可见、到它留下的旧版本何时被谁回收。要求点到至少 4 章的概念。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>按时间顺序串：① 改动先进 <a href="03-vacuum-wal.html#wal">WAL</a>；② 堆里写新版本、旧版本盖 <code>xmax</code>（<a href="02-mvcc.html#dead-tuple">§2.4</a>）；③ 改的列有没有索引决定走不走 <a href="02-mvcc.html#hot">HOT</a>；④ 提交后新版本对后续快照可见（<a href="02-mvcc.html#visibility">§2.2</a>）；⑤ 旧版本成死元组，等 <a href="03-vacuum-wal.html#vacuum">VACUUM</a> 在没有更老快照需要它时回收。</p>
+        </details>
+      </div>
+
+      <section style="margin-top: 36px;">
+        <details>
+          <summary>答案（三层全部做完再展开）</summary>
+
+          <h3>概念层</h3>
+          <ol>
+            <li><code>xmin</code> = 插入这个行版本的事务 ID；<code>xmax</code> = 删除或锁定这个行版本的事务 ID（仍有效时为 0）。两者一起决定该版本对某个快照是否可见。</li>
+            <li><code>ctid</code> = 行版本的物理位置 <code>(block号, 页内偏移)</code>。<code>UPDATE</code> 会写一个新版本、它有新的 <code>ctid</code>；旧版本的 <code>ctid</code> 不变（仍指向它自己），只是被盖上 <code>xmax</code>。所以"旧版本的 ctid 变了吗"——不变。</li>
+            <li>约超过 page 的 1/4（≈2KB）时触发。大字段被压缩、必要时切片，存进旁置的 TOAST 表，主行只留一个指针。</li>
+            <li>Read Committed。</li>
+            <li>死元组 = 一个已被 <code>xmax</code> 标记、且对所有当前存在的快照都不可见的旧行版本。回收前它仍占用所在 page 的空间，以及指向它的索引项。</li>
+            <li>line pointer（ItemId）数组从 page 头部往后增长，tuple 数据从 page 尾部往前堆，中间是 free space。</li>
+          </ol>
+
+          <h3>原理层</h3>
+          <ol>
+            <li>读操作只拿每个 tuple 的 <code>xmin</code>/<code>xmax</code> 与自己的快照比对来判断可见性，从不申请行锁、不等待；写操作不覆盖旧行，而是追加一个新版本并给旧版本盖 <code>xmax</code>。读看旧版本、写产生新版本，两者不争用同一份数据，所以互不阻塞。</li>
+            <li>两个条件同时满足：被修改的列上都没有索引，且新版本能放进与旧版本相同的 page。破坏任一条（典型是给被更新的列加了索引），HOT 失效——每次更新都要为所有索引插新项，造成写放大和索引膨胀。</li>
+            <li>普通 <code>VACUUM</code>：不把空间还给 OS（只在文件内标记可复用），加的是较弱的锁、读写可继续。<code>VACUUM FULL</code>：把表重写进新文件、能把空间还给 OS，但加 <code>ACCESS EXCLUSIVE</code> 锁、全表期间不可读写。</li>
+            <li>txid 是 32 位、会回卷；若一个很老的行版本没被冻结，回卷后它的 <code>xmin</code> 会显得"在未来"，于是突然对所有人不可见——数据看似消失。冻结把足够老的 <code>xmin</code> 改写成"永远可见"，使它不再受回卷影响。</li>
+            <li>被 <code>VACUUM</code> 和 index-only scan 同时用到。<code>VACUUM</code> 用它跳过"整页全可见"的 page（也用它维护这些标记）；index-only scan 用它确认目标 page 全可见，从而免去回堆确认可见性。</li>
+            <li>它先扫索引、把命中的 <code>ctid</code> 收进一个按 page 排序的位图，再按物理顺序一次性访问堆。这把"随机 IO + 同一 page 可能重复访问"变成"顺序 IO + 每页只访问一次"。单行命中时 index scan 的随机访问更省，命中大比例时 seq scan 更省，中间区间 bitmap 最优。</li>
+            <li><code>COMMIT</code> 只需等这次事务的 WAL 记录 <code>fsync</code> 落盘；被修改的数据页可以稍后异步刷盘。顺序的 WAL 落了，就不会丢。</li>
+            <li>通常指向统计信息失真（过期或缺失，没及时 <code>ANALYZE</code>）。连锁后果：上层节点基于错误的行数估算选了错误的 join——例如以为内表只有 1 行而选 nested loop，实际有几十万行，于是内表被探几十万次，查询慢几个数量级。</li>
+          </ol>
+
+          <h3>应用判别层</h3>
+          <ol>
+            <li><strong>场景 A</strong>：先看 <code>pg_stat_user_tables</code> 的 <code>n_dead_tup</code> 和 <code>pg_relation_size</code>，确认是死元组膨胀。普通 <code>VACUUM</code> 不还盘，所以占用不降（§3.1/§3.3）。但真正要查的是<em>为什么死元组没被回收</em>——最可能是有长事务或 <code>idle in transaction</code> 会话持有老快照，<code>xmin</code> horizon 不前进，VACUUM 无法判定这些旧版本"对谁都不可见"（§2.6）。查 <code>pg_stat_activity</code> 里的长事务，杀掉或修复它，再让 autovacuum 跟上；要立刻还盘才用 <code>VACUUM FULL</code> 或 pg_repack。<code>count(*)</code> 变慢是因为它要扫描所有可见行，膨胀让要扫的 page 变多（§5）。</li>
+            <li><strong>场景 B</strong>：根因是这个索引让 <code>last_seen</code> 的更新无法走 HOT（§2.5），每秒多次更新都要维护索引，写放大 + 索引膨胀。两种取舍：(1) 接受写代价但降低频率——把 <code>last_seen</code> 的更新合并/降采样（比如最多每分钟落一次），让范围查询仍可用 B-tree；(2) 换索引策略——如果这张表按时间近似追加，<code>last_seen</code> 与物理顺序相关，可用 BRIN（§4.5）：索引极小、维护轻，范围查询配 bitmap scan 仍快，代价是精度低于 B-tree。选哪个取决于查询对精度的要求和写入热度。</li>
+            <li><strong>场景 C</strong>：<code>estimated 1 / actual 800000</code> 是典型的统计失真（§5.2）。规划器以为内表只有 1 行，于是顶层多半选了 nested loop（§5.4），结果内表被探 80 万次，复杂度爆炸。修法：(1) 对相关表跑 <code>ANALYZE</code> 刷新统计，必要时提高 <code>default_statistics_target</code> 或加多列扩展统计；(2) 若估算因列间相关性长期偏差，用扩展统计或调整查询，让规划器改选 hash join（大表等值连接的正解）。核心是先让行数估准，join 选择会跟着对。</li>
+            <li><strong>场景 D</strong>：index-only scan 要求目标 page 在可见性图里标为 all-visible（§4.7）。刚批量导入的表还没被 VACUUM 扫过，VM 里几乎没有 all-visible 标记，所以每条索引项都得回堆确认可见性——退化成 Index Scan，<code>Heap Fetches</code> 高。让它走 index-only：手动 <code>VACUUM</code>（或等 autovacuum）这张表，把 VM 填上 all-visible 标记（§3.5），之后查询即可免回堆。</li>
+            <li><strong>场景 E</strong>：① <strong>会变</strong>——默认隔离级别从 InnoDB 的 RR 变成 PG 的 RC（§2.3/§6.4），同一事务里重复读到的结果在 PG 默认下会随其它事务提交而变化；要保持原语义得显式设 <code>REPEATABLE READ</code>，且 PG 的 RR 在写冲突时是抛 <code>40001</code> 让你重试，而不是像 InnoDB 那样用间隙锁阻塞。② <strong>必须改写</strong>——<code>ON DUPLICATE KEY UPDATE</code> 在 PG 没有，要改成 <code>INSERT ... ON CONFLICT (...) DO UPDATE</code> 并显式指明冲突目标（§6.6）。③ <strong>反而变好</strong>——UUID 主键在 InnoDB 因聚簇索引导致页分裂和二级索引变胖（§6.1）；PG 没有聚簇索引、主键不决定行的物理位置，UUID 主键基本不再有这个惩罚。</li>
+          </ol>
+        </details>
+      </section>
+
+      <footer class="references">
+        <h3>把判别能力接着练下去</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/18/using-explain.html">PostgreSQL 18: Using EXPLAIN</a>（拿真实查询练读计划）</li>
+          <li><a href="https://www.interdb.jp/pg/">The Internals of PostgreSQL</a>（把每章机制再深一层）</li>
+          <li><a href="https://wiki.postgresql.org/wiki/Slow_Query_Questions">PostgreSQL Wiki: Slow Query Questions</a>（把场景题搬到真实排查）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="06-vs-mysql.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">06 · 深入对比 MySQL</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到 →</span>
+          <span class="title">00 · 起点与概念地图</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#gradient" data-toc-target="gradient">三层梯度</a></li>
+        <li><a href="#concept-layer" data-toc-target="concept-layer">概念层</a></li>
+        <li><a href="#principle-layer" data-toc-target="principle-layer">原理层</a></li>
+        <li><a href="#discrimination" data-toc-target="discrimination">应用判别层</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

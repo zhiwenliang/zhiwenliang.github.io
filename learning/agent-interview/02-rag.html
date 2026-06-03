@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update <title>
+    3. Update the .learning-path breadcrumb (mark current chapter with .current)
+    4. Fill in <article> with chapter content using the reusable HTML
+       snippets defined in references/tutorial_template.md
+    5. Update sticky TOC links (aside.toc-sidebar > ul) to match in-article anchors
+    6. Update prev/next nav at bottom
+
+  Class names you'll use (full reference in tutorial_template.md):
+    .learning-path   .chapter-opener (now uses .chapter-label, not .numeral)
+    .schema-panel   .one-liner   .rationale   .annotations
+    .code-block (with .header > .filename .lang .copy)
+    .callout (.warning .tip .example .insight — only .warning shows accent)
+    .compare-table (tr.selected)
+    figure > svg > figcaption (figcaption > .fig-num)
+    .predict   details > summary
+    .self-check   .challenge   .references   .chapter-nav
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 · RAG 与知识库 · AI Agent 面试通关</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-llm-prompt.html">01 LLM/Prompt</a><span class="sep">—</span>
+    <a href="02-rag.html" class="current">02 RAG</a><span class="sep">—</span>
+    <a href="03-agent-arch.html">03 Agent 架构</a><span class="sep">—</span>
+    <a href="04-engineering.html">04 工程化</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>RAG 与知识库：给模型补上它不知道的事</h1>
+        <p class="recap">上一章把 LLM 钉成了一个上下文有限、会幻觉的组件。正是这两个限制，逼出了这一章的检索增强（RAG）——在生成前先去外部知识里捞回相关片段塞进上下文，让模型"看着资料答题"而不是"凭记忆编"。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你要建立的心智模型</p>
+        <ul>
+          <li>什么时候该用 RAG、什么时候长上下文或微调更对——RAG 是规模决策，不是默认项。</li>
+          <li>一条生产级 RAG 链路每一环的决策点与失败模式，以及怎么定位是"没检索到"还是"检索到了没用好"。</li>
+          <li>为什么纯向量检索不够、混合检索 + rerank 各自解决什么问题。</li>
+          <li>怎么用 RAGAS 三元组把"RAG 好不好"从主观感受变成可回归的数字。</li>
+        </ul>
+      </section>
+
+      <!-- ============================ §2.1 ============================ -->
+      <h2 id="s1"><span class="num">2.1</span><span>为什么要检索：RAG vs 微调 vs 长上下文</span></h2>
+
+      <p class="one-liner">RAG = 在生成前先检索外部知识、把相关片段拼进 prompt 再让模型作答；它改的是模型"知道什么"，不是模型"怎么说话"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>LLM 的参数是训练那一刻冻结的：私域文档没见过、上周发的公告没见过、内部 SOP 更没见过。直接问，模型要么承认不知道，要么编一个像模像样的答案（幻觉）。把知识"写进参数"要重新训练，代价高且每次知识更新都得重训；把知识"塞进上下文"则便宜、即时、且天然带出处。RAG 选的是后者——用一次检索换掉一次重训。</p>
+      </div>
+
+      <p>面试里这道题的陷阱是把 RAG、微调、长上下文当成三个并列选项让你"选一个"。它们其实在回答不同的问题：<strong>RAG 改知识</strong>（模型该看哪些资料）、<strong>微调改行为</strong>（模型该用什么风格、格式、语气、能力）、<strong>长上下文改的是"这次对话能看多少"</strong>。中高级答法是先把问题归类，再谈取舍。</p>
+
+      <p>一条值得记住的规模启发式来自 Anthropic 的 Contextual Retrieval 一文：当整个语料能放进上下文窗口时（文中给的经验值是约 <strong>20 万 token / 约 500 页</strong>），直接把全部资料塞进 prompt + 开 prompt 缓存即可，无需 RAG——召回率 100%、没有分块和检索两段链路要维护，工程量和出错面都远小于 RAG。等到语料超过这个规模塞不下、或知识要实时更新 / 按权限过滤 / 可溯源时，才把 RAG 这条更复杂的链路顶上去。这是一道<em>规模 + 工程</em>的取舍，不是"做知识问答就默认上 RAG"。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 三条路线在回答不同问题</caption>
+        <thead>
+          <tr><th>方案</th><th>解决什么</th><th>代价 / 为什么不总用它</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>长上下文 + prompt 缓存</td><td>一次性把全部资料喂进去，召回率 100%、无检索链路</td><td>语料一大就塞不下；每次都全量进 prompt，首 token 延迟和成本随上下文线性涨</td></tr>
+          <tr class="selected"><td>RAG（检索增强）</td><td>补外部 / 私域 / 实时知识，降幻觉，答案可溯源，改知识不用重训</td><td>多了分块 + 检索两段链路；召回不准则前功尽弃；选中行 = 大语料 / 常更新场景的默认</td></tr>
+          <tr><td>微调（SFT / LoRA）</td><td>改风格、格式、语气、领域能力——让模型"换一种说法 / 学会一种任务"</td><td>改不动"知识时效"；要标注数据、要训练、知识一变还得重训；落地周期最长</td></tr>
+        </tbody>
+      </table>
+
+      <p>三者不互斥，复杂系统常常叠加：用微调让模型学会"严格按引用作答、不编造"的行为，再用 RAG 喂它实时知识——行为靠微调锁、知识靠 RAG 供。下面这张决策树是面试白板上能直接画出来的判断顺序。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 486" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="RAG、长上下文、微调三选一的决策树">
+          <defs>
+            <marker id="dec21" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- Start -->
+          <ellipse cx="340" cy="30" rx="92" ry="22" class="diagram-ink node-fill"/>
+          <text x="340" y="35" text-anchor="middle" class="node-label">需要补充知识 / 改行为</text>
+
+          <!-- Q1 -->
+          <polygon points="340,68 470,128 340,188 210,128" class="diagram-ink node-fill"/>
+          <text x="340" y="124" text-anchor="middle" class="node-label">语料 &lt; ~200K</text>
+          <text x="340" y="142" text-anchor="middle" class="node-label">tokens？</text>
+          <line x1="340" y1="52" x2="340" y2="68" class="diagram-ink" marker-end="url(#dec21)"/>
+
+          <!-- Q1 Yes -> 直接塞 (left) -->
+          <text x="150" y="120" text-anchor="middle" class="branch-label">是</text>
+          <line x1="210" y1="128" x2="130" y2="128" class="diagram-ink" marker-end="url(#dec21)"/>
+          <rect x="10" y="104" width="120" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="70" y="124" text-anchor="middle" class="node-label-accent" font-size="12">直接塞上下文</text>
+          <text x="70" y="142" text-anchor="middle" class="edge-label">+ prompt 缓存</text>
+
+          <!-- Q1 No -> Q2 -->
+          <text x="356" y="208" text-anchor="middle" class="branch-label">否</text>
+          <line x1="340" y1="188" x2="340" y2="216" class="diagram-ink" marker-end="url(#dec21)"/>
+
+          <!-- Q2 -->
+          <polygon points="340,216 470,276 340,336 210,276" class="diagram-ink node-fill"/>
+          <text x="340" y="272" text-anchor="middle" class="node-label">知识常变 /</text>
+          <text x="340" y="290" text-anchor="middle" class="node-label">要溯源？</text>
+
+          <!-- Q2 Yes -> RAG (left) -->
+          <text x="150" y="268" text-anchor="middle" class="branch-label">是</text>
+          <line x1="210" y1="276" x2="130" y2="276" class="diagram-ink" marker-end="url(#dec21)"/>
+          <rect x="10" y="252" width="120" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="70" y="280" text-anchor="middle" class="node-label-accent">用 RAG</text>
+
+          <!-- Q2 No -> Q3 -->
+          <text x="356" y="356" text-anchor="middle" class="branch-label">否</text>
+          <line x1="340" y1="336" x2="340" y2="364" class="diagram-ink" marker-end="url(#dec21)"/>
+
+          <!-- Q3 -->
+          <polygon points="340,364 470,424 340,484 210,424" class="diagram-ink node-fill"/>
+          <text x="340" y="420" text-anchor="middle" class="node-label">要改风格 /</text>
+          <text x="340" y="438" text-anchor="middle" class="node-label">格式 / 能力？</text>
+
+          <!-- Q3 Yes -> 微调 (left) -->
+          <text x="150" y="416" text-anchor="middle" class="branch-label">是</text>
+          <line x1="210" y1="424" x2="130" y2="424" class="diagram-ink" marker-end="url(#dec21)"/>
+          <rect x="10" y="400" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="70" y="428" text-anchor="middle" class="node-label">微调</text>
+
+          <!-- Q3 No -> 长上下文 (right) -->
+          <text x="530" y="416" text-anchor="middle" class="branch-label">否</text>
+          <line x1="470" y1="424" x2="550" y2="424" class="diagram-ink" marker-end="url(#dec21)"/>
+          <rect x="550" y="400" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="610" y="421" text-anchor="middle" class="node-label" font-size="12">长上下文</text>
+          <text x="610" y="439" text-anchor="middle" class="edge-label">/ 纯 prompt</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>三选一不是品味问题，是顺着"规模 → 时效 → 行为"三道关往下落。<strong>注意</strong>：第一道关先问"语料塞得进上下文窗口吗"（Anthropic 给的经验值约 20 万 token）——塞得下就先用全塞 + 缓存，这是最常被跳过的判断。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>产品要求"客服机器人必须用公司规定的固定话术开头和结尾，并且能答出今天刚更新的资费表"。这两个要求该各用什么手段？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>拆成两个问题：固定话术 = <strong>行为</strong>，用微调（或更轻的：把话术写进 system prompt）锁定；今天的资费表 = <strong>实时知识</strong>，用 RAG 检索最新文档喂入。把两者混为一谈、想"微调一个知道资费的模型"，结果就是资费一改又要重训——这是面试里区分初级和中高级的典型判别点。</p>
+        </details>
+      </div>
+
+      <!-- ============================ §2.2 ============================ -->
+      <h2 id="s2"><span class="num">2.2</span><span>RAG 链路总览（一张图看全）</span></h2>
+
+      <p class="one-liner">一条生产级 RAG 由两段独立链路构成：离线把文档变成可检索的索引，在线把查询变成带引用的答案。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>面试官问"你的 RAG 怎么搭的"，初级答"用 LangChain 调一下向量库"，中高级答"分两段、每段哪几环、每环最容易出什么问题"。把链路拆清楚的真正价值在排障：线上"答得不对"时，能立刻判断是离线索引建错了、在线召回没捞到、还是召回到了但生成没用好——而不是从头瞎调。</p>
+      </div>
+
+      <p>下图把整条链路摊开。左半是<strong>离线索引</strong>（文档进来一次、建好索引）；右半是<strong>在线查询</strong>（每个用户请求走一遍）。两段唯一的交汇点是中间那个<strong>索引存储</strong>——离线往里写，在线从里读。</p>
+
+      <figure>
+        <svg viewBox="0 0 960 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="RAG 完整链路：离线索引与在线查询两段，交汇于索引存储">
+          <defs>
+            <marker id="flow22" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="flow22a" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- gutter labels -->
+          <text x="14" y="36" class="edge-label" font-weight="700">离线索引</text>
+          <text x="14" y="318" class="edge-label" font-weight="700" fill="#B73B2F">在线查询</text>
+
+          <!-- ===== Row 1: offline (y ~ 52..96) ===== -->
+          <rect x="40" y="52" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="83" y="79" text-anchor="middle" class="node-label">文档</text>
+          <line x1="126" y1="74" x2="158" y2="74" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="158" y="52" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="201" y="79" text-anchor="middle" class="node-label">解析</text>
+          <line x1="244" y1="74" x2="276" y2="74" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="276" y="52" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="319" y="79" text-anchor="middle" class="node-label">分块</text>
+          <line x1="362" y1="74" x2="394" y2="74" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="394" y="52" width="100" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="444" y="79" text-anchor="middle" class="node-label">embedding</text>
+          <line x1="494" y1="74" x2="526" y2="74" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="526" y="52" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="569" y="79" text-anchor="middle" class="node-label">入库</text>
+
+          <!-- ===== Center store bar (y ~ 150..200) ===== -->
+          <rect x="394" y="150" width="218" height="52" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="503" y="172" text-anchor="middle" class="node-label-accent" font-size="12.5">索引存储</text>
+          <text x="503" y="190" text-anchor="middle" class="edge-label">向量库 + BM25</text>
+
+          <!-- 入库 -> store (down) -->
+          <line x1="569" y1="96" x2="569" y2="150" class="diagram-ink" marker-end="url(#flow22)"/>
+          <!-- store -> 混合召回 (down to row2) -->
+          <line x1="430" y1="202" x2="430" y2="246" class="diagram-accent" marker-end="url(#flow22a)"/>
+          <text x="476" y="228" class="edge-label">读索引</text>
+
+          <!-- ===== Row 2: online (y ~ 246..290) ===== -->
+          <rect x="40" y="246" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="83" y="273" text-anchor="middle" class="node-label">查询</text>
+          <line x1="126" y1="268" x2="158" y2="268" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="158" y="246" width="92" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="204" y="273" text-anchor="middle" class="node-label">查询改写</text>
+          <line x1="250" y1="268" x2="282" y2="268" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="282" y="246" width="98" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="331" y="273" text-anchor="middle" class="node-label-accent" font-size="12.5">混合召回</text>
+          <line x1="380" y1="268" x2="412" y2="268" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="412" y="246" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="455" y="273" text-anchor="middle" class="node-label">rerank</text>
+          <line x1="498" y1="268" x2="530" y2="268" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="530" y="246" width="96" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="578" y="273" text-anchor="middle" class="node-label">拼 prompt</text>
+          <line x1="626" y1="268" x2="658" y2="268" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="658" y="246" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="701" y="273" text-anchor="middle" class="node-label">生成</text>
+          <line x1="744" y1="268" x2="776" y2="268" class="diagram-ink" marker-end="url(#flow22)"/>
+
+          <rect x="776" y="240" width="158" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="855" y="264" text-anchor="middle" class="node-label">带引用回答</text>
+          <text x="855" y="282" text-anchor="middle" class="edge-label">answer + sources</text>
+
+          <!-- divider hint between two halves -->
+          <line x1="700" y1="52" x2="700" y2="96" class="diagram-soft"/>
+          <text x="722" y="78" class="edge-label" font-style="italic" fill="#A3A3A3">建一次</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>RAG = 离线索引 + 在线查询两段链路，交汇于中间的索引存储。<strong>注意</strong>：检索和生成是两段独立环节——答得不好先分清是"没检索到"（混合召回 / rerank 出问题）还是"检索到了没用好"（拼 prompt / 生成出问题），这决定你去调哪一半。</figcaption>
+      </figure>
+
+      <p>每一环都有自己的决策点和失败模式，下表是排障时的对照清单。后面几节会把其中最关键的几环（embedding、chunking、混合检索、rerank、评估）单独展开。</p>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 每一环的决策点与典型失败模式</caption>
+        <thead>
+          <tr><th>环节</th><th>决策点</th><th>失败模式</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>解析</td><td>PDF / 表格 / 扫描件怎么抽？保不保留结构</td><td>表格被拍扁成一行乱码，后续全错</td></tr>
+          <tr><td>分块</td><td>切多大、overlap 多少、按结构还是按长度</td><td>切碎丢上下文 / 切太大稀释语义</td></tr>
+          <tr><td>embedding</td><td>选哪个模型、几维、领域适配</td><td>中文用了英文模型，语义检索全面失准</td></tr>
+          <tr><td>入库</td><td>向量库选型、索引类型（HNSW / IVF）</td><td>索引类型选错，召回率或延迟不达标</td></tr>
+          <tr><td>查询改写</td><td>要不要改、改成几条</td><td>口语化 / 指代不清的 query 直接检索召回差</td></tr>
+          <tr><td>混合召回</td><td>纯向量还是 BM25 + 向量、融合方式</td><td>纯向量漏掉专名 / 编号 / 精确词</td></tr>
+          <tr><td>rerank</td><td>要不要重排、用哪个 reranker</td><td>top-k 里相关的没排进前面，喂错片段</td></tr>
+          <tr><td>拼 prompt / 生成</td><td>放几条、怎么约束引用</td><td>检索对了，模型却忽略上下文照样编</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ============================ §2.3 ============================ -->
+      <h2 id="s3"><span class="num">2.3</span><span>Embedding 与向量库（HNSW vs IVF）</span></h2>
+
+      <p class="one-liner">Embedding 把一段文本压成一个稠密向量，语义相近的文本向量也相近；向量库则负责在亿级向量里快速找出与查询最近的若干个。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>计算机不能直接比较"这句话和那句话意思像不像"。embedding 把语义编码成几百到几千维的向量，于是"相似"变成了可计算的几何量——通常用<strong>余弦相似度</strong>。没有它，检索只能退回关键词匹配，"汽车"和"轿车"在字面上毫无关系，语义检索就无从谈起。</p>
+      </div>
+
+      <p>常用模型的关键参数要记牢，面试常问具体数字：OpenAI <code>text-embedding-3-small</code> 是 1536 维、<code>3-large</code> 是 3072 维；后者支持 Matryoshka 表示——可以把向量<strong>截断</strong>到更低维度而精度只小幅下降（<code>3-large</code> 截到 1024 维仅比全维差 1–2%），用更小的存储换几乎相同的效果。中文场景的开源首选是 <strong>BGE-M3</strong>（1024 维、覆盖 100+ 语言），它的特别之处是一个模型同时产出三种表示：dense（稠密，编码语义）、sparse（稀疏，等价 BM25 式的精确词权重）、multi-vector（多向量精排）。dense 管"意思像"，sparse 管"词对得上"——这正好对应下一节的混合检索。</p>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>embedding 像给每段文本在语义空间里发一个 GPS 坐标，意思接近的落在同一片区域。但类比到此为止：GPS 是 3 维、人能想象；embedding 是上千维，高维空间里"距离"和"密度"的直觉会失效（维度灾难），所以才需要专门的近似最近邻索引，而不是简单地"算出所有距离再排序"。</p>
+      </div>
+
+      <p>向量库的核心是索引结构——它决定"在一亿个向量里找最近的 10 个"是亚毫秒还是几秒。两种主流路线：<strong>HNSW</strong>（基于图，多层跳表式导航）召回率高、查询亚毫秒、写入即插不需重建，代价是内存占用是原始向量的 2–5 倍；<strong>IVF</strong>（先聚类分桶、查询只搜邻近几桶）省内存、适合超大静态集，但需要周期性重建，且配合 PQ 量化（IVFPQ）才能把十亿级向量压进可控内存。</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · HNSW vs IVF——向量索引选型</caption>
+        <thead>
+          <tr><th>索引</th><th>优势</th><th>代价 / 适用</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>HNSW（图）</td><td>recall@10 &gt; 95%、查询亚毫秒、写入不需重建——增量更新友好</td><td>内存 2–5×；中小规模 / 频繁更新的默认选择</td></tr>
+          <tr><td>IVF(Flat)（聚类）</td><td>省内存、构建快</td><td>需周期重建、召回随分桶数波动；适合 &gt; 50M 的相对静态集</td></tr>
+          <tr><td>IVFPQ（聚类 + 量化）</td><td>把向量压缩，十亿级也能进内存</td><td>量化有损、精度下降；只在亿级以上、内存吃紧时才用</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 近似 = 用召回换速度（而且不报错）</span>
+        <p>HNSW、IVF 都是<strong>近似</strong>最近邻——为换亚毫秒延迟，它们<em>不保证</em>找到真正的 top-k。recall@10 ≈ 95% 的另一面是：约 5% 的查询会悄悄漏掉一个本该召回的相关文档，而系统<strong>不会报错</strong>，只是答得差一点、且你无从察觉。所以"召回不准"常常不是哪里写错了，而是近似索引的固有代价——这也是为什么要靠加大召回候选数、混合检索与 rerank（下一节）把这 5% 抢回来。</p>
+      </div>
+
+      <p><strong>带来的代价</strong>：HNSW 的内存放大是真实成本——1 亿个 1024 维 float32 向量原始就约 400GB，HNSW 还要再叠 2–5 倍的图结构内存。这正是"亿级向量怎么扛"这道追问的落点：要么换 IVFPQ 用量化压、要么分片到多机（Milvus / Qdrant 这类分布式向量库），不能无脑全上 HNSW。库的选型按规模和运维成本排：单机 / 嵌入式选 FAISS（库，无服务进程）；要持久化 + 分布式选 Milvus / Qdrant；已经在用 Postgres、想少加一个组件就选 pgvector。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>线上已经用 <code>text-embedding-3-small</code> 入库了几百万条向量，现在想换成召回更好的 BGE-M3。存量向量还能直接用吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不能。不同 embedding 模型输出的是<strong>各自独立的向量空间</strong>，维度不同（1536 vs 1024）、坐标含义也完全不同——拿新模型编码查询去和旧模型编码的库里向量算距离，结果是噪声。换 embedding 模型意味着<strong>必须对全部存量文档重新编码、重建索引</strong>，这是一次性的批处理成本，也是为什么 embedding 选型要在上线前定好、不要轻易换。这个"换模型 = 全量重建"是高频追问。</p>
+        </details>
+      </div>
+
+      <!-- ============================ §2.4 ============================ -->
+      <h2 id="s4"><span class="num">2.4</span><span>Chunking：切分策略与父子块</span></h2>
+
+      <p class="one-liner">Chunking 把长文档切成适合检索的小片段；切多大、怎么切，直接决定召回的上限。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>embedding 模型有输入长度上限，向量库也只能按"段"检索。但切分是把双刃剑：切太小，一句话脱离上下文，"它指的是上一段那个产品"这种信息丢失，检索到了也看不懂；切太大，一个块里混了好几个主题，向量被多个语义"平均"稀释，既检索不准、又在拼 prompt 时挤占宝贵的上下文预算。chunking 就是在这两端之间找平衡。</p>
+      </div>
+
+      <p>典型经验值：每块 <strong>256–512 token</strong>、相邻块留 <strong>10–20% overlap</strong>（重叠是为了让跨边界的句子不被切断）。但"切多大"只是表象，真正的策略差异在"按什么切"：</p>
+
+      <table class="compare-table">
+        <caption>表 2.4 · 四种 chunking 策略</caption>
+        <thead>
+          <tr><th>策略</th><th>怎么切</th><th>代价 / 适用</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>fixed（定长）</td><td>每 N token 一刀，无视文档结构</td><td>实现最简，但会从句子 / 表格中间切断；只适合结构松散的纯文本</td></tr>
+          <tr class="selected"><td>recursive（递归分层）</td><td>优先按段落切，过长再按句子、再按字符逐层退</td><td>务实默认——尊重结构又有兜底；绝大多数场景的起点</td></tr>
+          <tr><td>semantic（语义）</td><td>按相邻句 embedding 相似度找语义边界下刀</td><td>边界最自然，但要额外算 embedding、慢且贵；主题混杂的长文才值得</td></tr>
+          <tr><td>parent-document（父子块）</td><td>用小块（128–256 token）去检索、命中后返回它所属的大块（512–1024 token）喂给模型</td><td>多存一层映射；但同时拿到"检索准"和"上下文全"，是高级 RAG 的常用解</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>父子块</strong>值得单独强调，因为它直接化解了"切大切小都不对"的两难：<strong>小块检索、大块喂入</strong>。检索时用语义聚焦的小块去匹配（精准命中），命中后不把小块给模型，而是返回它所在的父块（保留完整上下文）。面试里这是"chunk 怎么切"这道题的加分答法——它说明你理解了"检索粒度"和"生成粒度"可以解耦。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p>用一套定长切分套全部文档类型，是最常见的失败模式。表格被按 token 拦腰切断后，行列对应关系彻底丢失；代码块被切断后语法不完整；合同条款被切散后"本条所称……"失去指代对象。表格、代码、合同各自需要专门的切分策略（如表格整块保留、代码按函数 / 类边界切），不能一刀切。</p>
+      </div>
+
+      <!-- ============================ §2.5 ============================ -->
+      <h2 id="s5"><span class="num">2.5</span><span>混合检索 + RRF + Rerank</span></h2>
+
+      <p class="one-liner">混合检索 = 同时用关键词（BM25）和语义（向量）两路召回再融合；rerank = 用更重的模型对融合结果精排，把真正相关的顶到最前。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>纯向量检索有一类系统性盲区：它擅长"意思像"，却弱于"字要对"。专有名词、产品型号、错误码、合同编号、人名——这些<strong>精确匹配</strong>需求，向量会把"ERR-5012"和"ERR-5013"编码得很近，于是召回错号；向量还表示不了<strong>否定</strong>——"无糖"和"含糖"语义相近，按纯向量检索"无糖饮料"就会把含糖的也一并召回，语义相似度天生分不清"是"与"不是"。BM25 这类关键词检索恰好相反，对精确词命中极强。两者短板互补，所以生产 RAG 几乎都上混合检索，而不是赌单一通道。</p>
+      </div>
+
+      <p>问题随之而来：BM25 给的是词频打分、向量给的是余弦相似度，两套分数<strong>量纲完全不同</strong>，没法直接相加。解法是 <strong>RRF</strong>（Reciprocal Rank Fusion，倒数排名融合）——不看分数绝对值，只看<strong>排名</strong>：一个文档在某一路里排第 <code>rank</code> 位，就贡献 <code>1/(k+rank)</code> 分，两路相加即融合得分，<code>k</code> 通常取 60。因为只用排名，天然规避了跨尺度归一化的难题。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">rrf_fusion.py（演示用，未在本机执行）</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-rrf">复制</button>
+        </div>
+<pre id="code-rrf"><code class="language-python"># RRF：按排名融合两路召回，无需跨尺度归一化
+def rrf_fuse(bm25_ids: list[str], vec_ids: list[str], k: int = 60) -&gt; list[str]:
+    scores: dict[str, float] = {}
+    for ranked in (bm25_ids, vec_ids):          # 两路召回结果，各自已按相关性排序
+        for rank, doc_id in enumerate(ranked, start=1):
+            scores[doc_id] = scores.get(doc_id, 0) + 1 / (k + rank)
+    # 分数高者在前：在两路都靠前的文档自然胜出
+    return sorted(scores, key=scores.get, reverse=True)
+
+bm25 = ["d3", "d1", "d7"]   # 关键词路：d3 精确命中排第一
+vec  = ["d1", "d5", "d3"]   # 语义路：d1 语义最近排第一
+print(rrf_fuse(bm25, vec))  # ['d1', 'd3', 'd5', 'd7'] —— d1/d3 两路都靠前，融合后领先
+</code></pre>
+      </div>
+
+      <p>融合只解决了"两路结果怎么合并排名"，没解决"排名够不够准"。召回阶段用的是 <strong>bi-encoder</strong>：query 和 doc 各自独立编码成向量再比距离——快（向量可预先算好、查询时只比距离），但 query 和 doc 之间没有交互，粗。<strong>rerank</strong> 换上 <strong>cross-encoder</strong>：把 query 和每个候选 doc <em>拼在一起</em>送进模型，让两者在注意力层充分交互后直接输出一个相关性分——准，但慢（每个候选都要跑一次模型，无法预计算）。</p>
+
+      <table class="compare-table">
+        <caption>表 2.5 · bi-encoder vs cross-encoder——为什么两步不能合并</caption>
+        <thead>
+          <tr><th>维度</th><th>bi-encoder（召回）</th><th>cross-encoder（精排）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>编码方式</td><td>query / doc 分开编码</td><td>query + doc 拼一起编码，全交互</td></tr>
+          <tr><td>速度</td><td>快，向量可预计算（~5ms 召回 top-100）</td><td>慢，每对都要现算（~50ms 重排 top-10）</td></tr>
+          <tr><td>精度</td><td>高召回、低精度（粗筛）</td><td>低召回、高精度（精排）</td></tr>
+          <tr class="selected"><td>定位</td><td>从百万级里廉价捞出 top-100</td><td>把 top-100 精排成 top-10——准度由它兜底</td></tr>
+        </tbody>
+      </table>
+
+      <p>所以标准流水线是<strong>两步分工</strong>：bi-encoder 在全量里廉价召回 top-100（求广、高召回），cross-encoder 只在这 100 个里精排出 top-10（求准、高精度）。合并不可行——让 cross-encoder 直接对百万级文档逐一打分，延迟会爆炸。常用 reranker 有 <code>bge-reranker-v2-m3</code>（开源、中文友好）和 Cohere Rerank（API）。</p>
+
+      <p><strong>带来的代价</strong>：rerank 是一笔实打实的延迟和算力账。cross-encoder 每个候选都要现跑一次模型、无法预计算，重排候选数（top-100 还是 top-50）直接换算成延迟。权衡的旋钮就是这个候选数：调大召回更全但精排更慢，调小延迟低但容易把相关文档挡在重排门外。自建 reranker 还要额外占一块 GPU，用 Cohere 这类 API 则是按调用计费——这条延迟-成本-召回的取舍正是"rerank 怎么权衡"这道追问的落点。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="混合检索：query 同时走 BM25 与向量两路，RRF 融合后 cross-encoder 精排出 top-k">
+          <defs>
+            <marker id="hr" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="hra" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- query -->
+          <rect x="20" y="138" width="96" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="68" y="167" text-anchor="middle" class="node-label">query</text>
+
+          <!-- split to two paths -->
+          <line x1="116" y1="150" x2="196" y2="74" class="diagram-ink" marker-end="url(#hr)"/>
+          <line x1="116" y1="176" x2="196" y2="252" class="diagram-ink" marker-end="url(#hr)"/>
+
+          <!-- BM25 path (top) -->
+          <rect x="196" y="50" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="271" y="72" text-anchor="middle" class="node-label">BM25（关键词）</text>
+          <text x="271" y="90" text-anchor="middle" class="edge-label">bi-encoder · 求广</text>
+
+          <!-- vector path (bottom) -->
+          <rect x="196" y="226" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="271" y="248" text-anchor="middle" class="node-label">向量（语义）</text>
+          <text x="271" y="266" text-anchor="middle" class="edge-label">bi-encoder · 求广</text>
+
+          <!-- to RRF -->
+          <line x1="346" y1="74" x2="426" y2="150" class="diagram-ink" marker-end="url(#hr)"/>
+          <line x1="346" y1="252" x2="426" y2="176" class="diagram-ink" marker-end="url(#hr)"/>
+          <text x="372" y="116" class="edge-label">top-100</text>
+          <text x="372" y="222" class="edge-label">top-100</text>
+
+          <!-- RRF -->
+          <rect x="426" y="138" width="96" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="474" y="160" text-anchor="middle" class="node-label-accent">RRF</text>
+          <text x="474" y="178" text-anchor="middle" class="edge-label">按排名融合</text>
+
+          <!-- to cross-encoder -->
+          <line x1="522" y1="163" x2="554" y2="163" class="diagram-accent" marker-end="url(#hra)"/>
+
+          <!-- cross-encoder -->
+          <rect x="554" y="132" width="146" height="62" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="627" y="156" text-anchor="middle" class="node-label-accent" font-size="12.5">cross-encoder</text>
+          <text x="627" y="174" text-anchor="middle" class="edge-label">精排 · 求准</text>
+          <text x="627" y="188" text-anchor="middle" class="edge-label">→ top-k</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>一个 query 同时进 BM25 和向量两路，RRF 按排名融合，cross-encoder 精排出 top-k。<strong>注意</strong>：召回靠 bi-encoder 求广（高召回），精排靠 cross-encoder 求准（高精度），两步分工不可合并——把它们合成一步，要么慢到不可用、要么准度塌方。</figcaption>
+      </figure>
+
+      <!-- ============================ §2.6 ============================ -->
+      <h2 id="s6"><span class="num">2.6</span><span>高级 RAG：查询改写 / HyDE / 上下文检索</span></h2>
+
+      <p class="one-liner">高级 RAG 的共同思路：在"查询"或"文档"进入检索前，先用 LLM 加工一道，让两边在语义空间里更容易对上。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>基础 RAG 默认"用户问得清楚、文档块自带足够上下文"，现实常常两头都不成立：用户问"它多少钱"（指代不清、口语化），文档块是从长文里切出来的孤立片段（缺背景）。query 和 doc 在语义空间里离得远，再好的检索器也对不上。高级技巧就是在检索<em>前</em>修补这道鸿沟。</p>
+      </div>
+
+      <p>三类主流手段：</p>
+      <ul>
+        <li><strong>查询改写 / multi-query</strong>：让 LLM 把口语化、有指代的查询改写清楚，或扩展成多条不同措辞的查询分别检索再合并，提高召回覆盖面。</li>
+        <li><strong>HyDE</strong>（Hypothetical Document Embeddings）：让 LLM 先<em>假想</em>一段"理想答案"，再拿这段假设答案去检索。原理是"答案和答案"在语义空间里比"问题和答案"更接近。代价/风险很明确——假设答案本身会漂移（模型编的方向偏了），反而把检索带偏，要谨慎用在模型有一定先验知识的领域。</li>
+        <li><strong>Anthropic Contextual Retrieval</strong>：给每个 chunk <em>前置</em>一段 50–100 token 的、由 LLM 生成的上下文说明（"本段出自 X 文档关于 Y 的章节，讲的是……"），再对这个"加了上下文的 chunk"做 embedding 和 BM25。这直接补上了"切分后块缺背景"的问题。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">洞察 · Contextual Retrieval 的量化收益</span>
+        <p>Anthropic 公布的数据很能说明问题：相比基础 RAG，contextual embedding 把检索失败率降低 <strong>35%</strong>，叠加 contextual BM25 降 <strong>49%</strong>，再叠加 rerank 降 <strong>67%</strong>。注意这条收益链和本章前几节是同一套组合拳——上下文增强 + 混合检索 + rerank 协同。而"给每个 chunk 都调一次 LLM 生成上下文"听起来很贵，但配合 prompt 缓存（文档主体只算一次），成本约 \$1.02 / 百万 token，工程上可接受。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>HyDE 让模型先编一个假设答案去检索——这不正是第一章说的"幻觉"吗？为什么这里反而有用？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>关键在于假设答案<strong>不会进入最终回答</strong>，它只用来生成一个"更像答案"的检索向量。即便假设答案有事实错误，只要它在语义空间里把查询推向了正确的文档区域，检索就受益；真正的答案仍由检索回来的<em>真实文档</em>生成。所以 HyDE 是"用一次受控的幻觉换更好的检索方向"。但风险也在此：若假设答案整体跑偏（模型对该领域毫无先验），就会把检索带到错误区域——这就是为什么它适合模型有基础知识、不适合完全陌生的私域。</p>
+        </details>
+      </div>
+
+      <!-- ============================ §2.7 ============================ -->
+      <h2 id="s7"><span class="num">2.7</span><span>RAG 评估（RAGAS 三元组）</span></h2>
+
+      <p class="one-liner">RAG 评估分两侧：检索侧看"有没有捞对、捞全"，生成侧用三元组看"答得对不对、有没有支撑、切不切题"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"答得不对"是一句没法回归的主观判断。要让 RAG 能像代码一样持续迭代而不退化，必须把质量拆成可计算的指标，放进 CI 里跑——改了 chunk 大小、换了 reranker，指标涨了还是跌了，一目了然。没有评估，每次调参都是凭感觉，且无法防止"修好一类问题又引入另一类"的回归。</p>
+      </div>
+
+      <p>评估顺着图 2.1 的"两段链路"分两侧。<strong>检索侧</strong>衡量召回质量：命中率、<code>MRR</code>（平均倒数排名，相关文档排得越靠前越高）、<code>Recall@k</code>（前 k 个里捞回了多少相关文档）。<strong>生成侧</strong>是面试高频的 <strong>RAGAS 三元组</strong>，它把"答得好不好"拆成三个正交的维度：</p>
+
+      <table class="compare-table">
+        <caption>表 2.6 · RAGAS 评估指标——两侧四个维度</caption>
+        <thead>
+          <tr><th>侧 / 指标</th><th>问的是什么</th><th>低分说明哪一环出了问题</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>检索 · context precision</td><td>召回的相关 chunk 有没有排在前面</td><td>融合 / rerank 排序差</td></tr>
+          <tr><td>检索 · context recall</td><td>该召回的相关信息是不是都召回了</td><td>分块 / 召回漏了，或 k 太小</td></tr>
+          <tr class="selected"><td>生成 · 忠实度 faithfulness</td><td>回答里的每个论断是否都有上下文支撑</td><td>检索对了但模型在编——生成的锅</td></tr>
+          <tr><td>生成 · 答案相关性 answer relevancy</td><td>回答是否切题、没跑偏没啰嗦</td><td>模型答非所问 / 答了无关内容</td></tr>
+        </tbody>
+      </table>
+
+      <p>这套三元组（上下文相关性 / 忠实度 / 答案相关性）的实际算法多用 <strong>LLM-as-judge</strong>——让一个评判模型按维度打分，RAGAS 框架把这套流程封装好了。它的杀手锏是<strong>诊断定位</strong>：忠实度低和答案相关性低指向完全不同的修复方向。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 用三元组定位故障</span>
+        <p>三个维度组合起来就是一张排障表：<strong>忠实度低 + 上下文相关性高</strong> = 资料捞对了、模型却没用它（生成的锅，去收紧 prompt 约束、强制引用）；<strong>上下文相关性低</strong> = 资料就没捞对（检索的锅，去查分块 / 混合检索 / rerank）；<strong>答案相关性低但忠实度高</strong> = 答得有依据但答偏了题（query 理解或拼 prompt 的问题）。这正好把图 2.1 那句"先分清是没检索到还是没用好"量化成了可读数的信号。</p>
+      </div>
+
+      <!-- ============================ self-check ============================ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>面试题检索</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案在脑子里过一遍或写下来。写完再点开对照——直接点开等于把这一章当再读一遍。每题标注是否高频。
+        </p>
+
+        <ol>
+          <li><strong>[高频]</strong> RAG 是什么？相比微调解决了什么问题？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>RAG = 生成前先检索外部知识、把相关片段拼进 prompt 再作答。相比微调，它补的是<strong>外部 / 私域 / 实时知识</strong>、降低幻觉、答案<strong>可溯源</strong>、且改知识不用重训。分工：微调改风格 / 格式 / 能力（行为），RAG 改知识（内容）。</p>
+              <p><strong>追问：何时微调、何时 RAG、何时都要？</strong> 知识常变 / 要溯源 → RAG；改风格 / 学新任务能力 → 微调；复杂系统两者叠加——微调锁"严格按引用作答"的行为，RAG 供实时知识。补一刀规模启发式（Anthropic Contextual Retrieval）：语料能放进上下文窗口时（经验值约 20 万 token / 约 500 页），直接全塞 + prompt 缓存即可，无需 RAG；超过这个规模、或要实时更新 / 按权限过滤 / 可溯源，才上 RAG。</p>
+            </details>
+          </li>
+
+          <li><strong>[高频]</strong> 一条完整的 RAG 链路有哪些环节？每步的决策点是什么？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>离线：解析 → 分块 → embedding → 入库（向量 + BM25 双写）。在线：查询改写 → 混合召回 → rerank → 拼 prompt → 生成 → 带引用回答。决策点见表 2.2（切多大、选哪个 embedding、索引用 HNSW 还是 IVF、要不要改写 / 重排、怎么约束引用）。</p>
+              <p><strong>追问：哪步最易出问题？怎么定位是召回还是生成的锅？</strong> 检索和生成是两段独立环节。用 RAGAS：上下文相关性低 = 检索的锅（查分块 / 混合检索 / rerank）；上下文相关性高但忠实度低 = 生成的锅（资料对了模型没用，收紧 prompt 约束、强制引用）。</p>
+            </details>
+          </li>
+
+          <li><strong>[高频]</strong> 纯向量检索有什么问题？为什么要混合检索？两路怎么融合？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>纯向量擅长语义相似，弱于<strong>精确匹配</strong>——专有名词、产品型号、错误码、合同编号会被编码得很近导致召回错号。BM25 这类关键词检索补这块短板，故用混合检索。融合用 <strong>RRF</strong>：文档在某路排第 rank 位贡献 <code>1/(k+rank)</code> 分（k≈60），按排名相加，无需跨尺度归一化，再交给 rerank。</p>
+              <p><strong>追问：RRF 的 k 起什么作用？</strong> k 控制高排名文档的权重衰减：k 越小，靠前名次的优势越被放大（头部主导）；k 越大，各名次贡献越平均（长尾更有机会）。k=60 是经验上较稳的折中。</p>
+            </details>
+          </li>
+
+          <li><strong>[高频]</strong> Rerank 解决什么？为什么检索后还要重排？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>召回用 bi-encoder（query / doc 分开编码）快但粗——高召回、低精度；rerank 用 cross-encoder 把 query + doc <strong>拼在一起</strong>编码，让两者充分交互后直接打相关性分——准但慢。流水线：bi-encoder 召回 top-100（~5ms）→ cross-encoder 精排 top-10（~50ms），准度由精排兜底。</p>
+              <p><strong>追问：常用 reranker？延迟成本怎么权衡？</strong> <code>bge-reranker-v2-m3</code>（开源中文友好）、Cohere Rerank（API）。cross-encoder 每个候选都要现算无法预计算，所以只重排召回的少量候选（top-100→top-10），通过控制重排候选数把延迟压在可接受范围。</p>
+            </details>
+          </li>
+
+          <li><strong>[高频]</strong> Chunk 怎么切？切大切小各有什么问题？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>太小丢上下文（脱离背景、指代失效），太大稀释语义 + 挤占上下文预算。典型 256–512 token、10–20% overlap。策略上 recursive（递归分层）是务实默认，semantic 按语义边界切更自然但慢，最优解常是<strong>父子块：小块检索、大块喂入</strong>——检索粒度和生成粒度解耦。</p>
+              <p><strong>追问：表格 / 代码 / 合同策略不同？</strong> 是。表格要整块保留（拦腰切断毁掉行列对应），代码按函数 / 类边界切（保语法完整），合同按条款切并保留指代上下文。用一套定长切分套所有类型是典型失败模式。</p>
+            </details>
+          </li>
+
+          <li><strong>[高频]</strong> Embedding 模型怎么选？中文选什么？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>看 MTEB 榜单（任务匹配度）、权衡维度 vs 精度 / 存储、考虑领域适配。中文开源首选 <code>bge-m3</code>，备选 <code>m3e</code> / <code>gte</code>。BGE-M3 一个模型同出 dense + sparse + multi-vector，天然适配混合检索。</p>
+              <p><strong>追问：维度越高越好吗？换模型后存量向量怎么办？</strong> 不是越高越好——高维带来存储和检索成本，<code>3-large</code> 用 Matryoshka 截到 1024 维仅差 1–2%。换 embedding 模型后存量向量<strong>必须全量重新编码、重建索引</strong>，因为不同模型是各自独立的向量空间，不能混用。</p>
+            </details>
+          </li>
+
+          <li><strong>[高频]</strong> 怎么评估一个 RAG 系统？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>分两侧。检索侧：命中率 / <code>MRR</code> / <code>Recall@k</code>。生成侧：RAGAS 三元组——<strong>上下文相关性、忠实度（faithfulness）、答案相关性</strong>。算法多用 LLM-as-judge，RAGAS 框架封装好了。</p>
+              <p><strong>追问：忠实度低 vs 相关性低分别怎么排查？怎么搭 CI eval 防回归？</strong> 忠实度低 = 模型没用好已召回的资料（收紧 prompt、强制引用）；上下文相关性低 = 检索没捞对（查分块 / 混合检索 / rerank）。CI eval：维护一个带标准答案的评测集，每次改动跑 RAGAS，指标低于阈值就拦住合并——把"答得好不好"变成可回归的数字。</p>
+            </details>
+          </li>
+
+          <li>向量库怎么选？Milvus / FAISS / Qdrant / pgvector 各适合什么？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>FAISS：库 / 单机、无独立服务进程，适合实验和嵌入式；Milvus / Qdrant：分布式 + 持久化，适合生产大规模；pgvector：复用已有 Postgres，少加一个组件。按规模 / 运维成本 / 团队栈选。</p>
+              <p><strong>追问：亿级向量怎么扛？HNSW vs IVF？</strong> HNSW（图）召回高、亚毫秒、写入不需重建，但内存 2–5×，是中小规模 / 频繁更新的默认；IVF（聚类）省内存适合超大静态集，IVFPQ（加量化）撑十亿级但精度有损。亿级以上要么用 IVFPQ 压、要么分片到多机，不能无脑全上 HNSW。</p>
+            </details>
+          </li>
+
+          <li><strong>[系统设计]</strong> 给 10 万用户设计一个企业知识库 RAG，怎么架构？
+            <details>
+              <summary>参考答案 + 追问</summary>
+              <p>分层答：<strong>数据层</strong>——文档解析（表格 / 代码专门策略）+ 向量库 + BM25 双写；<strong>检索层</strong>——混合检索 + rerank；<strong>生成层</strong>——幻觉约束 + 强制引用；<strong>工程层</strong>——结果缓存、异步增量更新、可观测监控；<strong>安全层</strong>——文档级权限隔离、Prompt 注入防御。</p>
+              <p><strong>追问：文档实时更新怎么增量索引？多租户权限隔离？热点缓存？</strong> 增量索引：HNSW 支持写入不重建，文档变更触发对应 chunk 的重新 embedding + upsert；权限隔离：检索时按用户可见范围过滤（metadata filter / 分库 / 行级权限），不能让 A 检索到 B 的文档；热点缓存：高频 query 缓存检索结果甚至生成结果，配 prompt 缓存降首 token 成本。</p>
+            </details>
+          </li>
+        </ol>
+
+        <div class="callout example">
+          <span class="label">亲手画一张图</span>
+          <p>合上教程，在纸上把图 2.1 的 RAG 链路默画出来——只画"离线索引"和"在线查询"两行、中间一个共享存储就行。画完回到 §2.2 对照：你画的图里，"检索"和"生成"有没有被清楚地分成两段？排障时你能不能在自己画的图上指出"该去调哪一半"？</p>
+        </div>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>你的 RAG 上线后用户反馈"答得不对"。给出一个能区分"召回没找到" vs "找到了但生成没用好"的诊断流程。</h3>
+        <p>不要直接调参。设计一个分步流程，每一步能把故障域缩小一半，最终把锅落到"检索侧"还是"生成侧"。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键动作：把"检索回来的上下文"和"最终回答"分别拎出来看。第一步——拿出这次 query 召回的 top-k chunk，人工或用 context precision / recall 判断：<strong>正确答案所需的信息在不在里面？</strong> 不在 → 检索侧（去查分块 / 混合检索 / rerank / k 值）。在里面 → 第二步：看模型的回答有没有用上这些 chunk（忠实度 faithfulness）——没用上、自己编了 → 生成侧（收紧 prompt、强制按引用作答）。一次"召回内容 vs 回答"的对照，就把故障域切成了两半。这正是 RAGAS 三元组的实战用法。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2005.11401">Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks（Lewis et al., 2020）</a>——RAG 原论文</li>
+          <li><a href="https://www.anthropic.com/news/contextual-retrieval">Anthropic — Introducing Contextual Retrieval</a>（上下文检索 + 混合 + rerank 的量化收益）</li>
+          <li><a href="https://docs.ragas.io">RAGAS 文档</a>（检索 / 生成两侧指标与三元组）</li>
+          <li><a href="https://huggingface.co/BAAI/bge-m3">BAAI BGE-M3</a>（中文 embedding，一模型同出 dense / sparse / multi-vector）</li>
+          <li><a href="https://docs.cohere.com/docs/rerank-overview">Cohere Rerank 文档</a>（cross-encoder 精排）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-llm-prompt.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · LLM/Prompt 基础</span>
+        </a>
+        <a href="03-agent-arch.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · Agent 架构与多智能体</span>
+        </a>
+      </nav>
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">2.1 RAG vs 微调 vs 长上下文</a></li>
+        <li><a href="#s2" data-toc-target="s2">2.2 RAG 链路总览</a></li>
+        <li><a href="#s3" data-toc-target="s3">2.3 Embedding 与向量库</a></li>
+        <li><a href="#s4" data-toc-target="s4">2.4 Chunking 切分策略</a></li>
+        <li><a href="#s5" data-toc-target="s5">2.5 混合检索 + RRF + Rerank</a></li>
+        <li><a href="#s6" data-toc-target="s6">2.6 高级 RAG</a></li>
+        <li><a href="#s7" data-toc-target="s7">2.7 RAG 评估</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">面试题检索</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 MVCC 生命周期 · pgvector</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" integrity="sha384-rCCjoCPCsizaAAYVoz1Q0CmCTvnctK0JkfCSjx7IIxexTBg+uCKtFYycedUjMyA2" crossorigin="anonymous">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-model.html">01 数据模型</a><span class="sep">—</span>
+    <a href="02-index-build.html">02 索引构建</a><span class="sep">—</span>
+    <a href="03-mvcc-lifecycle.html" class="current">03 生命周期</a><span class="sep">—</span>
+    <a href="04-filtering.html">04 过滤检索</a><span class="sep">—</span>
+    <a href="05-landscape.html">05 选型前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>MVCC 生命周期：建完不是终点</h1>
+        <p class="recap">第 2 章把 HNSW 的图建了起来：每个向量是图里一个节点，节点之间连着导航边，查询沿边逼近最近邻。但那是一张<strong>静态</strong>图的故事。真实的 RAG 表会被 UPDATE、DELETE——文档重切、embedding 换模型、租户删数据。这一章讲那张图在 MVCC 下如何随写入腐烂：建好的图不会自动跟着堆表变，而第 1 章那条"<code>ORDER BY 距离 ... LIMIT k</code> 取够 k 个就停"的契约，会在墓碑堆积时让查询<strong>返回不足 k 行，甚至 0 行</strong>。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>MVCC 下 UPDATE = 删旧 + 插新，DELETE 只给堆元组打死亡标记；vacuum 之前死元组<strong>物理还在</strong>，HNSW 节点仍指着它。</li>
+          <li>图节点不在 UPDATE/DELETE 时删除，而是 scan 时靠堆可见性<strong>事后过滤</strong>掉——这与第 4 章的 post-filter 欠返是<em>同一个形状</em>。</li>
+          <li>HNSW 的 vacuum 是定制的<strong>三趟</strong>例程：剥 TID → 重连邻居 → 标删清零；第二趟逐节点重算邻居，写重、慢。</li>
+          <li>高 churn 表上召回会<strong>按天/周腐烂</strong>；vacuum 只"修补"不"重排"，死元组比例到 10–15% 该上 <code>REINDEX CONCURRENTLY</code>。</li>
+        </ul>
+      </section>
+
+      <p>沿用第 1 章的 <code>doc_chunks</code> 表。一个常见且无害的操作，是给某段 chunk 换一版 embedding（换了 embedding 模型，或文档被重新切分）：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">churn.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-churn">复制</button>
+        </div>
+<pre id="c-churn"><code class="language-sql">-- 看似只是"改一列"，MVCC 下却是删旧行 + 插新行
+UPDATE doc_chunks
+SET    embedding = $new_vec
+WHERE  id = 12345;
+
+-- 删除一个租户的全部文档：每行留下一个死元组，等 vacuum
+DELETE FROM doc_chunks WHERE tenant_id = 42;</code></pre>
+      </div>
+
+      <p>这两条 SQL 在堆表里留下的"尸体"，正是这一章的主角。它们怎么影响那张已经建好的 HNSW 图，决定了几天后同一条检索查询还准不准。</p>
+
+      <!-- ============ §3.1 ============ -->
+      <h2 id="s31"><span class="num">3.1</span><span>写入之后，图不动</span></h2>
+
+      <p class="one-liner">UPDATE/DELETE 不会从 HNSW 图里摘掉对应节点——节点仍指着已死的堆行，靠 scan 时的可见性判定<strong>事后</strong>把它筛掉。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>MVCC 是 Postgres 并发的根基：写不阻塞读，靠的是"旧版本先留着、新版本另写一份、谁能看见谁由事务快照决定"。在堆表里这套很顺。但 HNSW 图是一份<strong>独立于堆表</strong>的结构——它没法像 B-tree 那样廉价地删一个 key。理解"图为什么不动"，是理解后面 vacuum 为什么那么贵、召回为什么会腐烂的前提。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：在 MVCC 里，一次 UPDATE 是<strong>删旧元组 + 插新元组</strong>，一次 DELETE 只是给旧元组打上死亡标记（事务结束后对新快照不可见）。无论哪种，旧的堆元组在 <code>VACUUM</code> 真正回收它之前都<strong>物理留在堆页里</strong>。HNSW 这边：图里那个老节点的元组保存着一个 <code>heaptids[]</code> 数组（源码常量 <code>HNSW_HEAPTIDS = 10</code>，单个 element 元组最多挂 10 个堆 TID），数组里那个指向老行的 TID <strong>原封不动</strong>——节点没被摘掉，边也没断。</p>
+
+      <p>那查询为什么没被这些"幽灵节点"污染？因为过滤发生在<strong>扫描时</strong>，而不是写入时：</p>
+      <ul>
+        <li>检索时，HNSW 沿图游走，收集候选节点，把每个候选的堆 TID（<code>xs_heaptid</code>）逐个吐给执行器；</li>
+        <li>执行器拿 TID 去<strong>堆表取行并做 MVCC 可见性判定</strong>——已删除 / 当前快照不可见的，直接丢弃；</li>
+        <li>于是"老行还在图里"不影响<em>正确性</em>：死行会在可见性这一关被筛掉。图节点<strong>不在 UPDATE/DELETE 时删除</strong>，只是 scan 时被过滤。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · issue #244：欠返，甚至返回 0 行</span>
+        <p>正确性没问题，<strong>完整性</strong>却会出问题。HNSW 的搜索在凑齐 <code>ef_search</code>（默认 40）个候选后就<strong>停止游走</strong>（这个 <code>ef_search</code> 就是第 2 章 <a href="02-index-build.html#s24">§2.4 调过的搜索期参数</a>）。可见性判定是在搜索<strong>停下来之后</strong>才逐个施加的——如果这 40 个候选里靠前的一批恰好都是死元组，它们被筛掉后，<code>LIMIT 10</code> 就只剩下不到 10 行，<strong>极端情况下 0 行</strong>，哪怕有效向量就排在搜索视野之外一点点。</p>
+        <p>IVFFlat 退化得更平缓：它按 <code>probes</code> 扫整张倒排列表，列表里的死元组被跳过后仍继续往下取，凑数的余地大得多。HNSW 的"固定预算先取满、可见性后过滤"才是这个 bug 的根因。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="HNSW 搜索取满 ef_search 个候选后停止，可见性判定事后剔除死元组，存活数跌破 LIMIT 线，导致欠返">
+          <defs>
+            <marker id="v3a" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="v3v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- step 1: graph search stops at ef_search -->
+          <rect x="34" y="28" width="240" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="154" y="50" text-anchor="middle" class="node-label">图游走，取满即停</text>
+          <text x="154" y="70" text-anchor="middle" class="edge-label">ef_search = 40 个候选</text>
+
+          <line x1="154" y1="84" x2="154" y2="116" class="diagram-ink" marker-end="url(#v3a)"/>
+          <text x="164" y="104" class="edge-label">候选含死元组</text>
+
+          <!-- funnel: top wide = 40 candidates -->
+          <path d="M 64 122 L 444 122 L 364 196 L 144 196 Z" class="diagram-ink node-fill"/>
+          <text x="254" y="150" text-anchor="middle" class="node-label">候选漏斗</text>
+          <text x="254" y="170" text-anchor="middle" class="edge-label">40 个：有效 + 死亡混在一起</text>
+
+          <!-- visibility recheck label on the funnel slope -->
+          <text x="468" y="160" class="branch-label">可见性判定</text>
+          <text x="468" y="176" class="edge-label">剔除死元组</text>
+          <line x1="446" y1="150" x2="392" y2="150" class="diagram-accent" marker-end="url(#v3v)"/>
+
+          <!-- LIMIT line -->
+          <line x1="40" y1="214" x2="680" y2="214" class="diagram-soft"/>
+          <text x="600" y="210" class="edge-label">LIMIT 10 线</text>
+
+          <!-- survivors below LIMIT line: only a few -->
+          <line x1="254" y1="196" x2="254" y2="236" class="diagram-accent" marker-end="url(#v3v)"/>
+          <rect x="174" y="236" width="160" height="56" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="254" y="260" text-anchor="middle" class="node-label-accent">只剩 4 行存活</text>
+          <text x="254" y="280" text-anchor="middle" class="edge-label">&lt; 10：欠返</text>
+
+          <!-- annotation: valid vectors just past the horizon -->
+          <rect x="430" y="236" width="252" height="56" rx="6" class="diagram-soft node-fill"/>
+          <text x="556" y="260" text-anchor="middle" class="node-label">有效向量在视野外</text>
+          <text x="556" y="280" text-anchor="middle" class="edge-label">搜索已停，够不着</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>"预算先取满，过滤在事后"：搜索取够 40 个候选就停，可见性判定再从中剔除死元组，存活数跌破 <code>LIMIT 10</code> 线——欠返。<strong>注意</strong>：这个形状和第 4 章 <a href="04-filtering.html">带过滤的检索</a>里 post-filter 的欠返<strong>一模一样</strong>——都是"固定条数先抓出来、条件后施加、最后不够数"。死元组是隐式过滤条件，<code>WHERE</code> 是显式过滤条件，根都在第 1 章那条 <code>LIMIT k</code> 契约。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一张 chunk 表昨天还好好的，今天一条 <code>... ORDER BY embedding &lt;=&gt; $1 LIMIT 10</code> 突然只返回 3 行。表里明明有几十万条有效向量。中间只发生了一件事：凌晨批量 re-embedding 了一大批热门文档。问题出在哪？把 <code>ef_search</code> 调大到 200 能不能缓解？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>批量 re-embedding = 大量 UPDATE = 大量死元组，且这些死元组集中在"热门文档"——也就是查询最容易命中的那片图区域。搜索取满 <code>ef_search</code> 个候选时，靠前的一批正是这些死节点；可见性判定把它们筛掉后就不够 10 行。</p>
+          <p>调大 <code>ef_search</code>（40 → 200）<strong>能缓解但不治本</strong>：候选池更大，存活的有效行更可能凑够 10，代价是每次查询更慢、更耗内存。真正的修法是让死元组消失——触发 vacuum（§3.2），或在死元组比例高时 <code>REINDEX</code>（§3.3）。pgvector 0.8.0 起还提供 <code>hnsw.iterative_scan</code>：候选不够时继续往下游走、而非停在 <code>ef_search</code>，正是为这个 bug 设计的兜底。</p>
+        </details>
+      </div>
+
+      <!-- ============ §3.2 ============ -->
+      <h2 id="s32"><span class="num">3.2</span><span>vacuum 三趟修图</span></h2>
+
+      <p class="one-liner">HNSW 的 vacuum 不是通用索引清理，而是定制的三趟例程：剥死 TID → 重连邻居 → 标删清零；第二趟逐节点重算邻居，是全程最贵的一步。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§3.1 说明了"图不动"会导致欠返，那总得有人来收拾死节点、把断掉的连通性补回来。B-tree 删一个 key 是局部操作；HNSW 删一个节点却会让<strong>所有把它当邻居的节点</strong>少一条边——如果不补，图会越删越稀疏、越搜越偏。vacuum 就是那个"既要清死元组、又要保持图连通"的修复程序。理解它三趟干了什么，才能解释为什么"删除便宜、vacuum 死贵"。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：pgvector 为 HNSW 实现了专门的 <code>hnswbulkdelete</code>，源码里清清楚楚分三趟（<code>Pass 1 / Pass 2 / Pass 3</code>），不是 Postgres 的通用索引 vacuum：</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="HNSW vacuum 三趟时间线：第一趟剥死 TID，第二趟逐节点调 HnswFindElementNeighbors 重连邻居，第三趟标删并清零向量数据">
+          <defs>
+            <marker id="p3a" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- timeline baseline -->
+          <line x1="40" y1="60" x2="680" y2="60" class="diagram-soft"/>
+
+          <!-- Pass 1 -->
+          <rect x="44" y="84" width="190" height="92" rx="6" class="diagram-ink node-fill"/>
+          <text x="139" y="74" text-anchor="middle" class="branch-label">Pass 1</text>
+          <text x="139" y="112" text-anchor="middle" class="node-label">剥死 TID</text>
+          <text x="139" y="134" text-anchor="middle" class="edge-label">RemoveHeapTids()</text>
+          <text x="139" y="152" text-anchor="middle" class="edge-label">从 heaptids[] 删掉</text>
+          <text x="139" y="168" text-anchor="middle" class="edge-label">死行 TID · 便宜</text>
+
+          <line x1="234" y1="130" x2="262" y2="130" class="diagram-ink" marker-end="url(#p3a)"/>
+
+          <!-- Pass 2 (accent, the expensive one) -->
+          <rect x="262" y="78" width="196" height="104" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="74" text-anchor="middle" class="branch-label">Pass 2 · 最贵</text>
+          <text x="360" y="108" text-anchor="middle" class="node-label-accent">重连邻居</text>
+          <text x="360" y="130" text-anchor="middle" class="edge-label">RepairGraph()</text>
+          <text x="360" y="148" text-anchor="middle" class="edge-label">逐节点 FindElement-</text>
+          <text x="360" y="164" text-anchor="middle" class="edge-label">Neighbors 重算边</text>
+
+          <line x1="458" y1="130" x2="486" y2="130" class="diagram-ink" marker-end="url(#p3a)"/>
+
+          <!-- Pass 3 -->
+          <rect x="486" y="84" width="190" height="92" rx="6" class="diagram-ink node-fill"/>
+          <text x="581" y="74" text-anchor="middle" class="branch-label">Pass 3</text>
+          <text x="581" y="112" text-anchor="middle" class="node-label">标删 + 清零</text>
+          <text x="581" y="134" text-anchor="middle" class="edge-label">MarkDeleted()</text>
+          <text x="581" y="152" text-anchor="middle" class="edge-label">置 deleted 标记</text>
+          <text x="581" y="168" text-anchor="middle" class="edge-label">清零向量数据</text>
+
+          <!-- lock band under all three -->
+          <rect x="44" y="210" width="632" height="48" rx="6" class="diagram-soft node-fill"/>
+          <text x="360" y="231" text-anchor="middle" class="node-label">HNSW_UPDATE_LOCK / HNSW_SCAN_LOCK 全程串行化</text>
+          <text x="360" y="249" text-anchor="middle" class="edge-label">并发的插入 / 扫描不会撞见"修了一半"的节点</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>HNSW vacuum 的三趟。<strong>注意</strong>：朱红的 Pass 2 是性能瓶颈——它对<strong>每一个</strong>"邻居里有死节点"的节点都重跑一遍 <code>HnswFindElementNeighbors()</code>（和建索引时同一个邻居搜索）来算替补边。删除只是打标记，几乎免费；真正的代价全压在 vacuum 的 Pass 2 上，这就是"删得轻松、回收要命"的来源。</figcaption>
+      </figure>
+
+      <ul>
+        <li><strong>Pass 1 · 剥死 TID（<code>RemoveHeapTids</code>）</strong>：遍历 element 元组，把 <code>heaptids[]</code> 里指向死堆行的 TID 剔除。轻量，主要是改数组、置无效标记。</li>
+        <li><strong>Pass 2 · 重连邻居（<code>RepairGraph</code>，最贵的一趟）</strong>：对每个"曾把某个被删 element 当邻居"的节点，调用 <code>HnswFindElementNeighbors()</code> 重新计算<strong>替补边</strong>并覆写邻居元组，把因删节点而断掉的连通性补回来。这一步逐节点重跑邻居搜索，是全程的写放大与耗时来源。</li>
+        <li><strong>Pass 3 · 标删 + 清零（<code>MarkDeleted</code>）</strong>：把已无有效 TID 的 element 标记为 <code>deleted</code> 并清零其向量数据，页空间留待复用。</li>
+      </ul>
+
+      <p>三趟之间靠两把页级锁串行：<code>HNSW_UPDATE_LOCK</code> 把 vacuum 的重连和并发插入隔开，<code>HNSW_SCAN_LOCK</code> 把它和并发扫描隔开——保证<strong>正在跑的检索永远不会游走到一个"修了一半"的节点</strong>上（读邻居时还会校验 element 版本，防止读到已被替换的旧节点）。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · "修补"不等于"重排"</span>
+        <p>这是这一章最关键的一句话。Pass 2 只做一件事：把断掉的连通性<strong>补</strong>回来——让图重新连通。它<strong>不</strong>重新平衡整张图、<strong>不</strong>优化导航质量。打个比方：删掉路口后 vacuum 会修一条<strong>绕行小道</strong>把两头接上，但不会重新规划路网。绕道越修越多，图的平均跳数变长、搜索路径变绕，<strong>召回质量仍在缓慢下滑</strong>——只是连通性没断而已。这正是 §3.3"光靠 vacuum 救不回召回"的机制根源。</p>
+      </div>
+
+      <!-- ============ §3.3 ============ -->
+      <h2 id="s33"><span class="num">3.3</span><span>churn → 召回腐烂 → REINDEX</span></h2>
+
+      <p class="one-liner">高 churn 表上召回会按天/周腐烂；vacuum 只修补不重排，死元组比例到 10–15% 时，<code>REINDEX CONCURRENTLY</code> 重建一张干净图，比死等 vacuum 划算。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§3.1 给了急性病（突然欠返），§3.2 给了应急药（vacuum 修补连通性）。但 RAG 的 embedding 表往往是<strong>慢性高 churn</strong>：天天有文档重切、模型升级触发整表 re-embedding。在这种负载下，召回不是某天崩，而是<strong>一个月里悄悄从 95% 滑到 80%</strong>，监控不报警、用户只觉得"最近搜得不太准"。这一节给的是运维决策：什么时候该停止打补丁、直接重建。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：召回腐烂有两条叠加的路径，都能追回前两节——</p>
+      <ul>
+        <li><strong>死节点占着候选预算</strong>（§3.1）：vacuum 没跟上时，搜索游走仍会路过大量死节点，它们挤进 <code>ef_search</code> 候选池、又被可见性筛掉，等效于<strong>缩小了有效搜索宽度</strong>，召回向下掉（病态情况趋近 0%）。</li>
+        <li><strong>绕行边累积</strong>（§3.2）：vacuum 跟上了，但它只修补不重排，反复删插让图攒下越来越多绕道，平均跳数变长、近邻越来越容易被错过——召回<strong>即使 vacuum 健康也仍在缓降</strong>。</li>
+      </ul>
+
+      <p>所以运维上有两个动作，对应两条路径：</p>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 两种"治法"的分工</caption>
+        <thead>
+          <tr><th>动作</th><th>治什么</th><th>代价</th><th>触发时机</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>VACUUM</code> / 调激进 autovacuum</td><td>清死元组、补连通性（修补）</td><td>Pass 2 写重、慢；治标</td><td>持续后台跑；高 churn 表调低 <code>scale_factor</code></td></tr>
+          <tr class="selected"><td><code>REINDEX INDEX CONCURRENTLY</code></td><td>从零重建一张<strong>干净、无绕道</strong>的图</td><td>重付第 2 章的建图开销</td><td>死元组比例 ≈ <strong>10–15%</strong>，或召回掉到阈值以下</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">maintenance.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-maint">复制</button>
+        </div>
+<pre id="c-maint"><code class="language-sql">-- 1) 高 churn 表：把 autovacuum 调激进，别等默认 20% 死元组才触发
+ALTER TABLE doc_chunks SET (
+    autovacuum_vacuum_scale_factor = 0.05,   -- 5% 死元组就 vacuum
+    autovacuum_vacuum_cost_delay   = 0
+);
+
+-- 2) 看死元组比例：n_dead_tup / (n_live_tup + n_dead_tup)
+SELECT relname, n_live_tup, n_dead_tup,
+       round(100 * n_dead_tup / nullif(n_live_tup + n_dead_tup, 0), 1) AS dead_pct
+FROM   pg_stat_user_tables
+WHERE  relname = 'doc_chunks';
+
+-- 3) 比例到 ~10–15%、或召回掉下来：重建干净图（不锁表）
+REINDEX INDEX CONCURRENTLY doc_chunks_embedding_idx;</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">张力 · REINDEX 不是免费的</span>
+        <p><code>REINDEX ... CONCURRENTLY</code> 重建图 = <strong>重付第 2 章的建图代价</strong>（见 <a href="02-index-build.html#s23">§2.3 的建图断崖</a>：百万级向量建一次 HNSW 是分钟到小时级、吃满 <code>maintenance_work_mem</code>）。而且第 1 章挑战里埋的"<strong>一列建多个索引</strong>"（cosine + L2 两张图）在这里加倍咬人——每张图都要独立 vacuum、独立 REINDEX，churn 成本<strong>乘以索引个数</strong>。所以"要不要为 L2 再建一张图"这种决策，账要算到这一章的维护成本上，而不只看查询是否走索引。</p>
+      </div>
+
+      <!-- ============ self-check ============ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里，再点开对照。直接展开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>一条 <code>... ORDER BY embedding &lt;=&gt; $1 LIMIT 10</code> 在大批 UPDATE 后返回 3 行，表里有效向量却有几十万。用"取满 <code>ef_search</code> 后停 + 可见性事后过滤"两步，讲清为什么会欠返。</li>
+          <li>同样的 churn，为什么 IVFFlat 比 HNSW 欠返得轻？</li>
+          <li>HNSW vacuum 三趟分别干什么？哪一趟最贵，贵在哪个函数调用上？</li>
+          <li>死元组都被 vacuum 清了、图也连通，为什么召回还会继续往下掉？这时该上什么操作？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>UPDATE = 删旧 + 插新，老行留死元组、HNSW 节点仍指着它。搜索沿图取满 <code>ef_search</code>（默认 40）个候选就停；这批候选里靠前的一批是死节点，可见性判定在搜索<strong>停下之后</strong>才把它们筛掉，于是 <code>LIMIT 10</code> 只剩 3 行——有效向量排在搜索视野外、够不着。</li>
+            <li>IVFFlat 按 <code>probes</code> 扫整张倒排列表，跳过死元组后继续往下取，凑够 k 的余地大；HNSW 是"取满固定预算就停、再过滤"，停得早，欠返更狠。</li>
+            <li>Pass 1 <code>RemoveHeapTids</code> 从 <code>heaptids[]</code> 剥掉死堆行 TID（便宜）；Pass 2 <code>RepairGraph</code> 对每个邻居含死节点的节点调 <code>HnswFindElementNeighbors()</code> 重算替补边、补连通性（<strong>最贵</strong>，逐节点重跑邻居搜索）；Pass 3 <code>MarkDeleted</code> 标删并清零向量数据。</li>
+            <li>因为 vacuum 只"修补"不"重排"——补的是绕行边，图攒下越来越多绕道，平均跳数变长、近邻易被错过，召回缓降。该上 <code>REINDEX INDEX CONCURRENTLY</code>（死元组比例 ≈ 10–15% 或召回破阈值），重建一张无绕道的干净图。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一张每天换掉 30% 向量的 chunk 表，怎么设计维护策略让召回稳住，又不让 REINDEX 把库压垮？</h3>
+        <p>这张表 churn 极高（每日 ~30% 行被 re-embedding）。每天 <code>REINDEX</code> 一次又要分钟到小时级、吃满内存（§3.3 / <a href="02-index-build.html#s23">§2.3</a>）；只靠 autovacuum 又只能修补、召回照样缓降。在不停服、不显著拉高查询延迟的前提下，怎么把"召回稳定"和"维护开销可控"这两件事同时拿住？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>分两层想。<strong>短期兜底</strong>：开 <code>hnsw.iterative_scan</code>（候选不够时继续游走而非停在 <code>ef_search</code>，§3.1 答案），让欠返先不发生；同时把 autovacuum 调到 5% 触发（§3.3）压住死元组。<strong>结构性解</strong>：高 churn 往往集中在"近期文档"——考虑按时间<strong>分区</strong>，热分区频繁 REINDEX、冷分区几乎不动，把全表重建摊成小分区重建。再想一层：如果 embedding 频繁换模型，索引是不是该跟着向量列一起做<strong>蓝绿切换</strong>（新列建好新图、原子切换），而不是原地 REINDEX？把"在线修补"和"离线重建"两条路按分区/版本拆开，是这类系统的常规打法。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://github.com/pgvector/pgvector/blob/master/src/hnswvacuum.c">pgvector 源码 — <code>hnswvacuum.c</code>（三趟：RemoveHeapTids / RepairGraph / MarkDeleted）</a>（机制源头）</li>
+          <li><a href="https://github.com/pgvector/pgvector/issues/244">pgvector issue #244 — HNSW 在死元组下返回不足 k 行</a>（事故原始记录）</li>
+          <li><a href="https://github.com/pgvector/pgvector#troubleshooting">pgvector README — Iterative Scans 与 <code>hnsw.iterative_scan</code></a>（官方兜底）</li>
+          <li><a href="https://www.postgresql.org/docs/current/routine-vacuuming.html">PostgreSQL 文档 — VACUUM、死元组与 autovacuum 调参</a></li>
+          <li><a href="https://www.postgresql.org/docs/current/sql-reindex.html">PostgreSQL 文档 — <code>REINDEX ... CONCURRENTLY</code></a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-index-build.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 索引构建与存储</span>
+        </a>
+        <a href="04-filtering.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 带过滤的检索</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 写入之后图不动</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 vacuum 三趟修图</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 churn 与 REINDEX</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

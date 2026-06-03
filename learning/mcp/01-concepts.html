@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概念与架构 · MCP 模型上下文协议 深潜</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; font-weight: 500; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+.path-list { list-style: none; padding: 0; margin: 16px 0; }
+.path-list li {
+  padding: 10px 0 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 15px;
+}
+.path-list .who {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--vermilion); letter-spacing: 0.04em;
+  margin-right: 10px;
+}
+.toc-files { list-style: none; padding: 0; margin: 16px 0; }
+.toc-files li { margin: 0 0 10px; }
+.toc-files a {
+  display: block; padding: 12px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-files a:hover { border-color: var(--vermilion); }
+.toc-files .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-files .t { font-weight: 600; }
+.toc-files .d { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html" class="current">01 概念</a><span class="sep">—</span>
+    <a href="02-protocol.html">02 协议</a><span class="sep">—</span>
+    <a href="03-bidirectional.html">03 双向</a><span class="sep">—</span>
+    <a href="04-security.html">04 安全</a><span class="sep">—</span>
+    <a href="05-design-and-frontier.html">05 设计·前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>概念与架构：谁是 client，谁说了算</h1>
+        <p class="recap">起点页给了一张拓扑图：host 里的 client 连 server，server 向下暴露三类 primitive，还有一条反向的红箭头。这一章把图上每个框拆开，建立 MCP 的词汇表，并钉死两个最容易搞反的点：<strong>client 不是 AI 应用</strong>，以及<strong>三类 primitive 按"控制权归谁"划分</strong>。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label" style="font-size:10px;font-weight:500;">本章你将建立的 schema</p>
+        <ul>
+          <li>MCP 解决的是 M×N 集成爆炸——降成 M+N，骨架借自 LSP</li>
+          <li>host / client / server 三个角色：client 在 host 内、与 server 严格 1:1</li>
+          <li>沙箱隔离：server 看不到完整对话，也看不到别的 server</li>
+          <li>tools / resources / prompts 三类 primitive，按"谁发起调用"分（模型 / 应用 / 用户）</li>
+        </ul>
+      </section>
+
+      <p>贯穿全章用同一个场景：你在给一个 AI 编程助手（host，比如 Cursor 或 Claude Desktop）接上一个 <strong>GitHub server</strong>，让助手能读 issue、查 PR、提交评论。下面每个概念，都用这个场景走一遍。</p>
+
+      <h2 id="s11"><span class="num">1.1</span><span>为什么是 MCP：M×N 集成爆炸</span></h2>
+      <p class="one-liner">MCP 是一套标准协议，让任意 LLM 应用与任意外部能力之间用同一种方式对接——把 M 个应用 × N 个工具的私有集成，降成 M+N 的协议实现。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>在 MCP 之前，每个 LLM 应用要接每个数据源 / 工具，都得写一份私有适配：Cursor 接 GitHub 一份、Claude Desktop 接 GitHub 又一份、接数据库再各写一份。M 个应用 × N 个工具 = M×N 份互不复用的胶水代码。加一个工具，所有应用都要改；换一个应用，所有集成重写一遍。这是组合爆炸。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：MCP 的解法是插一层协议——工具方实现一次 <strong>server</strong>，应用方实现一次 <strong>client</strong>，两边都遵守同一套消息格式。于是 GitHub 写一个 server，所有支持 MCP 的 host 都能用；Cursor 实现一次 MCP client，就能接上所有 MCP server。集成数从 M×N 降到 M+N。</p>
+      <p>这个降维不是 MCP 发明的思路。它<strong>直接借自微软的 Language Server Protocol（LSP）</strong>：编辑器世界曾有同样的爆炸——M 个编辑器 × N 种语言 = M×N 个语言插件；LSP 让每种语言写一个 language server、每个编辑器实现一次 LSP client，降成 M+N。MCP 的作者把 LSP 的三件套——JSON-RPC 消息、能力协商、双向请求——整套搬到了"AI 应用 × 外部能力"上。所以若你熟悉 LSP，MCP 的许多设计会眼熟：这不是巧合，是同一副骨架。这一点 Anthropic 的发布博客没写，只在作者访谈里讲过——也正是它，解释了后面 02 章为什么是 JSON-RPC、为什么要握手协商。</p>
+
+      <figure>
+        <svg viewBox="0 0 780 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左侧三个应用与三个工具两两私有集成形成九条交叉连线，右侧三个应用经 MCP 中枢连到三个工具只需六条连线">
+          <defs>
+            <marker id="c11-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="c11-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- divider -->
+          <line x1="390" y1="30" x2="390" y2="290" class="diagram-soft"/>
+          <text x="180" y="26" text-anchor="middle" class="edge-label" font-weight="700">MCP 之前</text>
+          <text x="600" y="26" text-anchor="middle" class="edge-label" font-weight="700" fill="#B73B2F">MCP 之后</text>
+
+          <!-- LEFT: M x N tangle -->
+          <rect x="34" y="56" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="72" y="81" text-anchor="middle" class="node-label">应用 1</text>
+          <rect x="34" y="138" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="72" y="163" text-anchor="middle" class="node-label">应用 2</text>
+          <rect x="34" y="220" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="72" y="245" text-anchor="middle" class="node-label">应用 3</text>
+
+          <rect x="250" y="56" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="288" y="81" text-anchor="middle" class="node-label">工具 1</text>
+          <rect x="250" y="138" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="288" y="163" text-anchor="middle" class="node-label">工具 2</text>
+          <rect x="250" y="220" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="288" y="245" text-anchor="middle" class="node-label">工具 3</text>
+
+          <!-- 9 tangled lines (soft gray = the mess) -->
+          <line x1="110" y1="76" x2="250" y2="76" class="diagram-soft"/>
+          <line x1="110" y1="76" x2="250" y2="158" class="diagram-soft"/>
+          <line x1="110" y1="76" x2="250" y2="240" class="diagram-soft"/>
+          <line x1="110" y1="158" x2="250" y2="76" class="diagram-soft"/>
+          <line x1="110" y1="158" x2="250" y2="158" class="diagram-soft"/>
+          <line x1="110" y1="158" x2="250" y2="240" class="diagram-soft"/>
+          <line x1="110" y1="240" x2="250" y2="76" class="diagram-soft"/>
+          <line x1="110" y1="240" x2="250" y2="158" class="diagram-soft"/>
+          <line x1="110" y1="240" x2="250" y2="240" class="diagram-soft"/>
+          <text x="180" y="305" text-anchor="middle" class="edge-label">M × N 份私有集成</text>
+
+          <!-- RIGHT: M + N via hub -->
+          <rect x="430" y="56" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="468" y="81" text-anchor="middle" class="node-label">应用 1</text>
+          <rect x="430" y="138" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="468" y="163" text-anchor="middle" class="node-label">应用 2</text>
+          <rect x="430" y="220" width="76" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="468" y="245" text-anchor="middle" class="node-label">应用 3</text>
+
+          <rect x="566" y="116" width="84" height="84" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="608" y="153" text-anchor="middle" class="node-label-accent">MCP</text>
+          <text x="608" y="171" text-anchor="middle" class="edge-label">协议</text>
+
+          <rect x="706" y="56" width="68" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="740" y="81" text-anchor="middle" class="node-label">工具 1</text>
+          <rect x="706" y="138" width="68" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="740" y="163" text-anchor="middle" class="node-label">工具 2</text>
+          <rect x="706" y="220" width="68" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="740" y="245" text-anchor="middle" class="node-label">工具 3</text>
+
+          <line x1="506" y1="76" x2="566" y2="140" class="diagram-ink" marker-end="url(#c11-ink)"/>
+          <line x1="506" y1="158" x2="566" y2="158" class="diagram-ink" marker-end="url(#c11-ink)"/>
+          <line x1="506" y1="240" x2="566" y2="176" class="diagram-ink" marker-end="url(#c11-ink)"/>
+          <line x1="650" y1="140" x2="706" y2="76" class="diagram-accent" marker-end="url(#c11-acc)"/>
+          <line x1="650" y1="158" x2="706" y2="158" class="diagram-accent" marker-end="url(#c11-acc)"/>
+          <line x1="650" y1="176" x2="706" y2="240" class="diagram-accent" marker-end="url(#c11-acc)"/>
+          <text x="600" y="305" text-anchor="middle" class="edge-label">M + N 份协议实现</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>同一组 3 应用 × 3 工具：左边每对都要一份私有集成（9 条），右边各方只对接 MCP 一次（3+3 条）。<strong>注意</strong>：左边那团乱线<em>就是重点</em>——它是 M×N 的组合爆炸；MCP 把每一方"对接所有人"变成"对接协议一次"。这正是 LSP 当年对编辑器和语言做的事。</figcaption>
+      </figure>
+
+      <h2 id="s12"><span class="num">1.2</span><span>host / client / server：三个角色</span></h2>
+      <p class="one-liner">host 是宿主应用（持有 LLM 与对话），client 是 host 内为每个 server 开的连接器，server 是提供能力的独立进程；一个 client 恰好连一个 server。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一个 host 通常要同时连多个 server——GitHub、文件系统、数据库。host 不亲自跟每个 server 对话，而是为每个 server 开一个独立的 <strong>client</strong>，每个 client 维护一条独立、隔离的会话。这样多个 server 互不干扰，host 还能站在中间统一管控授权与上下文。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：这里有个最容易搞反的点——<strong>MCP 里的 "client" 不是你以为的那个 AI 应用</strong>。日常语境里 client 常指"用户面对的程序"。但在 MCP 里，用户面对的应用是 <strong>host</strong>（Cursor、Claude Desktop）；client 是 host <em>内部</em>的一个瘦连接器，每个 server 配一个。三者关系是 host : client : server = 1 : N : N，且 <strong>client 与 server 严格 1:1</strong>。要接 GitHub 和文件系统两个 server，host 就开两个 client，不是用一个 client 多路复用。把这层搞混，等到 03 章读 sampling（server 向 client 发请求）时，箭头方向会全反。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 350" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一个 host 内含两个 client，分别 1:1 连接外部的两个独立 server，server 之间互相隔离">
+          <defs>
+            <marker id="c12-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- HOST container -->
+          <rect x="28" y="44" width="304" height="264" rx="8" class="diagram-soft"/>
+          <text x="180" y="70" text-anchor="middle" class="node-label">Host · 宿主应用</text>
+          <text x="180" y="89" text-anchor="middle" class="edge-label">如 Cursor / Claude Desktop · 持有 LLM 与对话</text>
+
+          <rect x="64" y="116" width="232" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="141" text-anchor="middle" class="node-label">Client A</text>
+          <text x="180" y="160" text-anchor="middle" class="edge-label">连 GitHub server</text>
+
+          <rect x="64" y="210" width="232" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="235" text-anchor="middle" class="node-label">Client B</text>
+          <text x="180" y="254" text-anchor="middle" class="edge-label">连文件系统 server</text>
+
+          <!-- Servers -->
+          <rect x="480" y="110" width="208" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="584" y="137" text-anchor="middle" class="node-label-accent">GitHub Server</text>
+          <text x="584" y="156" text-anchor="middle" class="edge-label">独立进程</text>
+
+          <rect x="480" y="210" width="208" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="584" y="237" text-anchor="middle" class="node-label-accent">文件系统 Server</text>
+          <text x="584" y="256" text-anchor="middle" class="edge-label">独立进程</text>
+
+          <line x1="296" y1="145" x2="480" y2="142" class="diagram-ink" marker-end="url(#c12-ink)"/>
+          <text x="388" y="134" text-anchor="middle" class="edge-label">1:1 会话 · JSON-RPC</text>
+          <line x1="296" y1="239" x2="480" y2="242" class="diagram-ink" marker-end="url(#c12-ink)"/>
+          <text x="388" y="231" text-anchor="middle" class="edge-label">1:1 会话</text>
+
+          <line x1="584" y1="174" x2="584" y2="210" class="diagram-soft"/>
+          <text x="640" y="196" text-anchor="middle" class="edge-label">互不可见</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>一个 host 里开两个 client，各自 1:1 连一个 server。<strong>注意</strong>三点：① client 在 host <em>内部</em>，不是独立的 AI 应用；② 连两个 server 就要两个 client，没有"一个 client 接多个 server"；③ 两个 server 是隔离的独立进程，彼此看不见——这条隔离边界是 04 章攻击的舞台。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>你的 host 要同时接 GitHub server 和文件系统 server。是用一个 client 多路复用两个 server，还是开两个 client？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>开两个 client。MCP 规定 client 与 server <strong>严格 1:1</strong>——每个 client 维护一条独立、有状态、隔离的会话。这正是为什么"多接一个 server"在架构上很干净：再开一个 client 即可，已有 client 的会话不受影响。多路复用会打破隔离，也会让 02 章的能力协商失去意义（不同 server 协商出的能力不同）。</p>
+        </details>
+      </div>
+
+      <h2 id="s13"><span class="num">1.3</span><span>沙箱：server 看得到什么</span></h2>
+      <p class="one-liner">每个 server 跑在自己的进程与会话里，看不到完整对话历史，也看不到别的 server——全局只有 host 掌握。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>server 常常是第三方写的。若它能读到完整对话，等于把用户的全部上下文（含密钥、隐私、其他工具输出等敏感信息）交给一个任意第三方。MCP 的设计是：<strong>host 持有对话，server 只在被调用时拿到 host 显式传给它的那一点输入</strong>。信任边界画在 host 与 server 之间。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：隔离是双向的。GitHub server 看不到文件系统 server 的存在，也看不到用户和模型的完整交流；它只通过自己的 client 收到 host 决定传给它的参数（比如一次 <code>create_issue</code> 调用的 title 和 body）。这条"默认隔离"是 MCP 安全模型的地基。但地基也是攻击面：当隔离被绕过——例如一个恶意 server 的工具描述影响了模型对<em>另一个</em> server 工具的调用（04 章的 shadowing），或在你还没调用任何工具时就往上下文注入了指令（line jumping）——隔离的假设就破了。先记住"默认隔离"这个出厂设定，04 章专门看它怎么被攻破。</p>
+
+      <h2 id="s14"><span class="num">1.4</span><span>三大 server primitive</span></h2>
+      <p class="one-liner">server 通过三种 primitive 暴露能力：tools（可执行函数）、resources（可读数据）、prompts（预设模板）。</p>
+
+      <p>回到 GitHub server 场景，三类各举一例：</p>
+      <ul>
+        <li><strong>Tools（工具）</strong>：可执行的函数，带 JSON Schema 描述参数。例如 <code>create_issue(title, body)</code>、<code>search_code(query)</code>。调用会产生动作或副作用。</li>
+        <li><strong>Resources（资源）</strong>：结构化数据或内容，作为上下文喂给模型，用 URI 标识。例如 <code>repo://owner/name/README.md</code> 的文件内容、一段 commit 历史。读取它不产生副作用。</li>
+        <li><strong>Prompts（提示模板）</strong>：预设的指令 / 工作流模板，供用户主动触发。例如一个 <code>/review-pr</code> 模板，展开成"逐项检查这个 PR 的 diff、风格、测试"的结构化提示。</li>
+      </ul>
+
+      <p><strong>底层机制（比文档深一层）</strong>：这三者最常被当成"三个大同小异的东西，反正都是 server 给的内容"。它们在<em>内容形态</em>上确实都能是文本。但真正的区别不在形态，而在下一节要讲的<strong>控制权</strong>——谁来决定它什么时候被用上。这条线才是 MCP 对它们分类的依据，也是面试里"tools 和 resources 有什么区别"想考的点。</p>
+
+      <h2 id="s15"><span class="num">1.5</span><span>控制权分层：谁说了算</span></h2>
+      <p class="one-liner">tools 由模型决定调用（model-controlled），resources 由应用决定何时取用（application-controlled），prompts 由用户主动触发（user-controlled）。这条"谁发起"的轴，才是三大 primitive 的划分依据。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：官方规范给了一张控制层级表，三类 primitive 各对应一个控制方。</p>
+      <ul>
+        <li><strong>tools = 模型控制</strong>：模型在生成时<em>自己</em>决定要不要调 <code>create_issue</code>、用什么参数。这就是你已经熟悉的 function calling——MCP 只是把工具<em>送进</em>模型的可选清单，调不调仍由模型定。</li>
+        <li><strong>resources = 应用控制</strong>：由 host <em>应用</em>决定把哪些 resource 放进上下文。比如 IDE 把"当前打开的文件"作为 resource 注入，是 IDE 的逻辑在拉，不是模型主动"调用"了它。</li>
+        <li><strong>prompts = 用户控制</strong>：由<em>用户</em>在 UI 里主动选用，比如点一个 slash command。既不是模型自发，也不是应用自动。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 740 260" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一条从用户主动到模型自主的控制权横轴，prompts 在用户端、resources 在应用端、tools 在模型端">
+          <defs>
+            <marker id="c15-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- three primitive boxes -->
+          <rect x="60" y="48" width="150" height="62" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="76" text-anchor="middle" class="node-label">Prompts</text>
+          <text x="135" y="95" text-anchor="middle" class="edge-label">用户控制</text>
+
+          <rect x="296" y="48" width="150" height="62" rx="6" class="diagram-ink node-fill"/>
+          <text x="371" y="76" text-anchor="middle" class="node-label">Resources</text>
+          <text x="371" y="95" text-anchor="middle" class="edge-label">应用控制</text>
+
+          <rect x="532" y="48" width="150" height="62" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="607" y="76" text-anchor="middle" class="node-label-accent">Tools</text>
+          <text x="607" y="95" text-anchor="middle" class="edge-label">模型控制</text>
+
+          <!-- connectors down to axis -->
+          <line x1="135" y1="110" x2="135" y2="158" class="diagram-ink"/>
+          <line x1="371" y1="110" x2="371" y2="158" class="diagram-ink"/>
+          <line x1="607" y1="110" x2="607" y2="158" class="diagram-accent"/>
+
+          <!-- axis -->
+          <line x1="50" y1="170" x2="700" y2="170" class="diagram-ink" marker-end="url(#c15-ink)"/>
+          <text x="135" y="192" text-anchor="middle" class="edge-label">用户主动触发</text>
+          <text x="371" y="192" text-anchor="middle" class="edge-label">应用按规则注入</text>
+          <text x="607" y="192" text-anchor="middle" class="edge-label">模型自主决定</text>
+          <text x="375" y="226" text-anchor="middle" class="branch-label">谁来决定它被调用 →</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>三类 primitive 在"谁发起调用"这条轴上的位置。<strong>注意</strong>：它们的真正区别<em>不是</em>内容形态（都能是文本），而是控制权落在用户、应用、还是模型手里。要给 server 加新能力，先问这一句，就能定位它属于哪一类。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>三大 primitive 对照</caption>
+        <thead>
+          <tr><th>primitive</th><th>谁控制</th><th>典型例子（GitHub server）</th><th>UI 形态</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>Tools</td><td>模型</td><td><code>create_issue</code> · <code>search_code</code></td><td>模型在回答中自发调用</td></tr>
+          <tr><td>Resources</td><td>应用</td><td>README 内容 · commit 历史（URI 标识）</td><td>应用把它拼进上下文</td></tr>
+          <tr><td>Prompts</td><td>用户</td><td><code>/review-pr</code> 模板</td><td>用户在菜单 / 斜杠命令里选</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>你想让助手在用户每次提问时，自动带上"当前打开的文件内容"作为背景。这该做成 tool 还是 resource？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>resource。判据是"谁决定它被用上"：这里是<strong>应用</strong>（IDE）按规则每次注入，不是<strong>模型</strong>自己决定去"调用"它。若做成 tool，就把决定权交给了模型——模型可能在该带文件时没调、不该带时乱调。做成 resource，由应用稳定地注入，符合"application-controlled"的语义。这正是图 1.3 那条轴的实战用法。</p>
+        </details>
+      </div>
+
+      <h2 id="s16"><span class="num">1.6</span><span>不只 server 暴露能力：反向的预告</span></h2>
+      <p class="one-liner">client 也向 server 暴露能力——sampling、roots、elicitation——但方向相反：是 server 反过来请求 client。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：到这里，一个自然的默认是"能力都是 server 给、client 用"。这恰是 MCP 最违反直觉的地方，也是它区别于普通工具 API 的核心。host 内的 client 也会声明自己支持哪些能力，最重要的是 <strong>sampling</strong>——"替 server 跑一次模型"的能力。于是 server 可以反过来请求 client：让 client 的模型补全一段文本、向用户提问、列出允许访问的目录（roots）。控制流是<strong>双向</strong>的。这里只在 schema 上钉一个钉子：<strong>能力不是单向的</strong>。完整机制——尤其是 sampling 为什么让 server 不需要自己的 API key、为什么这条招牌能力实际部署得最少——留给 03 章。</p>
+
+      <h2 id="s17"><span class="num">1.7</span><span>综合：一张"控制权"地图</span></h2>
+      <p>把 1.2–1.6 串起来，本章的结论是一句话：<strong>MCP 不是"server 单向喂给模型一堆东西"，而是一套按控制权组织、且双向流动的能力结构。</strong></p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 为什么"控制权"是本章的钥匙</span>
+        <p>一旦把三大 primitive 按"谁发起"而非"是数据还是动作"来看，很多事就对上了：为什么 tools 走的就是普通 function calling（模型自发）；为什么 resources 不叫"读取工具"（应用注入，不归模型调度）；为什么 prompts 是 UI 里的斜杠命令（用户主动）。再叠加 1.6 的反向能力——server 能请求 client 的 sampling——你手里就有了一张完整的控制权地图：<strong>谁能发起什么、朝哪个方向</strong>。02 章讲这套结构在线路上如何用 JSON-RPC 跑起来，03 章把那条反向箭头展开。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>在 MCP 里 "client" 具体指什么？它和 host 是什么关系？为什么不能把 client 理解成"用户面对的 AI 应用"？</li>
+          <li>tools / resources / prompts 各由谁决定调用？把"IDE 每次自动把当前文件喂给模型"归到其中一类，并说明判据。</li>
+          <li>为什么 server 默认看不到完整对话历史？这条边界服务于什么目标？</li>
+          <li>MCP 把 M×N 的集成爆炸降成 M+N——这个降维具体怎么发生的？谁实现一次什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>client 是 host <strong>内部</strong>为每个 server 开的瘦连接器，与 server 严格 1:1。host（如 Cursor）才是用户面对的应用。把 client 当成"用户的 AI 应用"会让后面 sampling 的方向（server→client）全反。</li>
+            <li>tools = 模型控制，resources = 应用控制，prompts = 用户控制。"IDE 自动喂当前文件"归 <strong>resource</strong>：决定权在应用（IDE 按规则注入），不是模型自发调用。</li>
+            <li>因为 server 常是第三方，给它完整对话等于把全部上下文交给任意第三方。边界服务于信任隔离：host 持有对话，server 只拿到被显式传入的参数。</li>
+            <li>插一层协议：工具方实现一次 server、应用方实现一次 client，两边都遵守同一套消息格式。于是每一方只需"对接协议一次"，而非"对接每个对端一次"，集成数从 M×N 降到 M+N。骨架借自 LSP。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一个需求，三类 primitive 各占一块</h3>
+        <p>需求：用户在输入框打 <code>/standup</code>，助手就拉取该用户昨天的 commit、读取团队的日报模板文件、然后生成一份站会日报。把这个需求拆成 tools / resources / prompts 三类——哪部分是哪类？分别由谁控制？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>对每个动作问"谁发起"：<code>/standup</code> 这个入口是<em>用户</em>主动打的 → <strong>prompt</strong>；"拉昨天的 commit"是一个带参数、有动作的调用，由<em>模型</em>在展开后的指令里决定执行 → <strong>tool</strong>；"团队日报模板文件"是一段被读入当上下文的内容，由<em>应用</em>按 URI 取用 → <strong>resource</strong>。一个需求里三类同时出现，正说明它们不是"三种差不多的东西"，而是控制权不同的三层。这道题 06 章还会以变体重现。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://modelcontextprotocol.io/docs/concepts/architecture">MCP — Architecture</a>（client-host-server、1:1、隔离的官方定义）</li>
+          <li><a href="https://modelcontextprotocol.io/docs/concepts/tools">Tools</a> · <a href="https://modelcontextprotocol.io/docs/concepts/resources">Resources</a> · <a href="https://modelcontextprotocol.io/docs/concepts/prompts">Prompts</a>（三大 primitive 及控制层级表）</li>
+          <li><a href="https://microsoft.github.io/language-server-protocol/">Language Server Protocol</a>（MCP 的设计原型）· <a href="https://softwareengineeringdaily.com/2025/05/13/anthropic-and-the-model-context-protocol-with-david-soria-parra/">SE Daily 访谈 — David Soria Parra</a>（讲 LSP 血统）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev">
+          <span class="label">← 上一页</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a href="02-protocol.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 协议机制（下探一层）</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 M×N 集成爆炸</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 host/client/server</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 沙箱隔离</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 三大 primitive</a></li>
+        <li><a href="#s15" data-toc-target="s15">1.5 控制权分层</a></li>
+        <li><a href="#s16" data-toc-target="s16">1.6 反向能力预告</a></li>
+        <li><a href="#s17" data-toc-target="s17">1.7 控制权地图</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

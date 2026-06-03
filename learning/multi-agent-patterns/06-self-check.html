@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  LangChain 教程 · 入口页 index.html
+  极简单色 + 单一朱红强调（design system v2）
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自测题库 · 多 Agent 协作模式 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 失败模式</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html" class="current">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">多 Agent · 自测题库</p>
+        <h1>自测题库</h1>
+        <p class="recap">前五章建立了三轴、设计原理、实操、失败模式与综合项目——这一章用三层梯度题库检验：概念记得牢不牢、原理讲得通不通、场景判别得对不对。答案集中在文末一个折叠块里，先答再展开；直接看答案等于把这一章当再读一遍。</p>
+      </header>
+
+      <figure>
+        <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三层梯度题库金字塔：底层概念层对应 01 章、中层原理层对应 02 章、顶层应用判别层综合 03 至 05，难度从下往上递增">
+          <defs>
+            <marker id="pyr-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+          <rect x="250" y="60" width="180" height="50" rx="5" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="340" y="82" text-anchor="middle" class="node-label-accent">应用判别层</text>
+          <text x="340" y="100" text-anchor="middle" class="edge-label" stroke="none">综合 03–05 · 选得对</text>
+          <rect x="200" y="124" width="280" height="50" rx="5" class="diagram-ink node-fill"/>
+          <text x="340" y="146" text-anchor="middle" class="node-label">原理层</text>
+          <text x="340" y="164" text-anchor="middle" class="edge-label" stroke="none">对应 02 · 讲得通</text>
+          <rect x="140" y="188" width="400" height="50" rx="5" class="diagram-ink node-fill"/>
+          <text x="340" y="210" text-anchor="middle" class="node-label">概念层</text>
+          <text x="340" y="228" text-anchor="middle" class="edge-label" stroke="none">对应 01 · 记得住</text>
+          <line x1="600" y1="238" x2="600" y2="56" class="diagram-ink" marker-end="url(#pyr-ink)"/>
+          <text x="600" y="258" text-anchor="middle" class="edge-label">难度 ↑</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>三层梯度：概念层考“记得住”、原理层考“讲得通”、应用判别层考“选得对”。<strong>注意</strong>：卡在哪一层，就回对应章节补哪一层——卡在顶层判别题，往往不是没记住，而是三轴的取舍没真正打通。</figcaption>
+      </figure>
+
+      <section id="layer-concept">
+        <h2><span class="num">A</span><span>概念层（对应 01 章）</span></h2>
+        <ol>
+          <li>多 Agent 系统的三条正交轴是什么？为什么说它们“正交”？<small>（<a href="01-concepts.html#s11">提示：§1.1</a>）</small></li>
+          <li>supervisor、hierarchical、swarm-handoff 三种拓扑，连接形状各有什么不同？<small>（<a href="01-concepts.html#s12">§1.2</a>）</small></li>
+          <li>协调的“中心调度”与“去中心 handoff”差在谁持有下一步决策权——各举一例。<small>（<a href="01-concepts.html#s13">§1.3</a>）</small></li>
+          <li>通信的“共享 state”与“消息传递”各自适合什么？上下文隔离解决的是哪个问题？<small>（<a href="01-concepts.html#s14">§1.4</a>）</small></li>
+          <li>一句话：什么时候用单 agent + 多工具就够、不必上多 agent？<small>（<a href="01-concepts.html#s15">§1.5</a>）</small></li>
+          <li>LangGraph / AutoGen-AG2 / CrewAI / OpenAI Agents SDK 大致各是“三轴的哪种组合”的封装？</li>
+        </ol>
+      </section>
+
+      <section id="layer-principle">
+        <h2><span class="num">B</span><span>原理层（对应 02 章）</span></h2>
+        <ol>
+          <li>为什么多 Agent 大约要 15× token？这笔开销由哪几部分组成？<small>（<a href="02-principles.html#s21">§2.1</a>）</small></li>
+          <li>Anthropic 的“约 80% 性能差异由 token 量解释”，对“多 Agent 一定更强”这个直觉意味着什么？<small>（<a href="02-principles.html#s21">§2.1</a>）</small></li>
+          <li>supervisor 拓扑的瓶颈在哪？swarm-handoff 又拿什么换灵活？<small>（<a href="02-principles.html#s22">§2.2</a>）</small></li>
+          <li>上下文隔离能防 context clash，但隔离过度会怎样？怎么把握“够用且不过量”？<small>（<a href="02-principles.html#s24">§2.4</a>）</small></li>
+          <li>列出 3 类“不该上多 Agent”的任务特征。<small>（<a href="02-principles.html#s25">§2.5</a>）</small></li>
+          <li>多 Agent 比单 Agent 难评估，难在哪？</li>
+        </ol>
+      </section>
+
+      <section id="layer-apply">
+        <h2><span class="num">C</span><span>应用判别层（综合 03–05 · 选得对）</span></h2>
+        <ol>
+          <li><strong>场景一</strong>：要并行查 5 个信源、各自深挖、汇总成一份带引用的报告。该用什么拓扑？要不要上多 Agent？说出判据与代价。<small>（综合 §1.2 / §2.2 / <a href="05-capstone.html">05</a>）</small></li>
+          <li><strong>场景二</strong>：一个多 Agent 系统跑久了月账单翻了几倍，但抽样看质量没明显变化。最该先怀疑哪个失败模式？怎么从可观测数据定位？<small>（<a href="04-pitfalls.html">04</a>）</small></li>
+          <li><strong>场景三</strong>：两个 worker 并发写同一份共享 state，偶发结果错乱。根因是哪条轴的选择问题？怎么修？<small>（§1.4 + <a href="04-pitfalls.html">04</a>）</small></li>
+        </ol>
+      </section>
+
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上教程，在纸上画一个 supervisor + 3 个并行 worker 的多 Agent 系统——只画 5 个节点，并在连线上标出它的<strong>协调取值</strong>（中心调度还是去中心）和<strong>通信取值</strong>（共享 state 还是消息传递）。画完回到 §1.2 / §1.3 / §1.4 对照：你画的这套，在三条轴上分别落在哪？换成 swarm-handoff 又会变哪条轴？</p>
+      </div>
+
+      <details>
+        <summary>展开全部参考答案（三层都做完再看）</summary>
+
+        <h3>概念层</h3>
+        <ol>
+          <li><strong>拓扑结构、协调机制、通信方式</strong>。说“正交”是因为三者可独立取值：同一种拓扑（如 supervisor）既能用共享 state 也能用消息传递、既能中心调度也能带局部 handoff——改一条轴不强制改另一条，所以任意系统都是三轴各取一值的组合。</li>
+          <li><strong>supervisor</strong>：一个中心节点连向多个 worker，星形；<strong>hierarchical</strong>：多层星形嵌套，上层 supervisor 管下层 supervisor；<strong>swarm-handoff</strong>：agent 之间直接相连、无中心，谁接棒谁干，网状。</li>
+          <li>中心调度：决策权在 supervisor，它决定每一步派给谁（例：supervisor 看任务把子任务分给 search/写作 worker）。去中心 handoff：决策权在当前 agent，它自己决定交接给谁（例：客服 agent 判断这是技术问题，直接 handoff 给技术 agent）。</li>
+          <li>共享 state：所有 agent 读写同一份状态，省去显式传参、适合状态紧耦合；消息传递：显式发收消息、边界清晰、适合松耦合与审计。上下文隔离解决的是<strong>context clash</strong>——让每个 subagent 只看到与自己任务相关的上下文，避免无关信息互相干扰、也省 token。</li>
+          <li>当任务的步骤能由<strong>一个</strong> agent 配合多个工具线性走完、没有需要并行的独立子任务时，单 agent + 多工具就够——多 Agent 的协调开销与 token 翻倍只在“子任务独立可并行且价值高”时才划算。</li>
+          <li>大致：<strong>LangGraph</strong>=有状态图 + 任意拓扑 + 共享 state（精控、可持久化）；<strong>AutoGen-AG2</strong>=会话式 GroupChat（消息传递、偏去中心）；<strong>CrewAI</strong>=角色化 crew（supervisor 式编排、上手快）；<strong>OpenAI Agents SDK</strong>=显式 handoff（去中心交接）。框架只是把某种三轴组合封装好了。</li>
+        </ol>
+
+        <h3>原理层</h3>
+        <ol>
+          <li>每个 subagent 都带<strong>独立的上下文</strong>（系统提示 + 工具定义 + 各自的历史），再叠加 supervisor 与 worker 之间来回的<strong>协调轮次</strong>，token 随 agent 数与轮次相乘——Anthropic 实测约 15×。本质是“用更多 token 买并行广度”。</li>
+          <li>意味着多 Agent 的收益主要是<strong>烧更多 token 换来的广度</strong>，不是结构本身更聪明。所以只有当任务价值撑得起这笔 token、且确实需要并行探索时才划算；否则单 Agent 同样的 token 预算可能效果更好。</li>
+          <li>supervisor 的瓶颈：所有决策与汇总都过中心节点，它成为吞吐与单点故障的瓶颈，且容易上下文过载。swarm-handoff 用“去中心、agent 自行交接”换灵活，代价是<strong>难调试、可能踢皮球或死循环</strong>（没有中心视角看全局）。</li>
+          <li>隔离过度会让 subagent <strong>缺少完成任务必需的上下文</strong>（例如不知道总目标、重复别人已做的工作）。把握点：传“足够完成本子任务”的最小上下文，而非整段历史——既不过载（context clash）也不缺信息。</li>
+          <li>① 子任务<strong>强依赖</strong>、必须串行（后一步要等前一步结论）；② 需要<strong>共享大量中间状态</strong>、隔离反而增加同步成本；③ 步骤<strong>可预先枚举</strong>（那是 workflow 的活，不需要 agent 的自主性）。</li>
+          <li>难在：路径不唯一、中间步骤难判对错、失败可能源于<strong>任一</strong> agent 或它们的<strong>交互</strong>；所以除最终正确性，还要看过程指标（每个 agent 的工具调用准确率、协调轮次、token），并按 agent 维度拆解 trace 才能定位。</li>
+        </ol>
+
+        <h3>应用判别层</h3>
+        <ol>
+          <li>子任务（查不同信源）天然<strong>独立、可并行</strong>，汇总前的素材又容易超出单上下文——属于“广度优先”，<strong>supervisor + 并行 worker</strong> 划算，前提是这份报告的价值吃得下约 15× token。判据=独立可并行 + 价值够高；代价=token 翻倍、协调与合并开销、调试更难。若各信源强依赖、要频繁共享中间结论，则退回单 Agent。</li>
+          <li>质量没变而成本暴涨，多半不是质量 bug 而是<strong>结构 bug</strong>：先怀疑“协调轮次过多 / 上下文每轮膨胀 / 某个 worker 在循环”。定位：按 agent 维度看 token 燃烧率与单次任务的协调轮次、对比哪个 agent / 哪类请求贡献了增量，再下钻具体 trace——不是凭感觉猜。</li>
+          <li>根因是<strong>通信轴</strong>的选择：用了“共享 state”却没处理并发写——两个 worker 同时写同一键，更新互相覆盖（竞态）。修：要么改通信为<strong>消息传递 / 各写各的键再汇聚</strong>，要么给共享 state 的该键配<strong>reducer</strong>（定义并发更新如何合并，而非覆盖），把“并行写冲突”交给合并规则处理。</li>
+        </ol>
+      </details>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个你会坚持用多 Agent 的真实场景</h3>
+        <p>给出一个你会<strong>坚持</strong>用多 Agent（而非单 Agent + 多工具，也非 workflow）的具体场景，并说清：它在拓扑 / 协调 / 通信三条轴上各取什么值、为什么 workflow 和单 Agent 都表达不了、以及你准备付出的代价（token、调试、合并）。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>合格场景要同时满足：①子任务<strong>独立可并行</strong>（不是串行依赖）；②每个子任务都需要<strong>各自的深度探索</strong>、塞进单上下文会互相干扰或超窗口；③任务价值高到吃得下约 15× token。典型例：开放式深度调研（并行查多源、各自深挖、最后汇总）。把它在三轴上写出来——拓扑 supervisor、协调中心调度派发、通信各 worker 隔离上下文 + 结果消息汇总——再说清单 Agent 为什么做不到（单上下文装不下多源深挖且无法真正并行）。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/engineering/built-multi-agent-research-system">Anthropic — How we built our multi-agent research system</a>（约 15× token、约 80% 性能差异由 token 解释、上下文隔离）</li>
+          <li><a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a>（Agent vs Workflow、何时不该上 Agent）</li>
+          <li><a href="https://langchain-ai.github.io/langgraph/">LangGraph 文档</a>（多 Agent 拓扑、共享 state 与 reducer、Command/handoff）</li>
+          <li>前五章正文——本章是它们的综合检索场</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-capstone.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 综合项目</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到 →</span>
+          <span class="title">00 · 起点（重看三轴地图）</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#layer-concept" data-toc-target="layer-concept">A 概念层</a></li>
+        <li><a href="#layer-principle" data-toc-target="layer-principle">B 原理层</a></li>
+        <li><a href="#layer-apply" data-toc-target="layer-apply">C 应用判别层</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

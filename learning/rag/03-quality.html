@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>质量与评估 · RAG 检索增强生成 深潜</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; font-weight: 500; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+.path-list { list-style: none; padding: 0; margin: 16px 0; }
+.path-list li {
+  padding: 10px 0 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 15px;
+}
+.path-list .who {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--vermilion); letter-spacing: 0.04em;
+  margin-right: 10px;
+}
+.toc-files { list-style: none; padding: 0; margin: 16px 0; }
+.toc-files li { margin: 0 0 10px; }
+.toc-files a {
+  display: block; padding: 12px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-files a:hover { border-color: var(--vermilion); }
+.toc-files .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-files .t { font-weight: 600; }
+.toc-files .d { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-retrieval.html">02 检索</a><span class="sep">—</span>
+    <a href="03-quality.html" class="current">03 质量</a><span class="sep">—</span>
+    <a href="04-frontier.html">04 前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>质量与评估：让证据被用上，把失败定位到漏斗哪一阶</h1>
+        <p class="recap">前两章把<strong>召回→精度漏斗</strong>搭完了：<a href="02-retrieval.html#s22">hybrid</a> 在检索阶保召回，<a href="02-retrieval.html#s24">重排</a>在第二阶保精度。证据递到了门口——这一章管两件事：怎么逼生成真的<strong>用</strong>证据（grounding），以及怎么把"答得好不好"拆成<strong>检索质量</strong>和<strong>生成质量</strong>两把尺子分开量，从而把每一个失败<strong>定位到漏斗的具体某一阶</strong>。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label" style="font-size:10px;font-weight:500;">本章你将建立的 schema</p>
+        <ul>
+          <li>三个 grounding 杠杆：grounding 提示、citation 强制溯源、abstention 拒答</li>
+          <li>分块三难：recall / precision / context 预算，三者不可兼得</li>
+          <li>评估 2×2：检索侧（context precision/recall）× 生成侧（faithfulness/answer relevance）分开量</li>
+          <li>失败模式按漏斗分段：索引 → 检索 → 生成，每个症状对应一阶 + 一个指标</li>
+        </ul>
+      </section>
+
+      <p>沿用全程的场景：公司内部问答助手，语料是几百页员工手册 PDF，用户问<em>"出差住宿的报销上限是多少？"</em>。前两章保证了"对的那段证据有机会进候选、并被顶到前列"。这一章假设证据已经递到 prompt——问题变成：模型会用它吗？答错了，错在漏斗的哪一阶？</p>
+
+      <h2 id="s31"><span class="num">3.1</span><span>让生成扎根：grounding 的三个杠杆</span></h2>
+      <p class="one-liner">生成扎根 = 用提示、引用、拒答三个杠杆，把"基于给定证据回答"从一个建议变成一道尽量硬的约束——但它始终是概率性的，不是强制的。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>检索和重排只解决了"对的证据在不在 prompt 里"。<a href="01-concepts.html#s17">§1.7 的 grounding 概率契约</a>说得很清楚：<strong>检索质量是答案质量的上限，但拿到完美证据也不保证答对</strong>。证据进了 prompt，模型仍会用参数化记忆覆盖它、在多段之间错拼、或干脆含糊带过。这三个杠杆就是用来收窄这道缝隙的工程手段。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：把证据拼进 prompt，改变的是模型生成<strong>下一个 token 的概率分布</strong>——让"能从上下文里抄到的 token"获得更高概率。这是 grounding 唯一的物理基础：它<strong>抬高</strong>了照抄证据的概率，但没有<strong>锁死</strong>它。生成仍是从整个词表上采样，参数化记忆里那条"住宿一般报 500"的高频路径依然在竞争。所以三个杠杆都是在同一个概率分布上施加偏置，没有一个能把幻觉概率压到零。</p>
+
+      <p>三个杠杆，按作用点排列：</p>
+      <ul>
+        <li><strong>grounding 提示</strong>：在 system prompt 里写死"只依据给定证据作答，证据未覆盖的部分不要编"。它直接给"照抄上下文"这条路径加权，是最便宜、最先上的一道。</li>
+        <li><strong>引用 / citation 强制溯源</strong>：要求模型为每个论断标出处（chunk id / 页码），并在后处理里校验这条引用确实支持该句。强制溯源会<strong>抑制编造</strong>——模型要给不出处的句子找一个出处，比直接顺口编要难，于是更倾向于只说证据支持的话。</li>
+        <li><strong>拒答 / abstention</strong>：给模型一条显式的"不知道"出路，并配一个低置信阈值（检索得分太低 / 证据不覆盖问题时触发）。没有这条出路，模型面对"证据不足"时只能硬答，幻觉就在这里产生。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 过度拒答</span>
+        <p>grounding 拧太紧会反噬：阈值定太高、提示措辞太严，模型会把<strong>本可以答的问题也拒掉</strong>（证据其实够，但措辞和 query 不完全字面对齐，模型保守地说"不知道"）。grounding 强度是一个要调的旋钮——一端是幻觉，另一端是过度拒答，没有免费的中点。这条 trade-off 在 §3.3 会变成 faithfulness 与 answer relevance 的此消彼长。</p>
+      </div>
+
+      <h2 id="s32"><span class="num">3.2</span><span>分块策略的三难</span></h2>
+      <p class="one-liner">分块大小是一个三难选择：recall、precision、context 预算，没有任何一个 chunk size 能让三者同时取胜。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p><a href="01-concepts.html#s13">§1.3</a> 把分块定为<strong>漏斗第一段的入口决策</strong>：它决定"理想答案片段"能不能成为一个可被召回的单元。这一节把当时按下不表的"分块策略"展开——因为分块切坏了，后面 hybrid、rerank、grounding 全在给一个有缺陷的输入做补救。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：三难来自三个互相拉扯的量。<strong>recall</strong> 要求一个完整答案别被切散——倾向切大，让答案连同它的上下文待在同一个 chunk 里。<strong>precision</strong> 要求一段只讲一件事，嵌入向量语义锐利、能在排序里顶上来——倾向切小，避免一段塞多主题被<a href="02-retrieval.html#s21">稀释成"平均向量"</a>。<strong>context 预算</strong>是第三个约束：chunk 越大，同样 top-k 喂进 prompt 的 token 越多、越贵，且把噪声一起带进去。这三个量没有公共最优点——把一个拉好，另一个就退。</p>
+
+      <table class="compare-table">
+        <caption>分块策略 · 备选方案</caption>
+        <thead>
+          <tr><th>策略</th><th>怎么切</th><th>赢在哪</th><th>盲区</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>固定大小</td>
+            <td>每 N token 硬切，配 overlap</td>
+            <td>实现简单、可预测、批处理快</td>
+            <td>边界盲——把一句话、一张表从中间劈开</td>
+          </tr>
+          <tr class="selected">
+            <td>递归 / 结构感知</td>
+            <td>优先在段落、标题、表格边界切，再退到句号</td>
+            <td>尊重文档结构，答案片段更完整</td>
+            <td>依赖文档有干净的结构标记</td>
+          </tr>
+          <tr>
+            <td>语义分块</td>
+            <td>在相邻句嵌入相似度<strong>骤降</strong>处下刀</td>
+            <td>切点落在话题转折处，单段主题纯</td>
+            <td>要先逐句嵌入、算开销大；阈值需调</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>落地的经验数值（起点，不是定论）：<strong>事实型问答</strong>（查一个上限、一个日期）用 <strong>128–256 token</strong> 的小 chunk，让命中段语义锐利；<strong>分析型 / 长推理</strong>用 <strong>512–1024 token</strong>，保住论证的上下文。无论哪档都加 <strong>overlap</strong>（相邻 chunk 重叠几十 token），防止答案正好落在切口被拦腰截断。<strong>表格</strong>先转成 HTML（保留行列与表头的从属关系）再分块——这正是 §1.3 报销表那个例子要的：别让"800 元"和它的表头"住宿费上限"落进两个 chunk。</p>
+
+      <figure>
+        <svg viewBox="0 0 520 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="分块三难：recall、precision、context 预算分居三角形三个顶点，互相拉扯">
+          <polygon points="260,52 70,250 450,250" class="diagram-ink node-fill"/>
+
+          <circle cx="260" cy="52" r="5" fill="#B73B2F"/>
+          <text x="260" y="36" text-anchor="middle" class="node-label-accent">recall</text>
+
+          <circle cx="70" cy="250" r="5" fill="#B73B2F"/>
+          <text x="70" y="272" text-anchor="middle" class="node-label-accent">precision</text>
+
+          <circle cx="450" cy="250" r="5" fill="#B73B2F"/>
+          <text x="450" y="272" text-anchor="middle" class="node-label-accent">context 预算</text>
+
+          <text x="165" y="150" text-anchor="middle" class="edge-label">切大 → 答案完整</text>
+          <text x="358" y="150" text-anchor="middle" class="edge-label">切大 → token 涨</text>
+          <text x="260" y="262" text-anchor="middle" class="edge-label">切小 → 向量锐利</text>
+
+          <text x="260" y="170" text-anchor="middle" class="node-label">chunk size</text>
+          <text x="260" y="190" text-anchor="middle" class="edge-label">一个旋钮，三方拉扯</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>分块三难：调大 chunk 同时改善 recall（答案不被切散）却恶化 precision（向量被稀释）和 context 预算（token 变贵）。<strong>注意</strong>：三个顶点没有公共最优解——这就是为什么"事实型切小、分析型切大"是按问题类型分流，而不是找一个万能 chunk size。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队把所有文档统一切成 1000 token 的大 chunk，理由是"上下文更全、答案更完整"。员工手册里"住宿上限 800 元"这类一句话事实的检索质量，会因此变好还是变差？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>变差。1000 token 的 chunk 里塞了一整节的多个主题，嵌入向量是这些主题的"平均"，对"住宿上限"这个具体问题不够锐利，<a href="02-retrieval.html#s21">排不进前列</a>——recall 看似保住了（答案没被切散），precision 却塌了。这正是三难：拉大 chunk 改善了一个量，牺牲了另一个。事实型问答该往 128–256 token 切。</p>
+        </details>
+      </div>
+
+      <h2 id="s33"><span class="num">3.3</span><span>评估闭环：把检索和生成分开量</span></h2>
+      <p class="one-liner">RAG 的核心评估是一个 2×2：检索侧量 context precision / context recall，生成侧量 faithfulness / answer relevance——四个指标各管一件事，混在一起就无法定位失败。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一个端到端的"答得对不对"分数没法用来 debug：分数低，是检索没捞到证据，还是证据捞到了但模型没用好？这是两个完全不同的修法（一个改分块/hybrid，一个改 grounding/prompt）。<a href="01-concepts.html#s18">召回→精度漏斗</a>本来就分阶，评估也必须<strong>沿同一条漏斗分阶量</strong>，才能把分数映射回"该动哪一段"。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：四个指标不是四个"得 0.8 还是 0.9"的黑盒，每个底下都有一套可拆的判据。</p>
+      <ul>
+        <li><strong>context precision</strong>（检索侧）：检索到的 chunk 里，相关的占比多高、且排得靠不靠前。机制上是对 top-k 逐位算 precision@k 再取均值——相关的排在前面得分更高。回答"捞回来的这堆，是不是大多有用、噪声多不多"。</li>
+        <li><strong>context recall</strong>（检索侧）：需要的证据是不是<strong>都</strong>被检索到了。机制（比"得分"深一层）：把 ground-truth 参考答案拆成若干 claim，逐条检查<strong>该 claim 能否归因到检索到的上下文</strong>，支持的占比就是 recall。回答"答对所需的证据，有没有漏在门外"。</li>
+        <li><strong>faithfulness</strong>（生成侧）：答案是不是扎根于检索到的上下文、有没有编造。机制：把生成的答案拆成一条条 claim，逐条检查<strong>该 claim 能否从检索到的上下文里推出</strong>（LLM-as-judge，让模型当裁判逐条判定），被支持的 claim 占比就是分数。回答"模型有没有顺嘴编了上下文里没有的东西"。</li>
+        <li><strong>answer relevance</strong>（生成侧）：答案切不切用户的<strong>问题</strong>——完整、不跑题、不答非所问。注意它不管对错，只管"答的是不是问的那件事"。</li>
+      </ul>
+
+      <p>为什么四个都要：因为它们<strong>会解耦</strong>。系统完全可以 faithfulness 很高、context recall 很低——模型<em>忠实地</em>基于一份不全的证据作答，每句话都能在上下文找到出处（faithful），但上下文本身缺了关键的那一段（recall 低），于是忠实地答错。反过来也成立：检索捞回了完美证据（recall 高），生成却无视它编了一段（faithfulness 低）。四个指标分属漏斗两端，只有分开量，才知道是<strong>检索阶</strong>欠债还是<strong>生成阶</strong>欠债。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>只有 faithfulness 一个指标，分数 0.95。能不能据此说"这套 RAG 答得准"？如果不能，缺的那把尺子量的是漏斗哪一阶？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>不能。faithfulness 只问"答案的每句话是否被<em>检索到的上下文</em>支持"——它对"上下文本身全不全"是盲的。检索若漏了关键证据，模型会忠实地基于残缺上下文作答：faithfulness 照样 0.95，答案却是错的。缺的是 <strong>context recall</strong>，量的是<a href="01-concepts.html#s15">检索阶</a>"漏没漏"。这正是 §3.5 进阶挑战那道题的内核——两个生成侧指标管不到检索阶的漏。</p>
+        </details>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 560 440" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="评估 2x2：横轴检索质量，纵轴生成质量，四象限各自的含义和该修哪里">
+          <defs>
+            <marker id="q-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- quadrant rects -->
+          <rect x="80" y="60" width="200" height="140" rx="4" class="diagram-ink node-fill"/>
+          <rect x="280" y="60" width="200" height="140" rx="4" class="diagram-ink node-fill-accent"/>
+          <rect x="80" y="200" width="200" height="140" rx="4" class="diagram-ink node-fill"/>
+          <rect x="280" y="200" width="200" height="140" rx="4" class="diagram-ink node-fill"/>
+
+          <!-- top-left: retrieval poor, gen good -->
+          <text x="180" y="108" text-anchor="middle" class="node-label">检索差 · 生成好</text>
+          <text x="180" y="130" text-anchor="middle" class="edge-label">忠实地答错</text>
+          <text x="180" y="150" text-anchor="middle" class="branch-label">修分块 / hybrid</text>
+          <text x="180" y="170" text-anchor="middle" class="edge-label">否则 grounding 帮不上</text>
+
+          <!-- top-right: both good -->
+          <text x="380" y="120" text-anchor="middle" class="node-label-accent">双高 · 理想区</text>
+          <text x="380" y="142" text-anchor="middle" class="edge-label">证据齐 + 答得忠实切题</text>
+
+          <!-- bottom-left: both poor -->
+          <text x="180" y="262" text-anchor="middle" class="node-label">双低</text>
+          <text x="180" y="284" text-anchor="middle" class="edge-label">先修检索，再看生成</text>
+
+          <!-- bottom-right: retrieval good, gen poor -->
+          <text x="380" y="252" text-anchor="middle" class="node-label">检索好 · 生成差</text>
+          <text x="380" y="274" text-anchor="middle" class="edge-label">证据齐却幻觉/跑题</text>
+          <text x="380" y="294" text-anchor="middle" class="branch-label">修 grounding / prompt</text>
+
+          <!-- axes -->
+          <line x1="60" y1="360" x2="500" y2="360" class="diagram-ink" marker-end="url(#q-ink)"/>
+          <line x1="60" y1="360" x2="60" y2="40" class="diagram-ink" marker-end="url(#q-ink)"/>
+          <text x="290" y="392" text-anchor="middle" class="node-label">检索质量 →</text>
+          <text x="290" y="410" text-anchor="middle" class="edge-label">context precision / recall</text>
+          <text x="34" y="200" text-anchor="middle" class="node-label" transform="rotate(-90 34 200)">生成质量 →</text>
+          <text x="50" y="200" text-anchor="middle" class="edge-label" transform="rotate(-90 50 200)">faithfulness / answer relevance</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>评估 2×2：横轴是检索质量（context precision/recall），纵轴是生成质量（faithfulness/answer relevance）。<strong>注意</strong>：左上角"检索差+生成好"最隐蔽——模型忠实地基于残缺证据作答，faithfulness 漂亮但答案是错的，这时拧 grounding 没用，得回去修分块/hybrid。右下"检索好+生成差"才是 grounding/prompt 该管的区。把端到端分数拆到这张图上，才知道往哪一阶使劲。</figcaption>
+      </figure>
+
+      <p><strong>工具与前提</strong>：<strong>RAGAS</strong>（把上面四个指标做成了开箱即用的实现）、<strong>TruLens</strong>、<strong>DeepEval</strong> 三套自 2024 年起就稳定可用，都按"检索侧 / 生成侧分开量"组织指标。共同前提是要有一批<strong>带标注的 QA pairs</strong>（问题 + ground-truth 答案，context recall 尤其依赖参考答案来拆 claim）。还有一条原则：评估是<strong>持续</strong>跑的回归，不是上线那天量一次就完——语料在变、模型在换、query 分布在漂，§3.4 会给出"为什么离线评估会骗你"的硬理由。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 指标即漏斗的探针</span>
+        <p>把四个指标按漏斗摆开：context recall 探的是<a href="01-concepts.html#s15">检索阶</a>"漏没漏"，context precision 探的是<a href="02-retrieval.html#s24">重排阶</a>"排得净不净"，faithfulness 探的是<a href="01-concepts.html#s17">生成阶</a>"编没编"，answer relevance 探的是"答的是不是问的"。一个低分指标，直接指向漏斗的一段——这就是分开量的全部价值：把"答得不好"翻译成"漏斗第几阶欠债"。</p>
+      </div>
+
+      <h2 id="s34"><span class="num">3.4</span><span>失败模式：按漏斗分段</span></h2>
+      <p class="one-liner">RAG 的失败几乎都能挂到漏斗的某一阶——索引/分块、检索、生成。按阶分类，是因为每一阶的失败有不同的症状、根因和修法。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>用户只会报告"答得不对"。把这个笼统症状对上漏斗的某一阶，是从"它坏了"到"这里坏了、这么修"的关键一跳。下面按 §3.3 的探针顺序，逐阶列常见失败模式。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="失败模式按漏斗分段：索引分块、检索、生成三阶各挂对应的失败模式">
+          <defs>
+            <marker id="fm-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- funnel stages -->
+          <rect x="40" y="40" width="170" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="125" y="71" text-anchor="middle" class="node-label-accent">索引 / 分块</text>
+
+          <rect x="275" y="40" width="170" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="71" text-anchor="middle" class="node-label-accent">检索</text>
+
+          <rect x="510" y="40" width="170" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="595" y="71" text-anchor="middle" class="node-label">生成</text>
+
+          <line x1="210" y1="66" x2="275" y2="66" class="diagram-accent" marker-end="url(#fm-acc)"/>
+          <line x1="445" y1="66" x2="510" y2="66" class="diagram-accent" marker-end="url(#fm-acc)"/>
+
+          <!-- drop lines to failure lists -->
+          <line x1="125" y1="92" x2="125" y2="128" class="diagram-soft"/>
+          <line x1="360" y1="92" x2="360" y2="128" class="diagram-soft"/>
+          <line x1="595" y1="92" x2="595" y2="128" class="diagram-soft"/>
+
+          <!-- index failures -->
+          <text x="125" y="148" text-anchor="middle" class="edge-label">chunk 太小 / 太大</text>
+          <text x="125" y="170" text-anchor="middle" class="edge-label">边界盲切</text>
+          <text x="125" y="192" text-anchor="middle" class="edge-label">索引陈旧 freshness</text>
+
+          <!-- retrieval failures -->
+          <text x="360" y="148" text-anchor="middle" class="edge-label">dense 漏精确词</text>
+          <text x="360" y="170" text-anchor="middle" class="edge-label">query-doc 不对称</text>
+          <text x="360" y="192" text-anchor="middle" class="edge-label">lost-in-the-middle</text>
+          <text x="360" y="214" text-anchor="middle" class="edge-label">metadata 误杀</text>
+
+          <!-- generation failures -->
+          <text x="595" y="148" text-anchor="middle" class="edge-label">证据对仍幻觉</text>
+          <text x="595" y="170" text-anchor="middle" class="edge-label">不会拒答</text>
+          <text x="595" y="192" text-anchor="middle" class="edge-label">没抽取出</text>
+
+          <!-- probe labels -->
+          <text x="125" y="252" text-anchor="middle" class="branch-label">context recall↓</text>
+          <text x="360" y="252" text-anchor="middle" class="branch-label">recall / precision↓</text>
+          <text x="595" y="252" text-anchor="middle" class="branch-label">faithfulness↓</text>
+          <text x="360" y="284" text-anchor="middle" class="edge-label">每一阶有自己的失败模式和探针指标</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>把失败模式挂回<a href="01-concepts.html#s18">召回→精度漏斗</a>：索引/分块阶的失败让 context recall 掉，检索阶让 recall/precision 掉，生成阶让 faithfulness 掉。<strong>注意</strong>：同一个"答得不对"的症状，根因在哪一阶并不写在脸上——先用 §3.3 的四个指标定位是哪一阶欠债，再对着本阶的失败模式找修法，而不是一上来就调 prompt。</figcaption>
+      </figure>
+
+      <h3>索引 / 分块阶</h3>
+      <div class="callout warning">
+        <span class="label">陷阱 · chunk 太小</span>
+        <p><strong>症状</strong>：检索命中一句话，但答案需要的上下文丢了（"上限 800 元"——哪个城市档？）。<strong>根因</strong>：切得太碎，完整答案被拆散。<strong>方向</strong>：加大 chunk 或加 overlap；事实型也别小过 128 token。指标上表现为 context recall 偏低。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · chunk 太大</span>
+        <p><strong>症状</strong>：相关 chunk 明明存在，却排不进检索前列。<strong>根因</strong>：一段塞多主题，<a href="02-retrieval.html#s21">嵌入被稀释成平均向量</a>，对单一问题不够锐利。<strong>方向</strong>：缩小 chunk、按结构切。指标上表现为 context precision 偏低。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · 边界盲切</span>
+        <p><strong>症状</strong>：一张报销表被从中间劈开，"800 元"和表头"住宿费上限"落进两个 chunk，检索到数字却丢了它修饰的对象。<strong>根因</strong>：固定大小硬切，不尊重表格/段落边界。<strong>方向</strong>：结构感知分块、表格转 HTML 再切（§3.2）。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · 索引陈旧 / freshness</span>
+        <p><strong>症状</strong>：源文档上周已删，用户却拿到一段出处是那份旧政策的答案——正是 <a href="01-concepts.html#self-check">ch.01 进阶挑战</a>那道题。<strong>根因</strong>：删除发生在<em>源文档</em>，但查询侧读的是<em>索引</em>；删源文件时，索引侧的写路径没有同步把对应 chunk 的向量从索引里删掉。<strong>方向</strong>：把索引更新（增 / 删 / 改）接进文档生命周期，让删除事件触发索引侧重跑——这是索引侧的写路径问题，不是检索或生成能补救的。</p>
+      </div>
+
+      <h3>检索阶</h3>
+      <div class="callout warning">
+        <span class="label">陷阱 · dense 漏精确词</span>
+        <p><strong>症状</strong>：问 <code>1099-MISC</code>、<code>SKU-7741</code> 这类罕见精确 token，命中的却是一堆"沾边但不是这个"的段落。<strong>根因</strong>：dense 嵌入的<a href="02-retrieval.html#s21">有损压缩抹平了精确字形</a>。<strong>方向</strong>：上 <a href="02-retrieval.html#s22">hybrid（dense + BM25）</a>，让精确词项检索补盲。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · query-doc 不对称</span>
+        <p><strong>症状</strong>：用户用大白话短问（"住宿能报多少"），文档是书面长句（"差旅住宿费用报销标准"），向量没贴近，召回掉。<strong>根因</strong>：问句和文档句式/长度不在一个分布上。<strong>方向</strong>：查询改写 / HyDE 把 query 拉到文档那侧（04 章展开）。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · lost-in-the-middle</span>
+        <p><strong>症状</strong>：正确证据进了 prompt，但夹在一长串上下文的<strong>中间</strong>，模型像没看见。<strong>根因</strong>：Liu 等 2023 测出长上下文里存在位置偏置——模型对开头和结尾的信息利用得好，中间的差，呈 <strong>U 形</strong>。一个要紧的细微差别：这是<strong>经验测量结果</strong>，不是 RoPE 之类位置编码机制必然导致的；而且在更长上下文的模型上<strong>仍然存在</strong>。<strong>方向</strong>：靠重排把最相关的证据顶到首尾位置，而不是指望更大窗口。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · metadata 过滤误杀</span>
+        <p><strong>症状</strong>：加了"部门=HR"之类过滤后，本该召回的证据被滤掉了。<strong>根因</strong>：过滤条件比意图更窄，或 metadata 标注本身有缺。<strong>方向</strong>：放宽 / 校验过滤字段；过滤应缩小范围、不该误杀正解。</p>
+      </div>
+
+      <h3>生成阶</h3>
+      <div class="callout warning">
+        <span class="label">陷阱 · 检索对了仍幻觉</span>
+        <p><strong>症状</strong>：3 段证据都正确明确，模型仍答错（用参数记忆里的"500 元"覆盖，或把"二线 600"张冠李戴到一线）。<strong>根因</strong>：<a href="01-concepts.html#s17">grounding 概率契约</a>——证据正确 ≠ 答案正确。<strong>方向</strong>：强化 grounding 提示 + citation 校验（§3.1）。指标上表现为 faithfulness 低。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · 不会拒答</span>
+        <p><strong>症状</strong>：证据其实不覆盖问题，模型不说"不知道"，硬编一个答案。<strong>根因</strong>：没有显式拒答路径和置信阈值。<strong>方向</strong>：加 abstention 出口 + 低置信阈值（§3.1），注意别拧到过度拒答。</p>
+      </div>
+      <div class="callout warning">
+        <span class="label">陷阱 · 没抽取出</span>
+        <p><strong>症状</strong>：答案明明在上下文里，模型却略过了。<strong>根因</strong>：噪声或互相矛盾的 chunk 太多，把正解淹没；或证据埋在 lost-in-the-middle 区。<strong>方向</strong>：重排压噪声、减少喂进生成的 chunk 数——堆更多文档反而更糟（见下）。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">两个反直觉 · 必须显式说破</span>
+        <p>(1) <strong>验证只有在生产里才真正可行</strong>。Barnett 等 2024（Seven Failure Points of RAG）的核心观察：RAG 的多数失败点要到<strong>运行时</strong>才暴露——真实 query 的分布、文档的脏边角、检索与生成的耦合，离线测试集盖不全。离线"看起来对"会误导你，把没真正验证的系统当成验证过的。</p>
+        <p>(2) <strong>更大的上下文反而更糟</strong>。把窗口开大、塞更多文档进 prompt，不仅<strong>修不了</strong> lost-in-the-middle（位置偏置照在），还会<strong>降低抽取准确率</strong>——更多 chunk = 更多噪声和潜在矛盾，正解更容易被淹没。"召回不够就多塞点"是错的方向；该做的是重排提精度，不是加量。</p>
+      </div>
+
+      <h2 id="s35"><span class="num">3.5</span><span>综合：从症状到漏斗坐标</span></h2>
+      <p>这一章给了一张<strong>诊断映射</strong>：任何"答得不对"，都能顺着两步落到漏斗的具体一阶——先看检索侧两个指标（recall 漏没漏、precision 净不净），再看生成侧两个指标（faithfulness 编没编、answer relevance 切不切题）。哪个低，指向哪一阶。</p>
+
+      <table class="compare-table">
+        <caption>症状 → 漏斗定位速查</caption>
+        <thead>
+          <tr><th>症状</th><th>低分指标</th><th>漏斗阶</th><th>方向</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>命中一句、丢了上下文</td><td>context recall</td><td>索引/分块</td><td>加大 chunk / overlap</td></tr>
+          <tr><td>相关段排不进前列</td><td>context precision</td><td>索引 + 重排</td><td>缩小 chunk / 上重排</td></tr>
+          <tr><td>精确词（编号/型号）漏召</td><td>context recall</td><td>检索</td><td>hybrid + BM25</td></tr>
+          <tr><td>证据齐却答错</td><td>faithfulness</td><td>生成</td><td>grounding / citation</td></tr>
+          <tr><td>证据不足却硬答</td><td>faithfulness</td><td>生成</td><td>abstention 拒答</td></tr>
+          <tr><td>答得忠实但答错了问题</td><td>answer relevance</td><td>生成 / 检索</td><td>先查 recall 再查 query 改写</td></tr>
+        </tbody>
+      </table>
+
+      <p>把三章串起来：分块（<a href="01-concepts.html#s13">§1.3</a> / §3.2）决定了"理想答案片段"能不能成为一个可召回单元——它是漏斗的入口闸门；检索（<a href="02-retrieval.html#s22">hybrid</a>）保住召回、重排（<a href="02-retrieval.html#s24">§2.4</a>）逼出精度，把对的证据顶到 prompt 首尾；生成端的 grounding（<a href="01-concepts.html#s17">§1.7</a> / §3.1）在概率分布上施压，让证据真的被照抄而非被参数记忆覆盖。评估 2×2 是贯穿这条链的<strong>探针组</strong>：context recall/precision 量前半段（证据进没进、净不净），faithfulness/answer relevance 量后半段（用没用、切不切题）。漏斗是结构，指标是仪表——同一条线，从入口量到出口。04 章的查询改写、Contextual Retrieval、Agentic RAG，每一个都还是插在这条漏斗的某一段上。</p>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>答案<strong>忠实但答错了用户的问题</strong>，最该先看哪个指标？为什么不是 faithfulness？</li>
+          <li>faithfulness 和 context recall 各自的判据是"逐条检查 claim"，但拆的是<strong>谁的</strong> claim、对照<strong>什么</strong>？两者怎么区分？</li>
+          <li>团队抱怨"召回不够"，提议把上下文窗口开到 4 倍、多塞文档进去。按本章，这为什么是错方向？该怎么做？</li>
+          <li>grounding 提示拧得越严越好吗？说清它另一端的代价，以及这代价对应 2×2 里哪个指标。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>先看 <strong>answer relevance</strong>。faithfulness 只回答"答案的每句话是否被检索上下文支持"——答案完全可以句句忠实于证据，却答的不是用户问的那件事（跑题但忠实）。faithfulness 高分根本不看"切不切题"，所以它对"答错了问题"是沉默的；answer relevance 才是量"答的是不是问的"那把尺子。</li>
+            <li>faithfulness 拆的是<strong>生成的答案</strong>的 claim，逐条对照<strong>检索到的上下文</strong>，看能否推出——量"编没编"。context recall 拆的是 <strong>ground-truth 参考答案</strong>的 claim，逐条对照<strong>检索到的上下文</strong>，看能否归因——量"漏没漏"。前者属生成侧、后者属检索侧；同样是"逐条查 claim"，但一个查"答案对不对得上证据"，一个查"证据够不够支撑标准答案"。</li>
+            <li>更大的窗口修不了 lost-in-the-middle（位置偏置仍在，证据夹中间照样被忽略），而且多塞文档会引入更多噪声和矛盾，<strong>降低</strong>抽取准确率。"召回不够"的正解是上 hybrid 补召回、靠重排提精度把最相关的顶到首尾，而不是加量。</li>
+            <li>不是。拧太严会导致<strong>过度拒答</strong>——证据其实够、只是措辞和 query 不字面对齐，模型也保守地说"不知道"。代价对应 <strong>answer relevance</strong> 下降（该答的没答、不切题）。grounding 强度是一个旋钮：一端是 faithfulness 掉（幻觉），另一端是 answer relevance 掉（过度拒答）。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>两个指标都很漂亮，用户却投诉"答得不对"</h3>
+        <p>离线评估跑出来：faithfulness <strong>0.95</strong>、answer relevance <strong>0.9</strong>，看着都很好。可用户实测一直投诉"答案不对"。这两个漂亮分数里，是哪一个在<strong>说谎</strong>？真正欠债的指标是谁？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>这两个分数都只看"答案 vs 检索到的上下文"——faithfulness 说答案忠实于上下文，answer relevance 说答案切题。但它们<strong>都没看上下文本身全不全</strong>。如果检索漏了关键证据，模型就会<em>忠实地、切题地</em>基于一份残缺证据作答：每句都对得上手里的上下文（faithfulness 高）、也确实在回答这个问题（answer relevance 高），可手里的上下文压根缺了那段——答案因此是错的。该看的是 <strong>context recall</strong>（对照图 3.2 的左上象限：检索差 + 生成好 = 忠实地答错）。两个生成侧指标没说谎，它们只是<strong>管不到检索阶的漏</strong>——这正是必须四个指标分开量的理由。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.ragas.io/">RAGAS 文档</a>（faithfulness / context precision / context recall / answer relevance 的指标定义与 claim 级判据）</li>
+          <li><a href="https://arxiv.org/abs/2307.03172">Liu et al. 2023 — Lost in the Middle: How Language Models Use Long Contexts</a>（长上下文 U 形位置偏置的经验测量）</li>
+          <li><a href="https://arxiv.org/abs/2401.05856">Barnett et al. 2024 — Seven Failure Points When Engineering a RAG System</a>（失败点多在运行时暴露）</li>
+          <li><a href="https://arxiv.org/abs/2312.10997">Gao et al. 2023 — Retrieval-Augmented Generation for Large Language Models: A Survey</a>（RAG 评估维度综述）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-retrieval.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 检索机制</span>
+        </a>
+        <a href="04-frontier.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 前沿</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 让生成扎根</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 分块三难</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 评估闭环（分开量）</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 失败模式（按漏斗）</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 综合：症状→定位</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

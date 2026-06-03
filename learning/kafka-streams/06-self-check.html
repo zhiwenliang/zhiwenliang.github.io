@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 自测 · Kafka Streams 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html" class="current">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 06</p>
+        <h1>自测题库与面试准备</h1>
+        <p class="recap">前五章建起了一整条认知链：Streams 是嵌进应用的库（01），状态住在本地 RocksDB 但真相源是 changelog 日志（02），DSL 把这套机制跑成可运行的代码（03），违反机制时它如何崩坏（04），综合实战里如何在多个机制间判别取舍（05）。本章不再讲新东西——它把那条链反过来用：合上教程，靠提取而非重读检验哪些环节真正进了长期记忆。题目按概念→原理→判别三层递进，并为最易在面试里露馅的几道题列出"普通答案 vs 资深必须点到"。能在没有提示的情况下重建这些答案，才算把 Streams 框成"消费组 + 本地状态 + changelog 日志"而非"又一个流处理引擎"。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将检验的 schema</p>
+        <ul>
+          <li>三层提取梯度：概念层（回忆事实）→ 原理层（解释机制）→ 判别层（迁移到新场景）</li>
+          <li>面试主战场是判别层——面试官在意对取舍的推理，而非背 API</li>
+          <li>五六道最易露馅题的"资深必须点到"清单：状态容错、EOS 真实边界、共分区、线程模型并行上限、stream-time 冻结</li>
+        </ul>
+      </section>
+
+      <p style="color: var(--ink-soft); font-size: 15px;">
+        总题数 <strong>20</strong> 道，分三层：概念层 7 道（对应 01）、原理层 8 道（对应 02）、应用判别层 5 道（综合，面试主战场）。<strong>所有答案集中在文末一个 <code>&lt;details&gt;</code> 里</strong>，按三层分节。题目区只有题——先把能想到的答案写在纸上或编辑器里，写完再展开对照；直接点开等于把这套机制当再读一遍，提取练习的效果归零。每道概念层与原理层题都带一条 <small>提示链</small>，回指对应章节的锚点，卡住时去那里复习，而不是直接看答案。
+      </p>
+
+      <!-- ============================================================
+           FIGURE — difficulty gradient pyramid
+           ============================================================ -->
+      <figure>
+        <svg viewBox="0 0 680 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="难度梯度金字塔：底层概念层回忆、中层原理层理解、顶层判别层迁移，标注各层题量">
+          <defs>
+            <marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- Cognitive-demand axis on the left -->
+          <line x1="70" y1="330" x2="70" y2="50" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+          <text x="56" y="44" class="edge-label" font-weight="700">认知要求 ↑</text>
+
+          <!-- Bottom tier: 概念层 (recall) — widest -->
+          <polygon points="150,330 590,330 510,250 230,250" class="diagram-ink node-fill"/>
+          <text x="370" y="285" text-anchor="middle" class="node-label">概念层 · 回忆</text>
+          <text x="370" y="305" text-anchor="middle" class="edge-label">7 题 · 对应 01 概念</text>
+
+          <!-- Middle tier: 原理层 (understand) -->
+          <polygon points="230,248 510,248 440,168 300,168" class="diagram-ink node-fill"/>
+          <text x="370" y="203" text-anchor="middle" class="node-label">原理层 · 理解</text>
+          <text x="370" y="223" text-anchor="middle" class="edge-label">8 题 · 对应 02 原理</text>
+
+          <!-- Top tier: 判别层 (transfer) — accent, narrowest -->
+          <polygon points="300,166 440,166 370,86 370,86" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="370" y="138" text-anchor="middle" class="node-label-accent">判别层</text>
+          <text x="370" y="156" text-anchor="middle" class="edge-label">迁移 · 5 题</text>
+
+          <!-- Annotation pointing at the apex -->
+          <text x="470" y="110" class="branch-label">面试主战场</text>
+          <line x1="466" y1="106" x2="412" y2="116" class="diagram-accent" marker-end="url(#arrow-ink)"/>
+
+          <!-- Verb labels on right gutter, aligned to each tier -->
+          <text x="600" y="294" class="edge-label">能复述</text>
+          <text x="600" y="212" class="edge-label">能解释为什么</text>
+          <text x="600" y="126" class="edge-label">能迁移判别</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.0</span>三层提取梯度：底层最宽（回忆的事实最多、最易答），越往上认知要求越高、题量越少。<strong>注意</strong>：朱红的顶层"判别层"题量最少却是面试主战场——它要的不是背 API，而是把下两层的机制迁移到一个没见过的取舍场景里。底层答得顺不代表顶层答得出，三层一起做才看得出 schema 哪里是空的。</figcaption>
+      </figure>
+
+      <!-- ============================================================
+           LAYER 1 — concept
+           ============================================================ -->
+      <section>
+        <h2 id="concept-layer"><span class="num">6.A</span><span>概念层（对应 01 概念）</span></h2>
+        <p>每题只考一个原子事实，对应 01 章某个概念。答得卡壳，就回提示链指的锚点复习——这一层是后面两层的地基，地基空了上面的推理也立不住。</p>
+        <ol>
+          <li>用一句话各自概括 <strong>KStream、KTable、GlobalKTable</strong> 的语义差异（分别是什么"日志/视图"，同一个 key 来多条时各自怎么处理）。<br><small><a href="01-concepts.html#kstream-ktable">提示：参考 01 章 §1.2 KStream / KTable / GlobalKTable</a></small></li>
+          <li>什么是<strong>流表对偶</strong>？为什么说 table 是 stream 的物化、stream 是 table 的差异日志？这个双向性和"状态可恢复"有什么关系？<br><small><a href="01-concepts.html#duality">提示：参考 01 章 §1.3 流表对偶</a></small></li>
+          <li>一个 Streams 应用的 <strong>task 数量由谁决定</strong>？是配置项 <code>num.stream.threads</code> 吗？运行时能改吗？<br><small><a href="01-concepts.html#library">提示：参考 01 章 §1.4 应用即库</a></small></li>
+          <li>Streams 应用的<strong>并行上限</strong>是多少？把实例数或线程数加到超过这个上限会发生什么？<br><small><a href="01-concepts.html#library">提示：参考 01 章 §1.4 应用即库</a></small></li>
+          <li>已经有 KafkaConsumer + KafkaProducer 了，<strong>为什么还要用 Streams</strong>？它在裸 consumer 之上多给了哪几样东西？<br><small><a href="01-concepts.html#why">提示：参考 01 章 §1.1 为什么是 Streams</a></small></li>
+          <li>下列算子哪些是 <strong>stateless</strong>、哪些是 <strong>stateful</strong>：<code>map</code>、<code>filter</code>、<code>flatMap</code>、<code>branch</code>、<code>aggregate</code>、<code>count</code>、<code>reduce</code>、<code>join</code>、窗口算子？判断依据是什么？<br><small><a href="01-concepts.html#stateless-stateful">提示：参考 01 章 §1.5 无状态 vs 有状态</a></small></li>
+          <li>什么是 <strong>topology（拓扑）</strong>？什么情况下一个拓扑会被切成多个 <strong>sub-topology（子拓扑）</strong>？<br><small><a href="01-concepts.html#topology">提示：参考 01 章 §1.4 拓扑</a></small></li>
+        </ol>
+      </section>
+
+      <!-- ============================================================
+           LAYER 2 — principle
+           ============================================================ -->
+      <section>
+        <h2 id="principle-layer"><span class="num">6.B</span><span>原理层（对应 02 原理）</span></h2>
+        <p>这一层不问"是什么"，问"怎么实现的、代价在哪、什么时候失效"。每题对应 02 章某条机制。答案要能说出底层路径，而不是复述定义。</p>
+        <ol>
+          <li>有状态算子的状态<strong>怎么容错</strong>？一个有状态 task 故障转移到新实例后，新 owner 手上没有本地 RocksDB 副本，它如何恢复到正确状态？说清"真相源"在哪。<br><small><a href="02-principles.html#state-store">提示：参考 02 章 §2.1 状态存储</a></small></li>
+          <li>为什么 <code>selectKey</code> / <code>map</code> / <code>groupBy</code> 这类<strong>改 key 的操作会触发 repartition</strong>？Streams 为此自动做了什么？这条往返的代价是什么？<br><small><a href="02-principles.html#repartition">提示：参考 02 章 §2.3 repartition</a></small></li>
+          <li><strong>stream-time 何时前进</strong>？它由什么驱动、用来做什么？一个低流量或空闲的分区上，stream-time 会怎样，进而对窗口结果有什么后果？<br><small><a href="02-principles.html#windowing-time">提示：参考 02 章 §2.4 窗口与时间</a></small></li>
+          <li>辨析 <strong>grace period、retention、suppress</strong> 三者：各自管什么？过了 <code>windowEnd + grace</code> 的迟到事件会怎样？为什么 retention 必须 ≥ 窗口 + grace？<br><small><a href="02-principles.html#windowing-time">提示：参考 02 章 §2.4 窗口与时间</a></small></li>
+          <li>说出 <strong>四种 join</strong>（KStream-KStream、KStream-KTable、KTable-KTable、外键 join）各自的触发语义；其中哪些要求<strong>共分区</strong>、哪些不要求？共分区到底要求两侧满足什么？<br><small><a href="02-principles.html#joins">提示：参考 02 章 §2.5 join 与共分区</a></small></li>
+          <li><code>exactly_once_v2</code> 到底把<strong>哪三件事绑进一个 Kafka 事务</strong>？相比 v1 的"一 task 一 producer"，v2 改了什么？为什么 v2 在高分区数下不会爆？<br><small><a href="02-principles.html#eos">提示：参考 02 章 §2.6 EOS v2</a></small></li>
+          <li><strong>RocksDB 的内存为什么不受 <code>-Xmx</code> 管</strong>？它分配在哪里？这件事在容器里会以什么形式炸出来？为什么 Streams 选 RocksDB+changelog 而不是一个远程状态库？<br><small><a href="02-principles.html#state-store">提示：参考 02 章 §2.1 状态存储</a>；失败形态见 <a href="04-pitfalls.html#rocksdb-mem">04 章 §4.C 堆外内存</a></small></li>
+          <li><strong>standby 副本</strong>（<code>num.standby.replicas</code>）做什么？它如何把故障转移从"分钟级回放"压到"秒级"？代价是什么？<br><small><a href="02-principles.html#rebalance-scaling">提示：参考 02 章 §2.2 再平衡与缩放</a></small></li>
+        </ol>
+      </section>
+
+      <!-- ============================================================
+           LAYER 3 — discrimination (interview main battlefield)
+           ============================================================ -->
+      <section>
+        <h2 id="discrimination"><span class="num">6.C</span><span>应用判别层（综合 · 面试主战场）</span></h2>
+        <p>这一层给场景、要决策。没有"标准答案"对应某一章某一节——要把前两层的机制迁移到一个没见过的取舍里。面试官在这一层听的是<strong>推理过程</strong>：你凭什么排除另一个选项。</p>
+        <ol>
+          <li><strong>Streams vs Flink / Spark Streaming</strong>：团队要做实时处理，有人主张上 Flink。从"部署形态"和"处理模型"两个维度说清 Streams 与 Flink/Spark 的根本差异；什么场景下 Streams 是更省心的选择，什么场景下它明显不够用？</li>
+          <li><strong>Streams vs 裸 consumer</strong>：一个服务只是"从 topic A 读、做个无状态转换、写 topic B"。该上 Streams 还是直接用 KafkaConsumer/Producer？把判据说成一条可操作的线——出现什么需求时才值得引入 Streams？</li>
+          <li><strong>何时不用 Streams</strong>：举出三类即使数据在 Kafka 里、也不该用 Streams 的场景，并说明每一类的根本障碍在哪。</li>
+          <li><strong>groupByKey vs groupBy</strong>：两个聚合，一个用 <code>groupByKey()</code>，一个用 <code>groupBy((k,v)-&gt;...)</code>。它们在拓扑和运行成本上有什么不同？默认该优先用哪个、为什么？什么情况下不得不用另一个？</li>
+          <li><strong>KTable-KTable join vs GlobalKTable join</strong>：要用一张维表去丰富主流。维表是"小而慢变"。选普通 KTable join 还是 GlobalKTable join？从共分区要求、每实例内存、数据规模三个角度说清取舍；维表如果变大到几十 GB，结论会怎么变？</li>
+        </ol>
+      </section>
+
+      <!-- ============================================================
+           Reader-drawing prompt (mandatory)
+           ============================================================ -->
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上教程，凭记忆画出<strong>有状态聚合一条记录的完整路径</strong>：记录进入 → 更新本地 RocksDB → 写 changelog topic →（故障时）从 changelog 或 standby 副本恢复。只画这四个环节加它们之间的箭头就行。画完回 <a href="02-principles.html#state-store">02 章 §2.1</a> 对照——你的图里，那个箭头标对了吗：<strong>你标出真相源是 changelog 而不是本地 RocksDB 了吗？</strong>如果你的箭头是"恢复时从本地 RocksDB 读"，说明对偶那一层还没真进去，回 <a href="01-concepts.html#duality">01 章 §1.3</a> 重看。</p>
+      </div>
+
+      <!-- ============================================================
+           Interview deep-dive — 强答案必须包含什么
+           ============================================================ -->
+      <h2 id="interview-extra"><span class="num">6.D</span><span>面试加餐 · 强答案必须包含什么</span></h2>
+      <p>下面六道是最容易"答得像对、其实露馅"的题。面试官靠它们区分"用过 Streams"和"懂 Streams"。每道列出<strong>普通答案</strong>（不算错，但谁都能背）与<strong>资深必须点到</strong>（点到才证明你摸过它的边界）。这一节不放在文末 <code>&lt;details&gt;</code> 里——它本身就是"答案该长什么样"的标尺，对照上面三层的题用。</p>
+
+      <table class="compare-table">
+        <caption>表 6.1 · 六道易露馅题：普通答案 vs 资深必须点到</caption>
+        <thead>
+          <tr><th style="width:20%">题</th><th style="width:36%">普通答案（谁都能背）</th><th style="width:44%">资深必须点到（摸过边界才说得出）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>状态容错</strong></td>
+            <td>状态存在 RocksDB，会持久化，故障了能恢复。</td>
+            <td>本地 RocksDB 只是<strong>读缓存式的物化视图</strong>，<strong>真相源是 log-compacted 的 changelog topic</strong>；故障转移时新 owner <strong>回放 changelog 重建</strong> RocksDB（或用 standby 副本已追平的副本秒级接管）。措辞上要说"<strong>changelog 复制</strong>"，不能说"checkpoint / 快照"——那是 Flink/Spark 的模型，说错就暴露没分清两套体系。</td>
+          </tr>
+          <tr>
+            <td><strong>EOS 真实边界</strong></td>
+            <td><code>exactly_once_v2</code> 保证精确一次，不重不丢。</td>
+            <td>事务<strong>只绑定三件事</strong>：offset 提交 + 状态 changelog 写 + 输出 produce，下游必须 <code>read_committed</code> 才看不到 aborted 数据；<strong>只在单个 Kafka 集群内原子</strong>，<strong>不延伸到外部副作用</strong>（DB / HTTP / 短信仍可能重复，要 outbox 或按 event-id 幂等）。还要点出"变慢"的真因是 <code>commit.interval.ms</code> 在 EOS 下默认从 30000ms 降到 100ms，而非事务本身重。</td>
+          </tr>
+          <tr>
+            <td><strong>共分区</strong></td>
+            <td>join 两边要按同一个 key。</td>
+            <td>等值 join 要两侧<strong>相同分区数 + 相同分区方式（同一 producer 分区器）</strong>；分区数不符<strong>启动时拓扑校验失败</strong>，分区方式不符则<strong>静默零输出、不报错</strong>（最坑的失败形态）。逃生口：GlobalKTable join 和外键 join <strong>免共分区</strong>。能把"静默无输出"这个症状讲出来，才证明真踩过。</td>
+          </tr>
+          <tr>
+            <td><strong>线程模型 / 并行上限</strong></td>
+            <td>调 <code>num.stream.threads</code> 加线程、加实例就能扩。</td>
+            <td>并行天花板 = <strong>子拓扑最大输入分区数</strong>，运行时<strong>钉死不可改</strong>；<code>task = 分区</code>，一个 task 是一个分区组、<strong>不跨线程拆</strong>；线程/实例多于 task 则多出的<strong>闲置空转</strong>。要再扩只能<strong>重分区输入 topic（破坏性）</strong>。层级关系要说全：instance ⊃ StreamThread ⊃ task ⊃ partition。</td>
+          </tr>
+          <tr>
+            <td><strong>stream-time 冻结</strong></td>
+            <td>窗口按事件时间关闭。</td>
+            <td>stream-time = 每 task <strong>见过的最大时间戳，只前进、只在有记录到达时推进</strong>；<strong>没有新记录 → 时间冻结 → 窗口永不关、结果永不发</strong>。所以低流量/空闲分区会让窗口结果"卡住不出来"——这是个真实的生产现象，不是理论。点到这一条，面试官就知道你跑过它而不是只读过文档。</td>
+          </tr>
+          <tr>
+            <td><strong>RocksDB 内存模型</strong></td>
+            <td>RocksDB 是嵌入式状态存储，落盘。</td>
+            <td>block cache 与 memtable 分配在 <strong>JVM 堆外</strong>，<code>-Xmx</code> 管不住；<strong>每分区每 store 各占一份</strong>，分区一多堆外内存线性涨。容器里的表现是 <strong>JVM 堆指标全程正常、Pod 却被内核 OOMKilled</strong>。修复是用一个共享 <code>LRUCache</code>+<code>WriteBufferManager</code> 设上限，并把 Pod 内存算成"堆 + 堆外缓存 + 余量"。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 面试官真正在称量什么</span>
+        <p>对比上表两列，资深列的共同点不是"知道更多 API"，而是<strong>每条都点到了一个边界或失败形态</strong>：changelog 才是真相源、EOS 不覆盖外部、共分区不符会静默无输出、并行被分区数钉死、空闲分区冻结 stream-time、堆外内存绕过 <code>-Xmx</code>。面试官在意对<strong>取舍的推理</strong>胜过背 API，想听的是<strong>失败模式的故事</strong>（恢复卡顿、空闲分区、EOS 边界）。把每个机制都连到"它在什么时候、以什么方式坏掉"，答案就从"用过"升到"懂"。</p>
+      </div>
+
+      <!-- ============================================================
+           Advanced challenge
+           ============================================================ -->
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把五道判别题压成一棵决策树</h3>
+        <p>不看教程，把 6.C 的五道判别题合并成一张<strong>选型决策树</strong>：根节点是"我要做流处理"，叶子是 {裸 consumer、Kafka Streams、Flink/Spark、Streams + GlobalKTable、Streams + KTable join}。每个分叉用一个二元判据（如"需要状态/窗口/join 吗？""源汇主要是 Kafka 吗？""维表能塞进每个实例内存吗？"）。画完检查：有没有哪条判据其实在重复另一条？有没有哪个叶子永远走不到？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>先按"源汇是否主要在 Kafka"分一刀——否则连 Streams 的门槛都够不到，落向 Flink/Spark 或别的方案。再按"是否需要状态/窗口/join/EOS"分第二刀——只读简单消费的落向裸 consumer。进了 Streams 之后才轮到"维表多大"决定 GlobalKTable（小而慢变、免共分区、每实例全量）还是 KTable join（大、要共分区）。判据顺序很重要：先排除门槛，再在门槛内部细分。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           ALL ANSWERS — single <details> at the very end, grouped by 3 layers
+           ============================================================ -->
+      <details id="answers">
+        <summary>答案（三层全部 · 先做完再展开）</summary>
+
+        <h3>概念层（6.A）</h3>
+        <ol>
+          <li><strong>KStream</strong> = append-only 的 INSERT 日志，同一个 key 来多条记录全部保留（每条都是一个独立事件）。<strong>KTable</strong> = 按 key UPSERT 的 changelog，同 key 后到的值覆盖先到的，<code>null</code> 值是 tombstone（删除该 key）。<strong>GlobalKTable</strong> = 每个实例都消费该 topic 的<strong>所有分区</strong>、持有全量副本，启动时 eager 加载——因此 join 时免共分区，但只适合小而慢变的维表。</li>
+          <li>流表对偶 = 流和表是同一条日志的两种视图：<strong>table 是 changelog "每 key 最新值" 的物化</strong>（把日志按 key 折叠成当前状态），<strong>stream 是 table 的差异日志</strong>（把状态变化展开成事件序列）。正因为这个双向性，状态才可恢复——把 changelog 从头回放一遍就能重建出 table，所以本地状态丢了也不怕。</li>
+          <li>task 数 = <strong>子拓扑输入 topic 的分区数</strong>（取最大输入分区数），运行时<strong>钉死不可改</strong>。<code>num.stream.threads</code> 只控制每个实例起几个 StreamThread，<strong>不决定 task 总数</strong>；task 在所有实例的所有线程间分配。要改 task 数只能重分区输入 topic。</li>
+          <li>并行上限 = <strong>最大输入分区数</strong>（= task 数）。实例数或线程数加到超过它，多出来的实例/线程会被分到<strong>零个 task、CPU 空转</strong>，吞吐不再增长。越过这个上限的唯一办法是重分区输入 topic（破坏性操作）。</li>
+          <li>裸 consumer 只给你"读到消息"。Streams 在其上加了：<strong>有状态算子</strong>（聚合/count/reduce）及其容错（changelog + standby）、<strong>窗口与事件时间</strong>处理、<strong>join</strong>（含自动 repartition 与共分区校验）、<strong>EOS v2</strong> 端到端精确一次、以及把这些架在消费组之上的<strong>缩放/再平衡</strong>。只要不需要这些，裸 consumer 就够。</li>
+          <li><strong>stateless</strong>：<code>map</code>、<code>filter</code>、<code>flatMap</code>、<code>branch</code>（还有 merge/peek）——逐条处理、不依赖其它记录。<strong>stateful</strong>：<code>aggregate</code>、<code>count</code>、<code>reduce</code>、<code>join</code>、所有窗口算子——需要跨记录维护状态，因此要状态存储。判断依据：处理这一条时是否需要"记住"别的记录。</li>
+          <li>topology = source → processor → sink 的算子有向图，Streams 把 DSL 编译成它。当流中出现<strong>需要重分区的边界</strong>（改 key 后接 stateful 算子，要经 repartition topic 重新洗牌）时，拓扑会在那里被切成多个 <strong>sub-topology</strong>——每个子拓扑独立调度成 task。</li>
+        </ol>
+
+        <h3>原理层（6.B）</h3>
+        <ol>
+          <li>每次对状态存储的 put <strong>同时写一条内部 changelog topic</strong>（log-compacted）。本地 RocksDB 只是物化视图，<strong>真相源是 changelog</strong>。故障转移：新 owner 没有本地副本，就<strong>从 changelog 回放</strong>逐条重建 RocksDB 后再处理；配了 standby 副本则由一直尾随 changelog 的热备秒级接管，跳过大部分回放。</li>
+          <li>聚合和等值 join 要求<strong>相同 key 的记录落到同一个 task / 分区</strong>（共分区）。改 key 的操作打乱了原有分区，所以 Streams 在下游 stateful 算子前<strong>自动建一个内部 <code>&lt;app&gt;-&lt;name&gt;-repartition</code> topic</strong>，把数据按新 key produce 进去再重新消费回来。代价：每个改 key 的操作前置一次 produce→re-consume 往返（延迟 + broker 磁盘 + 额外 topic）。注意 <code>selectKey</code> 本身是 lazy 的，只有下游真依赖 key 的算子才物化出 topic。</li>
+          <li>stream-time = <strong>该 task 见过的所有记录的最大时间戳</strong>，<strong>只前进不回退</strong>，用来驱动窗口关闭与迟到判定。它<strong>只在有记录到达时推进</strong>。低流量或空闲分区上没有新记录，stream-time 就<strong>冻结</strong>，窗口永远等不到 <code>windowEnd + grace</code>、结果永不发——表现为"结果卡住不出来"。</li>
+          <li><strong>grace period</strong> = 窗口结束后迟到事件还能更新该窗口结果的时长；过 <code>windowEnd + grace</code> 的迟到事件被<strong>静默丢弃</strong>（只计入 dropped 指标）。<strong>retention</strong> = 窗口状态/changelog 在存储里保留多久，<strong>必须 ≥ 窗口 + grace</strong>，否则窗口还在 grace 内状态就被清了。<strong>suppress(untilWindowCloses)</strong> = 抑制中间结果，每个窗口只发一个最终结果（代价：要等窗口关，增加延迟；内存压力下若用 <code>emitEarlyWhenFull</code> 会发非最终结果，要"最终"必须 <code>shutDownWhenFull</code>）。</li>
+          <li><strong>KStream-KStream</strong>：窗口化 join，两侧入库缓冲，窗口+grace 内每对匹配各发一次。<strong>KStream-KTable</strong>：查表 join，流记录探当前表值；表更新<strong>不</strong>反向触发。<strong>KTable-KTable</strong>：维护式，任一侧更新都重新发结果。<strong>外键 join</strong>：按 value 提取的 key join，Streams 建两个隐藏 topic（subscription + response）+ 复合 RocksDB 存储。前三种等值 join <strong>要求共分区</strong>（相同分区数 + 相同分区方式）；<strong>GlobalKTable join 和外键 join 免共分区</strong>。</li>
+          <li>把 <strong>offset 提交 + 状态 changelog 写 + 输出 produce 三件事绑进一个 Kafka 事务</strong>，下游 <code>read_committed</code> 跳过 aborted。v2（KIP-447）相比 v1 改成<strong>一个线程一个 producer 覆盖该线程的多个 task</strong>，而 v1 是一个 task 一个 producer。高分区数下 v1 会产生海量 producer（爆炸），v2 因此不爆。</li>
+          <li>RocksDB 的 block cache（≈50MiB）和 memtable 分配在 <strong>JVM 堆外</strong>（off-heap），<code>-Xmx</code> 只管堆内、管不到它；而且<strong>每分区每 store 各占一份</strong>，分区多则堆外内存线性增长。容器里表现为 <strong>JVM 堆指标正常、Pod 却被内核 OOMKilled</strong>。选 RocksDB + changelog 而非远程状态库：本地读亚毫秒、无逐条网络跳，且 Kafka 的 compacted 日志本身已是复制/HA 层，不必再引第二个集群化数据库。</li>
+          <li>standby 副本 = 在<strong>另一个实例上预先维护一份尾随 changelog 的热备</strong>状态。主 task 故障时，已追平的 standby 直接接管，<strong>跳过从零回放 changelog</strong>，把故障转移从分钟级压到秒级。代价：额外的磁盘 + 网络（每个 standby 都在持续拉 changelog 保温）。</li>
+        </ol>
+
+        <h3>应用判别层（6.C）</h3>
+        <ol>
+          <li><strong>部署形态</strong>：Streams 是嵌进你应用的<strong>库</strong>，没有独立集群，跑在消费组上、用普通 JVM 部署；Flink/Spark 是<strong>独立集群</strong>，要单独的 JobManager/TaskManager 或 Spark 集群运维。<strong>处理模型</strong>：Streams 逐条处理、容错靠 <strong>changelog 复制</strong>；Flink 逐条但容错靠<strong>分布式快照 checkpoint</strong>；Spark Streaming 是<strong>微批</strong>。Streams 更省心的场景：源和汇都在 Kafka、想避免再养一个集群、Java 后端就近嵌入。Streams 不够用的场景：需要跨多种数据源/汇、复杂 CEP、ML pipeline、或要 Flink 那种独立 checkpoint/状态后端能力。</li>
+          <li>无状态单纯转发<strong>不该上 Streams</strong>——裸 consumer/producer 就够，还少一层抽象和内部 topic 开销。值得引入 Streams 的那条线：出现<strong>有状态需求</strong>（聚合/count/reduce）、<strong>窗口/事件时间</strong>、<strong>join</strong>、或<strong>端到端 EOS</strong> 中任意一项时。判据是"是否需要跨记录的状态或时间语义"，不是数据量大小。</li>
+          <li>三类即使数据在 Kafka 也不该用 Streams：① <strong>源汇主要不在 Kafka</strong>（比如主要从 DB/HTTP 拉、写第三方系统）——Streams 的所有机制都围绕 Kafka topic，离开 Kafka 它的优势全失；② 需要<strong>复杂 CEP / ML / 跨多集群</strong>的能力——Streams 的算子模型撑不起，该上 Flink；③ <strong>只是简单消费</strong>没有状态/窗口/join 需求——上 Streams 是过度设计，徒增内部 topic 与运维面。</li>
+          <li><code>groupByKey()</code> <strong>不改 key</strong>，下游聚合<strong>不需要 repartition</strong>，没有额外内部 topic。<code>groupBy((k,v)-&gt;...)</code> <strong>改 key</strong>，下游聚合会<strong>自动建 repartition topic</strong> 把数据重洗一遍——多一次 produce→re-consume 往返（延迟 + broker 磁盘）。<strong>默认优先 <code>groupByKey</code></strong>。只有当确实需要<strong>按一个不同于当前 key 的字段聚合</strong>时，才不得不用 <code>groupBy</code>（这时重分区是必要代价，不是浪费）。</li>
+          <li>"小而慢变"的维表选 <strong>GlobalKTable join</strong>：<strong>免共分区</strong>（主流不必按维表 key 重分区）、查表式语义简单；代价是<strong>每个实例都持有全量副本</strong>（磁盘 + 内存 + 启动 bootstrap 延迟）。普通 <strong>KTable-KTable join</strong> 要求<strong>共分区</strong>、状态按分区切分（每实例只存自己那份），适合维表较大、放不进单实例内存的情况。维表涨到几十 GB 时结论<strong>翻转</strong>：GlobalKTable 的"每实例全量"变得不可承受（内存爆 + 启动慢），应改用按 key 共分区的 KTable join，或用<strong>外键 join</strong>（按 value 提取 key、免共分区、状态分区化）。</li>
+        </ol>
+      </details>
+
+      <footer class="references">
+        <h3>本章参考 · 面试资源</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/streams/">Kafka Streams 官方文档</a>（官方 · 概念与原理的权威来源）</li>
+          <li><a href="https://developer.confluent.io/courses/kafka-streams/internals/">developer.confluent.io · Kafka Streams Internals</a>（恢复 / 共分区 / repartition / 线程模型——判别题的内功）</li>
+          <li><a href="https://www.confluent.io/blog/enabling-exactly-once-kafka-streams/">Confluent: Enabling Exactly-Once in Kafka Streams</a>（设计文档 · EOS 真实边界）</li>
+          <li><a href="https://www.confluent.io/blog/how-to-tune-rocksdb-kafka-streams-state-stores-performance/">Confluent: How to Tune RocksDB for Kafka Streams State Stores</a>（维护者博客 · 堆外内存模型）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071: Streams Rebalance Protocol</a>（设计文档 · 再平衡协议的近期变化，截至 2026-06）</li>
+          <li><a href="../kafka/02-principles.html#rebalance">主 Kafka 教程 · 消费组再平衡</a>（Streams 缩放/再平衡的底座）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-capstone.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 综合实战</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到起点 →</span>
+          <span class="title">00 · 起点（回顾全教程）</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#concept-layer" data-toc-target="concept-layer">6.A 概念层</a></li>
+        <li><a href="#principle-layer" data-toc-target="principle-layer">6.B 原理层</a></li>
+        <li><a href="#discrimination" data-toc-target="discrimination">6.C 应用判别层</a></li>
+        <li><a href="#interview-extra" data-toc-target="interview-extra">6.D 面试加餐</a></li>
+        <li><a href="#answers" data-toc-target="answers">答案（文末）</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

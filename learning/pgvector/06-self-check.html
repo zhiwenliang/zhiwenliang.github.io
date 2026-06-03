@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 自测辨析 · pgvector</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" integrity="sha384-rCCjoCPCsizaAAYVoz1Q0CmCTvnctK0JkfCSjx7IIxexTBg+uCKtFYycedUjMyA2" crossorigin="anonymous">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-model.html">01 数据模型</a><span class="sep">—</span>
+    <a href="02-index-build.html">02 索引构建</a><span class="sep">—</span>
+    <a href="03-mvcc-lifecycle.html">03 生命周期</a><span class="sep">—</span>
+    <a href="04-filtering.html">04 过滤检索</a><span class="sep">—</span>
+    <a href="05-landscape.html">05 选型前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html" class="current">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 06</p>
+        <h1>自测辨析</h1>
+        <p class="recap">前五章建好了"一条向量在 pgvector 里的一生"。这一章不再讲新东西——它用三层梯度的题把那条主线从你脑子里逼出来：记得住（概念）、想得通（原理）、选得对（跨章判别）。</p>
+      </header>
+
+      <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+        用法：每道题<strong>先合上前面的章节</strong>，把答案写在纸上或编辑器里，再翻到文末 <code>答案</code> 对照。直接看答案等于把这一章当成第六遍泛读——那不会留下任何东西。判别层尤其要写完整理由，不只是选一个选项。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三层梯度金字塔：概念层对应第一章，原理层对应第二三章，判别层对应第四五章，越往上越难越跨章">
+          <defs>
+            <marker id="g6" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- top tier: discrimination -->
+          <rect x="230" y="40" width="220" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="340" y="64" text-anchor="middle" class="node-label-accent">选得对 — 判别层</text>
+          <text x="340" y="84" text-anchor="middle" class="edge-label">第 4·5 章：选计划 · 选型</text>
+
+          <!-- middle tier: principle -->
+          <rect x="150" y="130" width="380" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="340" y="154" text-anchor="middle" class="node-label">想得通 — 原理层</text>
+          <text x="340" y="174" text-anchor="middle" class="edge-label">第 2·3 章：构建 · 存储 · MVCC · vacuum</text>
+
+          <!-- bottom tier: concept -->
+          <rect x="70" y="220" width="540" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="340" y="244" text-anchor="middle" class="node-label">记得住 — 概念层</text>
+          <text x="340" y="264" text-anchor="middle" class="edge-label">第 1 章：类型 · 运算符 · opclass · 排序契约</text>
+
+          <!-- right side gradient arrow -->
+          <line x1="646" y1="290" x2="646" y2="60" class="diagram-ink" marker-end="url(#g6)"/>
+          <text x="636" y="300" text-anchor="end" class="edge-label">记忆</text>
+          <text x="636" y="52" text-anchor="end" class="branch-label">迁移</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>三层题按难度叠成金字塔，每层挂在对应的章节上。<strong>注意</strong>：朱红的顶层（判别层）测的不是"记不记得"，而是"换个场景选不选得对"——它故意把第 1 到第 5 章的概念混在一道题里，这才是能不能用的真正检验。</figcaption>
+      </figure>
+
+      <!-- ============ 概念层 ============ -->
+      <h2 id="concept"><span class="num">▸</span><span>概念层（对应 01 章）</span></h2>
+      <ol>
+        <li>说出 <code>vector</code>、<code>halfvec</code>、<code>bit</code> 三种类型的可建索引维度上限，并解释 <code>vector</code> 那个上限为什么是 2,000。</li>
+        <li><code>&lt;=&gt;</code>、<code>&lt;-&gt;</code>、<code>&lt;#&gt;</code> 各算什么距离？哪个返回的是负值，为什么？</li>
+        <li>opclass 在建索引时起什么作用？查询运算符和它对不上号会怎样——报错还是变慢？</li>
+        <li>一句话说清 <code>amcanorderbyop</code> 排序契约：向量索引<strong>只</strong>服务什么形状的查询？</li>
+        <li>为 3072 维 embedding 建 HNSW 索引，写出能成功的那行 DDL。</li>
+        <li>向量已归一化时，<code>&lt;=&gt;</code> 和 <code>&lt;#&gt;</code> 的排序结果一样吗？哪个更省算力？</li>
+      </ol>
+
+      <!-- ============ 原理层 ============ -->
+      <h2 id="principle"><span class="num">▸</span><span>原理层（对应 02 · 03 章）</span></h2>
+      <ol>
+        <li>HNSW 和 IVFFlat，哪个能在空表上建、哪个必须先灌数据？为什么 IVFFlat 不行？</li>
+        <li>"构建悬崖"是什么？跨过 <code>maintenance_work_mem</code> 那条线后，建索引为什么会慢 10–50 倍？</li>
+        <li>HNSW 图的搜索为什么是随机 I/O 密集？这和"图放不放得进 RAM"有什么关系？</li>
+        <li>默认 <code>ef_search = 40</code> 给的召回偏低且不报警。怎样取一个<strong>精确</strong>的基准来量召回？</li>
+        <li>UPDATE / DELETE 一行后，HNSW 图里那个旧节点立刻消失了吗？查询时它怎么被处理？</li>
+        <li>vacuum 修 HNSW 图为什么"写得重"？它修复连通性，但<strong>不</strong>做的那件事是什么？</li>
+        <li>高频写入的 embedding 表召回逐周下降。什么时候该 <code>REINDEX</code> 而不是等 vacuum？</li>
+      </ol>
+
+      <!-- ============ 应用判别层 ============ -->
+      <h2 id="discrimination"><span class="num">▸</span><span>应用判别层（跨 01–05 章，重点）</span></h2>
+      <p>每道题给一个真实场景。先判断<strong>根因在哪一章</strong>，再在多个方案里选一个并说清为什么其它不合适。</p>
+      <ol>
+        <li><strong>欠返 vs 腐烂</strong>：多租户 RAG，某小语种租户搜出来只有 3 条。另有一张高频 re-embedding 的表，召回逐周下降。这<strong>两个</strong>症状看起来都是"结果变少"，但根因分属不同章、解法完全不同。分别指出根因与解法。</li>
+        <li><strong>选哪条过滤计划</strong>：<code>WHERE tenant_id = 99</code> 在全表只命中 0.3%。iterative scan、partial index、B-tree 精确排序——选哪个？为什么另外两个在这个选择性下不划算？</li>
+        <li><strong>EXPLAIN 显示 Seq Scan</strong>：列出<strong>至少三个</strong>会让 planner 放弃 HNSW 索引的原因，并各给一句诊断/修复。其中哪个根本不是 bug？</li>
+        <li><strong>内存放不下图</strong>：5 千万条 1536 维向量，HNSW 图远超 RAM，p99 延迟爆炸。在"加大机器内存 / 换 halfvec / 换 pgvectorscale 的 StreamingDiskANN"里，分别解决了问题的哪一面？哪个最治本？</li>
+        <li><strong>该不该离开 pgvector</strong>：团队数据已在 Postgres，2 千万向量、查询几乎都带租户过滤、写入中等。另一个团队 8 亿向量、纯向量热路径、几乎不过滤。两个团队该继续用 pgvector 还是换专用库 / pgvectorscale？把判断依据落到具体维度上。</li>
+      </ol>
+
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上整本教程，在纸上画出<strong>"一条向量在 pgvector 里的一生"</strong>——只画 6 个节点：向量列 → 排序契约 → 索引实现 → MVCC → planner 过滤 → 选型。在每条边上写一句它发生了什么。<br>
+        画完回到 <a href="index.html#map">起点页的概念地图</a> 对照：你画的图里，"排序契约"那个节点有没有标出"不是过滤索引"？这条边是后面三章所有事故的总根源——漏了它，说明主线还没真正立住。</p>
+      </div>
+
+      <!-- ============ 答案 ============ -->
+      <details>
+        <summary>答案（三层都做完再展开）</summary>
+
+        <h3>概念层</h3>
+        <ol>
+          <li><code>vector</code> ≤ 2,000、<code>halfvec</code> ≤ 4,000、<code>bit</code> ≤ 64,000。2,000 来自 8KB page：一个索引项要把向量原值连同图指针塞进单页，<code>4 × 2000 + 开销</code> 已逼近 8KB。</li>
+          <li><code>&lt;=&gt;</code> cosine 距离、<code>&lt;-&gt;</code> L2、<code>&lt;#&gt;</code> 负内积。<code>&lt;#&gt;</code> 返回负值：内积越大越相似要降序，但索引只能升序吐，取负让"最相似"变成"最小"。</li>
+          <li>opclass 决定索引按哪种距离建图，并让 planner 把查询运算符和索引对上号。对不上不报错，只是索引用不上、退化全表扫描（30s vs 5ms）。</li>
+          <li>只服务 <code>ORDER BY &lt;距离运算符&gt; ... LIMIT k</code>：按距离排序、取前 k。没有 ORDER BY、没有 LIMIT、或带 DESC，都用不上。</li>
+          <li><code>CREATE INDEX ON doc_chunks USING hnsw ((embedding::halfvec(3072)) halfvec_cosine_ops);</code></li>
+          <li>排序结果完全一样（都是 <code>dot</code> 的单调变换）。<code>&lt;#&gt;</code> 更省：cosine 还要多算模长和除法，单位向量下是浪费。</li>
+        </ol>
+
+        <h3>原理层</h3>
+        <ol>
+          <li>HNSW 能在空表上建（增量插入建图）；IVFFlat 必须先有数据，因为 <code>lists</code> 个聚类中心要靠 k-means 在已有行上算出来。</li>
+          <li>构建在内存里进行，直到 <code>maintenance_work_mem</code> 填满，之后退化成逐元组的磁盘路径（日志打印 "hnsw graph no longer fits..."）。同样数据、只跨了一条线，建索引时间就 10–50 倍地涨。</li>
+          <li>图节点的邻居指针散落在任意 8KB 页上，每跳一步就要解引用到不同页。图放得进 RAM 时这些是内存访问；放不下时每跳都可能触发 page fault，延迟塌方。</li>
+          <li><code>BEGIN; SET LOCAL enable_indexscan = off;</code> 跑同一条 <code>ORDER BY ... LIMIT k</code> 得到精确暴力结果作为 ground truth，再和走索引的结果算 overlap@k。</li>
+          <li>不会立刻消失。MVCC 下它仍指向已死的堆行；查询时 pgvector 走完图、拿到候选后，<strong>逐个重检堆可见性</strong>，把已死的丢掉。图本身要等 vacuum 才清。</li>
+          <li>因为 vacuum 的第二趟要为每个"邻居被删了"的节点重新计算替补边（<code>HnswFindElementNeighbors</code>）并改写邻居元组——这是大量随机写。它修复连通性，但<strong>不重平衡</strong>图，所以质量仍会随删除累积而漂移。</li>
+          <li>当死元组比例到 ~10–15%：此时 vacuum 只能修不能重建，召回已腐烂，<code>REINDEX INDEX CONCURRENTLY</code> 重建一张干净的图更划算。</li>
+        </ol>
+
+        <h3>应用判别层</h3>
+        <ol>
+          <li><strong>症状一（小语种只剩 3 条）= post-filter 欠返</strong>，根因第 1 章排序契约 + 第 4 章：索引先取固定 <code>ef_search</code> 候选、<code>WHERE</code> 后筛，命中率低就筛没了。解法：开 <code>hnsw.iterative_scan = relaxed_order</code>（或对该租户建 partial index）。<strong>症状二（逐周下降）= 召回腐烂</strong>，根因第 3 章：churn 在图里堆死节点。解法：<code>REINDEX CONCURRENTLY</code> + 调激进 autovacuum。两者同形（结果变少）但一个在<em>查询期</em>、一个在<em>索引寿命</em>。</li>
+          <li><strong>B-tree 精确排序</strong>。命中仅 0.3%（极少行），精确算距离又快又准、无近似误差，planner 走 B-tree 是对的。iterative scan 会一路扫到 <code>max_scan_tuples</code> 仍可能补不够；partial index 对 0.3% 散落的行维护不起、且若 tenant 值很多则不可扩展。</li>
+          <li>① 查询带 <code>DESC</code>（索引只升序）；② 没有 <code>LIMIT</code>（要求全量有序，扫表更便宜）；③ opclass 与查询运算符不匹配；④ 0.8.0 前的成本误估在复杂查询里退回 Seq Scan；⑤ 表太小。其中<strong>⑤（小表）根本不是 bug</strong>——几百行暴力算比走图快，planner 选 Seq Scan 正确。诊断统一用 <code>EXPLAIN</code>。</li>
+          <li><strong>加内存</strong>：治标，把图勉强塞回 RAM，但 5 千万还会继续涨、成本高。<strong>换 halfvec</strong>：把图体积砍半（2 字节/分量），多数情况召回损失 &lt;1%，能把"放得下 RAM"的天花板推高一倍。<strong>StreamingDiskANN</strong>：最治本——它把图放 SSD、只在内存留压缩副本做搜索，本就不受"图必须进 RAM"约束。规模继续涨时只有它不撞墙。</li>
+          <li><strong>团队一继续 pgvector</strong>：数据已在 PG、2 千万在舒适区、查询都带关系过滤（pgvector + 关系过滤正是它的主场）、写入中等。<strong>团队二该换</strong>（pgvectorscale 或专用库）：8 亿向量远超 pgvector 单机 HNSW 的舒适区、纯向量热路径让向量延迟成为瓶颈、又不靠关系过滤——这正是 StreamingDiskANN / 专用库的主场。判断维度：数据量级、是否带关系过滤、向量延迟是否是热路径、churn 率。</li>
+        </ol>
+      </details>
+
+      <footer class="references">
+        <h3>回头复习</h3>
+        <ul>
+          <li>概念层卡壳 → <a href="01-model.html">01 数据模型与排序契约</a></li>
+          <li>原理层卡壳 → <a href="02-index-build.html">02 索引构建</a> · <a href="03-mvcc-lifecycle.html">03 MVCC 生命周期</a></li>
+          <li>判别层卡壳 → <a href="04-filtering.html">04 带过滤的检索</a> · <a href="05-landscape.html">05 选型与前沿</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-landscape.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 选型与前沿</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到 →</span>
+          <span class="title">00 · 起点 · 概念地图</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#concept" data-toc-target="concept">概念层 · 01</a></li>
+        <li><a href="#principle" data-toc-target="principle">原理层 · 02·03</a></li>
+        <li><a href="#discrimination" data-toc-target="discrimination">判别层 · 跨章</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

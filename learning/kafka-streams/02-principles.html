@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 原理 · Kafka Streams 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html" class="current">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>原理：状态、再平衡、窗口、Join、EOS 怎么工作</h1>
+        <p class="recap">上一章把 Streams 框定为<a href="01-concepts.html#library">一个跑在消费组之上的库</a>——task=分区、缩放走再平衡、状态有本地副本但真相源是一条 changelog 日志。这章把六个机制拆开看：状态到底怎么存怎么恢复、再平衡如何搬动有状态 task、repartition topic 何时被偷偷建出来、窗口靠什么时钟推进、四种 join 各自的代价、EOS 用一个事务包住了什么。每个机制都配一张备选方案对比表——看清"为什么是这个设计"比记住 API 更值钱。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>本地 RocksDB 是读缓存，compacted changelog 才是真相源；恢复=回放，standby=保温</li>
+          <li>有状态 task 在再平衡里被搬走时要重建状态——这是缩放卡顿的根因，不是 bug</li>
+          <li>改 key 的算子给下游埋了一次 produce→re-consume 往返，repartition topic 是隐藏成本</li>
+          <li>stream-time 由记录的最大时间戳驱动，只在有数据到达时前进——空闲分区会冻结窗口</li>
+          <li>四种 join 的共分区要求与逃生口（GlobalKTable / 外键 join）</li>
+          <li>EOS v2 用一个 Kafka 事务绑定 offset 提交+状态写+输出，边界止于 Kafka 集群</li>
+        </ul>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.1 状态存储
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="state-store"><span class="num">2.1</span><span>状态存储：RocksDB 是缓存，changelog 是真相</span></h2>
+
+      <p class="one-liner">有状态算子把状态写进本地 RocksDB，同时每次 put 追加进一条 compacted changelog topic——故障转移靠回放这条日志重建。</p>
+
+      <p>一个有状态算子（<code>aggregate</code> / <code>count</code> / <code>reduce</code> / 窗口 / join）需要一块跨记录存活的内存。Streams 默认给它一个嵌入式 <strong>RocksDB</strong> 实例：一个 LSM-tree 的本地键值库，落盘到 task 的状态目录，所以进程重启后目录还在、状态不丢。RocksDB 前面再挂一个小的写回缓存（record cache），把同一 key 的连续更新合并后再下沉，减少写放大。但本地盘会随实例一起消失——容器被调度走、磁盘坏掉、task 被再平衡搬到别的实例，本地 RocksDB 就没了。所以每次 put 还会<strong>同步</strong>追加一条记录到一个内部 <strong>changelog topic</strong>（命名 <code>&lt;application.id&gt;-&lt;store-name&gt;-changelog</code>，配置为 log-compacted——每个 key 只保留最新值 + tombstone）。这条日志才是状态的<strong>真相源</strong>：RocksDB 丢了可以从零回放 changelog 重建，changelog 丢了 RocksDB 就成了孤儿。这正是<a href="01-concepts.html#duality">流表对偶</a>落到工程上的样子——table 是 changelog 的物化视图，所以 table 永远可以从日志重新长出来。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="状态存储、changelog topic 与 standby 副本的关系">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 左列标签 -->
+          <text x="118" y="34" text-anchor="middle" class="edge-label" font-weight="700">实例 A（owner）</text>
+          <text x="600" y="34" text-anchor="middle" class="edge-label" font-weight="700">实例 B（standby）</text>
+
+          <!-- 实例 A: StreamThread -->
+          <rect x="40" y="52" width="156" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="118" y="73" text-anchor="middle" class="node-label">StreamThread</text>
+          <text x="118" y="91" text-anchor="middle" class="edge-label">处理记录</text>
+
+          <!-- 实例 A: 本地 RocksDB -->
+          <rect x="40" y="158" width="156" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="118" y="182" text-anchor="middle" class="node-label">本地 RocksDB</text>
+          <text x="118" y="200" text-anchor="middle" class="edge-label">读缓存 / 落盘</text>
+
+          <!-- StreamThread -> RocksDB (put) -->
+          <line x1="118" y1="102" x2="118" y2="158" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="118" y="134" text-anchor="middle" class="edge-label">put</text>
+
+          <!-- 中央 changelog topic（真相源，朱红） -->
+          <rect x="278" y="150" width="164" height="74" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="178" text-anchor="middle" class="node-label-accent">changelog topic</text>
+          <text x="360" y="198" text-anchor="middle" class="edge-label">compacted</text>
+          <text x="360" y="214" text-anchor="middle" class="branch-label">真相源</text>
+
+          <!-- RocksDB -> changelog（每 put 写，朱红） -->
+          <line x1="196" y1="187" x2="278" y2="187" class="diagram-accent" marker-end="url(#ar-verm)"/>
+          <text x="237" y="178" text-anchor="middle" class="edge-label">每 put 写</text>
+
+          <!-- changelog -> 实例 B standby（尾随） -->
+          <line x1="442" y1="187" x2="524" y2="187" class="diagram-soft" marker-end="url(#ar-ink)"/>
+          <text x="483" y="178" text-anchor="middle" class="edge-label">尾随</text>
+
+          <!-- 实例 B: standby RocksDB -->
+          <rect x="524" y="158" width="156" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="602" y="182" text-anchor="middle" class="node-label">standby 副本</text>
+          <text x="602" y="200" text-anchor="middle" class="edge-label">保温的 RocksDB</text>
+
+          <!-- 故障转移：changelog -> 重建（虚线下行回放） -->
+          <rect x="278" y="296" width="164" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="320" text-anchor="middle" class="node-label">新 owner 重建</text>
+          <text x="360" y="338" text-anchor="middle" class="edge-label">回放 changelog</text>
+          <line x1="360" y1="224" x2="360" y2="296" class="diagram-accent" marker-end="url(#ar-verm)"/>
+          <text x="360" y="263" text-anchor="middle" class="branch-label">故障转移</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>本地 RocksDB 只是缓存，每次 put 都写进 compacted changelog——后者才是真相源。<strong>注意</strong>：实例 A 挂掉后，新 owner 不是从 A 的盘恢复（盘没了），而是回放 changelog；standby 提前尾随同一条日志，把"分钟级回放"压成"秒级追尾"。</figcaption>
+      </figure>
+
+      <p>故障转移的代价由状态大小决定。一个多 GB 的状态从零回放 changelog 会<strong>阻塞启动数分钟</strong>——这是 Streams 运维里最常被点名的痛点（<a href="04-pitfalls.html#restore">04 章</a>专门讲它）。缓解手段是 <strong>standby 副本</strong>（<code>num.standby.replicas</code>）：另一个实例后台尾随同一条 changelog，把状态"保温"在本地 RocksDB 里；owner 挂掉时再平衡把 task 优先分给持有 standby 的实例，它只需追上最后一小段日志，恢复从分钟降到秒。Kafka 4.3 的 KIP-1035 进一步让 StateStore 自己管理 changelog 的已恢复 offset，重启后能跳过已重放的部分，恢复更快。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">word-count-store.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-state">复制</button>
+        </div>
+<pre id="cb-state"><code class="language-java">// 一个有状态 count：状态进本地 RocksDB，并由内部 changelog 撑腰
+KStream&lt;String, String&gt; lines = builder.stream("text-lines");
+KTable&lt;String, Long&gt; counts = lines
+    .flatMapValues(v -&gt; Arrays.asList(v.toLowerCase().split("\\W+")))
+    .groupBy((key, word) -&gt; word)            // 改 key → 触发重分区（见 §2.3）
+    .count(Materialized.&lt;String, Long&gt;as(    // 物化为一个具名状态存储
+        Stores.persistentKeyValueStore("word-counts")));
+// 这块状态对应的内部 topic：
+//   &lt;application.id&gt;-word-counts-changelog   （compacted，真相源）
+</code></pre>
+      </div>
+      <div class="annotations">
+        <span class="line-ref">count(Materialized…)</span>把聚合结果物化进名为 <code>word-counts</code> 的 RocksDB 存储，Streams 同时为它建一条 compacted changelog topic；这条 topic 的 retention 必须足够长，否则压缩后丢的就是真相。
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 状态放哪：远程状态库 vs 本地 RocksDB + changelog</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>远程状态库（Redis / Cassandra / 外部 KV）</td>
+            <td>状态与计算解耦，实例无盘、再平衡不用搬状态</td>
+            <td>每次 get/put 走一跳网络（毫秒级 vs 本地亚毫秒），热路径吞吐塌方；还要单独运维一套 HA 集群、自己解决一致性</td>
+          </tr>
+          <tr>
+            <td>纯内存状态（无落盘、无 changelog）</td>
+            <td>最快，零磁盘、零外部 topic</td>
+            <td>进程一重启状态全丢，无法容错；状态超过堆就 OOM——只适合可重算的小状态</td>
+          </tr>
+          <tr class="selected">
+            <td>本地 RocksDB + compacted changelog</td>
+            <td>本地读亚毫秒、无逐条网络跳；changelog 复用 Kafka 已有的复制/HA，无需第二个数据库</td>
+            <td>选中：把"复制层"外包给 Kafka 自己——状态在哪算就在哪存，容错由日志兜底</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>带来的代价</h3>
+      <p>① <strong>恢复阻塞</strong>：多 GB 状态从零回放 changelog 会阻塞启动数分钟，无 standby 时每次再平衡都会触发。② <strong>写量翻倍</strong>：每次 put 既写本地 RocksDB 又写一条 changelog 记录，broker 端多承一份写入和存储。③ <strong>堆外内存</strong>：RocksDB 的 block cache 与 memtable 分配在 JVM 堆<strong>之外</strong>，<code>-Xmx</code> 管不住——容器内存按"堆 + RocksDB 缓存 + 余量"算，否则被 OOMKilled（<a href="04-pitfalls.html#resource">04 章资源陷阱</a>）。④ 版本化状态存储（KIP-889, 3.5 GA）给每个 key 存多版本 <code>(value, timestamp)</code> 以支持 <code>get(key, asOf)</code> 和正确的乱序处理，代价是更高的存储与写放大。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个实例持有 8GB 状态，没有配 standby 副本。它崩溃后被 Kubernetes 用一个全新 pod（空磁盘）拉起。新 pod 要多久才能开始处理新记录？如果改用持久卷（StatefulSet）让磁盘跨重启存活，会快多少？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>空盘启动必须从头回放整条 changelog 重建 8GB RocksDB——受 broker 读带宽和 RocksDB 写入速度限制，分钟级甚至更久，期间该 task 不处理任何新记录。这就是"再平衡卡顿数分钟"的来源。</p>
+          <p>持久卷让本地 RocksDB 跨重启存活：新 pod 挂回旧盘，状态目录还在，只需从 changelog 追上崩溃后那一小段增量，恢复降到秒级。这也是为什么 standby 副本（在别的实例保温）和持久卷（在本地保活）都能解同一个问题——它们都让"恢复"从"全量回放"退化成"追尾增量"。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.2 再平衡与缩放
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="rebalance-scaling"><span class="num">2.2</span><span>再平衡与缩放：消费组那套，外加搬状态的代价</span></h2>
+
+      <p class="one-liner">缩放就是消费组再平衡——task 在实例和线程间重新分配，但有状态 task 被搬走时要在新落点重建状态。</p>
+
+      <p>Streams 不自造调度器。每个 JVM 实例起 <code>num.stream.threads</code> 个 StreamThread，每个线程内嵌一个普通 consumer，全部以 <code>application.id</code> 作为 <code>group.id</code> 加入同一个<a href="../kafka/02-principles.html#rebalance">消费组</a>。<strong>task = 子拓扑输入 topic 的每个分区一个</strong>，所以 task 总数被最大输入分区数钉死、运行时不可改。加一个实例、某实例掉线、某线程死掉，都触发一次再平衡，把所有 task 在当前所有实例的所有线程间重新摊分。无状态 task 搬家几乎零成本——换个线程接着消费就行。有状态 task 不同：它在新落点没有本地 RocksDB，必须先<strong>回放 changelog 重建状态</strong>（或从 standby 追尾）才能处理，这段时间该分区的处理停滞。所以"缩放"在有状态拓扑里从来不是瞬时的——这是机制的必然代价，不是故障。</p>
+
+      <p>分配逻辑在哪算，是 4.x 的关键变化。经典协议（classic）由其中一个 client 当 group leader、在客户端计算 task 分配；<strong>KIP-1071 Streams 再平衡协议</strong>把分配移到 <strong>broker 端的 group coordinator</strong>，<strong>4.2 起新集群默认开</strong>（需 broker + client 都 ≥ 4.2，feature <code>streams.version=1</code>）。broker 端分配能拿到全局视图做更稳的 task 放置与 standby 调度，但<strong>仍不支持</strong> static membership、运行中在线把 classic 协议迁到 streams 协议、以及运行中修改 topology。</p>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 再平衡协议：classic（客户端分配）vs KIP-1071（broker 端分配）</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>自造专用调度器（独立 master 分配 task）</td>
+            <td>可针对流处理做最优放置</td>
+            <td>得自己实现成员发现、故障检测、再平衡、与 EOS 事务的协同——把消费组已经解决的问题重造一遍</td>
+          </tr>
+          <tr>
+            <td>classic 协议（client 端 leader 分配）</td>
+            <td>复用消费组，零额外 broker 改动；老集群唯一选项</td>
+            <td>分配在客户端算，leader 只有局部视图；大消费组的 join/sync 来回开销与"停顿式"再平衡更明显</td>
+          </tr>
+          <tr class="selected">
+            <td>KIP-1071（broker 端 group coordinator 分配）</td>
+            <td>broker 全局视图、更稳的 task/standby 放置、再平衡更平滑；4.2 新集群默认</td>
+            <td>选中（新集群）：把分配收归 broker；代价是仍不支持 static membership 与在线协议迁移</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>带来的代价</h3>
+      <p>① <strong>有状态搬迁成本</strong>：每次再平衡，被重分配的有状态 task 都要重建状态——无 standby 时这就是分钟级停顿。② <strong>并行上限 = 最大输入分区数</strong>：<code>num.stream.threads</code> 把线程提到 task 数能用满单实例，再加实例才有意义；线程/实例超过 task 数则纯闲置，要更多并行只能重分区输入 topic（破坏性操作）。③ <strong>无 static membership</strong>（KIP-1071 下）：滚动重启 / pod 漂移更容易触发全量再平衡，靠 standby 副本和持久卷缓解，而非靠 <code>group.instance.id</code> 跳过再平衡。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>输入 topic 有 6 个分区。部署 4 个实例、每个 <code>num.stream.threads=3</code>，共 12 个线程。能跑多少个并行 task？多出来的线程在干什么？要再提并行度，唯一的办法是什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>task 数 = 最大输入分区数 = 6，被钉死。12 个线程里只有 6 个各领一个 task，另外 6 个线程<strong>空闲</strong>（持有 consumer 但分不到 task）。加机器、加线程都越不过 6 这个天花板。</p>
+          <p>唯一提并行度的办法是把输入 topic 重分区到更多分区（比如 12），让 task 数随之上去——但这是破坏性操作（改变 key→分区映射、打乱既有顺序与状态归属），通常意味着重建拓扑。这就是为什么分区数要在设计阶段按峰值并行需求预留。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.3 重分区
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="repartition"><span class="num">2.3</span><span>重分区：改 key 就给下游埋了一次往返</span></h2>
+
+      <p class="one-liner">改 key 的算子置一个"需重分区"标志，下游第一个 stateful 算子自动建一条 repartition topic 把数据按新 key 重洗。</p>
+
+      <p>聚合和等值 join 要求"相同 key 的记录落在同一个 task/分区"（共分区）。但改 key 的操作——<code>selectKey</code> / <code>map</code> / <code>flatMap</code> / <code>groupBy</code>——会让记录的新 key 与它当前所在分区不再一致。Streams 的处理方式：这些算子只是<strong>置一个"需重分区"标志</strong>，自己不立即重洗；当下游出现第一个依赖 key 的 stateful 算子（<code>aggregate</code> / <code>count</code> / <code>join</code>）时，Streams 在它前面<strong>自动插入</strong>一条内部 <code>&lt;application.id&gt;-&lt;name&gt;-repartition</code> topic：上游把改了 key 的记录 produce 进这条 topic（按新 key 分区），下游再把它<strong>重新消费</strong>进来——此时相同新 key 必然同分区，聚合/join 才正确。<code>selectKey</code> 是 <strong>lazy</strong> 的：单独用它（后面没有依赖 key 的算子）不会建任何 topic，只有真正需要共分区的下游才把重洗物化出来。这是"默认正确"的设计——用户不必手动保证共分区，代价是这条往返被藏在拓扑里。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="改 key 触发 repartition topic 的额外往返">
+          <defs>
+            <marker id="ar-flow" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-flow-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="14" y="70" class="edge-label" font-weight="700">上游</text>
+          <text x="14" y="186" class="edge-label" font-weight="700">下游</text>
+
+          <!-- source -->
+          <rect x="60" y="44" width="120" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="120" y="68" text-anchor="middle" class="node-label">source 流</text>
+          <text x="120" y="86" text-anchor="middle" class="edge-label">key=A</text>
+
+          <!-- selectKey -->
+          <line x1="180" y1="69" x2="222" y2="69" class="diagram-ink" marker-end="url(#ar-flow)"/>
+          <rect x="222" y="44" width="130" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="287" y="68" text-anchor="middle" class="node-label">selectKey</text>
+          <text x="287" y="86" text-anchor="middle" class="edge-label">改 key→B（lazy）</text>
+
+          <!-- selectKey -> repartition topic (produce, 朱红下行) -->
+          <line x1="287" y1="94" x2="287" y2="148" class="diagram-accent" marker-end="url(#ar-flow-v)"/>
+          <text x="333" y="124" text-anchor="middle" class="edge-label">produce</text>
+
+          <!-- repartition topic（朱红强调，额外往返） -->
+          <rect x="200" y="148" width="174" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="287" y="172" text-anchor="middle" class="node-label-accent">repartition topic</text>
+          <text x="287" y="190" text-anchor="middle" class="edge-label">按新 key 分区</text>
+
+          <!-- repartition -> aggregate (re-consume, 朱红上行右移；加宽间隙避免标签被框裁切) -->
+          <line x1="374" y1="177" x2="456" y2="177" class="diagram-accent" marker-end="url(#ar-flow-v)"/>
+          <text x="415" y="166" text-anchor="middle" class="edge-label">re-consume</text>
+
+          <!-- aggregate -->
+          <rect x="456" y="148" width="150" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="531" y="172" text-anchor="middle" class="node-label">aggregate</text>
+          <text x="531" y="190" text-anchor="middle" class="edge-label">同 key 已同分区</text>
+
+          <!-- 往返标注 -->
+          <text x="531" y="68" text-anchor="middle" class="branch-label">produce→re-consume</text>
+          <text x="531" y="86" text-anchor="middle" class="edge-label">一次额外往返</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>改 key 的算子（selectKey）不立即重洗，而是给下游 aggregate 埋了一条 repartition topic——数据先 produce 出去、再 re-consume 回来。<strong>注意</strong>：这一次 broker 往返是延迟与磁盘成本的来源；<code>selectKey</code> 单独用不建 topic，是下游的 aggregate 把它物化出来的。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 2.3 · 共分区怎么保证：强制用户共分区 vs 自动 repartition</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>强制用户事先共分区（改 key 后 join 直接报错，要用户手动重发到对齐的 topic）</td>
+            <td>零隐藏 topic，成本完全显式，工程师清楚每一跳</td>
+            <td>把共分区的正确性责任全压给用户，极易出错；漏对齐就静默错或拓扑失败，DSL 的"声明式"承诺破产</td>
+          </tr>
+          <tr>
+            <td>每个改 key 的算子都立即重洗（不 lazy）</td>
+            <td>语义直白，所见即所建</td>
+            <td><code>selectKey</code> 后若没有依赖 key 的下游，重洗纯属浪费；会凭空多出大量无用 repartition topic</td>
+          </tr>
+          <tr class="selected">
+            <td>改 key 置标志 + 下游 stateful 算子自动按需 repartition（lazy）</td>
+            <td>默认正确，用户不必手动共分区；只在真正需要时才物化重洗</td>
+            <td>选中：正确性默认兜底；代价是 produce→re-consume 往返被藏进拓扑，成本不显眼</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>带来的代价</h3>
+      <p>① <strong>一次完整往返</strong>：每个被物化的重分区点，每条记录都要 produce 进 repartition topic 再 re-consume 回来——多一份网络、broker 磁盘、序列化/反序列化和端到端延迟。② <strong>隐藏 topic 成本</strong>：这些 topic 不在你的代码里，但占 broker 存储、计入分区配额，排查时容易遗漏。③ <strong>能省则省</strong>：不改 key 的操作（<code>mapValues</code> / <code>filter</code>）和 <code>groupByKey</code>（不改 key）不触发重分区；优先它们而非 <code>map</code> / <code>groupBy</code>。用 <code>topology.describe()</code> 打印拓扑、数清实际建了几条 repartition topic（<a href="04-pitfalls.html#resource">04 章</a>）。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>下面两段代码，哪段会建出 repartition topic？<code>stream.selectKey((k,v)-&gt;v.userId()).to("out")</code> 还是 <code>stream.selectKey((k,v)-&gt;v.userId()).groupByKey().count()</code>？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>第一段<strong>不会</strong>。<code>selectKey</code> 是 lazy 的——它只置"需重分区"标志，后面接的是 <code>to()</code>（sink，不依赖 key 共分区），没有任何 stateful 算子来物化重洗，所以不建 topic。</p>
+          <p>第二段<strong>会</strong>。<code>groupByKey().count()</code> 是依赖 key 的 stateful 算子，它需要"相同 userId 落同分区"，于是 Streams 在它前面插入 repartition topic，把 selectKey 改过 key 的记录重洗一遍。要点：建不建 topic 取决于<strong>下游是否真的需要共分区</strong>，不取决于你改没改 key。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.4 窗口与时间
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="windowing-time"><span class="num">2.4</span><span>窗口与时间：stream-time 由数据推进，不是墙上时钟</span></h2>
+
+      <p class="one-liner">窗口按事件时间切分，由 stream-time（每 task 见过的最大时间戳）驱动关闭——它只在有记录到达时前进。</p>
+
+      <p>窗口把无界流切成有界的桶来聚合，四种形状：<strong>tumbling 滚动</strong>（固定大小、不重叠，一条记录进一个窗）、<strong>hopping 跳跃</strong>（固定大小 + 更小步进 → 窗口重叠 → 一条记录进多个窗）、<strong>sliding 滑动</strong>（按记录两两之间的时间差成对落窗）、<strong>session 会话</strong>（按活动间隙合并，间隙超阈值就开新会话）。关键不在形状，而在驱动它们关闭的时钟。Streams 默认用 <strong>event-time</strong>（记录自带的时间戳，由 <code>TimestampExtractor</code> 提取），不是 <strong>processing-time</strong>（记录被处理的墙上时间），也不是 <strong>ingestion-time</strong>（写入 broker 的时间）。窗口由 <strong>stream-time</strong> 推进：stream-time = 这个 task 到目前为止见过的<strong>最大记录时间戳</strong>，单调不减。它只在<strong>有记录到达</strong>时前进——没有新数据，stream-time 就<strong>冻结</strong>，依赖它关闭的窗口永远不发结果。这是 event-time 换来可重放确定性（同样的输入重跑得到同样的窗口结果，与运行时刻无关）所付的代价。</p>
+
+      <p>迟到事件由 <strong>宽限期 grace</strong> 控制：窗口在 <code>windowEnd</code> 逻辑上结束后，还允许 stream-time 推进到 <code>windowEnd + grace</code> 之前到达的迟到记录更新该窗结果；一旦 stream-time 越过 <code>windowEnd + grace</code>，更晚到的记录被<strong>静默丢弃</strong>（只计入 dropped-records 指标，不报错、不进死信）。状态存储的 retention 必须 ≥ 窗口大小 + grace，否则窗口还没关、状态先被清掉。若要"每个窗口只发一个最终结果"而非每次更新都发一条中间结果，用 <strong><code>suppress(untilWindowCloses)</code></strong>（KIP-328）把中间更新压住、只在窗口关闭时发一次。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="事件流、stream-time 推进与窗口 grace 内外的迟到事件">
+          <defs>
+            <marker id="ar-tl" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- 时间轴 -->
+          <line x1="50" y1="150" x2="690" y2="150" class="diagram-ink" marker-end="url(#ar-tl)"/>
+          <text x="690" y="172" text-anchor="end" class="edge-label">event-time →</text>
+
+          <!-- 窗口 [t0,t1) 区间底纹 -->
+          <rect x="150" y="92" width="240" height="58" rx="4" class="diagram-ink node-fill"/>
+          <text x="270" y="116" text-anchor="middle" class="node-label">窗口 [t0, t1)</text>
+          <text x="270" y="134" text-anchor="middle" class="edge-label">聚合桶</text>
+
+          <!-- grace 区间（窗口右侧，虚线框） -->
+          <rect x="390" y="92" width="110" height="58" rx="4" class="diagram-soft node-fill"/>
+          <text x="445" y="120" text-anchor="middle" class="edge-label">grace</text>
+          <text x="445" y="137" text-anchor="middle" class="edge-label">宽限期</text>
+
+          <!-- 时间刻度 -->
+          <line x1="150" y1="145" x2="150" y2="155" class="diagram-ink"/>
+          <text x="150" y="186" text-anchor="middle" class="edge-label">t0</text>
+          <line x1="390" y1="145" x2="390" y2="155" class="diagram-ink"/>
+          <text x="390" y="186" text-anchor="middle" class="edge-label">t1（windowEnd）</text>
+          <line x1="500" y1="145" x2="500" y2="155" class="diagram-accent"/>
+          <text x="500" y="186" text-anchor="middle" class="branch-label">t1+grace</text>
+
+          <!-- 事件点（在窗口内，纳入） -->
+          <circle cx="210" cy="150" r="5" fill="#0A0A0A"/>
+          <text x="210" y="74" text-anchor="middle" class="edge-label">e1 纳入</text>
+          <line x1="210" y1="92" x2="210" y2="142" class="diagram-soft"/>
+
+          <!-- 迟到事件在 grace 内（纳入） -->
+          <circle cx="450" cy="150" r="5" fill="#0A0A0A"/>
+          <text x="450" y="74" text-anchor="middle" class="edge-label">迟到·grace 内</text>
+          <text x="450" y="58" text-anchor="middle" class="branch-label">纳入</text>
+          <line x1="450" y1="92" x2="450" y2="142" class="diagram-soft"/>
+
+          <!-- 迟到事件在 grace 外（静默丢弃） -->
+          <circle cx="600" cy="150" r="5" fill="#B73B2F"/>
+          <text x="600" y="74" text-anchor="middle" class="edge-label">迟到·grace 外</text>
+          <text x="600" y="58" text-anchor="middle" class="branch-label">静默丢弃</text>
+          <line x1="600" y1="118" x2="600" y2="142" class="diagram-accent"/>
+
+          <!-- stream-time 标注 -->
+          <text x="270" y="232" text-anchor="middle" class="edge-label">stream-time = 见过的最大时间戳，只随记录到达前进</text>
+          <text x="270" y="250" text-anchor="middle" class="edge-label">无新数据 → stream-time 冻结 → 窗口不关</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>窗口由 stream-time（见过的最大事件时间戳）推进；grace 内的迟到事件被纳入，越过 t1+grace 的被静默丢弃。<strong>注意</strong>：是"是否有更晚的记录把 stream-time 推过 t1+grace"决定迟到记录的去留，而不是墙上时钟——所以一个空闲分区会冻结 stream-time，让窗口永远不关、结果永远不发。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 2.4 · 窗口时钟：processing-time vs event-time</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>processing-time（按记录被处理的墙上时间分窗）</td>
+            <td>实现简单，时间永远向前、永不冻结，低延迟出结果</td>
+            <td>结果不可重放——同一份数据重跑因机器/时刻不同得到不同窗口归属；网络抖动、回填历史数据会把记录算进错误的窗</td>
+          </tr>
+          <tr>
+            <td>ingestion-time（按写入 broker 的时间分窗）</td>
+            <td>比 processing-time 稳定，时间在 broker 端钉死</td>
+            <td>仍不反映事件真实发生时刻；上游缓冲/批量写入会扭曲时间；回填依旧错</td>
+          </tr>
+          <tr class="selected">
+            <td>event-time + stream-time（按事件自带时间戳分窗）</td>
+            <td>可重放、确定性——同输入同结果，与运行时刻无关；正确处理乱序与回填</td>
+            <td>选中：正确性优先；代价是空闲/低流量分区会冻结 stream-time，窗口不关、结果不发</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>带来的代价</h3>
+      <p>① <strong>空闲分区冻结</strong>：stream-time 只随记录前进，低流量或空闲分区让窗口迟迟不关、结果延迟甚至永不发出——event-time 的根本代价（<a href="04-pitfalls.html#correctness">04 章</a>）。② <strong>suppress 的内存压力</strong>：<code>suppress</code> 把未关窗口的中间状态缓在内存，缓冲满时行为取决于配置——<code>emitEarlyWhenFull</code> 会在内存压力下<strong>提前发出非最终结果</strong>（破坏"只发最终"的承诺），要严格"最终"必须用 <code>shutDownWhenFull</code>（宁可崩也不发中间结果）。③ <strong>retention 约束</strong>：窗口状态与 changelog 的 retention 必须 ≥ 窗口 + grace，配小了窗口没关状态先没。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 5 分钟 tumbling 窗口 + 1 分钟 grace。某分区在 10:00 收到最后一条记录后就没有任何新数据进来了。覆盖 09:55–10:00 的那个窗口，结果会在什么时候发出？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>它<strong>不会</strong>自动发出（至少在该分区有新记录之前）。窗口要在 stream-time 推进到 <code>windowEnd + grace</code>（即 10:01）之后才关闭，而 stream-time = 该 task 见过的最大记录时间戳。10:00 之后没有任何记录到达，stream-time 就停在 10:00，永远到不了 10:01，窗口永远不关、结果永远不发。</p>
+          <p>这正是 event-time 的代价：墙上时间走到 10:05 也没用，Streams 不看墙钟。要让低流量场景的窗口能关，得靠业务侧持续有数据、或用 processing-time 兜底（牺牲可重放）、或周期性灌入 heartbeat 记录把 stream-time 顶上去。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.5 join
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="joins"><span class="num">2.5</span><span>Join：四种语义，各自的共分区要求与逃生口</span></h2>
+
+      <p class="one-liner">四种 join 对应四种数据形态，等值 join 要求两侧共分区，GlobalKTable 与外键 join 是免共分区的逃生口。</p>
+
+      <p>join 把两条流/表按 key 关联，语义由两侧是<a href="01-concepts.html#kstream-ktable">流还是表</a>决定。<strong>KStream-KStream</strong>=窗口化 join：两侧记录都入状态存储缓冲，在窗口 + grace 内每出现一对匹配就发一条——因为两条都是无界流，必须给一个时间窗口才能界定"什么算同时发生"。<strong>KStream-KTable</strong>=查表 join：流记录到达时探查表的<strong>当前</strong>值，表自己的更新不回头重新触发已处理的流记录——典型用于流数据打维表标签。<strong>KTable-KTable</strong>=维护式 join：任一侧更新都重新计算并发出新结果，维护一个始终最新的连接视图。<strong>外键 join</strong>（KIP-213, 2.4）：左表按 value 里提取的外键关联右表主键，Streams 在背后建<strong>两个隐藏 topic</strong>（subscription + response）加一个复合 RocksDB 存储来重新按外键路由——这是唯一不要求左侧用主键 join 的表-表 join。</p>
+
+      <p><strong>共分区要求</strong>是等值 join 的硬约束：两侧必须<strong>相同分区数 + 相同分区方式</strong>（同一个 producer 分区器、同样的 key），相同 key 才会落到同一个 task。分区数不一致，Streams 在<strong>启动时直接校验失败</strong>；分区方式不一致（数量碰巧相同但分区器不同），Streams 不报错却<strong>静默丢匹配</strong>——这是最难排查的 join 故障。Streams 会对改过 key 的一侧自动重分区来对齐，但两个独立来源 topic 的分区方式得你自己保证。<strong>GlobalKTable</strong> 是逃生口：它在每个实例<a href="01-concepts.html#kstream-ktable">全量加载所有分区</a>，所以任何 key 本地都能查到，<strong>免共分区</strong>，但代价是每实例一份全量副本（磁盘 + 内存 + 启动 bootstrap 延迟），只配小而慢变的维表；外键 join 同样免共分区（它自己用隐藏 topic 重路由）。</p>
+
+      <table class="compare-table">
+        <caption>表 2.5 · 维表关联：共分区 join vs GlobalKTable join</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>共分区的 KStream-KTable join（两侧对齐分区数 + 分区方式）</td>
+            <td>每实例只持有本分区那部分维表，内存/磁盘省；维表可大</td>
+            <td>必须保证两侧严格共分区——数量不符启动失败、方式不符静默丢匹配；维表来自别处时对齐成本高且易错</td>
+          </tr>
+          <tr>
+            <td>把维表 join 改成外部查询（每条流记录查一次远程 DB/缓存）</td>
+            <td>维表无需进 Streams，更新即时可见</td>
+            <td>每条记录一跳网络，吞吐塌方且引入外部依赖；丢了 Streams"本地状态"的全部优势</td>
+          </tr>
+          <tr class="selected">
+            <td>GlobalKTable join（维表每实例全量副本）</td>
+            <td>免共分区、任意 key 本地可查、用流记录的任意字段关联；最省心</td>
+            <td>选中（小维表）：拿全量副本换掉共分区约束；代价是每实例全量内存/磁盘 + 启动 bootstrap，仅限小而慢变的维表</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>带来的代价</h3>
+      <p>① <strong>静默无输出</strong>：未共分区时（分区方式不一致）零输出且无任何报错——join "不工作"却查不出原因，必须核对两侧分区数 + 分区器（<a href="04-pitfalls.html#correctness">04 章</a>）。② <strong>外键 join 的内部 topic</strong>：FK join 额外建 subscription + response 两条内部 topic 加复合存储，运维面与存储成本随之上升。③ <strong>KStream-KStream 缓冲整窗</strong>：两侧记录在窗口 + grace 内都要入状态存储，宽窗 + 高流量 = 大状态、大 changelog。④ <strong>GlobalKTable 全量代价</strong>：每实例一份完整副本，维表一大就磁盘/内存爆炸、启动 bootstrap 拖慢。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>两条 topic 都是 6 个分区，一个 KStream-KTable join 上线后<strong>零输出</strong>，日志里没有任何报错。分区数都对得上，问题嫌疑最大的出在哪？换成 GlobalKTable 为什么能绕过？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>嫌疑最大的是<strong>分区方式不一致</strong>：两条 topic 由不同上游写入、用了不同的 producer 分区器（比如一边按字符串 hash、一边按自定义逻辑），导致相同 key 落到不同分区号。Streams 启动时只校验分区<strong>数量</strong>（这里都是 6，过关），不校验分区<strong>方式</strong>，于是相同 key 永远不相遇，匹配全部丢失——零输出且零报错。</p>
+          <p>GlobalKTable 绕过是因为它在每个实例<strong>全量加载所有分区</strong>：不管流记录的 key 经哪种分区方式落在哪，本地都有完整维表可查，共分区约束直接不适用。代价就是那份全量副本——所以它只对小维表成立。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.6 EOS v2
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="eos"><span class="num">2.6</span><span>EOS v2：一个事务包住 offset、状态、输出</span></h2>
+
+      <p class="one-liner">exactly_once_v2 把 offset 提交、状态 changelog 写、输出 produce 绑进一个 Kafka 事务，下游 read_committed 只读已提交。</p>
+
+      <p>read-process-write 循环里有三件事必须同生共死，否则就重复或丢数：消费位移的<strong>提交</strong>、状态的 <strong>changelog 写</strong>、结果的<strong>输出 produce</strong>。任意两件之间崩溃都会破坏 exactly-once——比如输出发了但 offset 没提交，重启后重新处理同一批，输出就重复。<code>processing.guarantee=exactly_once_v2</code> 用一个 <strong>Kafka 事务</strong>把这三者原子化：要么三件一起提交、要么一起回滚。下游消费者设 <code>isolation.level=read_committed</code> 就只读已提交的记录、自动跳过被回滚（aborted）的部分。v2 的关键改进（KIP-447）是<strong>一个 StreamThread 一个 producer</strong> 覆盖该线程的所有 task；v1（<code>exactly_once</code>，已淘汰）是<strong>一个 task 一个 producer</strong>，高分区数下 producer 数量爆炸、内存与 broker 端事务协调开销失控。这就是为什么 v2 是 3.0 起的默认、v1 被弃用。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">eos-config.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="cb-eos">复制</button>
+        </div>
+<pre id="cb-eos"><code class="language-properties"># 生产者侧（Streams 应用）
+processing.guarantee=exactly_once_v2
+# EOS 下 Streams 把提交间隔默认改成 100ms（非 EOS 是 30000ms）——
+# 这才是"开了 EOS 就变慢"的真因，不是事务本身的固定开销
+commit.interval.ms=100
+# EOS 需要事务，至少 3 个 broker（事务状态 topic 副本因子默认 3）
+
+# 消费者侧（下游应用）：不设这个，EOS 形同虚设
+isolation.level=read_committed
+</code></pre>
+      </div>
+      <div class="annotations">
+        <span class="line-ref">commit.interval.ms</span>EOS 把它从 30000ms 砍到 100ms——提交越频繁、未提交批越小、端到端延迟越低，但事务开销和吞吐损失随之上升；调它就是在延迟和吞吐间权衡。
+        <span class="line-ref">isolation.level</span>下游不设 <code>read_committed</code> 就会读到未提交甚至已回滚的记录，上游的 EOS 白做。
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.6 · 精确一次怎么做：at-least-once + 消费侧幂等 vs EOS v2</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>at-least-once + 下游按业务键幂等去重</td>
+            <td>无事务开销、吞吐高；不依赖 ≥3 broker</td>
+            <td>每个下游都得自己实现去重（去重表 / 幂等 upsert），漏一处就重复；对"状态聚合"这类内部计算无能为力——状态会被重放放大</td>
+          </tr>
+          <tr>
+            <td>eos-v1（exactly_once，一 task 一 producer）</td>
+            <td>同样的端到端原子语义</td>
+            <td>已淘汰：高分区数下 producer 数量随 task 爆炸，内存与事务协调开销失控</td>
+          </tr>
+          <tr class="selected">
+            <td>exactly_once_v2（一线程一 producer，KIP-447）</td>
+            <td>offset+状态+输出 原子提交，状态聚合也精确一次；producer 数只随线程数增长</td>
+            <td>选中：3.0 起默认；代价是提交延迟（commit.interval.ms 默认 100ms）+ 仅限单 Kafka 集群内、不覆盖外部副作用</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>带来的代价</h3>
+      <p>① <strong>延迟与吞吐</strong>：EOS 把 <code>commit.interval.ms</code> 默认从 30000ms 改到 100ms——这才是"开了 EOS 就变慢"的真因（更频繁提交 + read_committed 消费者 15–30% 吞吐下降），而非事务本身有多重。调大它换吞吐、调小换延迟（<a href="04-pitfalls.html#correctness">04 章</a>）。② <strong>边界止于 Kafka</strong>：事务只在<strong>单个 Kafka 集群内</strong>原子，<strong>不覆盖外部副作用</strong>——往 DB / HTTP / 发短信，事务回滚也撤不回，仍会重复。要端到端一致得上 outbox 模式（把外部写也变成 Kafka 写，由另一个消费者按幂等落地）。③ <strong>部署门槛</strong>：需要至少 3 个 broker（事务状态 topic 副本因子默认 3），下游必须配 <code>read_committed</code> 否则 EOS 形同虚设。这与<a href="../kafka/02-principles.html#delivery">主教程的投递语义</a>一脉相承——Streams 的 EOS 是消费组 + 事务在流处理上的封装，不是新机制。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 EOS v2 应用对每条记录的副作用是：写一条结果到输出 topic + 调一次外部支付 HTTP 接口。事务回滚（abort）后，输出 topic 那条记录消失了，但支付接口已经被调过。这条记录会怎样？problem 在哪、怎么修？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>输出 topic 的写入随事务回滚被撤销，下游 <code>read_committed</code> 消费者看不到它——这部分精确一次成立。但<strong>外部支付 HTTP 调用不在 Kafka 事务里</strong>，已经发生且无法回滚；事务重试时这条记录会被重新处理、支付接口被<strong>再调一次</strong>，造成重复扣款。</p>
+          <p>根因：EOS 的原子边界止于单个 Kafka 集群，外部副作用在边界之外。修法是 <strong>outbox 模式</strong>——处理时不直接调支付，而是把"待支付"事件写进输出 topic（这步在事务内，精确一次），由一个独立消费者读出后调支付接口，并对支付接口做<strong>幂等</strong>（按 event-id 去重），把"恰好一次的外部效果"交给幂等而非事务来保证。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §2.7 跨概念综合
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="end-to-end"><span class="num">2.7</span><span>串起来：一条记录在有状态聚合里的完整一生</span></h2>
+
+      <p>六个机制不是孤立的。把它们串在一个具体场景上看协同：一条订单事件进入一个 <strong>EOS v2</strong> 的有状态聚合拓扑（按用户 ID 累计消费额），从进入到被下游读到，依次穿过状态、重分区、提交、投递四道关。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 一条记录的旅程</span>
+        <p>① <strong>进入与重分区</strong>（§2.3）：订单事件以订单号为 key 进入；聚合要按用户 ID,于是 <code>groupBy(userId)</code> 改了 key，下游的 <code>aggregate</code> 触发一次 repartition——记录被 produce 进 repartition topic、再 re-consume 回来，此时相同用户 ID 已落同一 task。② <strong>更新 RocksDB + 写 changelog</strong>（§2.1）：聚合算子把该用户的累计额更新进本地 RocksDB，同一步把这次变更追加进 changelog topic。③ <strong>EOS 事务提交</strong>（§2.6）：到 <code>commit.interval.ms</code>（EOS 下 100ms）时，这条记录的<strong>输入 offset 提交 + changelog 写 + 输出 produce</strong> 被绑进同一个 Kafka 事务一起提交——三者同生共死。④ <strong>下游 read_committed 读</strong>（§2.6）：下游消费者只读已提交事务里的输出，跳过任何被回滚的部分，拿到精确一次的累计结果。⑤ <strong>若此刻实例崩溃</strong>（§2.1 + §2.2）：再平衡把这个有状态 task 搬到别的实例，新 owner 回放 changelog（或从 standby 追尾）重建该用户的累计额——因为 RocksDB 只是缓存、changelog 才是真相，状态精确恢复到最后一次提交的位置，不重不漏。</p>
+      </div>
+
+      <p>这条链解释了一个常被误解的现象：为什么"开了 EOS 的有状态聚合"在崩溃恢复后既不丢数也不重复算。不是因为某个魔法标志，而是因为<strong>状态的真相在 changelog、changelog 的写又被事务和 offset 提交绑在一起</strong>——恢复时回放到的状态，和已提交给下游的输出，永远对齐在同一个事务边界上。</p>
+
+      <!-- ════════════════════════════════════════════════════════
+           self-check
+           ════════════════════════════════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>为什么说本地 RocksDB 只是缓存、changelog 才是真相源？故障转移时新 owner 从哪里恢复状态，standby 副本把什么从"分钟"压成了"秒"？</li>
+          <li><code>selectKey</code> 被称为 lazy，是什么意思？什么时候它身后才真的冒出一条 repartition topic？为什么优先用 <code>groupByKey</code> 而非 <code>groupBy</code>？</li>
+          <li>stream-time 由什么驱动？为什么一个空闲分区会让窗口"永远不发结果"？这是 event-time 换来了什么而付的代价？</li>
+          <li>四种 join 里哪些要求共分区、哪些不要求？"分区数对得上但 join 零输出且无报错"嫌疑最大的原因是什么？</li>
+          <li>EOS v2 的事务到底包住了哪三件事？为什么说"开了 EOS 变慢"的真因是 <code>commit.interval.ms</code> 而不是事务本身？EOS 的原子边界到哪里为止？</li>
+          <li><strong>（跨机制综合）</strong>一条记录进入"EOS v2 + 按用户 ID 聚合"的拓扑，从进入到被下游 read_committed 读到，依次穿过哪些机制？如果在事务提交后、下游读到前实例崩溃，状态如何保证不重不漏地恢复？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>本地 RocksDB 随实例消失（重调度/坏盘/再平衡搬走就没了），而每次 put 都同步追加进 compacted changelog——后者跨实例持久，能从零重建 RocksDB，所以它才是真相源。故障转移时新 owner <strong>回放 changelog</strong> 重建状态（不是从旧实例的盘恢复，盘已不在）。standby 副本在另一实例后台尾随同一条 changelog 保温本地 RocksDB，接管时只需追上最后一小段增量，把全量回放（分钟）压成追尾（秒）。</li>
+            <li>lazy 指 <code>selectKey</code> 只置"需重分区"标志、自己不立即重洗也不建 topic。只有当下游出现真正依赖 key 共分区的 stateful 算子（aggregate/count/join）时，Streams 才在它前面物化出一条 repartition topic。<code>groupByKey</code> 不改 key、不触发重分区；<code>groupBy</code> 改 key、要付一次 produce→re-consume 往返——能用前者就别用后者。</li>
+            <li>stream-time = 该 task 见过的最大记录时间戳，单调不减，<strong>只在有记录到达时前进</strong>。空闲分区没有新记录，stream-time 冻结，依赖它推进到 <code>windowEnd+grace</code> 才关闭的窗口永远不关、结果永远不发。这是 event-time 换来<strong>可重放确定性</strong>（同输入同结果、与运行时刻无关、正确处理乱序回填）所付的代价——Streams 不看墙上时钟。</li>
+            <li>KStream-KStream / KStream-KTable / KTable-KTable 等值 join <strong>要求</strong>共分区（相同分区数 + 相同分区方式）；GlobalKTable join 和外键 join <strong>不要求</strong>（前者每实例全量副本，后者用隐藏 topic 重路由）。"分区数对得上但零输出无报错"嫌疑最大的是<strong>分区方式不一致</strong>——Streams 启动只校验分区数量、不校验分区器，相同 key 落到不同分区号，匹配全部静默丢失。</li>
+            <li>包住三件事：输入 <strong>offset 提交</strong> + 状态 <strong>changelog 写</strong> + 输出 <strong>produce</strong>，绑进一个 Kafka 事务原子提交/回滚，下游 <code>read_committed</code> 跳过回滚部分。"变慢"真因是 EOS 把 <code>commit.interval.ms</code> 默认从 30000ms 改到 100ms（提交更频繁 + read_committed 吞吐降），不是事务固定开销。原子边界<strong>止于单个 Kafka 集群</strong>，不覆盖 DB/HTTP/短信等外部副作用（要 outbox + 幂等）。</li>
+            <li>依次穿过：<strong>repartition</strong>（groupBy(userId) 改 key→repartition topic 重洗，§2.3）→ <strong>状态写</strong>（更新本地 RocksDB + 追加 changelog，§2.1）→ <strong>EOS 事务提交</strong>（offset+changelog+输出 三者绑一个事务，§2.6）→ <strong>下游 read_committed 读</strong>（只读已提交，§2.6）。提交后、下游读到前崩溃：再平衡把有状态 task 搬到新实例（§2.2），新 owner 回放 changelog 或从 standby 追尾重建该用户累计额（§2.1）；因为状态真相在 changelog、changelog 写又与 offset 提交绑在同一事务，恢复到的状态与已提交给下游的输出对齐在同一事务边界，不重不漏。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个"窗口聚合 + EOS + 维表富集"的拓扑画出全部内部 topic</h3>
+        <p>设计这样一条拓扑：从 <code>orders</code>（按订单号分区）读流，<code>selectKey</code> 改成用户 ID，做一个 5 分钟 tumbling 窗口的金额求和（带 grace + suppress 只发最终结果），再用一个小的 <code>users</code> 维表富集出用户等级，整条拓扑开 <code>exactly_once_v2</code>，结果写到 <code>user-spending</code>。不写代码，只回答：这条拓扑会让 Streams 在 broker 上建出哪些<strong>内部 topic</strong>（repartition / changelog 各几条、分别服务谁）？维表用 KTable 还是 GlobalKTable 才能免去对 <code>orders</code> 的共分区要求？suppress 的状态存活在哪、它的 changelog retention 要 ≥ 多少？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>顺着记录流向数：<code>selectKey(userId)</code> 后的窗口聚合是 stateful 且依赖 key→触发一条 repartition topic；窗口聚合的状态存储 + suppress 的缓冲各自有 changelog topic。维表若用 KTable 做 KStream-KTable join，要求与（已按 userId 重分区的）流共分区；用 GlobalKTable 则每实例全量、免共分区——但要权衡 <code>users</code> 是否够小。suppress 的 changelog retention 要覆盖"窗口大小 + grace"否则窗口没关状态先被清。把每条内部 topic 的命名前缀 <code>&lt;application.id&gt;-…</code> 写出来，再用 <code>topology.describe()</code> 的输出对照验证。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/streams/">Kafka Streams 官方文档</a>（官方）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071:+Streams+Rebalance+Protocol">KIP-1071: Streams Rebalance Protocol</a>（设计文档 · broker 端再平衡）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-889:+Versioned+State+Stores">KIP-889: Versioned State Stores</a>（设计文档 · 版本化状态存储）</li>
+          <li><a href="https://www.confluent.io/blog/enabling-exactly-once-kafka-streams/">Confluent: Enabling Exactly-Once in Kafka Streams</a>（维护者博客 · EOS 实现）</li>
+          <li><a href="https://developer.confluent.io/courses/kafka-streams/internals/">developer.confluent.io: Kafka Streams Internals</a>（高质量教程 · 内部机制）</li>
+          <li><a href="https://kafka.apache.org/blog/2026/05/22/apache-kafka-4.3.0-release-announcement/">Apache Kafka 4.3.0 Release Announcement</a>（官方 · 含 KIP-1035 恢复优化，截至 2026-06-03）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+        <a href="03-practice.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 上手实操</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#state-store" data-toc-target="state-store">2.1 状态存储</a></li>
+        <li><a href="#rebalance-scaling" data-toc-target="rebalance-scaling">2.2 再平衡与缩放</a></li>
+        <li><a href="#repartition" data-toc-target="repartition">2.3 重分区</a></li>
+        <li><a href="#windowing-time" data-toc-target="windowing-time">2.4 窗口与时间</a></li>
+        <li><a href="#joins" data-toc-target="joins">2.5 Join</a></li>
+        <li><a href="#eos" data-toc-target="eos">2.6 EOS v2</a></li>
+        <li><a href="#end-to-end" data-toc-target="end-to-end">2.7 跨概念综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

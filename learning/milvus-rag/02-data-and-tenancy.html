@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 数据与租户 · Milvus + RAG 落地</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale {
+  background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft);
+  margin: 16px 0; font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink { stroke: var(--ink); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill { fill: var(--bg); }
+.node-fill-accent { fill: var(--vermilion-soft); }
+.node-label { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-data-and-tenancy.html" class="current">02 数据·租户</a><span class="sep">—</span>
+    <a href="03-retrieval-and-freshness.html">03 检索·新鲜度</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>数据与租户：schema 怎么排、租户怎么隔</h1>
+        <p class="recap">01 把四个面钉成词汇——这一章展开前两个面：数据怎么组织成 entity、租户怎么在一套 Milvus 里隔离，以及标量字段和过滤比如何反过来约束索引选型。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>一个 chunk 怎么落成 Milvus 的一行 entity：哪些是向量、哪些是过滤用的标量、哪些塞进 dynamic field。</li>
+          <li>多租户的四级隔离（Database / Collection / Partition / Partition Key），以及"可扩展性与隔离强度正好相反"这条主线。</li>
+          <li>标量字段与标量索引的取舍：要 filter 的字段必须建索引，按基数选 BITMAP / INVERTED / range。</li>
+          <li>过滤比↔索引的反直觉收口：极严的 filter 为什么饿死 HNSW，而 IVF 类更扛得住。</li>
+        </ul>
+      </section>
+
+      <h2 id="s21"><span class="num">2.1</span><span>RAG 的 schema：把 chunk 落成 entity</span></h2>
+      <p class="one-liner">一个 chunk 就是 Milvus 里的一行 entity：主键 + 向量 + 一段原文 + 一组用来过滤的标量字段；schema 设计的本质，是预先想清楚"检索时要按什么条件切、答案要回溯到哪份原文"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么生产要管它</span>
+        <p>demo 往往只存 <code>[id, vector]</code> 两列，召回回来就直接拼进 prompt。生产要回答三件事：召回的这段话来自哪份文档（引用、去重、删整篇）、它能不能被当前查询的条件过滤掉（租户/时间/权限）、原文怎么取回喂 LLM。这三件事都要在写入时就铺成字段，事后补字段意味着重灌库。</p>
+      </div>
+
+      <p>一行 entity 的典型字段：<code>pk</code>（主键，自增或外部 ID）、<code>dense</code>（语义向量）、可选的 <code>sparse</code>（稀疏向量，给 BM25/全文检索用，03 章的混合检索靠它）、<code>text</code>（VARCHAR，存 chunk 原文，既喂 LLM 也是 BM25 的分词源）、<code>parent_doc_id</code>（指回整篇文档）、一组过滤用标量（<code>tenant_id</code> / <code>timestamp</code> / <code>source</code> / <code>acl_tags</code>），以及一个 dynamic field（动态字段 <code>$meta</code>，JSON，装那些零散、不稳定的元数据）。</p>
+
+      <p><strong>比文档深一层</strong>：三个容易被默认值带过去的点。其一，<strong>分块发生在 Milvus 之外</strong>——切分策略、chunk 大小、重叠都是在 LangChain 或自建管道里决定的，Milvus 只负责存切好的结果，所以"召回质量差"很多时候根因在分块、不在索引。其二，<code>parent_doc_id</code> 不是可有可无的装饰：有了它才能"删整篇文档的所有 chunk"（按 <code>parent_doc_id</code> 批量 delete）和"取相邻块"（small-to-big：命中小 chunk，回查同一 parent 的前后块补上下文）；没存它，删一篇文档就得逐 chunk 找、上下文也拼不回来。其三，<strong>过滤字段必须是显式标量字段</strong>——同一个值塞进 <code>$meta</code> 这个 JSON 里也能过滤，但 JSON 路径过滤要解析、要走通用扫描，比独立标量列上的索引慢一截；凡是高频 filter 的维度，提成显式列。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一个 chunk 落成 Milvus 一行 entity，宽行内列出各字段与其角色">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <rect x="24" y="28" width="180" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="114" y="48" text-anchor="middle" class="node-label-accent">一个 chunk</text>
+          <text x="114" y="64" text-anchor="middle" class="edge-label">分块在 Milvus 外</text>
+
+          <line x1="204" y1="50" x2="252" y2="50" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="228" y="40" text-anchor="middle" class="edge-label">落成</text>
+
+          <rect x="256" y="24" width="480" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="496" y="46" text-anchor="middle" class="node-label">一行 entity</text>
+          <text x="496" y="63" text-anchor="middle" class="edge-label">pk · dense · sparse · text · parent_doc_id · 标量 · $meta</text>
+
+          <line x1="350" y1="76" x2="350" y2="120" class="diagram-soft"/>
+          <line x1="496" y1="76" x2="496" y2="120" class="diagram-soft"/>
+          <line x1="640" y1="76" x2="640" y2="120" class="diagram-soft"/>
+
+          <rect x="256" y="124" width="190" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="351" y="143" text-anchor="middle" class="node-label">向量 + 原文</text>
+          <text x="351" y="160" text-anchor="middle" class="edge-label">dense · sparse · text</text>
+
+          <rect x="466" y="124" width="120" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="526" y="143" text-anchor="middle" class="node-label">回溯键</text>
+          <text x="526" y="160" text-anchor="middle" class="edge-label">parent_doc_id</text>
+
+          <rect x="606" y="124" width="130" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="671" y="143" text-anchor="middle" class="node-label">过滤标量</text>
+          <text x="671" y="160" text-anchor="middle" class="edge-label">tenant·time·source</text>
+
+          <text x="256" y="204" class="edge-label">原文喂 LLM · text 也是 BM25 分词源</text>
+          <text x="466" y="204" class="edge-label">删整篇 / 取邻块</text>
+          <text x="606" y="204" class="edge-label">必须显式列 + 索引</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>一个 chunk 落成一行 entity，每组字段对应一种生产职责。<strong>注意</strong>：<code>parent_doc_id</code> 让你能删整篇、取相邻块；凡是要 filter 的维度都得是显式标量列——藏进 <code>$meta</code> JSON 里能查但更慢。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>有人把 <code>source</code>、<code>lang</code>、<code>tenant_id</code> 全塞进 <code>$meta</code> 这个 JSON 动态字段，理由是"以后加字段不用改 schema"。检索时按这三个维度过滤，会有什么代价？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>过滤会变慢。dynamic field 存的是 JSON，按 <code>$meta["source"]</code> 这种路径过滤要先解析 JSON、再匹配，且默认走的是通用扫描而非独立标量列上的专用索引。高频过滤维度（尤其 <code>tenant_id</code> 这种几乎每条查询都带的）应当提成显式标量字段并建索引；<code>$meta</code> 留给那些稀疏、低频、形态不稳定的元数据。"不用改 schema"换来的是每次查询都付的过滤税。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：schema 决定了一行里有哪些字段；其中 <code>tenant_id</code> 这个字段怎么用来切分租户，正是下一节四级隔离要展开的——它既可以只是个普通过滤列，也可以被提升成 partition key。</p>
+
+      <h2 id="s22"><span class="num">2.2</span><span>多租户四级隔离：从物理到逻辑的四档</span></h2>
+      <p class="one-liner">在一套 Milvus 上隔离多个租户有四档——Database、Collection-per-tenant、Partition-per-tenant、Partition Key（按 <code>tenant_id</code> 分区）；从上到下隔离越来越弱、可扩展性越来越强，选型由租户数量主导。</p>
+
+      <div class="rationale">
+        <span class="label">为什么生产要管它</span>
+        <p>这是 01 面①（<a href="01-concepts.html#s12">租户隔离</a>）落地时的第一个硬决策，也是本章最长的一节。选错了不是性能问题而是结构问题：用 Collection-per-tenant 撑十万租户会撞上容量墙，用一个大 collection 装两个需要物理隔离的大客户又混在一起删不干净。四档各有上限和隔离强度，必须按租户规模和合规要求对号入座。</p>
+      </div>
+
+      <p>四档的机制底座是 <a href="../milvus/01-concepts.html#s12">深潜 01 的数据模型（partition vs shard）</a>。逐档看：</p>
+
+      <p><strong>Database</strong>——最强的逻辑隔离单元，不同 database 之间近乎物理隔离、RBAC 也能按 database 授权。但每个集群的 database 数量默认上限是 64（<code>maxDatabaseNum</code>）。适合"少数几个彼此完全独立的大业务线/大客户"，撑不了海量租户。</p>
+
+      <p><strong>Collection-per-tenant</strong>——每个租户一个 collection，隔离强、可独立建索引、可单独 drop。配置项上 collection 数量上限写着 65536，但<strong>这是个配置值不是真实墙</strong>：官方实测在约 10000 个 collection 量级就开始劣化，建议控制在 5000 以内。更隐蔽的是，有效负载是 collection × shard × partition 一起计入 <code>maxGeneralCapacity</code> 这个总预算——partition 会悄悄吃掉 collection 的额度。适合"数百到数千个、需要强隔离的中大客户"。</p>
+
+      <p><strong>Partition-per-tenant</strong>——一个 collection，每个租户一个 partition。比 collection 轻，但单个 collection 的 partition 数量硬上限是 1024。适合"上千以内、且能共用同一份 schema 的租户"，超过 1024 就此路不通。</p>
+
+      <p><strong>Partition Key</strong>——一个 collection，把 <code>tenant_id</code> 声明为 partition key，Milvus 自动按哈希把每个租户的数据分散进 <code>num_partitions</code> 个物理分区（默认 64）。<strong>没有硬上限，可达百万级租户</strong>。代价是隔离最弱（所有租户物理上同处一个 collection、共享分区），且带一串硬限制（见下文 callout）。这是海量小租户 RAG 的默认选择。</p>
+
+      <p><strong>比文档深一层——记住这条主线</strong>：四档的可扩展性是 <strong>Partition Key &gt; Partition &gt; Collection &gt; Database</strong>，而隔离强度<strong>正好反过来</strong>：Database &gt; Collection &gt; Partition &gt; Partition Key。租户越多、越要往可扩展那头走，单租户能拿到的隔离就越弱——这不是某一档的缺陷，而是这条轴上无法回避的权衡。决策因此几乎只问一个问题：有多少租户、要多强的隔离。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="多租户四级隔离的决策树，按租户数和隔离要求分叉到四种方案">
+          <defs>
+            <marker id="m-ink3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- decision 1 -->
+          <path d="M 280 20 L 440 56 L 280 92 L 120 56 Z" class="diagram-ink node-fill"/>
+          <text x="280" y="52" text-anchor="middle" class="node-label">≤64 且要物理隔离?</text>
+          <text x="280" y="70" text-anchor="middle" class="edge-label">按租户数分叉</text>
+
+          <!-- d1 yes -> Database -->
+          <line x1="120" y1="56" x2="92" y2="56" class="diagram-ink" marker-end="url(#m-ink3)"/>
+          <text x="106" y="46" text-anchor="middle" class="branch-label">是</text>
+          <rect x="2" y="34" width="86" height="44" rx="5" class="diagram-accent node-fill"/>
+          <text x="45" y="54" text-anchor="middle" class="node-label">Database</text>
+          <text x="45" y="70" text-anchor="middle" class="edge-label">最强隔离</text>
+
+          <!-- d1 no -> decision 2 -->
+          <line x1="280" y1="92" x2="280" y2="120" class="diagram-ink" marker-end="url(#m-ink3)"/>
+          <text x="296" y="110" text-anchor="middle" class="branch-label">否</text>
+          <path d="M 280 120 L 450 156 L 280 192 L 110 156 Z" class="diagram-ink node-fill"/>
+          <text x="280" y="152" text-anchor="middle" class="node-label">要强隔离且 ≤ 数千?</text>
+          <text x="280" y="170" text-anchor="middle" class="edge-label">单租户独立 drop?</text>
+
+          <!-- d2 yes -> Collection -->
+          <line x1="110" y1="156" x2="82" y2="156" class="diagram-ink" marker-end="url(#m-ink3)"/>
+          <text x="96" y="146" text-anchor="middle" class="branch-label">是</text>
+          <rect x="2" y="134" width="80" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="42" y="152" text-anchor="middle" class="node-label">Collection</text>
+          <text x="42" y="168" text-anchor="middle" class="edge-label">per-tenant</text>
+
+          <!-- d2 no -> decision 3 -->
+          <line x1="280" y1="192" x2="280" y2="220" class="diagram-ink" marker-end="url(#m-ink3)"/>
+          <text x="296" y="210" text-anchor="middle" class="branch-label">否</text>
+          <path d="M 280 220 L 430 256 L 280 292 L 130 256 Z" class="diagram-ink node-fill"/>
+          <text x="280" y="252" text-anchor="middle" class="node-label">租户数 ≤ 1000?</text>
+          <text x="280" y="270" text-anchor="middle" class="edge-label">共用一份 schema?</text>
+
+          <!-- d3 yes -> Partition -->
+          <line x1="130" y1="256" x2="102" y2="256" class="diagram-ink" marker-end="url(#m-ink3)"/>
+          <text x="116" y="246" text-anchor="middle" class="branch-label">是</text>
+          <rect x="14" y="234" width="88" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="58" y="252" text-anchor="middle" class="node-label">Partition</text>
+          <text x="58" y="268" text-anchor="middle" class="edge-label">≤1024/coll</text>
+
+          <!-- d3 no -> Partition Key (recommended) -->
+          <line x1="280" y1="292" x2="280" y2="320" class="diagram-ink" marker-end="url(#m-ink3)"/>
+          <text x="312" y="310" text-anchor="middle" class="branch-label">否·数千~百万</text>
+          <rect x="206" y="320" width="148" height="38" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="280" y="338" text-anchor="middle" class="node-label-accent">Partition Key</text>
+          <text x="280" y="352" text-anchor="middle" class="edge-label">RAG 默认 · 无硬上限</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>按租户数从上往下走的四级隔离决策树。<strong>注意</strong>：可扩展性 Partition Key &gt; Partition &gt; Collection &gt; Database，隔离强度正好相反——往下走是拿隔离换规模。数千以上小租户落到 Partition Key（accent），即多租户 RAG 的默认。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>四级隔离 · 选型对照</caption>
+        <thead>
+          <tr><th>级别</th><th>隔离强度</th><th>规模上限</th><th>何时用</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Database</td>
+            <td>最强（近物理 + RBAC）</td>
+            <td>64 / 集群（<code>maxDatabaseNum</code>）</td>
+            <td>少数完全独立的大业务线 / 大客户</td>
+          </tr>
+          <tr>
+            <td>Collection-per-tenant</td>
+            <td>强（独立索引 / 可单独 drop）</td>
+            <td>实测约 10000、建议 &lt;5000（配置写 65536）</td>
+            <td>数百~数千个需强隔离的中大客户</td>
+          </tr>
+          <tr>
+            <td>Partition-per-tenant</td>
+            <td>中（同 collection 内逻辑分区）</td>
+            <td>1024 / collection（硬上限）</td>
+            <td>≤1000 且共用一份 schema 的租户</td>
+          </tr>
+          <tr class="selected">
+            <td>Partition Key</td>
+            <td>弱（同 collection、靠应用层 filter）</td>
+            <td>无硬上限（~百万，默认 64 分区）</td>
+            <td>数千~百万小租户 RAG 的默认</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>Partition Key 的路由机制</strong>：把 <code>tenant_id</code> 设为 partition key 后，Milvus 用它哈希到 <code>num_partitions</code> 个分区。关键约束是——<strong>查询必须带 <code>tenant_id == "A"</code> 这样的等值过滤，才会触发分区裁剪</strong>（<a href="../milvus/04-search-and-consistency.html#s43">深潜 04 的分区裁剪</a>），只扫该租户落到的那个分区；不带这个 filter，就退化成全 collection 扫描，既慢又跨了租户。2.5.4 起还有个 Partition Key Isolation（<code>partitionkey.isolation=true</code>）：给每个 key 值建独立索引，进一步提升单租户查询效率——但它要求 filter 里<strong>正好一个 key 值</strong>，一旦写成 <code>tenant_id IN ["A","B"]</code> 或多租户聚合查询，隔离就被破坏、回退普通扫描。</p>
+
+      <div class="callout warning">
+        <span class="label">硬限制 · Partition Key collection 的三条墙</span>
+        <p>选了 partition-key 方案，要预先吞下三条限制：<strong>① 禁止 bulk import</strong>——只能逐行（或批量）<code>insert</code>，没有批量导入快路径，初始灌库会更慢。<strong>② 无法只 load 单个租户</strong>——<code>load()</code> 是整个 collection 一起加载进内存，不能按租户选择性加载，内存占用随总数据量走。<strong>③ RBAC 管不到 collection 内部</strong>——回指 <a href="01-concepts.html#s12">01 面①</a>：权限只到 collection / database 粒度，partition-key collection 内部的租户边界<strong>零数据库级保护</strong>，完全靠应用层那个 <code>tenant_id</code> filter 强制。漏写一次就是跨租户泄漏。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 SaaS 用 Collection-per-tenant，每个租户一个 collection，目前 800 个租户、跑得很顺。产品要求每个租户的数据再按"部门"分隔，于是给每个 collection 加了 30 个 partition。为什么这个看似局部的改动会让集群逼近容量墙？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>因为有效负载是 collection × shard × partition 一起计入 <code>maxGeneralCapacity</code>，<strong>partition 会悄悄吃掉总预算</strong>。原来 800 个 collection 还算宽裕，加了 partition 后有效单元数变成 800 × shard × 30，量级骤增，足以直接撞上容量上限或显著劣化。"collection 数量没变、只是加了分区"是错觉——分区不是免费的逻辑标签，它和 collection 抢同一个全局预算。这也是 Collection-per-tenant 难以再叠一层细分的原因。</p>
+        </details>
+      </div>
+
+      <h2 id="s23"><span class="num">2.3</span><span>元数据与标量索引：要 filter 的字段就要建索引</span></h2>
+      <p class="one-liner">显式标量字段装高频过滤维度、dynamic field 装零散元数据；铁律是——任何你要 filter 的字段都得建标量索引，否则 filter 退化成全表扫描，把向量索引的加速整个抵消掉。</p>
+
+      <div class="rationale">
+        <span class="label">为什么生产要管它</span>
+        <p>生产里几乎每条查询都带 filter（租户、时间、来源、权限）。如果过滤字段没有标量索引，Milvus 得逐行求值这个条件——相当于全表扫一遍标量列，再在结果上做向量检索。向量索引把检索从 O(N) 降到近似 O(logN) 的努力，会被这个全扫直接吃掉。标量索引选型不是锦上添花，是让 filter 不拖垮整条检索的前提。</p>
+      </div>
+
+      <p><strong>显式标量字段 vs dynamic field</strong>：判据是"过滤频率 + 维度是否稳定"。<code>tenant_id</code>、<code>timestamp</code>、<code>source</code>、<code>acl_tags</code> 这类几乎每条查询都用、形态固定的，做成显式标量列并建索引；那些稀疏出现、形态多变、低频过滤的元数据（某些来源独有的标签、调试信息），塞进 dynamic field（<code>$meta</code> JSON）即可。提成显式列的代价是 schema 要预先定义、改动要重灌；换来的是过滤走专用索引而非 JSON 路径解析。</p>
+
+      <p><strong>比文档深一层——按基数选索引类型</strong>：标量索引不是只有一种，选错类型同样拖慢过滤。基数（cardinality，不同取值的个数）是主判据：</p>
+
+      <table class="compare-table">
+        <caption>标量索引 · 按基数与字段类型选型</caption>
+        <thead>
+          <tr><th>索引类型</th><th>适用基数 / 场景</th><th>典型字段</th><th>机制要点</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>BITMAP</td>
+            <td>低基数类别（取值数 ≲ 数千）</td>
+            <td><code>source</code> · <code>lang</code> · <code>category</code></td>
+            <td>每个取值一个位图，等值/集合过滤极快；高基数会爆位图、不适用</td>
+          </tr>
+          <tr>
+            <td>INVERTED</td>
+            <td>高基数 / JSON 路径 / 字符串</td>
+            <td><code>acl_tags</code> · <code>$meta</code> 路径 · 长尾 ID</td>
+            <td>倒排索引，通用、基数无上限；是高基数标量与动态字段过滤的主力</td>
+          </tr>
+          <tr>
+            <td>STL_SORT / range</td>
+            <td>数值范围查询</td>
+            <td><code>timestamp</code> · 价格 · 评分</td>
+            <td>有序结构，<code>&gt;= / &lt;= / between</code> 范围过滤高效（"最近 90 天"靠它）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="label">速记 · 基数→索引</span>
+        <p>低基数类别选 BITMAP，高基数或 JSON 路径选 INVERTED，数值范围选 STL_SORT/range。错配的典型：给 <code>tenant_id</code>（百万基数）建 BITMAP——位图数量爆炸；给 <code>timestamp</code> 建 BITMAP——范围查询无法利用有序性，退化成逐位图求并。字段语义先确定，再挑索引。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：标量索引让 filter 本身快起来；但即使 filter 飞快，它和向量检索叠加时还有一层更深的反直觉——过滤掉的行越多，向量索引（尤其图索引）反而越容易召不回来。这就是下一节要收口的 01 面④。</p>
+
+      <h2 id="s24"><span class="num">2.4</span><span>过滤比↔索引：极严的 filter 会饿死图遍历</span></h2>
+      <p class="one-liner">过滤比越高（通过的行越少），越伤 HNSW 的图遍历——图在被过滤掉的点之间走不动、凑不齐连通候选，召回反而塌；这是 01 面④反直觉点的机制收口，也直接影响索引选型。</p>
+
+      <div class="rationale">
+        <span class="label">为什么生产要管它</span>
+        <p>生产里高选择性 filter 很常见："这个租户 + 最近 7 天 + 某来源"叠起来，往往只剩全库万分之一的行通过。从关系库直觉来的人以为这会让检索更快更准，实际在图索引上会让召回从 95% 掉到个位数——而且不报错，只是答案变差。这条决定了高选择性场景该选哪类向量索引，必须在 schema/索引阶段就考虑。</p>
+      </div>
+
+      <p><strong>比文档深一层——为什么是图索引塌</strong>：机制底座是 <a href="../milvus/03-index-internals.html#s39">深潜 03 的过滤比→索引</a>。HNSW 是靠"在邻居图上贪心游走"找近邻的：从入口点出发，每步跳到离 query 更近的邻居。当 filter 极严，图上绝大多数点都被判出局，游走时<strong>从一个通过的点跳不到下一个通过的点</strong>——邻居全被过滤掉了，搜索要么提前困死、要么扫遍全图也凑不齐 top-k，召回因此塌。IVF 类（先聚类分桶、桶内暴力扫）受影响小得多：它本来就是在选中的桶里线性扫，过滤掉一部分行只是少扫几个，不破坏可达性。</p>
+
+      <p>Milvus 2.x 用 <strong>iterative filtering（可迭代过滤）</strong> 和 <strong>概率（alpha）策略</strong>缓解这个问题——大致是动态判断 filter 的选择性，过滤太狠时改变遍历/补采样策略，避免空手而归。但缓解不等于消除，选型规则不变：</p>
+
+      <table class="compare-table">
+        <caption>高过滤比时 · 图索引 vs IVF 的取舍</caption>
+        <thead>
+          <tr><th>维度</th><th>HNSW（图索引）</th><th>IVF 类 / 预过滤+扫描</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>低过滤比（大多数行通过）</td>
+            <td>最优：图遍历快、召回高</td>
+            <td>可用，但延迟通常不及 HNSW</td>
+          </tr>
+          <tr class="selected">
+            <td>高过滤比（极少行通过）</td>
+            <td>风险：图走不动、召回易骤降</td>
+            <td>更稳：桶内扫描不依赖图可达性</td>
+          </tr>
+          <tr>
+            <td>缓解手段</td>
+            <td>iterative filtering / alpha 概率策略</td>
+            <td>预过滤后直接暴力扫小集合</td>
+          </tr>
+          <tr>
+            <td>选型倾向</td>
+            <td>默认主力，但要警惕高选择性查询</td>
+            <td>已知高选择性场景的更稳选择</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 560 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="过滤比与召回的折线图，HNSW 在高过滤比处骤降，IVF 更平">
+          <!-- axes -->
+          <line x1="70" y1="40" x2="70" y2="220" class="diagram-ink"/>
+          <line x1="70" y1="220" x2="510" y2="220" class="diagram-ink"/>
+          <text x="60" y="44" text-anchor="end" class="edge-label">召回 ↑</text>
+          <text x="500" y="244" text-anchor="end" class="edge-label">过滤比 →（通过的行越少越往右）</text>
+
+          <!-- HNSW: flat then cliff -->
+          <polyline points="80,62 180,66 280,74 360,96 430,164 490,206" class="diagram-accent"/>
+          <text x="150" y="54" class="branch-label">HNSW</text>
+          <text x="486" y="198" text-anchor="end" class="edge-label">召回塌</text>
+
+          <!-- IVF: gentle decline -->
+          <polyline points="80,80 180,88 280,98 360,110 430,126 490,144" class="diagram-ink"/>
+          <text x="362" y="104" class="edge-label">IVF（更平）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>过滤比升高时两类索引的召回走向：HNSW（accent）在高过滤比处骤降，IVF 更平缓。<strong>注意</strong>：和关系库相反——极严的 filter 会饿死 HNSW 的图遍历、让召回塌；已知高选择性的查询，偏向 IVF 类或预过滤+扫描。</figcaption>
+      </figure>
+
+      <h2 id="s25"><span class="num">2.5</span><span>综合：给一个多租户 SaaS 客服 RAG 排 schema</span></h2>
+      <p class="one-liner">把 2.1–2.4 叠到一个具体场景——数千租户、每租户文档带来源和日期、查询按"租户 + 最近 90 天"过滤——一次决定隔离级别、标量字段、各字段索引，以及那个叠加 filter 的选择性如何反推向量索引。</p>
+
+      <div class="rationale">
+        <span class="label">为什么生产要管它</span>
+        <p>四个决策从来不是独立的：隔离级别决定 <code>tenant_id</code> 是普通列还是 partition key；标量字段决定能过滤什么；索引类型决定过滤快不快；过滤比又反过来约束向量索引。逐项最优拼起来未必整体对——只有把它们放到同一条查询上，才看得出相互牵制。</p>
+      </div>
+
+      <p>场景：SaaS 客服知识库，<strong>数千个租户</strong>，每个租户有自己的文档，文档带 <code>source</code>（来源系统）和发布日期；典型查询是"在<strong>本租户</strong>、<strong>最近 90 天</strong>的文档里，找和问题相关的内容"。逐面落地：</p>
+
+      <p><strong>① 隔离级别</strong>——数千租户、无强物理隔离/合规要求、共用一份 schema。Database（≤64）和 Partition（≤1024）都装不下数千，Collection-per-tenant 数千个已逼近建议上限且运维重。落到 <strong>Partition Key</strong>（图 2.2 的默认终点）：把 <code>tenant_id</code> 设为 partition key。代价照单接收——初始灌库不能用 bulk import、load 整个 collection、RBAC 管不到内部，租户隔离靠应用层强制 <code>tenant_id == 当前租户</code>。</p>
+
+      <p><strong>② schema 放哪些标量字段</strong>——除向量和 <code>text</code> 外，显式标量列至少要有：<code>tenant_id</code>（partition key，也是隔离边界）、<code>timestamp</code>（文档日期，给"最近 90 天"）、<code>source</code>（来源过滤/统计）、<code>parent_doc_id</code>（删整篇、取邻块）。零散的额外元数据进 <code>$meta</code>。</p>
+
+      <p><strong>③ 各建什么标量索引</strong>——按 2.3 的基数判据：<code>timestamp</code> 用 <strong>STL_SORT/range</strong>（"最近 90 天"是范围查询）；<code>source</code> 基数低（就那么几个来源系统）用 <strong>BITMAP</strong>；<code>tenant_id</code> 作为 partition key 由分区机制承载路由，若还要在过滤里直接命中，按其高基数用 <strong>INVERTED</strong>。</p>
+
+      <p><strong>④ 叠加 filter 的选择性 → 向量索引</strong>——查询里 <code>tenant_id == X</code> 先触发分区裁剪，把范围缩到该租户那个分区；再叠 <code>timestamp &gt;= now-90d</code>。在单个租户的数据量内，"最近 90 天"未必很严（90 天往往是大多数文档），所以叠加后的过滤比对该租户通常是<strong>中等而非极端</strong>——HNSW 一般扛得住。但对那些只有几篇文档、且 90 天内更少的小租户，叠加后往往只剩个位数行通过：这正是 2.4 的高过滤比陷阱，对这类租户的查询要么靠 iterative filtering 兜底、要么对极小集合直接暴力扫。<strong>关键不是全局选一种索引，而是认识到同一套 filter 在大租户和小租户上的选择性天差地别</strong>，召回风险集中在尾部小租户。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 决策是一条链不是四个点</span>
+        <p>"Partition Key → <code>tenant_id</code> 必须出现在每条 filter 里 → 分区裁剪先收窄 → 再叠 timestamp 范围 → 选择性因租户大小而异 → 召回风险落在尾部小租户"。这条链上任一环改了，下游都跟着变。这也是 04 章辨析题的形态：给场景、判断这条链哪里会断。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来再展开对照。</p>
+        <ol>
+          <li>一个 chunk 落成 entity 后，<code>parent_doc_id</code> 这个字段不存会失去哪两种能力？</li>
+          <li>四级隔离里，为什么说"加 partition 会让 Collection-per-tenant 撞容量墙"？预算是怎么算的？</li>
+          <li>Partition Key collection 的三条硬限制是什么？其中哪条直接关系到租户安全？</li>
+          <li>设计题：一个 RAG 要按 <code>source</code>（约 8 个取值）和 <code>timestamp</code>（范围）过滤，各建什么标量索引？若再叠成极高过滤比，向量索引该偏向哪类、为什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>失去"删整篇文档的所有 chunk"（按 <code>parent_doc_id</code> 批量 delete）和"取相邻块"（命中小 chunk 后回查同 parent 的前后块补上下文）。</li>
+            <li>有效负载是 collection × shard × partition 一起计入 <code>maxGeneralCapacity</code>，partition 会悄悄吃总预算；collection 数没变但有效单元数随 partition 倍增，逼近上限。</li>
+            <li>① 禁止 bulk import（只能逐行 insert）；② 无法只 load 单租户（load 整个 collection）；③ RBAC 管不到 collection 内部。<strong>第三条</strong>直接关系租户安全——隔离只能靠应用层 <code>tenant_id</code> filter。</li>
+            <li><code>source</code> 低基数 → BITMAP；<code>timestamp</code> 范围 → STL_SORT/range。叠成极高过滤比时偏向 <strong>IVF 类或预过滤+扫描</strong>：HNSW 的图遍历在被过滤掉的点之间走不动、召回塌，而桶内扫描不依赖图可达性。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把一个"超级租户"塞进 Partition Key 方案</h3>
+        <p>沿用 2.5 的数千租户 SaaS（已选 Partition Key）。现在来了一个超级大客户：单它一家的文档量超过其余所有租户之和，且合规要求它的数据物理隔离、可单独审计/删除。继续把它和别人混在同一个 partition-key collection 里，会出哪些问题？给一个分层方案。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>混在一起的问题：① 物理隔离/单独删除做不到（partition-key collection 内部无边界、不能选择性 load/drop 单租户）；② 它的海量数据会让分区严重倾斜，<code>num_partitions</code> 哈希也压不平，拖累同 collection 其他租户；③ 合规审计粒度到不了单租户。分层方案：对这个超级租户单开一个 <strong>Collection（甚至 Database）</strong>——拿回强隔离/独立 drop/RBAC 授权；其余数千小租户继续走 Partition Key。即"长尾小租户用 Partition Key、少数大客户上 Collection/Database"的混合架构，正好沿图 2.2 那条隔离强度轴按租户分层取点。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://milvus.io/docs/multi_tenancy.md">Implement Multi-tenancy</a> · <a href="https://milvus.io/docs/use-partition-key.md">Use Partition Key</a>（官方，§2.2）</li>
+          <li><a href="https://milvus.io/docs/schema.md">Schema</a> · <a href="https://milvus.io/docs/enable-dynamic-field.md">Dynamic Field</a>（官方，§2.1 / §2.3）</li>
+          <li><a href="https://milvus.io/docs/scalar_index.md">Scalar Index</a> · <a href="https://milvus.io/docs/filtered-search.md">Filtered Search</a>（官方，§2.3 / §2.4）</li>
+          <li>机制底座：<a href="../milvus/01-concepts.html#s12">深潜 01 数据模型</a> · <a href="../milvus/03-index-internals.html#s39">深潜 03 过滤比→索引</a> · <a href="../milvus/04-search-and-consistency.html#s43">深潜 04 分区裁剪</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 概念：四个设计面</span>
+        </a>
+        <a href="03-retrieval-and-freshness.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 检索质量与新鲜度</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 chunk→entity</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 四级隔离</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 标量索引</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 过滤比↔索引</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 综合 · SaaS</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

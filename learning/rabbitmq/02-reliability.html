@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 可靠投递 · RabbitMQ 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-model.html">01 模型</a><span class="sep">—</span>
+    <a href="02-reliability.html" class="current">02 可靠投递</a><span class="sep">—</span>
+    <a href="03-internals.html">03 内部机制</a><span class="sep">—</span>
+    <a href="04-selection.html">04 对标选型</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>可靠投递：让消息的托管链不断裂</h1>
+        <p class="recap">上一章建立了消息从 producer 经 exchange/binding 到 queue、并在 ack 后被删除的路径——这一章把这条托管链的每个接缝补上，让消息不丢。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>发送端的接缝：publisher confirms 用 delivery tag 异步回执，确认"消息已被 broker 托管"</li>
+          <li>消费端的两个接缝：手动 ack 确认"已处理可删除"，prefetch 控制"一次推多少"防止撑爆</li>
+          <li>持久化的三个独立开关：durable（实体）≠ persistent（消息）≠ 真正安全（quorum 多副本）</li>
+          <li>失败兜底：dead-letter exchange、TTL 过期、delivery-limit 重试上限，把毒消息引开而非丢弃</li>
+        </ul>
+      </section>
+
+      <h2 id="s21"><span class="num">2.1</span><span>发送端不丢：publisher confirms</span></h2>
+
+      <p class="one-liner">publisher confirms 让 broker 在消息被处理后回一个确认，生产者据此知道这条消息已被托管，不是发进了黑洞。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>裸的 <code>basic.publish</code> 是单向的——TCP write 返回成功只说明字节进了内核缓冲，不说明 broker 收到、更不说明它路由进了队列或写了盘。上一章 <a href="01-model.html#s12">1.2</a> 已经埋了这个缺口：没有 binding 命中的消息被静默丢弃，生产者一无所知。publisher confirms 把这条单行道改成有回执：broker 处理完一条消息，回送一个带 delivery tag 的 <code>basic.ack</code>，生产者凭它对账。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：confirm 是<strong>异步</strong>且<strong>按 delivery tag 累进</strong>的。生产者在 channel 上开启 confirm 模式后，broker 给这条 channel 上发出的每条消息按发布顺序编号（从 1 递增的 delivery tag）。生产者不必发一条等一条——它持续 publish，broker 在消息"处理完成"时回 <code>basic.ack</code>，且可以<strong>批量确认</strong>：一个 <code>basic.ack</code> 带 <code>multiple=true</code> 表示"到这个 tag 为止全部确认"。所谓"处理完成"对持久化消息意味着"已写入"（写入的真实强度见 <a href="#s23">2.3</a>，那里有一个关键的 fsync 缺口）；路由失败的消息走 <code>basic.nack</code>。生产者侧需维护一个"已发出未确认"的窗口，收到 ack 后从窗口移除，超时或 nack 则重发。</p>
+
+      <div class="callout insight">
+        <span class="label">对标 · 旧的事务机制</span>
+        <p>AMQP 还有一套老的事务机制 <code>tx</code>（<code>tx.select</code>/<code>tx.commit</code>），同步阻塞：每次提交都要等 broker 完整落地再返回。官方实测它比 publisher confirms <strong>慢约 250 倍</strong>。结论很硬：发送端可靠性用 confirms，不要用 tx。看到代码里还在 <code>txSelect()</code>，基本是十年前的写法。</p>
+      </div>
+
+      <p><strong>场景走查</strong>：一个支付回调服务每秒 publish 几千条结算消息。开启 confirm 模式后，它把每条消息的 delivery tag 和业务 ID 存进一个本地未决表，继续不停 publish。broker 陆续回 <code>basic.ack(tag=4200, multiple=true)</code>，服务一次性把 tag ≤ 4200 的记录从未决表清掉。某条消息的 routing key 拼错、无队列可达，broker 回 <code>basic.nack(tag=4201)</code>，服务据此告警并把这条转人工补偿——这条本来会被静默吞掉，现在看得见了。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">publisher_confirms.py</span>
+          <span class="lang">python</span>
+        </div>
+        <pre><code class="language-python">channel.confirm_delivery()  # 开启 confirm 模式
+
+def on_confirm(tag, multiple, nacked):
+    # multiple=True 表示 tag 及之前的都确认；nacked=True 表示这是 nack
+    if nacked:
+        resend(pending.pop_le(tag))   # broker 拒收，重发
+    else:
+        pending.discard_le(tag)       # 已托管，从未决窗口移除
+
+channel.add_on_confirm_callback(on_confirm)
+
+for msg in stream:                    # 持续发布，不逐条阻塞等待
+    channel.basic_publish("orders", msg.key, msg.body,
+                          mandatory=True)   # 无队列可达就退回，不静默丢
+    pending.add(channel.next_delivery_tag, msg)</code></pre>
+      </div>
+
+      <p>上面的 <code>mandatory=True</code> 是 confirms 的搭档：confirms 回答"broker 收下了吗"，<code>mandatory</code> 回答"收下后有队列接吗"——无队列可路由时 broker 通过 <code>basic.return</code> 把消息退回生产者，而不是默默丢弃。两者合起来才覆盖 <a href="01-model.html#s12">1.2</a> 里那个"publish 成功 ≠ 进了队列"的缺口。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两段确认：Producer 到 Broker 到 Consumer，含 confirm 回执与 ack 回执">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <rect x="22" y="98" width="118" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="81" y="123" text-anchor="middle" class="node-label">Producer</text>
+          <text x="81" y="141" text-anchor="middle" class="edge-label">发送端</text>
+
+          <rect x="291" y="98" width="118" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="350" y="123" text-anchor="middle" class="node-label-accent">Broker</text>
+          <text x="350" y="141" text-anchor="middle" class="edge-label">队列</text>
+
+          <rect x="560" y="98" width="118" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="619" y="123" text-anchor="middle" class="node-label">Consumer</text>
+          <text x="619" y="141" text-anchor="middle" class="edge-label">消费端</text>
+
+          <line x1="140" y1="113" x2="291" y2="113" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="215" y="105" text-anchor="middle" class="edge-label">publish</text>
+          <path d="M 291 138 C 240 168, 191 168, 140 138" class="diagram-accent" fill="none" marker-end="url(#ar-verm)"/>
+          <text x="215" y="183" text-anchor="middle" class="branch-label">confirm：已托管</text>
+
+          <line x1="409" y1="113" x2="560" y2="113" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="484" y="105" text-anchor="middle" class="edge-label">deliver</text>
+          <path d="M 560 138 C 509 168, 460 168, 409 138" class="diagram-accent" fill="none" marker-end="url(#ar-verm)"/>
+          <text x="484" y="183" text-anchor="middle" class="branch-label">ack：可删除</text>
+
+          <text x="215" y="222" text-anchor="middle" class="edge-label">补的接缝①：发送端</text>
+          <text x="484" y="222" text-anchor="middle" class="edge-label">补的接缝②：消费端</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>托管链上的两段确认：左半段 confirm 关闭"发出去是否被 broker 收下"的缺口，右半段 ack 关闭"处理完是否可以删除"的缺口。<strong>注意</strong>：两段方向相反、互不替代——只开 confirm 不开手动 ack，消费端崩溃照样丢；反之亦然。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>生产者收到了 broker 的 <code>basic.ack</code> confirm，能不能就此断定"这条消息一定不会丢了"？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不能，要看队列类型。confirm 只保证 broker 已按它对这条消息的承诺处理完。对 classic 队列，承诺仅是"写进了内存写缓冲并已下发写盘指令"，并未 fsync——broker 此刻崩溃，这条已 confirm 的持久化消息仍可能丢（缺口见 <a href="#s23">2.3</a>）。只有 quorum 队列在回 confirm 前已提交到多数派副本，才给出多数工程师以为自己早就有的那种保证。confirm 是<strong>对账工具</strong>，不是<strong>持久化级别</strong>本身。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：confirm 守住了消息进 broker 这一段。消息推给消费者之后，能不能不丢、会不会把消费者撑爆，是另外两个接缝。</p>
+
+      <h2 id="s22"><span class="num">2.2</span><span>消费端不丢、不撑爆：consumer ack 与 prefetch</span></h2>
+
+      <p class="one-liner">手动 ack 让 broker 在消费者真正处理完后才删除消息；prefetch 限定一次最多推几条未确认消息，防止单个消费者吞掉整条队列。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>两个独立的风险。其一，自动 ack（automatic ack，俗称 ack-on-send）让 broker 在<strong>推送瞬间</strong>就删消息——消费者处理到一半崩溃，这条已经没了，连 requeue 的机会都没有。手动 ack 把删除推迟到"业务处理完成"那一刻。其二，broker 默认会尽量多推未确认消息给消费者，一个慢消费者会把整条队列的消息全拉进自己内存，撑爆自己（OOM），同时让别的消费者空闲——prefetch（通过 <code>basic.qos</code> 设置）给"未确认消息数"设了上限。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：prefetch 限的是一条 channel/consumer 上 <strong>Unacked 状态</strong>（见 <a href="01-model.html#s14">1.4</a>）的消息条数上限。broker 推一条，Unacked 计数 +1；消费者 ack 一条，计数 −1，broker 才补推下一条。所以 prefetch 和 ack 是<strong>同一个反馈环</strong>的两端：忘了 ack，Unacked 计数只增不减，撞到 prefetch 上限后 broker 停止投递——消费者就此"挂起"，但它其实没死，只是再也拿不到新消息。<code>basic.nack</code> 是 RabbitMQ 的扩展，支持 <code>multiple</code>（一次否定到某 tag 为止）和 <code>requeue</code>（退回还是丢弃）；<code>basic.reject</code> 功能相同但只能一次一条。注意 4.x 里<strong>全局 QoS（global prefetch）已弃用</strong>，prefetch 应按 per-consumer 设置。</p>
+
+      <p>prefetch 取值有量纲化的经验法则：<code>prefetch ≈ 往返时延 / 单条处理时间</code>。极端值 <code>prefetch=1</code>（入门教程"公平分发"的默认）把吞吐锁死在"每个网络往返才处理一条"——若 RTT 为 125ms，上限约 8 条/秒。实战起步给 10–50，消费者慢、消费者多时调小。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 两种 ack 模式 × prefetch 取值的后果</caption>
+        <thead>
+          <tr><th>设置</th><th>机制</th><th>后果</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>自动 ack</td><td>推送瞬间即删除</td><td>吞吐最高，<strong>消费者崩溃即丢消息</strong>，无痕迹</td></tr>
+          <tr class="selected"><td>手动 ack + prefetch 适中</td><td>处理完才删除，未确认数受限</td><td>不丢、负载均衡、内存可控——生产默认</td></tr>
+          <tr><td>手动 ack + prefetch=1</td><td>处理完才删除，一次只推一条</td><td>绝对公平，<strong>吞吐被往返时延锁死</strong></td></tr>
+          <tr><td>手动 ack + 无限 prefetch</td><td>处理完才删除，但不限未确认数</td><td>一个消费者吞光队列 → OOM，其余空闲</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>场景走查</strong>：四个消费者从一条订单队列取货，单条处理约 50ms，RTT 约 10ms。按经验法则 <code>10/50</code> 远小于 1，prefetch 给个位数即可，取 <code>prefetch=5</code>：每个消费者手里最多压 5 条未确认，broker 在它 ack 后即时补推，四个消费者负载基本均摊。若误设无限 prefetch，启动瞬间最快的那个消费者把上万条全拉进内存，自己 OOM 重启，重启后名下 Unacked 全部 requeue，又一次涌入下一个消费者——形成"击鼓传 OOM"。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">consumer_ack.py</span>
+          <span class="lang">python</span>
+        </div>
+        <pre><code class="language-python">channel.basic_qos(prefetch_count=5)   # per-consumer，最多 5 条 Unacked
+
+def handle(ch, method, props, body):
+    try:
+        process(body)                              # 业务处理
+        ch.basic_ack(method.delivery_tag)          # 处理完才确认 → broker 删除
+    except TransientError:
+        ch.basic_nack(method.delivery_tag, requeue=True)    # 可重试：退回队列
+    except PoisonError:
+        ch.basic_nack(method.delivery_tag, requeue=False)   # 必失败：走 DLX（见 2.4）
+
+channel.basic_consume("orders", handle, auto_ack=False)   # 关键：不要自动 ack</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 自动 ack 丢消息</span>
+        <p>症状：消费者偶发"消息凭空消失"，日志里没有任何异常。根因：用了 <code>auto_ack=True</code>，broker 在推送的那一刻就删了消息，消费者处理途中崩溃（或被 OOM kill、被部署重启），这条永久丢失、零痕迹。修复：<code>auto_ack=False</code> + 处理成功后再 <code>basic_ack</code>；只有"丢了也无所谓"的指标流才考虑自动 ack。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 忘了 ack 导致假死</span>
+        <p>症状：消费者进程活着、CPU 也不高，却不再消费新消息，队列 Unacked 数顶在某个值不动。根因：业务分支里漏了 <code>basic_ack</code>，Unacked 计数只增不减，撞到 prefetch 上限后 broker 停止投递。看着像"卡死"，实则是反馈环被卡住。修复：确保每条消息在所有分支上都恰好 ack/nack 一次。management UI 里"Unacked 持续不降"是这个故障的指纹。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个消费者设了 <code>prefetch=1</code>，处理每条消息要 100ms，网络 RTT 约 100ms。它的吞吐上限大约是多少？怎么提高？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>约 <strong>5 条/秒</strong>。<code>prefetch=1</code> 时一条消息的完整周期是"推送(100ms) + 处理(100ms) + ack 回程(100ms)"≈ 200ms 串行往返（推送与 ack 各占半个 RTT），broker 必须等 ack 才推下一条，吞吐被锁在往返节奏上。提高办法：把 prefetch 调到 <code>RTT/处理时间</code> 量级或更高（这里 ≥ 2 就能让处理与网络往返重叠流水线化），让 broker 提前把后续消息推到消费者手里，处理和网络传输并行起来。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：confirm 和 ack 守的是"在线消息不丢"。但 broker 一旦重启或崩溃，内存里的队列和消息还在不在，是另一套机制——而且这里藏着本章最大的认知陷阱。</p>
+
+      <h2 id="s23"><span class="num">2.3</span><span>重启与崩溃不丢：durable ≠ persistent ≠ safe</span></h2>
+
+      <p class="one-liner">durable 是队列定义能否扛重启，persistent 是单条消息要不要落盘，两者都满足也未必扛得住崩溃——那要 quorum。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"重启不丢"被工程师普遍误解为一个开关，实则是三个相互独立的属性，常被混为一谈。durable 是<strong>实体属性</strong>：队列/exchange 的<em>定义</em>是否在 broker 重启后还存在。persistent（<code>delivery_mode=2</code>）是<strong>消息属性</strong>：这一条消息是否被标记为要写盘。两者正交——durable 队列里的 transient 消息，重启后队列还在但消息没了；non-durable 队列里的 persistent 消息，重启后队列连同消息一起蒸发。要让一条消息扛过重启，<strong>队列 durable 和消息 persistent 必须同时满足</strong>，缺一不可。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）——本章最重要的一点</strong>：满足了 durable + persistent，仍有一个被多数教程跳过的缺口。<strong>classic 队列在回送 publisher confirm 之前，并不保证已经 fsync 到磁盘</strong>。持久化消息先进的是操作系统的写缓冲，broker 随即回 confirm，真正刷盘是稍后批量进行的（通常有一个 ≤200ms 的窗口）。如果 broker 正好在这个窗口内崩溃（断电、内核 panic、被 OOM kill），这条"durable + persistent + 已 confirm"的消息<strong>照样会丢</strong>——它从来没真正落到盘上。这就是为什么 quorum 队列存在：quorum 队列基于 Raft，写入要<strong>提交到多数派副本之后才回 confirm</strong>，单机崩溃由其余副本兜底，给出 durable+persistent 让人误以为自己早已拥有的那种持久性。Raft 的细节留到 <a href="03-internals.html#s34">03 章 3.4</a>，这里只需记住缺口和补法。</p>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 三个独立属性，挡住三种不同的失败</caption>
+        <thead>
+          <tr><th>属性</th><th>作用对象</th><th>挡住的失败</th><th>挡不住的</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>durable</td><td>队列/exchange 定义</td><td>broker 重启后队列定义还在</td><td>消息本身（若消息非 persistent）</td></tr>
+          <tr><td>persistent</td><td>单条消息</td><td>消息被标记写盘，配合 durable 扛重启</td><td>fsync 前的崩溃窗口（classic）</td></tr>
+          <tr class="selected"><td>quorum 队列</td><td>整条队列 + 多副本</td><td>单节点崩溃 / 宕机：多数派已落地</td><td>多数派同时全灭（极端情形）</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三层防护：durable 挡重启、persistent 挡常规、quorum 挡崩溃窗口">
+          <defs>
+            <marker id="ar-ink2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="350" y="26" text-anchor="middle" class="node-label" font-weight="700">一条持久化消息要扛过的三种失败</text>
+
+          <rect x="120" y="52" width="460" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="74" text-anchor="middle" class="node-label">durable 队列定义</text>
+          <text x="350" y="92" text-anchor="middle" class="edge-label">让队列在 broker 重启后仍存在</text>
+          <text x="610" y="82" text-anchor="start" class="branch-label">挡：重启</text>
+
+          <rect x="120" y="120" width="460" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="142" text-anchor="middle" class="node-label">persistent 消息落盘</text>
+          <text x="350" y="160" text-anchor="middle" class="edge-label">消息标记写盘，配合 durable 才生效</text>
+          <text x="610" y="150" text-anchor="start" class="branch-label">挡：常规重启</text>
+
+          <rect x="120" y="188" width="460" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="350" y="211" text-anchor="middle" class="node-label-accent">quorum 多副本（Raft）</text>
+          <text x="350" y="229" text-anchor="middle" class="edge-label">提交到多数派副本后才回 confirm</text>
+          <text x="610" y="220" text-anchor="start" class="branch-label">挡：单机崩溃</text>
+
+          <rect x="120" y="266" width="460" height="40" rx="6" class="diagram-soft node-fill"/>
+          <text x="350" y="290" text-anchor="middle" class="edge-label">↑ 只有 classic：confirm 后 fsync 前的崩溃窗口仍丢 — quorum 关掉它</text>
+
+          <line x1="100" y1="77" x2="100" y2="217" class="diagram-soft"/>
+          <text x="92" y="150" text-anchor="middle" class="edge-label" transform="rotate(-90 92 150)">防护逐层加深</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>三层防护逐层加深：durable 挡 broker 重启、persistent 让消息真正落盘、quorum 多副本挡单机崩溃。<strong>注意</strong>：底部虚线层是 classic 队列特有的崩溃窗口——confirm 已回但尚未 fsync，此刻崩溃仍丢；quorum 用"多数派落地后才 confirm"关掉这个窗口。</figcaption>
+      </figure>
+
+      <p><strong>场景走查</strong>：一个对账系统把队列声明为 durable、消息设 <code>delivery_mode=2</code>、开了 publisher confirms，自认为"零丢失"。压测中给 broker 断电，复盘发现丢了最后约 80ms 的已 confirm 消息。根因不是配置错，而是 classic 队列的 fsync 窗口：那 80ms 的消息回了 confirm 但还在 OS 写缓冲里，断电时一起没了。把队列换成 quorum 队列后重测，同样断电零丢失——因为每条消息在回 confirm 前已写入多数派节点。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · durable 与 persistent 混为一谈</span>
+        <p>症状：队列声明了 durable，重启后队列还在但消息全空。根因：只设了队列 durable，没给消息设 <code>delivery_mode=2</code>，消息是 transient 的，重启时随内存蒸发。反之，给消息设了 persistent 却把队列建成 non-durable，重启后队列定义都没了，消息更无处安放。两个开关是<strong>正交</strong>的，必须同时打开，且这只防"重启"不防"崩溃窗口"。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一条消息设了 <code>delivery_mode=2</code>（persistent），但发往一个 non-durable 的 classic 队列。broker 正常重启后，这条消息还在吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不在。non-durable 队列的<em>定义</em>本身重启就消失了，承载它的队列都没了，消息标没标 persistent 已无意义——persistent 只决定"消息要不要写盘"，不决定"队列要不要保留"。这正是两个属性正交的体现：要扛重启，<strong>队列 durable 和消息 persistent 缺一不可</strong>；要再扛崩溃窗口，还得上 quorum。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：消息存住了，但如果某条消息本身有毒——每次处理都失败——nack 重回队列会变成无限循环。把毒消息引开，是下一个接缝。</p>
+
+      <h2 id="s24"><span class="num">2.4</span><span>毒消息不死循环：dead-letter、TTL、重试上限</span></h2>
+
+      <p class="one-liner">dead-letter exchange 把被拒绝、过期或超限的消息引到另一个 exchange，而不是丢弃或无限重投；delivery-limit 给重试次数封顶。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>手动 ack 解决了"处理失败的消息别删"，但若用 <code>nack(requeue=true)</code> 把一条<strong>永远会失败</strong>的消息退回队列，它会被立刻重新投递、再次失败、再次退回——一个无限重投循环，把 CPU 打满，还卡在队头阻塞后面所有正常消息（head-of-line blocking）。需要一个出口：让"反复失败的"和"过期的"和"积压超量的"消息离开主队列，进到一个专门的地方，等人工或自动重试逻辑处理。这个出口就是 dead-letter exchange（DLX，死信交换机）。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：一个队列可以声明 <code>x-dead-letter-exchange</code> 指向一个 DLX。三类事件会让消息被<strong>死信化</strong>（dead-lettered）而非留在原队列：① 被 <code>nack</code>/<code>reject</code> 且 <code>requeue=false</code>；② TTL 到期（<code>x-message-ttl</code> 设在队列上、或单条消息设 <code>expiration</code>）；③ 超过队列长度上限 <code>x-max-length</code> 被挤出。被死信化的消息按原 routing key（或 DLX 配置的覆盖 key）路由进 DLX 绑定的队列。每死信一次，broker 在消息的 <code>x-death</code> 头里累加一条记录（次数、原因、时间、来源队列）——这是排查"这条消息怎么进的死信队列"的取证依据。quorum 队列还有一个内建的 <code>delivery-limit</code>：4.0 起<strong>默认值为 20</strong>，一条消息被重投 20 次后自动死信化，从机制上掐断毒消息的无限循环，无需手工拼 DLX 计数逻辑。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="死信流：主队列经三类触发进 DLX，再分流到重试队列或死信队列">
+          <defs>
+            <marker id="ar-ink3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <rect x="24" y="116" width="132" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="90" y="140" text-anchor="middle" class="node-label">主队列</text>
+          <text x="90" y="159" text-anchor="middle" class="edge-label">orders</text>
+
+          <rect x="300" y="116" width="118" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="359" y="140" text-anchor="middle" class="node-label-accent">DLX</text>
+          <text x="359" y="159" text-anchor="middle" class="edge-label">死信交换机</text>
+
+          <rect x="552" y="48" width="132" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="618" y="71" text-anchor="middle" class="node-label">重试队列</text>
+          <text x="618" y="89" text-anchor="middle" class="edge-label">延迟后回主队列</text>
+
+          <rect x="552" y="186" width="132" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="618" y="209" text-anchor="middle" class="node-label">死信队列</text>
+          <text x="618" y="227" text-anchor="middle" class="edge-label">人工 / 归档</text>
+
+          <line x1="156" y1="145" x2="300" y2="145" class="diagram-accent" marker-end="url(#ar-verm3)"/>
+          <text x="228" y="118" text-anchor="middle" class="branch-label">reject(requeue=false)</text>
+          <text x="228" y="160" text-anchor="middle" class="branch-label">TTL 过期 · 超长 · 超重试</text>
+
+          <line x1="418" y1="132" x2="552" y2="80"  class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="486" y="100" text-anchor="middle" class="edge-label">可恢复</text>
+          <line x1="418" y1="158" x2="552" y2="210" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="486" y="196" text-anchor="middle" class="edge-label">不可恢复</text>
+
+          <path d="M 618 48 C 618 16, 90 16, 90 116" class="diagram-soft" fill="none" marker-end="url(#ar-ink3)"/>
+          <text x="350" y="14" text-anchor="middle" class="edge-label">退避后重投，x-death 计数累加</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>死信流：主队列里被拒绝、TTL 过期、超长或超重试的消息被引到 DLX，再按可恢复与否分流到重试队列或终态死信队列。<strong>注意</strong>：重试队列经延迟退避后把消息送回主队列，每轮在 <code>x-death</code> 头累加计数，配合 delivery-limit 才不会变成换皮的无限循环。</figcaption>
+      </figure>
+
+      <p><strong>场景走查</strong>：订单队列消费时，某条消息因下游一个字段 schema 不兼容而每次反序列化都抛异常。消费者对它 <code>nack(requeue=false)</code>，消息进 DLX。DLX 绑了两条路径：可重试错误（如下游瞬时 503）进"重试队列"，该队列设 30s TTL，过期后再死信回主队列重试，<code>x-death</code> 计数每轮 +1；不可重试错误（如这次的 schema 不兼容）直接进"死信队列"等人工。即便误把它当可重试，quorum 队列的 <code>delivery-limit=20</code> 也会在第 20 次后强制把它打入终态，不会无限打转。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">declare_dlx.json</span>
+          <span class="lang">json</span>
+        </div>
+        <pre><code class="language-json">{
+  "queue": "orders",
+  "arguments": {
+    "x-queue-type": "quorum",
+    "x-dead-letter-exchange": "orders.dlx",
+    "x-message-ttl": 600000,
+    "x-max-length": 100000,
+    "x-delivery-limit": 20
+  }
+}</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · requeue 无限循环</span>
+        <p>症状：一条消息在队列里反复出现、CPU 持续打满，后面正常消息迟迟得不到处理。根因：对一条必然失败的消息用了 <code>nack(requeue=true)</code>，它立刻回到队列被重投、再失败，形成死循环，还在队头阻塞后续消息。修复：失败时改用 <code>requeue=false</code> 送 DLX，并给 quorum 队列保留默认 <code>delivery-limit</code>（或在 classic 上用 DLX + 重试队列计数）封顶重试次数。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>给主队列设了 DLX，但消费者一直用 <code>nack(requeue=true)</code> 重投失败消息。这条毒消息会进 DLX 吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不会——除非命中别的死信条件。死信化只在 <code>requeue=false</code>、TTL 过期、超长或（quorum）超过 delivery-limit 时触发。<code>requeue=true</code> 表示"放回去再试"，根本没把消息交给 DLX，它会原地无限重投。DLX 配了不等于自动生效，<strong>得让消息真正满足某个死信条件</strong>。在 quorum 队列上，即使消费者执意 <code>requeue=true</code>，<code>delivery-limit=20</code> 仍会兜底把它死信化。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：前四节都在补"消息不丢"的接缝。但可靠性本身有反作用力——队列无限堆积会触发 broker 的自我保护，反而把整个集群的发送端按下暂停键。</p>
+
+      <h2 id="s25"><span class="num">2.5</span><span>可靠性的反作用力：内存/磁盘告警与背压</span></h2>
+
+      <p class="one-liner">为了不让自己被撑爆，broker 在内存或磁盘逼近水位线时会阻塞所有生产者——看起来像 publish 卡住，其实是设计中的背压。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>把消息可靠地存住，前提是 broker 自己不被存爆。一条没人消费的队列会一直堆，内存与磁盘是有限的。broker 设了告警水位（resource alarm）：内存用量逼近高水位（默认约总内存的 <strong>60%</strong>）或磁盘剩余跌破阈值时，broker 主动<strong>阻塞所有发布连接</strong>——这是自保的背压，不是故障。消费者照常消费，队列被排空、资源回落到水位线下后，发布自动解除阻塞。可靠性和吞吐在这里短兵相接：与其 OOM 崩掉丢光所有消息，不如先把入口关上。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：触发内存告警时，broker 在<strong>连接层</strong>停止从所有发布连接读取数据——TCP 接收窗口不再推进，生产者的 <code>basic.publish</code> 因此阻塞（或在异步客户端里收到 channel 的 blocked 通知）。这里有一个和 <a href="01-model.html#s11">1.1</a> 呼应的细节：阻塞作用在<strong>连接</strong>层级，所以一条连接上的<em>所有</em> channel 一起被卡，不是只卡发往满队列的那一个；而且告警是<strong>集群级</strong>的——任一节点触发，整个集群的发布全停。消费连接不受影响，继续放水。这造成一个极具迷惑性的现象：发送端集体"卡住"，消费端却一切正常。</p>
+
+      <p>队列实现也影响堆积时的内存行为：经典的 lazy 模式（消息尽量留在磁盘、不常驻内存）和 quorum 队列在大积压下对内存更友好，能延后撞上水位线的时刻；但它们只是<strong>推迟</strong>而非取消告警——根治还得给队列设上界。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 无界队列触发全集群发布阻塞</span>
+        <p>症状：所有生产者的 publish 同时"卡住"或超时，而消费端日志显示一切正常——极易误判成网络或生产者代码问题。根因：某条队列无人消费、无上界，一路堆到 broker 内存高水位（约 60%），触发集群级资源告警，broker 阻塞了<strong>所有</strong>发布连接。修复：给队列设 <code>x-max-length</code> 或 <code>x-message-ttl</code> 封顶并配 DLX 泄流，用 quorum 或 lazy 行为压低堆积时的内存占用，并监控内存水位告警。把"publish 卡住"的第一反应从"查网络"改成"查队列堆积与资源告警"。</p>
+      </div>
+
+      <p><strong>场景走查</strong>：一次发布上线把某个消费者服务的镜像配错，消费者全挂，但生产者还在全速 publish。一条队列在十几分钟内堆到几百万条，broker 内存撞上 60% 高水位，触发告警，集群所有发布连接被阻塞。值班同学看到"所有服务 publish 超时"，先怀疑网络和 broker 宕机，排查许久才在 management UI 看到内存告警和那条暴涨的队列。修复消费者镜像、队列被消费排空后，内存回落，发布阻塞自动解除。事后给该队列补了 <code>x-max-length</code> 和 DLX——再发生时超量消息进死信而非无限堆积，不再拖垮全集群。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>线上所有生产者的 publish 同时变慢甚至卡住，但消费者一切正常、网络也没问题。最先该怀疑什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>broker 资源告警触发了背压。"发布端集体阻塞、消费端正常"是 RabbitMQ 内存/磁盘告警的典型指纹——broker 在连接层停止读取发布连接，且这是集群级的，所以全员 publish 卡住。去 management UI 看内存/磁盘水位和有没有暴涨的队列，而不是先查网络。根因通常是某条队列无界堆积；根治是给队列加 <code>x-max-length</code>/TTL 上界并配 DLX 泄流。</p>
+        </details>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 可靠性是一组权衡，不是一个开关</span>
+        <p>本章五节连起来是一条因果链：每加一道"不丢"的保险，都要付出吞吐、延迟或资源的代价。confirm/ack 增加往返，persistent 与 quorum 增加写放大，无界堆积换来的"不丢消息"最终以"全集群发布阻塞"的形式反噬。可靠投递的工程问题从来不是"能不能不丢"，而是"为这条消息值得付多少代价、把界划在哪里"。这条权衡线会贯穿 <a href="03-internals.html#s34">03 章</a>的内部机制和 <a href="04-selection.html">04 章</a>的选型。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>队列声明了 durable、消息设了 persistent、还开了 publisher confirms 并收到了 ack。在 <strong>classic</strong> 队列上，这条消息还可能丢吗？为什么？换成 quorum 队列结果有何不同？</li>
+          <li>publisher confirms 和 consumer ack 都叫"ack"，方向和语义各是什么？只开其中一个，会在链路哪一端留下丢失缺口？</li>
+          <li>一个消费者进程活着、CPU 不高，却不再消费新消息，队列 Unacked 数顶住不降。最可能的根因是什么？它和 prefetch 的关系是什么？</li>
+          <li>（设计题）给一条核心订单队列设计一套"消息不丢 + 毒消息不死循环 + 不拖垮集群"的完整方案，列出你会设置的队列类型与关键参数，并说明每一项挡的是哪种失败。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>classic 队列上<strong>仍可能丢</strong>：它在回 confirm 前并不 fsync，消息还在 OS 写缓冲里，broker 在这 ≤200ms 窗口内崩溃就丢。confirm 只代表"broker 按它的承诺处理完"，对 classic 这个承诺不含落盘。quorum 队列在回 confirm 前已提交到多数派副本，单机崩溃由其余副本兜底，因此不丢。</li>
+            <li>publisher confirms 是 <strong>broker → producer</strong> 的回执，语义是"消息已被 broker 托管"；consumer ack 是 <strong>consumer → broker</strong> 的回执，语义是"已处理完，可删除"。只开 confirm 不开手动 ack，消费端崩溃丢消息；只开手动 ack 不开 confirm，发送端进 broker 失败时无感知。两段方向相反、互不替代。</li>
+            <li>根因是<strong>漏了 ack</strong>。Unacked 计数只随投递增加、不随 ack 减少，撞到 prefetch 上限后 broker 停止投递，消费者看着像假死，实则反馈环被卡住。prefetch 限的就是 Unacked 上限，所以"忘 ack"必然以"Unacked 顶在 prefetch 值不动"的形式暴露。</li>
+            <li>参考方案：队列用 <strong>quorum</strong>（多副本，挡单机崩溃，且自带 <code>delivery-limit=20</code> 挡无限重投）；消息设 <code>delivery_mode=2</code> persistent + 队列 durable（挡重启）；生产端开 <strong>publisher confirms</strong> + <code>mandatory</code>（挡发送端丢失与无路由静默丢弃）；消费端<strong>手动 ack</strong> + 适中 <code>prefetch</code>（挡消费端崩溃丢失与撑爆）；配 <strong>DLX</strong> 接收 <code>requeue=false</code>/TTL/超长的消息（挡毒消息与积压）；给队列设 <code>x-max-length</code>/<code>x-message-ttl</code> 上界（挡无界堆积触发全集群发布阻塞）。每一项对应一种具体失败，缺哪项就在哪处留缺口。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>用 TTL + DLX 拼一个"延迟重试 30 秒"</h3>
+        <p>RabbitMQ 没有原生的延迟队列。要求：消费失败的消息不立即重投，而是等 <strong>30 秒</strong>再回到主队列重新消费，且最多重试 5 次，超过就进终态死信队列。手上只有普通队列、TTL、DLX 三样积木——画出队列与 exchange 的拓扑，说明消息怎么"绕一圈"实现延迟，以及 5 次上限靠什么字段判定。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键技巧：让消息在一个<strong>没有消费者的"等待队列"</strong>里靠 TTL 自然过期，过期即死信。拓扑：主队列消费失败 → <code>nack(requeue=false)</code> 进 DLX-A → 路由到"等待队列"（设 <code>x-message-ttl=30000</code>，且它的 DLX 指回主队列对应的 exchange）→ 30s 后 TTL 到期，消息被死信回主队列重试。等待队列没有消费者，消息只能靠过期离开，"延迟"就来自这段 TTL。重试次数读消息 <code>x-death</code> 头里的累计计数，超过 5 就在消费端改判进终态死信队列（quorum 队列也可直接靠 <code>delivery-limit</code> 兜底，但那是次数上限不是延迟）。想一想：如果不同消息要不同延迟（30s/5min/1h），单条 TTL 的"队头阻塞"会带来什么问题？</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.rabbitmq.com/docs/confirms">Consumer Acknowledgements and Publisher Confirms</a>（官方文档）</li>
+          <li><a href="https://www.rabbitmq.com/docs/dlx">Dead Letter Exchanges</a>（官方文档）</li>
+          <li><a href="https://www.rabbitmq.com/docs/quorum-queues">Quorum Queues</a>（官方文档）</li>
+          <li><a href="https://www.rabbitmq.com/docs/memory">Memory and Disk Alarms / Resource-driven Flow Control</a>（官方文档）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-model.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 模型与路由</span>
+        </a>
+        <a href="03-internals.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 内部机制</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 publisher confirms</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 consumer ack 与 prefetch</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 durable ≠ persistent</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 dead-letter 与重试上限</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 告警与背压</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

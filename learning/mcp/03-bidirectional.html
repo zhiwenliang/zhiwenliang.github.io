@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>双向会话 · MCP 模型上下文协议 深潜</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; font-weight: 500; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+.path-list { list-style: none; padding: 0; margin: 16px 0; }
+.path-list li {
+  padding: 10px 0 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 15px;
+}
+.path-list .who {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--vermilion); letter-spacing: 0.04em;
+  margin-right: 10px;
+}
+.toc-files { list-style: none; padding: 0; margin: 16px 0; }
+.toc-files li { margin: 0 0 10px; }
+.toc-files a {
+  display: block; padding: 12px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-files a:hover { border-color: var(--vermilion); }
+.toc-files .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-files .t { font-weight: 600; }
+.toc-files .d { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-protocol.html">02 协议</a><span class="sep">—</span>
+    <a href="03-bidirectional.html" class="current">03 双向</a><span class="sep">—</span>
+    <a href="04-security.html">04 安全</a><span class="sep">—</span>
+    <a href="05-design-and-frontier.html">05 设计·前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>双向会话：server 反过来驱动 client</h1>
+        <p class="recap">02 章把消息放上了线路，并提到 JSON-RPC 是对称的——双方都能发请求。01 §1.6 钉下的那条反向箭头，这一章展开：server 不只被动应答，它会反过来向 client 发起请求，借用 host 的模型、问用户要输入、读 client 允许的目录。这一步，才把 MCP 从"无状态工具 API"分出来。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label" style="font-size:10px;font-weight:500;">本章你将建立的 schema</p>
+        <ul>
+          <li>控制流为什么能反向：02 的会话是持久且对称的，于是 server 能回头给 client 发请求</li>
+          <li>三类 server→client 请求：sampling（借模型）、roots（问边界）、elicitation（要用户输入）</li>
+          <li>sampling 让 server 不带 LLM SDK、不带 API key——它借用 host 的模型</li>
+          <li>反向能力是 MCP 的招牌，却部署得最少：无状态传输支撑不了 server→client</li>
+        </ul>
+      </section>
+
+      <p>延续 01–02 的 <strong>GitHub server</strong> 场景：助手已经能读 issue、查 PR。这一章再加一个 <strong>文档总结 server</strong>——它收到一篇超长文档，却<em>不自带</em>模型，而是反过来请 client 用用户的模型来总结。这个"server 借模型"的动作，就是本章的主角。</p>
+
+      <h2 id="s31"><span class="num">3.1</span><span>控制流为什么能反向</span></h2>
+      <p class="one-liner">02 的 JSON-RPC 会话是持久且对称的，因此 server 可以回头向 client 发请求——这正是 MCP 区别于无状态工具 API 的根本。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>普通 function calling 是无状态的一来一回：client 把工具调用发给 server，server 算完返回结果，<em>到此结束</em>，server 没有任何渠道再主动联系 client。MCP 不同——01–02 建立的是一条<strong>持久会话</strong>：握手协商完能力后，连接一直开着。连接既然一直开着、JSON-RPC 又是对称的，server 就能在处理一个请求的<em>过程中</em>，反过来给 client 发新请求。这一步把"调用"升级成了"会话"。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：对称性在 02 就埋好了——JSON-RPC 不区分谁是 client、谁是 server，任何一端都能发 request、收 response。无状态工具 API 之所以做不到反向，不是缺一个 API，而是缺<strong>那条一直开着的连接</strong>：HTTP 请求-响应打完即走，server 手里没有指向 client 的回路。MCP 的会话保留了这条回路，于是 server→client 的请求有处可发。具体有三类，全部由 server 发起、client 应答：<strong>sampling</strong>（请 client 跑一次 LLM）、<strong>roots</strong>（问 client 允许操作哪些目录）、<strong>elicitation</strong>（请 client 向用户要一段结构化输入）。三者方向一致，都是平时被当成"被动方"的 server 反客为主。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一条持久会话上有两个方向：client 到 server 的正向 tools 调用，以及 server 到 client 的反向 sampling/roots/elicitation 请求，反向用红色突出">
+          <defs>
+            <marker id="s31-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s31-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- session band -->
+          <rect x="40" y="116" width="680" height="48" rx="6" class="diagram-soft"/>
+          <text x="380" y="145" text-anchor="middle" class="edge-label">一条持久会话 · JSON-RPC（02 握手后一直开着）</text>
+
+          <!-- client box -->
+          <rect x="60" y="100" width="150" height="80" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="135" text-anchor="middle" class="node-label">Client</text>
+          <text x="135" y="154" text-anchor="middle" class="edge-label">在 host 内 · 握模型</text>
+
+          <!-- server box -->
+          <rect x="550" y="100" width="150" height="80" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="625" y="135" text-anchor="middle" class="node-label-accent">Server</text>
+          <text x="625" y="154" text-anchor="middle" class="edge-label">独立进程</text>
+
+          <!-- forward arrow (client -> server) -->
+          <line x1="210" y1="92" x2="550" y2="92" class="diagram-ink" marker-end="url(#s31-ink)"/>
+          <text x="380" y="82" text-anchor="middle" class="edge-label">正向：tools/call · resources/read（模型自发）</text>
+
+          <!-- reverse arrow (server -> client) -->
+          <line x1="550" y1="190" x2="210" y2="190" class="diagram-accent" marker-end="url(#s31-acc)"/>
+          <text x="380" y="210" text-anchor="middle" class="branch-label">反向：sampling · roots · elicitation</text>
+          <text x="380" y="228" text-anchor="middle" class="edge-label">server 回头请求 client —— 本章主角</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>同一条会话上的两个方向：上行是已熟悉的正向工具调用，下行（红）是 server 反过来向 client 发起的请求。<strong>注意</strong>：反向箭头之所以成立，<em>只</em>因为连接一直开着——无状态的 HTTP 请求-响应打完即走，没有这条回路。把"会话持久"和"反向请求"这两件事绑在一起记。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>无状态工具 API vs. MCP 双向会话</caption>
+        <thead>
+          <tr><th>维度</th><th>普通 function calling</th><th>MCP 会话</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>连接生命周期</td><td>一次请求-响应，打完即走</td><td>握手后持久保持</td></tr>
+          <tr><td>方向</td><td>单向：client→server→返回</td><td>双向：两端都能发起 request</td></tr>
+          <tr class="selected"><td>server 能否回头联系 client</td><td>不能（没有回路）</td><td>能：sampling / roots / elicitation</td></tr>
+          <tr><td>状态</td><td>无状态</td><td>有状态（协商结果 + 在途请求关联）</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="s32"><span class="num">3.2</span><span>sampling：server 借用 client 的模型</span></h2>
+      <p class="one-liner">sampling/createMessage 让 server 请 client 的 LLM 补全一段 prompt——server 因此不必自带模型，借用 host 的就行。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>很多 server 的活儿本质上需要一次 LLM 推理：总结一篇长文、把自然语言转成查询、给一段日志归类。如果每个 server 都自带模型，就要每个 server 各配一套 LLM SDK、各持一份 API key、各自计费——又回到了 01 痛批的"每一方重复造轮子"。sampling 反转了这件事：<strong>模型访问权和 API key 都归 client（host）所有</strong>，server 缺推理时就发一个 <code>sampling/createMessage</code>，让 client 用<em>用户自己的</em>模型跑。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：这是 MCP 最关键、也最反直觉的一招——<strong>server 保持模型无关（model-independent）：它不需要任何 LLM SDK，也不需要自己的 API key</strong>。文档总结 server 收到 50 页文档，自己不调任何模型，而是把"请总结这段内容"打包成 <code>sampling/createMessage</code> 发给 client；client 用用户配置的模型（Claude、GPT、Gemini 都行）跑完，把补全结果回给 server。server 从头到尾没碰过模型权重，却完成了一次推理。这条反转还带来两个硬约束：</p>
+      <ul>
+        <li><strong>human-in-the-loop</strong>：server 借的是用户的模型、用户的额度，所以 client <em>应当</em>用一道用户确认来把关每次 sampling——让人看到"这个 server 想用你的模型跑这段 prompt"，可以拦下。控制权仍在 host 手里。</li>
+        <li><strong>modelPreferences 只能给倾向，点不到具体模型</strong>：server 不能直接点名某个具体模型（如 claude-3-opus）。它只能发抽象的 <code>costPriority</code> / <code>speedPriority</code> / <code>intelligencePriority</code>（0..1 的权重）外加<em>建议性</em>的 <code>hints</code>；client 可以无视或重映射——server 提示 <code>claude-3-sonnet</code>，client 完全可以改用 Gemini。模型选择的最终决定权，留在持有模型的那一端。</li>
+      </ul>
+      <p>2025-11-25 修订版还给 sampling 加上了<strong>带工具调用</strong>的能力：server 发起的这次 sampling 里，模型可以再触发工具，从而在 server 侧跑一个 agentic 循环。反向请求不再只是"补全一段文本"，而能驱动一整段自主推理。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="sampling 时序图：server 发 createMessage 给 client，client 向用户请求确认，再调模型，最后把补全结果回给 server">
+          <defs>
+            <marker id="s32-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s32-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- lifelines: server (left, protagonist), client (mid), model (right) -->
+          <rect x="30" y="24" width="150" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="105" y="49" text-anchor="middle" class="node-label-accent">文档总结 Server</text>
+          <line x1="105" y1="64" x2="105" y2="332" class="diagram-soft"/>
+
+          <rect x="290" y="24" width="140" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="49" text-anchor="middle" class="node-label">Client（host）</text>
+          <line x1="360" y1="64" x2="360" y2="332" class="diagram-soft"/>
+
+          <rect x="556" y="24" width="134" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="623" y="49" text-anchor="middle" class="node-label">用户的 LLM</text>
+          <line x1="623" y1="64" x2="623" y2="332" class="diagram-soft"/>
+
+          <!-- 1: server -> client createMessage (reverse = accent) -->
+          <line x1="105" y1="96" x2="360" y2="96" class="diagram-accent" marker-end="url(#s32-acc)"/>
+          <text x="232" y="87" text-anchor="middle" class="edge-label">① sampling/createMessage</text>
+
+          <!-- 2: client -> user approval (self loop on client) -->
+          <path d="M 360 124 H 470 V 150 H 360" class="diagram-ink" marker-end="url(#s32-ink)"/>
+          <text x="476" y="140" text-anchor="start" class="edge-label">② 向用户确认</text>
+
+          <!-- 3: client -> model -->
+          <line x1="360" y1="180" x2="623" y2="180" class="diagram-ink" marker-end="url(#s32-ink)"/>
+          <text x="492" y="171" text-anchor="middle" class="edge-label">③ 用用户模型推理</text>
+
+          <!-- 4: model -> client completion -->
+          <line x1="623" y1="222" x2="360" y2="222" class="diagram-ink" marker-end="url(#s32-ink)"/>
+          <text x="492" y="213" text-anchor="middle" class="edge-label">④ 补全文本</text>
+
+          <!-- 5: client -> server result (reverse-return = accent) -->
+          <line x1="360" y1="264" x2="105" y2="264" class="diagram-accent" marker-end="url(#s32-acc)"/>
+          <text x="232" y="255" text-anchor="middle" class="edge-label">⑤ createMessage 结果</text>
+
+          <text x="105" y="300" text-anchor="middle" class="edge-label">不带 LLM SDK</text>
+          <text x="105" y="316" text-anchor="middle" class="edge-label">不带 API key</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>一次 sampling 往返：server（红）发起，client 先<em>向用户确认</em>（②）再借用户的模型推理，最后把结果回送。<strong>注意</strong>：红色的两段（①⑤）是 server→client 方向；中间黑色三段（②③④）全发生在 client 一侧。server 自始至终没碰模型——它<em>借</em>了 client 手里的那把钥匙。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">sampling/createMessage · server→client request</span>
+          <span class="lang">json</span>
+          <button class="copy" data-copy-target="cb-sampling">复制</button>
+        </div>
+<pre id="cb-sampling"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "sampling/createMessage",
+  "params": {
+    "messages": [
+      {
+        "role": "user",
+        "content": {
+          "type": "text",
+          "text": "用三句话总结这篇文档：\n\n&lt;50 页正文&gt;"
+        }
+      }
+    ],
+    "modelPreferences": {
+      "hints": [{ "name": "claude-3-sonnet" }],
+      "costPriority": 0.3,
+      "speedPriority": 0.2,
+      "intelligencePriority": 0.8
+    },
+    "maxTokens": 400
+  }
+}</code></pre>
+      </div>
+      <p>注意 <code>method</code> 是 server <em>发出</em>的——在 02 的 GitHub 场景里，<code>method</code> 总是 client 发的 <code>tools/call</code>；这里方向反了过来。<code>hints</code> 里的 <code>claude-3-sonnet</code> 只是建议，client 可以换成任何模型；三个 priority 给的是"省钱 / 求快 / 要聪明"的相对权重，而非硬指标。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>文档总结 server 想保证"一定用 GPT-4 来跑总结"，于是在 <code>modelPreferences.hints</code> 里写死 <code>gpt-4</code>。这能保证吗？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>不能。<code>hints</code> 是<strong>建议性</strong>的，<code>modelPreferences</code> 整体只表达倾向，<em>最终选哪个模型由 client 决定</em>。client 完全可以把 <code>gpt-4</code> 重映射成它本地配置的 Claude 或 Gemini，甚至忽略 hints 只按三个 priority 权衡。根本原因是 sampling 的设计前提——模型访问权归 client，server 借用而非指挥。server 唯一能影响的是"我希望更聪明 / 更快 / 更省"，点不到具体型号。这正是 server 保持 model-independent 的代价与前提。</p>
+        </details>
+      </div>
+
+      <h2 id="s33"><span class="num">3.3</span><span>roots：client 划出可操作的边界</span></h2>
+      <p class="one-liner">client 通过 roots 告诉 server"你被允许在这些目录/URI 范围内操作"；server 用 roots/list 来问，URI 必须是 file://。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一个文件系统 server 启动时并不知道"自己能访问哪些目录"。靠它自己猜既危险又不可靠。roots 让 client 显式声明边界：把用户授权的目录列出来，server 据此知道作用域，不必越界探测。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：server 发 <code>roots/list</code>（又一个 server→client 请求），client 回一组 root URI。规范限定这些 URI <strong>必须是 <code>file://</code></strong>——roots 表达的是文件系统边界，不是任意网络地址。它和 sampling 共享同一条反向回路，只是用途从"借模型"变成"问作用域"。当用户授权的目录变化时，client 还能用 <code>notifications/roots/list_changed</code> 通知 server 重新拉取。本节到此为止，重点是认得它是<em>第二类</em> server→client 请求。</p>
+
+      <h2 id="s34"><span class="num">3.4</span><span>elicitation：操作中途向用户要输入</span></h2>
+      <p class="one-liner">elicitation/create 让 server 在操作进行到一半时，经由 client 向用户索取一段结构化输入——用 requestedSchema 描述要什么。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>有些信息 server 在启动时拿不到，只有跑到一半才知道缺。比如 GitHub server 要建 issue，却发现没指定目标仓库；与其失败退出，不如<em>暂停</em>操作、回头问用户"建到哪个仓库"。elicitation 就是这条"中途问一句"的通道。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：server 发 <code>elicitation/create</code>，附一个 <code>requestedSchema</code> 描述需要哪些字段；client 据此<em>渲染一张表单</em>给用户填，再把结果回送。用户的回复是<strong>三选一动作</strong>：<strong>accept</strong>（填了并提交）、<strong>decline</strong>（明确拒答）、<strong>cancel</strong>（直接关掉不决定）——server 必须分别处理这三种，而不是只看"有没有数据"。两条硬约束值得钉死：</p>
+      <ul>
+        <li><strong>禁止借表单要密钥</strong>：server <em>不得</em>用表单式 elicitation 索取密码、token 等机密。这类敏感凭据走另一条路（见下）。</li>
+        <li><strong>schema 刻意保持扁平</strong>：<code>requestedSchema</code> 只允许原始类型字段（字符串、数字、布尔、枚举），<em>不</em>允许嵌套对象或数组。这不是协议没做完，而是<em>有意</em>的约束——扁平 schema 让 client 渲染表单这件事保持极简，任何 client 都能稳定地把它画成几个输入框，不必处理任意嵌套结构。</li>
+      </ul>
+      <p>2025-11-25 修订版补了一条 <strong>URL-mode elicitation</strong>：当真要走 OAuth / 凭据这类敏感流程时，server 让 client 把用户引导到一个带外（out-of-band）URL 完成，并配了专门的错误码来表达这条路径——既满足"要凭据"的现实需求，又守住了"表单不碰机密"的红线。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="elicitation 流程：server 暂停操作并发 elicitation/create 给 client，client 向用户渲染表单，用户以 accept/decline/cancel 回复，结果回到 server">
+          <defs>
+            <marker id="s34-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s34-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- server box -->
+          <rect x="24" y="60" width="150" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="99" y="88" text-anchor="middle" class="node-label-accent">GitHub Server</text>
+          <text x="99" y="107" text-anchor="middle" class="edge-label">操作暂停中</text>
+
+          <!-- client box -->
+          <rect x="285" y="60" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="88" text-anchor="middle" class="node-label">Client</text>
+          <text x="360" y="107" text-anchor="middle" class="edge-label">渲染表单</text>
+
+          <!-- user box -->
+          <rect x="546" y="60" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="621" y="88" text-anchor="middle" class="node-label">用户</text>
+          <text x="621" y="107" text-anchor="middle" class="edge-label">填扁平表单</text>
+
+          <!-- server -> client (reverse = accent) -->
+          <line x1="174" y1="84" x2="285" y2="84" class="diagram-accent" marker-end="url(#s34-acc)"/>
+          <text x="229" y="74" text-anchor="middle" class="edge-label">elicitation/create</text>
+          <text x="229" y="138" text-anchor="middle" class="edge-label">+ requestedSchema</text>
+
+          <!-- client -> user -->
+          <line x1="435" y1="92" x2="546" y2="92" class="diagram-ink" marker-end="url(#s34-ink)"/>
+          <text x="490" y="82" text-anchor="middle" class="edge-label">显示表单</text>
+
+          <!-- user -> client reply -->
+          <line x1="546" y1="116" x2="435" y2="116" class="diagram-ink" marker-end="url(#s34-ink)"/>
+          <text x="490" y="160" text-anchor="middle" class="branch-label">accept / decline / cancel</text>
+
+          <!-- client -> server back (reverse-return = accent) -->
+          <line x1="285" y1="116" x2="174" y2="116" class="diagram-accent" marker-end="url(#s34-acc)"/>
+          <text x="229" y="170" text-anchor="middle" class="edge-label">结果回送 → 操作恢复</text>
+
+          <!-- red-line note -->
+          <text x="360" y="226" text-anchor="middle" class="edge-label">硬约束：表单不得索取密钥；schema 只能扁平（无嵌套）</text>
+          <text x="360" y="246" text-anchor="middle" class="edge-label">要凭据 → 走 URL-mode 带外流程（2025-11-25）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.4</span>elicitation 流程：server（红）暂停操作并发 <code>elicitation/create</code>，client 渲染表单，用户以 accept/decline/cancel 三选一回复，结果回送后操作恢复。<strong>注意</strong>：schema 扁平是<em>有意设计</em>——它把 client 的表单渲染压到最简；要密钥不能走这条表单，得走带外 URL。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">elicitation/create · server→client request</span>
+          <span class="lang">json</span>
+          <button class="copy" data-copy-target="cb-elicit">复制</button>
+        </div>
+<pre id="cb-elicit"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 12,
+  "method": "elicitation/create",
+  "params": {
+    "message": "要把 issue 建到哪个仓库？",
+    "requestedSchema": {
+      "type": "object",
+      "properties": {
+        "repo": { "type": "string", "title": "仓库 owner/name" },
+        "assignToMe": { "type": "boolean", "title": "指派给我" }
+      },
+      "required": ["repo"]
+    }
+  }
+}</code></pre>
+      </div>
+      <p><code>requestedSchema</code> 里只有 <code>string</code> 和 <code>boolean</code> 两个扁平字段，没有嵌套对象——这正是约束所在。client 收到后画两个输入框，用户填完以 accept 回送 <code>{ "repo": "acme/web", "assignToMe": true }</code>，GitHub server 的建 issue 操作随即从暂停处恢复。</p>
+
+      <h2 id="s35"><span class="num">3.5</span><span>有状态会话：嵌套才是"会话"的实质</span></h2>
+      <p class="one-liner">会话保存着三样东西：协商出的 protocolVersion 与 capabilities、按 id 关联的在途请求、以及一次 sampling/elicitation 嵌套在某个工具调用<em>内部</em>的上下文。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：把前几节的反向请求叠到 02 的握手上，会话里实际驻留三层状态：</p>
+      <ul>
+        <li><strong>协商结果</strong>：02 握手敲定的 <code>protocolVersion</code> 和双方 capabilities——后续每个请求都默认在这套约定下进行。</li>
+        <li><strong>在途请求关联</strong>：JSON-RPC 用 <code>id</code> 把 request 和 response 对上号。会话里会同时有多个请求在飞，靠 id 各认各的回包。</li>
+        <li><strong>嵌套上下文（关键）</strong>：一次 sampling 或 elicitation 往往发生在某个 <code>tools/call</code> <em>还没返回</em>的中途——GitHub server 处理 <code>create_issue</code> 到一半，回头发 <code>elicitation/create</code> 问用户仓库，拿到答复再继续把 issue 建完。外层工具调用挂起、内层反向请求嵌在里面，这种"调用套调用"的嵌套，才是把它叫<strong>会话</strong>而非<strong>无状态调用</strong>的实质。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">重要 nuance · 留了一个无状态后门</span>
+        <p>"MCP 永远是有状态会话"是<em>默认</em>，不是绝对。架构刻意留了一条无状态逃生通道：<strong>MCP 的一个子集可以在 Streamable HTTP 上以无状态方式运行</strong>，以便水平扩展——多个无状态实例分摊请求，不必各自维护长连接。代价是：这种部署放弃了上面那条"一直开着的回路"。所以准确的说法是"会话是默认形态"，而不是"一定有会话"。这条后门正是下一节那个意外的根源。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">先停十秒</span>
+        <p>GitHub server 处理一个 <code>create_issue</code> 工具调用，中途发现缺仓库名，于是发 <code>elicitation/create</code> 问用户。此刻那个 <code>create_issue</code> 请求处于什么状态？为什么这能说明 MCP 是"会话"而非"无状态调用"？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>那个 <code>create_issue</code> 处于<strong>挂起（in-flight，未返回）</strong>状态——它的 response 还没发出，server 正卡在处理过程里，等内层 <code>elicitation/create</code> 的答复。这恰恰说明会话的实质是<strong>嵌套</strong>：一个外层调用没结束，内层反向请求嵌在它<em>内部</em>，会话必须同时记住外层 id、内层 id、以及两者的从属关系。无状态调用做不到这点——它一来一回就结束，没有"在某个调用<em>之中</em>再发起调用"的余地。嵌套上下文 = 会话的实质。</p>
+        </details>
+      </div>
+
+      <h2 id="s36"><span class="num">3.6</span><span>招牌能力，部署最少</span></h2>
+      <p class="one-liner">sampling 是 MCP 概念上的心脏（server 借模型），却是采用率最低的能力——这个反差本身就是值得直说的洞察。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：原因直接接上 3.5 的无状态后门。server→client 请求要成立，前提是那条一直开着的回路；而<strong>无状态传输（不带 session 的纯 Streamable HTTP）根本支撑不了 server→client 请求</strong>——没有持久连接，server 无处发起反向调用。现实里大量 server 为了好部署、易扩展，选了无状态形态，于是<strong>多数已部署的 server 干脆完全跳过 sampling</strong>。结果就是这个反差：server 借用 host 模型这件事，是 MCP 区别于普通工具 API 的<em>整个立意所在</em>，却在真实部署里几乎没人用。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 为什么最妙的设计最少被用</span>
+        <p>立意与采用的背离，根子是一对取舍：<strong>反向能力</strong>需要有状态的持久会话，而<strong>易部署</strong>偏爱无状态的水平扩展，二者在传输层直接打架。sampling 站在"有状态"那一边，于是每当工程团队为了上线方便选了无状态 Streamable HTTP，就顺手把 sampling 一起放弃了。这不是 sampling 设计得不好，而是它的前提（持久回路）恰好是规模化部署最想砍掉的东西。记住这条张力：<strong>MCP 最有想象力的反转，被它自己对部署友好的让步架空了</strong>——这也是 04 章谈信任模型、05 章谈前沿取舍时反复会撞见的主题。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>为什么 server 能反过来给 client 发请求，而普通 function calling 的 server 不能？根因是缺了什么？</li>
+          <li>sampling 让 server 不需要自带什么两样东西？这对"server 该是什么"意味着什么？</li>
+          <li>elicitation 的 <code>requestedSchema</code> 为什么不允许嵌套对象？这是 bug 还是有意设计？另外，三种回复动作各是什么？</li>
+          <li>sampling 是 MCP 的招牌反转，为什么真实部署里采用率最低？跟无状态传输有什么关系？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>因为 MCP 的会话是<strong>持久且对称</strong>的——握手后连接一直开着，JSON-RPC 不区分发起方，server 手里有一条指向 client 的回路。普通 function calling 是无状态请求-响应，打完即走，server 根本没有这条回路，缺的不是某个 API 而是<strong>持久连接</strong>。</li>
+            <li>不需要<strong>自带 LLM SDK</strong>，也不需要<strong>自己的 API key</strong>。模型访问权归 client，server 缺推理时发 <code>sampling/createMessage</code> 借用 host 的模型。这意味着 server 应当保持 <strong>model-independent</strong>，只管业务逻辑，把模型这件事留给 host。</li>
+            <li>扁平是<strong>有意设计</strong>，不是 bug：只允许原始类型字段（无嵌套对象/数组），是为了让任何 client 都能把它简单地渲染成几个输入框。三种回复动作：<strong>accept</strong>（填并提交）、<strong>decline</strong>（明确拒答）、<strong>cancel</strong>（关掉不决定），server 须分别处理。</li>
+            <li>因为 server→client 请求依赖那条持久回路，而<strong>无状态传输（不带 session 的 Streamable HTTP）支撑不了 server→client 请求</strong>。大量 server 为了易部署/易扩展选了无状态形态，就顺手跳过了 sampling。于是这个"借模型"的核心立意，在真实部署里几乎没被用上。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给文档总结 server 设计一次"借模型并补问参数"的流程</h3>
+        <p>需求：文档总结 server 收到一篇长文档，要总结它，但用户没指定"总结成几句话"和"用中文还是英文"。请把这次操作用本章三类反向请求中的<em>两类</em>串起来——哪一步用 elicitation、哪一步用 sampling？外层是哪种调用，它在中途处于什么状态？再说一句：如果这个 server 被部署成无状态 Streamable HTTP，这套流程还跑得通吗？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>外层是一次模型自发的 <code>tools/call</code>（比如 <code>summarize_doc</code>），它在整个流程里处于<strong>挂起</strong>状态。先用 <strong>elicitation/create</strong> 问用户"几句话 + 语言"——<code>requestedSchema</code> 用一个数字字段和一个枚举字段，保持扁平；拿到 accept 后，再用 <strong>sampling/createMessage</strong> 把文档正文 + 用户给的偏好打包，借 client 的模型跑总结，结果回送、外层工具调用恢复并返回。两类反向请求嵌在同一个外层调用<em>内部</em>——这正是 3.5 的嵌套上下文。最后一问：跑<strong>不</strong>通——无状态 Streamable HTTP 没有持久回路，elicitation 和 sampling 这两个 server→client 请求都发不出去，整套流程在那种部署下直接失效，正是 3.6 那个反差的具体后果。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://modelcontextprotocol.io/docs/concepts/sampling">MCP — Sampling</a>（createMessage、modelPreferences、human-in-the-loop）· <a href="https://modelcontextprotocol.io/docs/concepts/roots">Roots</a>（file:// 边界）</li>
+          <li><a href="https://modelcontextprotocol.io/specification/2025-06-18/client/elicitation">Elicitation</a>（requestedSchema、accept/decline/cancel、扁平约束）· <a href="https://modelcontextprotocol.io/specification/2025-11-25/changelog">2025-11-25 changelog</a>（sampling 带工具、URL-mode elicitation）</li>
+          <li><a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/transports">Transports</a>（Streamable HTTP 与无状态形态——为什么反向请求要求持久会话）</li>
+          <li><a href="https://spec.modelcontextprotocol.io/specification/architecture/">MCP Specification — Architecture</a>（双向请求方向与 capability 协商的规范定义）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-protocol.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 协议机制</span>
+        </a>
+        <a href="04-security.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 信任模型与安全</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 控制流为何能反向</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 sampling 借模型</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 roots 划边界</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 elicitation 要输入</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 有状态会话</a></li>
+        <li><a href="#s36" data-toc-target="s36">3.6 招牌却最少部署</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

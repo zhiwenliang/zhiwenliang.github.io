@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<!--
+  tech-tutorial · Redis 深度教程 · 05 复制 · 哨兵 · 集群 · 分布式锁
+  Aesthetic: minimalist monochrome + single vermillion accent
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>复制 · 哨兵 · 集群 · 分布式锁 · Redis 深度教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700;
+  font-size: 30px; line-height: 1.2; margin: 0 0 12px;
+  letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { font-size: 15.5px; line-height: 1.65; margin: 0; }
+
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em;
+  background: var(--bg-soft); padding: 1px 5px; border-radius: 2px;
+  color: var(--vermilion); border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms;
+  user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px;
+  color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* index landing: chapter directory cards */
+.toc-cards { display: grid; grid-template-columns: 1fr; gap: 0; margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.toc-cards a { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 14px 18px; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--rule); transition: background 150ms; }
+.toc-cards a:last-child { border-bottom: none; }
+.toc-cards a:hover { background: var(--bg-soft); }
+.toc-cards .n { font-family: var(--mono); font-size: 13px; color: var(--vermilion); font-weight: 700; padding-top: 2px; }
+.toc-cards .t { font-weight: 600; font-size: 15px; }
+.toc-cards .d { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; line-height: 1.5; }
+
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-data-structures.html">01 数据结构</a><span class="sep">—</span>
+    <a href="02-single-thread-and-io.html">02 内核模型</a><span class="sep">—</span>
+    <a href="03-persistence-and-memory.html">03 持久化</a><span class="sep">—</span>
+    <a href="04-caching-patterns.html">04 缓存工程</a><span class="sep">—</span>
+    <a href="05-distributed.html" class="current">05 分布式</a><span class="sep">—</span>
+    <a href="06-redis-for-agents.html">06 Agent</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Redis 深度教程 · 05</p>
+        <h1>复制 · 哨兵 · 集群 · 分布式锁</h1>
+        <p class="recap">前四章都在单实例内。这一章把 Redis 拉到多节点：数据如何在节点间复制、主库宕机时谁来顶上、数据如何跨节点分片，以及一个把基石二（单线程命令原子性）用到极致、同时至今仍有争议的话题——分布式锁。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>复制是异步的——客户端收到 <code>OK</code> 时写可能还未到达副本，故障切换后该写可能丢失</li>
+          <li>哨兵（Sentinel）通过主观下线→客观下线→仲裁（quorum）完成自动 failover</li>
+          <li>Cluster 用 16384 个 hash 槽（slot）分片，MOVED 与 ASK 是两种不同语义的重定向</li>
+          <li>分布式锁从 <code>SETNX+EXPIRE</code> 演进到 <code>SET NX PX</code> + Lua 释放，再到 Redlock，但 Kleppmann 的批评表明 Redlock 对「正确性」场景仍不安全</li>
+        </ul>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">基石连接 · 02 + 03</span>
+        <p>复制的全量同步传输的是 RDB 快照（<a href="03-persistence-and-memory.html">第 03 章</a>讲的 fork + COW）；分布式锁的原子获取和 Lua 原子释放，根基是单线程串行执行（<a href="02-single-thread-and-io.html">第 02 章</a>的基石二）——多条命令在 Lua 脚本里整体提交，主线程一口气执行完，中间不被任何其他命令插入。这两个连接贯穿本章。</p>
+      </div>
+
+      <!-- ===================== 5.1 主从复制 ===================== -->
+      <h2 id="replication"><span class="num">5.1</span><span>主从复制</span></h2>
+      <p class="one-liner">一主多副本：主库（master）处理写，副本（replica）异步接收写命令的字节流并重放；副本只读，主库宕机后副本的数据可能落后于主库最后一批已确认写。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>单实例无法扩读，且一旦宕机数据全失。复制把数据冗余到多个节点：读流量分摊到副本，主库宕机后副本可接管服务。但「异步」两字埋下一个关键取舍——主库把写结果返回给客户端的那一刻，副本不一定已经收到这条写。这不是设计疏漏，而是在延迟与持久性之间选了延迟。</p>
+      </div>
+
+      <h3>全量同步</h3>
+      <p>副本第一次连上主库（或因断线太久无法走增量），走全量同步（full resync）：</p>
+      <ol>
+        <li>副本发送 <code>PSYNC ? -1</code>，表示没有已知的复制偏移量。</li>
+        <li>主库执行 <code>BGSAVE</code>（fork 一个子进程，利用 COW 生成 RDB 快照，见第 03 章），同时把这段时间到来的写命令写入<strong>复制积压缓冲区（replication backlog）</strong>。</li>
+        <li>RDB 文件通过 socket 传输到副本，副本清空本地数据并载入 RDB。</li>
+        <li>载入完成后，主库把缓冲区里积累的写命令一次性发给副本，副本从此进入增量同步。</li>
+      </ol>
+
+      <h3>增量同步与复制积压缓冲区</h3>
+      <p>主库为每条写命令分配一个<strong>复制偏移量（replication offset）</strong>，并将命令字节流写入一个固定大小的环形缓冲区——复制积压缓冲区（默认 <strong>1MB</strong>，由 <code>repl-backlog-size</code> 控制）。副本断线重连后发送 <code>PSYNC &lt;runid&gt; &lt;offset&gt;</code>；若主库的 backlog 中还保有副本缺少的那段写，就直接补发这段差量（部分重同步，partial resync），避免重传整个 RDB。若断线期间写入量超过 backlog 容量，缺失部分已被覆盖，则退回全量同步。</p>
+
+      <div class="callout warning">
+        <span class="label">异步复制下的写丢失风险</span>
+        <p>主库向客户端回复 <code>OK</code> 时，该写可能还在主库的 TCP 缓冲区里，尚未到达任何副本。若此后主库立刻宕机，哨兵提升某个副本为新主，<strong>这条已确认写就永久丢失</strong>。<code>WAIT numreplicas timeout</code> 命令可要求主库阻塞到至少 N 个副本确认收到，但这会提高延迟，且在 timeout 到期时仍不能保证。Redis 的复制设计目标是最终一致性，而非强一致性。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 740 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="主从复制与哨兵 failover 流程：master 异步复制到两个 replica，三个哨兵监控集群，主观下线后投票达到 quorum 完成 failover">
+          <defs>
+            <marker id="ar5a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar5a-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="ar5a-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- Master -->
+          <rect x="280" y="30" width="180" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="370" y="54" text-anchor="middle" class="node-label-accent">Master</text>
+          <text x="370" y="72" text-anchor="middle" class="edge-label">处理写 · 主库</text>
+
+          <!-- Replica 1 -->
+          <rect x="60" y="164" width="160" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="185" text-anchor="middle" class="node-label">Replica 1</text>
+          <text x="140" y="203" text-anchor="middle" class="edge-label">只读副本</text>
+
+          <!-- Replica 2 -->
+          <rect x="520" y="164" width="160" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="600" y="185" text-anchor="middle" class="node-label">Replica 2</text>
+          <text x="600" y="203" text-anchor="middle" class="edge-label">只读副本</text>
+
+          <!-- async replication arrows -->
+          <line x1="320" y1="84" x2="185" y2="164" class="diagram-soft" marker-end="url(#ar5a-soft)"/>
+          <text x="228" y="126" text-anchor="middle" class="edge-label">异步复制</text>
+          <line x1="420" y1="84" x2="555" y2="164" class="diagram-soft" marker-end="url(#ar5a-soft)"/>
+          <text x="512" y="126" text-anchor="middle" class="edge-label">异步复制</text>
+
+          <!-- Sentinels row -->
+          <rect x="100" y="272" width="110" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="155" y="296" text-anchor="middle" class="node-label">Sentinel A</text>
+          <rect x="315" y="272" width="110" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="370" y="296" text-anchor="middle" class="node-label">Sentinel B</text>
+          <rect x="530" y="272" width="110" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="585" y="296" text-anchor="middle" class="node-label">Sentinel C</text>
+
+          <!-- sentinel monitor lines -->
+          <line x1="370" y1="272" x2="370" y2="84" class="diagram-soft"/>
+          <text x="396" y="190" class="edge-label">监控 PING</text>
+
+          <!-- failover arrow: sentinel to replica 1 promoted -->
+          <line x1="155" y1="272" x2="140" y2="214" class="diagram-accent" marker-end="url(#ar5a-accent)"/>
+          <text x="74" y="248" text-anchor="middle" class="branch-label">failover</text>
+          <text x="74" y="262" text-anchor="middle" class="branch-label">提升为主</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>主从复制与哨兵 failover 全景。<strong>注意</strong>：主库到两个副本的箭头是虚线，表示异步——主库返回 OK 的那一刻，这两条虚线上的数据包可能还在途中。哨兵在检测到主库宕机并达到 quorum 后，把某个副本提升为新主（朱红箭头）。</figcaption>
+      </figure>
+
+      <!-- ===================== 5.2 哨兵 ===================== -->
+      <h2 id="sentinel"><span class="num">5.2</span><span>哨兵 Sentinel</span></h2>
+      <p class="one-liner">哨兵（Sentinel）是一组独立进程，承担三件事：持续监控主/副本是否存活、在主库不可达时自动执行 failover、向客户端提供「当前主库地址」的服务发现接口。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>主从复制本身不包含故障检测与自动切换——主库宕机后副本依然原地等待。哨兵把运维的「发现宕机→手动切换→通知客户端」这个流程自动化。客户端只需在启动时连哨兵问「主库在哪」，哨兵负责始终维护这个答案的正确性。</p>
+      </div>
+
+      <h3>主观下线与客观下线</h3>
+      <p>单个哨兵每隔 1 秒向主库发 <code>PING</code>，若超过 <code>down-after-milliseconds</code>（默认 30000ms）没有有效响应，该哨兵单方面判定主库<strong>主观下线（Subjectively Down，SDOWN）</strong>。SDOWN 只是一个节点的看法，可能因网络抖动导致误判。</p>
+
+      <p>随后该哨兵向其他哨兵发送 <code>SENTINEL is-master-down-by-addr</code> 询问，收到足够多哨兵同意（票数 ≥ <code>quorum</code> 配置，通常为哨兵总数的多数派）后，判定主库<strong>客观下线（Objectively Down，ODOWN）</strong>，触发 failover 流程。</p>
+
+      <h3>选主与仲裁</h3>
+      <p>进入 failover 的哨兵先通过 Raft-like 投票在哨兵集群中选出一个 <strong>Leader 哨兵</strong>（需 ≥ ⌊哨兵数/2⌋+1 票），由 Leader 独自完成选主逻辑。选副本的优先级顺序：① <code>replica-priority</code> 配置值小的优先；② 复制偏移量最大的（数据最新）优先；③ run ID 字典序最小的作为平局决胜。</p>
+
+      <p>选定新主后，Leader 哨兵向该副本发 <code>REPLICAOF NO ONE</code>，使其脱离副本角色；再把其他副本和客户端重定向到新主。客户端通过哨兵的 <code>SENTINEL get-master-addr-by-name</code> 拿到最新地址，或由客户端库（如 Jedis SentinelPool）自动在 failover 完成后重新连接。</p>
+
+      <div class="callout insight">
+        <span class="label">quorum vs 选主多数派</span>
+        <p><code>quorum</code> 和 Leader 哨兵选举的多数派是两个独立门槛，经常混淆。<code>quorum</code> 仅决定「够多少哨兵同意才触发 ODOWN」，可以设得比哨兵总数的多数派小（比如 3 个哨兵设 quorum=2），这会更快触发 failover 但也更容易误判。Leader 哨兵选举必须拿到 ⌊N/2⌋+1 票，这个值固定，无法配置。两者解耦，目的是允许在「灵敏度」和「选举严格性」上分别调节。</p>
+      </div>
+
+      <!-- ===================== 5.3 Cluster ===================== -->
+      <h2 id="cluster"><span class="num">5.3</span><span>Cluster：16384 槽与 MOVED/ASK 重定向</span></h2>
+      <p class="one-liner">Redis Cluster 把键空间划分为 16384 个 hash 槽（slot），每个节点负责其中一段连续槽范围；键通过 <code>CRC16(key) % 16384</code> 映射到槽，从而路由到对应节点。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>单实例（含哨兵主从）的写吞吐量和内存都受限于一台机器。Cluster 把数据水平分片到多组主从上，每组主库只负责一部分键，使写能力和内存随节点数线性扩展。代价是「跨槽多 key 操作」受限，以及客户端需要理解重定向协议。</p>
+      </div>
+
+      <h3>为什么是 16384 个槽</h3>
+      <p>槽的总数是 2<sup>14</sup> = 16384，而非更常见的 2<sup>16</sup> = 65536。原因在心跳包的大小：Cluster 节点之间定期交换包含<strong>槽位图（slot bitmap）</strong>的 gossip 心跳。16384 个槽需要 16384 bit = <strong>2KB</strong> 的位图；65536 个槽则需要 8KB。集群节点数上限约 1000，16384 个槽对 1000 个节点已绰绰有余（每节点约 16 个槽），没必要为了扩展性付出 4× 的心跳带宽。</p>
+
+      <h3>键到槽的映射：hash tag</h3>
+      <p>槽号 = <code>CRC16(key) % 16384</code>。若 key 中包含花括号 <code>{}</code>，则只用花括号内的子串参与哈希——这叫 <strong>hash tag</strong>。例如 <code>{user1}.name</code> 和 <code>{user1}.age</code> 都只用 <code>user1</code> 计算槽号，因此落在同一个槽，允许对这两个 key 执行 <code>MSET</code> 或 Lua 操作而不触发 CROSSSLOT 错误。</p>
+
+      <h3>MOVED 与 ASK：两种不同语义的重定向</h3>
+      <p>客户端向某节点发送命令，该节点若判断 key 不属于自己，会回一个重定向错误。有两种：</p>
+
+      <table class="compare-table">
+        <caption>MOVED vs ASK 重定向语义</caption>
+        <thead>
+          <tr><th>错误类型</th><th>触发时机</th><th>客户端动作</th><th>是否更新本地槽表</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td><code>MOVED &lt;slot&gt; &lt;ip:port&gt;</code></td>
+            <td>槽已<strong>永久</strong>迁移到新节点</td>
+            <td>向新节点重发请求</td>
+            <td>是，更新本地槽映射表</td>
+          </tr>
+          <tr>
+            <td><code>ASK &lt;slot&gt; &lt;ip:port&gt;</code></td>
+            <td>槽<strong>正在迁移中</strong>，key 已迁到目标节点但迁移未完成</td>
+            <td>先发 <code>ASKING</code>，再向目标节点重发请求，仅此一次</td>
+            <td>否，不更新槽表（迁移未完成）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>区别的核心：<code>MOVED</code> 表示槽归属已定，客户端应更新本地的槽→节点映射缓存，之后对该槽的请求直接发新节点；<code>ASK</code> 表示这是迁移过程中的临时状态，客户端只为这一次请求做一次性重定向，不改变槽表，等迁移完成后收到 <code>MOVED</code> 再更新。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想 · MSET 跨槽</span>
+        <p>在 Redis Cluster 上执行 <code>MSET foo 1 bar 2 baz 3</code>，其中 <code>foo</code>、<code>bar</code>、<code>baz</code> 分别落在三个不同的槽上，会发生什么？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>返回 <code>CROSSSLOT Keys in request don't hash to the same slot</code> 错误。Redis Cluster 不支持对多个不同槽的 key 做单条多 key 命令（<code>MSET</code>/<code>MGET</code>/<code>DEL</code> 等）——因为这些 key 可能分布在不同节点，节点无法跨节点做原子操作。解法：用 hash tag 把相关 key 强制路由到同一槽，如 <code>{basket1}.foo</code>、<code>{basket1}.bar</code>，或在客户端拆成多次单 key 请求。</p>
+        </details>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 740 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Redis Cluster 16384 槽分片与 MOVED/ASK 重定向：三组主从节点各负责一段槽范围，客户端命中错误节点时触发 MOVED 或 ASK 重定向">
+          <defs>
+            <marker id="ar5b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar5b-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Slot range labels at top -->
+          <text x="120" y="22" text-anchor="middle" class="edge-label">槽 0–5460</text>
+          <text x="370" y="22" text-anchor="middle" class="edge-label">槽 5461–10922</text>
+          <text x="620" y="22" text-anchor="middle" class="edge-label">槽 10923–16383</text>
+
+          <!-- Node A group -->
+          <rect x="40" y="34" width="160" height="46" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="120" y="56" text-anchor="middle" class="node-label-accent">Node A (master)</text>
+          <text x="120" y="72" text-anchor="middle" class="edge-label">slots 0–5460</text>
+          <rect x="60" y="100" width="120" height="36" rx="5" class="diagram-soft node-fill"/>
+          <text x="120" y="123" text-anchor="middle" class="node-label">Node A replica</text>
+
+          <!-- Node B group -->
+          <rect x="290" y="34" width="160" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="370" y="56" text-anchor="middle" class="node-label">Node B (master)</text>
+          <text x="370" y="72" text-anchor="middle" class="edge-label">slots 5461–10922</text>
+          <rect x="310" y="100" width="120" height="36" rx="5" class="diagram-soft node-fill"/>
+          <text x="370" y="123" text-anchor="middle" class="node-label">Node B replica</text>
+
+          <!-- Node C group -->
+          <rect x="540" y="34" width="160" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="620" y="56" text-anchor="middle" class="node-label">Node C (master)</text>
+          <text x="620" y="72" text-anchor="middle" class="edge-label">slots 10923–16383</text>
+          <rect x="560" y="100" width="120" height="36" rx="5" class="diagram-soft node-fill"/>
+          <text x="620" y="123" text-anchor="middle" class="node-label">Node C replica</text>
+
+          <!-- Client -->
+          <rect x="290" y="198" width="160" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="370" y="220" text-anchor="middle" class="node-label">Client</text>
+          <text x="370" y="238" text-anchor="middle" class="edge-label">CRC16(key)%16384</text>
+
+          <!-- client sends to wrong node B, gets MOVED to A -->
+          <line x1="335" y1="198" x2="200" y2="80" class="diagram-ink" marker-end="url(#ar5b-ink)"/>
+          <text x="238" y="152" text-anchor="middle" class="edge-label">发给 Node B</text>
+          <line x1="200" y1="80" x2="335" y2="198" class="diagram-accent" marker-end="url(#ar5b-accent)"/>
+          <text x="246" y="176" text-anchor="middle" class="branch-label">MOVED → Node A</text>
+
+          <!-- client to correct node A -->
+          <line x1="370" y1="198" x2="120" y2="80" class="diagram-soft" marker-end="url(#ar5b-ink)"/>
+          <text x="200" y="195" text-anchor="middle" class="edge-label">重发 Node A · 命中</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>Cluster 三节点槽分布与 MOVED 重定向示意。<strong>注意</strong>：客户端发往错误节点（Node B）后收到 MOVED，重定向到 Node A 并更新本地槽表；之后对同槽的请求直接打 Node A，不再走重定向。</figcaption>
+      </figure>
+
+      <!-- ===================== 5.4 分布式锁 ===================== -->
+      <h2 id="distlock"><span class="num">5.4</span><span>分布式锁演进</span></h2>
+      <p class="one-liner">分布式锁的核心诉求是：同一时刻最多一个客户端持有锁。Redis 的原子命令让它成为热门实现方案，但从 <code>SETNX+EXPIRE</code> 到 Redlock，每一步演进都在修补上一步留下的漏洞——且争议至今未定。</p>
+
+      <div class="rationale">
+        <span class="label">为什么它是「基石二用到极致」</span>
+        <p>单线程串行执行（基石二）保证每条命令的原子性。正是凭借这一点，「判断锁不存在」和「设置锁」才能作为一个原子操作完成，不存在两个并发客户端同时通过「锁为空」检查的窗口。Lua 脚本整体提交后，主线程一口气执行完脚本里的所有命令，中间零插入——这是分布式锁在 Redis 上成立的物理基础。</p>
+      </div>
+
+      <h3>① SETNX + EXPIRE：两条命令的非原子漏洞</h3>
+      <p>最朴素的实现：先 <code>SETNX lock:resource 1</code>（Set if Not eXists），成功后再 <code>EXPIRE lock:resource 30</code>。问题在于这是<strong>两条独立命令</strong>：若进程在 <code>SETNX</code> 成功后、<code>EXPIRE</code> 执行前崩溃，锁永远不会过期——<strong>死锁</strong>。这个窗口虽窄，但线上真实发生过。</p>
+
+      <h3>② SET NX PX：原子获取</h3>
+      <p>Redis 2.6.12 起支持扩展语法，把获取锁和设置过期合并为一条原子命令：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">原子获取锁</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-setnxpx">复制</button></div>
+        <pre id="cb-setnxpx"><code class="language-bash">SET lock:resource &lt;unique-uuid&gt; NX PX 30000
+# NX : 仅当 key 不存在时设置
+# PX 30000 : 过期时间 30000 毫秒
+# 返回 OK 表示获取成功，nil 表示已被持有</code></pre>
+      </div>
+
+      <p>value 必须是<strong>唯一标识符</strong>（UUID 或进程+线程组合）。原因见下一步。</p>
+
+      <h3>③ Lua 原子释放：compare-and-delete</h3>
+      <p>释放锁时，不能直接 <code>DEL lock:resource</code>——若当前锁已被别人获取（自己的锁已过期），这一 <code>DEL</code> 会<strong>删掉别人的锁</strong>。正确做法是「先比对 value 是否是自己的，再删除」，这两步必须原子完成，否则比对通过后到删除前，锁恰好过期被他人获取，又回到问题。Lua 脚本是解法：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">Lua · 原子释放锁</span><span class="lang">lua</span><button class="copy" data-copy-target="cb-lua-release">复制</button></div>
+        <pre id="cb-lua-release"><code class="language-lua">-- KEYS[1] = lock key, ARGV[1] = 当前持有者的 unique value
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+else
+    return 0
+end</code></pre>
+      </div>
+
+      <p>GET 和 DEL 在 Lua 里整体提交，主线程一口气执行，中间不插入其他命令。value 比对确保只有持锁者能释放自己的锁。</p>
+
+      <h3>④ Redlock：N 个独立 master 上的多数派锁</h3>
+      <p>上述方案在单实例（含哨兵）上有一个根本漏洞：主库宕机、副本接管时，若刚才已确认的获锁写还没同步到副本，新主上不存在这把锁，另一个客户端可以再次获取——同一把锁被两个客户端同时持有。</p>
+
+      <p>Redlock 算法（antirez 提出）用 <strong>N 个相互独立的 Redis master</strong>（无主从关系，互不依赖）解这个问题：</p>
+      <ol>
+        <li>记下当前时间戳 <em>t₀</em>。</li>
+        <li>依次向 N 个 master 发送 <code>SET NX PX</code> 获取请求（超时时间远小于锁的 TTL，避免因单节点慢而阻塞太久）。</li>
+        <li>若在 ⌊N/2⌋+1 个以上节点获取成功，且耗费的总时间 Δt &lt; 锁 TTL，则认为加锁成功；锁的有效剩余时间 = TTL − Δt。</li>
+        <li>若未达到多数派，或 Δt 超出 TTL，则向所有节点发送释放命令，本次加锁失败。</li>
+      </ol>
+      <p>即使其中 ⌊N/2⌋ 个节点宕机，剩余节点仍可构成多数派，锁依然可用。antirez 建议 N = 5。</p>
+
+      <h3>⑤ Kleppmann 的批评：GC 停顿与时钟漂移</h3>
+      <p>Martin Kleppmann（《数据密集型应用系统设计》作者）在 2016 年发表了<em>How to do distributed locking</em>，指出 Redlock 对「正确性」场景（即绝对不能两个客户端同时操作受保护资源）不安全，核心论证如下：</p>
+
+      <p><strong>GC 停顿（Stop-the-World，STW）场景</strong>：客户端 1 获取锁，随即进入 JVM GC 的 STW 停顿。STW 期间锁过期，客户端 2 获取到同一把锁，开始操作资源。STW 结束，客户端 1 从停顿前的代码点恢复，<strong>它并不知道锁已过期</strong>，继续操作资源——两个客户端并发操作同一资源，互斥失效。</p>
+
+      <figure>
+        <svg viewBox="0 0 740 240" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="GC STW 停顿导致 Redis 锁失效时序：Client1 持锁进入 STW，锁过期后 Client2 获锁，Client1 醒来后仍以为持锁继续操作">
+          <defs>
+            <marker id="ar5c-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar5c-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Timeline axis -->
+          <line x1="40" y1="40" x2="700" y2="40" class="diagram-ink"/>
+          <text x="700" y="36" class="edge-label">时间 →</text>
+
+          <!-- Client 1 row -->
+          <text x="6" y="85" text-anchor="start" class="node-label">Client 1</text>
+          <!-- acquire lock -->
+          <rect x="60" y="64" width="100" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="110" y="85" text-anchor="middle" class="edge-label">获取锁</text>
+          <!-- STW block (accent) -->
+          <rect x="200" y="64" width="200" height="34" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="300" y="82" text-anchor="middle" class="node-label-accent">GC STW 停顿</text>
+          <text x="300" y="96" text-anchor="middle" class="edge-label">进程冻结</text>
+          <!-- resume and write -->
+          <rect x="460" y="64" width="120" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="520" y="82" text-anchor="middle" class="node-label">醒来</text>
+          <text x="520" y="96" text-anchor="middle" class="edge-label">仍以为持锁</text>
+          <rect x="600" y="64" width="90" height="34" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="645" y="85" text-anchor="middle" class="node-label-accent">操作资源!</text>
+
+          <!-- Lock TTL expiry marker -->
+          <line x1="400" y1="30" x2="400" y2="170" class="diagram-soft"/>
+          <text x="400" y="24" text-anchor="middle" class="branch-label">锁已过期</text>
+
+          <!-- Client 2 row -->
+          <text x="6" y="158" text-anchor="start" class="node-label">Client 2</text>
+          <rect x="420" y="136" width="100" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="470" y="157" text-anchor="middle" class="edge-label">获取锁成功</text>
+          <rect x="540" y="136" width="120" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="600" y="157" text-anchor="middle" class="edge-label">操作资源</text>
+
+          <!-- Danger annotation -->
+          <line x1="600" y1="98" x2="600" y2="136" class="diagram-accent" marker-end="url(#ar5c-accent)"/>
+          <text x="680" y="122" text-anchor="middle" class="branch-label">并发!</text>
+
+          <!-- Resource needs fencing token label -->
+          <text x="370" y="210" text-anchor="middle" class="node-label">解法：资源端需要 fencing token（单调递增令牌）拒绝旧令牌的写入</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.3</span>GC STW 停顿致 Redis 锁失效时序。<strong>注意</strong>：Client 1 醒来后进行的操作（朱红色）与 Client 2 的操作并发，互斥语义已被破坏——Redis 锁本身无法检测到这一失效，只有资源端引入 fencing token 才能防止旧令牌的写入被接受。</figcaption>
+      </figure>
+
+      <p><strong>时钟漂移</strong>：Redlock 依赖各节点的系统时钟判断锁是否过期。若某节点时钟向前跳跃（NTP 调整、虚拟化环境的时钟漂移），锁会提前过期，导致同样的并发持锁问题。</p>
+
+      <p>Kleppmann 提出，唯一安全的解法是在资源端引入<strong>fencing token（围栏令牌，单调递增令牌）</strong>：锁服务每次授权时附带一个严格递增的令牌号，资源端记录已处理的最大令牌号，拒绝令牌号更小的请求——即使旧令牌持有者的请求后来才到达，也无法覆盖新令牌持有者的写入。Redis 无法生成这样的令牌，因此对「正确性」场景，他建议用 ZooKeeper（内建 zxid 单调递增）。</p>
+
+      <h3>⑥ antirez 的回应</h3>
+      <p>antirez 在<em>Is Redlock safe?</em>中回应：Redlock <strong>面向效率（efficiency）而非绝对正确性（correctness）</strong>，设计目标是「在多数节点正常时，减少并发进程同时操作的概率」，而非在所有故障模式下保证绝对互斥。他认为时钟漂移在实践中可以被工程手段约束到足够小；随机锁值（unique value）可以在资源端做一种弱形式的 fencing 校验。双方的分歧实质上是对「分布式锁应当提供效率保证还是正确性保证」的前提不同。</p>
+
+      <div class="callout warning">
+        <span class="label">未定论话题</span>
+        <p>截至 2026 年，Redlock 的安全性争议尚无公认定论。工程上的经验性共识：<strong>效率场景</strong>（同一时刻避免多个进程重复执行某任务，偶发一次重复可接受）——单实例 Redis 锁（<code>SET NX PX</code> + Lua 释放）已足够，Redlock 提供额外的节点故障容忍；<strong>正确性场景</strong>（绝对不能两个进程同时持锁，如金融扣款）——Redis 锁不够，使用 ZooKeeper / etcd（基于 Raft，提供 fencing token 语义）。</p>
+      </div>
+
+      <h3>⑦ Redisson watchdog：解决持锁者提前过期</h3>
+      <p><code>SET NX PX 30000</code> 带来另一个问题：若持锁业务执行时间超过 30 秒，锁过期后别人可以获取，但原持锁者还在运行中——锁失效了，但业务不知道。</p>
+      <p>Redisson（Java Redis 客户端）的<strong>watchdog（看门狗）</strong>机制：调用 <code>lock()</code> 时<strong>不传 leaseTime</strong>（或传 <code>-1</code>），Redisson 在后台启动一个定时任务，每隔约 <strong>10 秒</strong>（<code>lockWatchdogTimeout</code> 的 1/3，默认 30s / 3）向 Redis 发一次续租命令，将锁的 TTL 重置回 <code>lockWatchdogTimeout</code>（默认 30000ms）。只要持锁进程存活，锁就不会提前过期。进程崩溃后 watchdog 停止续租，锁在 30 秒内自然过期，不会产生死锁。</p>
+
+      <div class="callout example">
+        <span class="label">watchdog 与 leaseTime 的选择</span>
+        <p>传了 <code>leaseTime</code> 参数（如 <code>lock(30, TimeUnit.SECONDS)</code>）时，Redisson <strong>不启动</strong> watchdog——锁将在 30 秒后强制过期，不管业务是否完成。这用于「即便进程卡死，也必须在固定时间内释放锁」的场景。不传 leaseTime 时，watchdog 兜底，适合「业务时长不可预测、但进程健康时不应让锁提前过期」的场景。两种模式各有适用场景，不能无脑选一个。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 主从异步复制下的写丢失</span>
+        <p>客户端已收到主库返回的 <code>OK</code>，确认一条写命令成功。此后主库宕机，哨兵完成 failover，将某个副本提升为新主。这条写一定还在新主上吗？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>不一定。复制是异步的：主库向客户端返回 <code>OK</code> 时，该写可能还在 TCP 缓冲区或 replication backlog 中，尚未到达任何副本。若主库在写传到副本前宕机，副本上不存在这条写；failover 后新主对外提供服务，这条写永久丢失。这是 Redis 异步复制的根本取舍——为换取低延迟，放弃了强持久性保证。<code>WAIT</code> 命令可以降低（但不能消除）这一风险。</p>
+        </details>
+      </div>
+
+      <!-- ===================== Self-check ===================== -->
+      <section class="self-check">
+        <h2 id="self-check"><span class="num">·</span><span>自测</span></h2>
+        <ol>
+          <li>主从复制的「全量同步」和「增量同步」各在什么情况下触发？复制积压缓冲区（repl backlog）在其中扮演什么角色？</li>
+          <li>哨兵的「主观下线」与「客观下线」分别是什么？为什么需要区分两者，单个哨兵判定宕机后直接 failover 有什么问题？</li>
+          <li>Redis Cluster 使用 <code>MOVED</code> 与 <code>ASK</code> 两种重定向，二者的核心区别是什么？客户端收到 ASK 后是否应更新本地槽表，为什么？</li>
+          <li>设计判别：一个「绝对不能两个进程同时持锁」的场景（如金融系统扣减库存后写入数据库），应当用 Redis 分布式锁还是 ZooKeeper，判断依据是什么？如果用 Redis 锁，需要在哪里额外引入什么机制才能接近安全？</li>
+        </ol>
+        <details>
+          <summary>展开全部答案</summary>
+          <p><strong>1.</strong> 副本首次连接、或断线重连时 repl backlog 中已不存在副本缺失的那段写（缺失量超过 backlog 大小），触发全量同步：主库 fork 子进程生成 RDB 传输到副本，期间新写入缓冲在 backlog 中，传输完后补发。增量同步在副本断线重连、且 backlog 中仍保有缺失段时触发：主库只补发差量字节流。backlog 是一个固定大小（默认 1MB）的环形缓冲区，是避免因短暂断线而重走全量的关键——backlog 太小、写入量大，就会触发不必要的全量同步。</p>
+          <p><strong>2.</strong> 主观下线（SDOWN）：单个哨兵在 <code>down-after-milliseconds</code> 时间内未收到主库有效 PING 响应，单方面判定主库不可达。客观下线（ODOWN）：多个哨兵协商，票数达到 quorum 配置后，集体判定主库不可达，触发 failover。区分的原因：单个哨兵与主库之间可能因网络抖动、交换机丢包等原因误判，而多数哨兵同时与主库失联的概率远低，可大幅降低误 failover 的概率（failover 本身会引起短暂服务不可用和数据风险）。</p>
+          <p><strong>3.</strong> MOVED 表示槽已<strong>永久</strong>迁移到新节点，客户端应更新本地槽映射表，之后对该槽的请求直接发新节点。ASK 表示槽<strong>正在迁移中</strong>，key 已移到目标节点但迁移未完成，客户端仅对此次请求发 ASKING + 重发，不更新槽表——因为迁移尚未完成，槽归属关系还未正式确定，贸然更新槽表会在迁移完成前后造成路由混乱。</p>
+          <p><strong>4.</strong> 「正确性场景」应优先选 ZooKeeper（或 etcd）。依据：ZooKeeper 基于 Raft/ZAB 共识协议，可提供严格单调递增的 zxid 作为 fencing token；资源端可拒绝令牌号落后的请求，即使出现 GC STW 停顿或时钟漂移，旧令牌的写入也不会被接受。Redis 锁的问题在于：① 异步复制导致 failover 时可能重复授权同一把锁；② 无法生成严格单调递增的 fencing token，无法让资源端区分「旧令牌持有者」和「新令牌持有者」的写入。若业务约束只能用 Redis，需在<strong>资源端</strong>自行维护一个单调递增的版本号（每次成功写入后递增），写入时比对传入的版本号是否 ≥ 当前已记录最大值，拒绝落后版本的写入——这等价于在应用层实现 fencing token，代价是资源端需要配合改造。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>挑出「用 Redis 锁保护扣库存」方案的漏洞</h3>
+        <p>某电商系统用如下方案保护库存扣减：① 获取锁：<code>SET lock:sku:123 &lt;uuid&gt; NX PX 5000</code>；② 读库存 → 判断是否足量 → 扣减 → 写回；③ 释放锁（Lua compare-and-delete）。分析在时钟漂移或 JVM GC STW 场景下，该方案在哪一步失效，以及若要实现真正的「不超卖」，资源端（数据库）需要如何配合。</p>
+        <details>
+          <summary>提示（不给全解）</summary>
+          <p>失效路径：步骤②耗时超过 5 秒（或时钟使锁提前过期）→ 锁自动过期 → 另一个进程获取锁、开始执行步骤② → 两个进程并发读到相同的库存数值、各自判断足量 → 各自扣减 → 超卖。此时步骤③的 Lua 只能防止「删他人的锁」，无法回滚已执行的库存写入。资源端配合方向：考虑在数据库层用<strong>乐观锁</strong>（版本号 CAS：<code>UPDATE stock SET cnt=cnt-1, version=version+1 WHERE sku=123 AND version=&lt;expected&gt;</code>，影响行数为 0 说明已被并发修改，回滚重试）或<strong>数据库行锁</strong>（<code>SELECT FOR UPDATE</code>）在持久化层面保证原子扣减，Redis 锁退化为「减少数据库并发压力」的效率手段而非正确性保障。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li><a href="https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/">redis.io · Redis Cluster Specification</a>（集群协议官方文档）</li>
+          <li><a href="https://redis.io/docs/latest/develop/use/patterns/distributed-locks/">redis.io · Distributed Locks with Redis</a>（分布式锁官方文档，含 Redlock 算法）</li>
+          <li><a href="https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html">Kleppmann · How to do distributed locking</a>（fencing token 批评，2016）</li>
+          <li><a href="http://antirez.com/news/101">antirez · Is Redlock safe?</a>（作者回应 Kleppmann 批评）</li>
+          <li><a href="https://redisson.org/docs/data-and-services/locks-and-synchronizers/">Redisson · Locks and Synchronizers</a>（watchdog 机制文档）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="04-caching-patterns.html">
+          <span class="label">← 上一章</span>
+          <span class="title">04 缓存工程</span>
+        </a>
+        <a class="next" href="06-redis-for-agents.html">
+          <span class="label">下一章 →</span>
+          <span class="title">06 Redis 作为 Agent 基础设施</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#replication" data-toc-target="replication">5.1 主从复制</a></li>
+        <li><a href="#sentinel" data-toc-target="sentinel">5.2 哨兵 Sentinel</a></li>
+        <li><a href="#cluster" data-toc-target="cluster">5.3 Cluster 槽与重定向</a></li>
+        <li><a href="#distlock" data-toc-target="distlock">5.4 分布式锁演进</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

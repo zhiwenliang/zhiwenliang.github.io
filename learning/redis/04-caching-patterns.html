@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<!--
+  tech-tutorial · Redis 深度教程 · 04 缓存工程
+  Aesthetic: minimalist monochrome + single vermillion accent
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>缓存工程 · Redis 深度教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700;
+  font-size: 30px; line-height: 1.2; margin: 0 0 12px;
+  letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { font-size: 15.5px; line-height: 1.65; margin: 0; }
+
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em;
+  background: var(--bg-soft); padding: 1px 5px; border-radius: 2px;
+  color: var(--vermilion); border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms;
+  user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px;
+  color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* index landing: chapter directory cards */
+.toc-cards { display: grid; grid-template-columns: 1fr; gap: 0; margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.toc-cards a { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 14px 18px; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--rule); transition: background 150ms; }
+.toc-cards a:last-child { border-bottom: none; }
+.toc-cards a:hover { background: var(--bg-soft); }
+.toc-cards .n { font-family: var(--mono); font-size: 13px; color: var(--vermilion); font-weight: 700; padding-top: 2px; }
+.toc-cards .t { font-weight: 600; font-size: 15px; }
+.toc-cards .d { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; line-height: 1.5; }
+
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-data-structures.html">01 数据结构</a><span class="sep">—</span>
+    <a href="02-single-thread-and-io.html">02 内核模型</a><span class="sep">—</span>
+    <a href="03-persistence-and-memory.html">03 持久化</a><span class="sep">—</span>
+    <a href="04-caching-patterns.html" class="current">04 缓存工程</a><span class="sep">—</span>
+    <a href="05-distributed.html">05 分布式</a><span class="sep">—</span>
+    <a href="06-redis-for-agents.html">06 Agent</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Redis 深度教程 · 04</p>
+        <h1>缓存工程</h1>
+        <p class="recap">03 讲了过期与淘汰——TTL 是缓存的命门。这一章把 Redis 放回它最出名的岗位：缓存，以及缓存最难的部分——与数据库的一致性，和三种被频繁问到的失败模式。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>几种缓存模式与为什么业务侧多用旁路缓存（cache-aside）</li>
+          <li>双写一致性为什么删而不更新；延迟双删与 binlog/Canal 各自的取舍</li>
+          <li>穿透（penetration）/ 击穿（breakdown）/ 雪崩（avalanche）各自的触发机制与解法</li>
+          <li>热点 key 与大 key 的检测与工程处理</li>
+        </ul>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">本章 = 缓存工程落地</span>
+        <p>缓存工程建立在两块基石之上：01 的数据类型（String / Bitmap / 布隆过滤器位图）决定能用什么结构防御穿透；02 的单线程原子性（链 05 的分布式锁）决定怎样安全地串行重建热点 key。失败模式不是孤立的——读清机制之后，防御策略的选择会变成一个推导过程而不是记忆清单。</p>
+      </div>
+
+      <!-- ====================== 4.1 缓存模式 ====================== -->
+      <h2 id="patterns"><span class="num">4.1</span><span>缓存模式对比</span></h2>
+      <p class="one-liner">四种缓存模式的分界线在于：DB 的读写由业务代码还是缓存层代劳，以及写操作是同步还是异步。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>不同模式在一致性、写延迟、故障风险上差距显著。选错模式，后续所有调优都是在错误的约束下打补丁。</p>
+      </div>
+
+      <p><strong>Cache-Aside（旁路缓存）</strong>是业务代码自己同时操作缓存和数据库——读先查缓存，miss 了再查 DB 并回填；写先更新 DB，再删缓存。缓存对 DB 完全透明，业务掌控两侧。</p>
+
+      <p><strong>Read-Through</strong> 和 <strong>Write-Through</strong> 把 DB IO 交给缓存层（或 ORM 框架）代管：read-through 在 cache miss 时由框架自动从 DB 加载并填充；write-through 在写时同步更新 DB，写缓存和写 DB 在同一调用链完成，一致性更强但写延迟叠加。</p>
+
+      <p><strong>Write-Behind（异步写回）</strong>只写缓存，由异步线程批量刷到 DB，写速度最快，但在缓存宕机或异步队列堆积时存在数据丢失风险。</p>
+
+      <table class="compare-table">
+        <caption>四种缓存模式对比</caption>
+        <thead>
+          <tr>
+            <th>模式</th>
+            <th>DB 读写由谁负责</th>
+            <th>写延迟</th>
+            <th>一致性</th>
+            <th>主要风险</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>Cache-Aside（旁路）</td>
+            <td>业务代码</td>
+            <td>低（写 DB + 删缓存）</td>
+            <td>最终一致，存在窗口</td>
+            <td>业务代码需维护两侧逻辑</td>
+          </tr>
+          <tr>
+            <td>Read-Through</td>
+            <td>缓存框架（读）</td>
+            <td>低（同 Cache-Aside）</td>
+            <td>与 Cache-Aside 相同</td>
+            <td>冷启动全部 miss；框架绑定</td>
+          </tr>
+          <tr>
+            <td>Write-Through</td>
+            <td>缓存框架（读写）</td>
+            <td>高（同步写 DB）</td>
+            <td>强一致</td>
+            <td>写延迟翻倍；冷 key 浪费写</td>
+          </tr>
+          <tr>
+            <td>Write-Behind</td>
+            <td>缓存框架（异步写）</td>
+            <td>极低</td>
+            <td>弱，有丢失风险</td>
+            <td>宕机 / 队列积压丢数据</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>业务侧最常用 cache-aside，原因有三：① Redis 本身不内置对 DB 的读写逻辑，框架层实现 read/write-through 引入额外依赖；② cache-aside 下业务对缓存失效时机有完整控制；③ write-through 的写延迟对高并发写场景代价过高，而 write-behind 的丢失风险对金融类场景不可接受。</p>
+
+      <!-- 图 4.1 旁路缓存读写流程 -->
+      <figure>
+        <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="旁路缓存 cache-aside 读流程与写流程并列">
+          <defs>
+            <marker id="ar4a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar4a-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- READ side (left) -->
+          <text x="160" y="22" text-anchor="middle" class="node-label-accent" font-size="12">读路径</text>
+
+          <!-- Client -->
+          <rect x="100" y="34" width="120" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="160" y="59" text-anchor="middle" class="node-label">业务代码</text>
+
+          <!-- Redis -->
+          <rect x="100" y="120" width="120" height="40" rx="5" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="160" y="145" text-anchor="middle" class="node-label-accent">Redis</text>
+
+          <!-- DB -->
+          <rect x="100" y="218" width="120" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="160" y="243" text-anchor="middle" class="node-label">Database</text>
+
+          <!-- read: client -> redis -->
+          <line x1="160" y1="74" x2="160" y2="120" class="diagram-ink" marker-end="url(#ar4a-ink)"/>
+          <text x="174" y="100" class="edge-label">① GET key</text>
+
+          <!-- HIT path: redis -> client (right side) -->
+          <polyline points="220,140 260,140 260,54 220,54" class="diagram-soft" fill="none" marker-end="url(#ar4a-ink)"/>
+          <text x="264" y="100" class="branch-label">HIT</text>
+          <text x="264" y="114" class="edge-label">返回值</text>
+
+          <!-- MISS path: redis -> DB -->
+          <line x1="160" y1="160" x2="160" y2="218" class="diagram-accent" marker-end="url(#ar4a-accent)"/>
+          <text x="170" y="193" class="branch-label">MISS</text>
+
+          <!-- DB -> client (回填) -->
+          <polyline points="100,238 60,238 60,54 100,54" class="diagram-ink" fill="none" marker-end="url(#ar4a-ink)"/>
+          <text x="8" y="190" class="edge-label" writing-mode="tb">② 查 DB</text>
+          <text x="28" y="190" class="edge-label" writing-mode="tb">③ 回填+返回</text>
+
+          <!-- WRITE side (right) -->
+          <text x="580" y="22" text-anchor="middle" class="node-label-accent" font-size="12">写路径</text>
+
+          <!-- Client W -->
+          <rect x="520" y="34" width="120" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="580" y="59" text-anchor="middle" class="node-label">业务代码</text>
+
+          <!-- DB W -->
+          <rect x="520" y="130" width="120" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="580" y="155" text-anchor="middle" class="node-label">Database</text>
+
+          <!-- Redis W -->
+          <rect x="520" y="230" width="120" height="40" rx="5" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="580" y="255" text-anchor="middle" class="node-label-accent">Redis</text>
+
+          <!-- write: client -> db -->
+          <line x1="580" y1="74" x2="580" y2="130" class="diagram-ink" marker-end="url(#ar4a-ink)"/>
+          <text x="590" y="107" class="edge-label">① UPDATE DB</text>
+
+          <!-- db -> redis del -->
+          <line x1="580" y1="170" x2="580" y2="230" class="diagram-accent" marker-end="url(#ar4a-accent)"/>
+          <text x="590" y="205" class="edge-label">② DEL key</text>
+
+          <!-- divider -->
+          <line x1="390" y1="20" x2="390" y2="290" class="diagram-soft"/>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>旁路缓存读写两条路径。<strong>注意</strong>：写路径是先更新 DB 再删缓存——不是更新缓存，原因见 4.2。</figcaption>
+      </figure>
+
+      <!-- ====================== 4.2 双写一致性 ====================== -->
+      <h2 id="consistency"><span class="num">4.2</span><span>双写一致性</span></h2>
+      <p class="one-liner">写操作时删缓存而非更新缓存，是因为删是幂等的惰性失效，更新则在并发写下容易产生旧值覆盖；标准做法"先写 DB 再删缓存"仍有一条罕见竞态，延迟双删和 binlog 是两种不同力度的补救。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一致性问题在低并发下几乎不会暴露，一旦 QPS 上升或写操作密集，旧值在缓存里多存一个请求周期就可能造成脏读。弄清机制才能在方案选型时知道选哪个、放弃什么。</p>
+      </div>
+
+      <h3>为什么删缓存而不是更新缓存</h3>
+      <p>更新缓存的常见直觉：写 DB 的同时把新值也写入 Redis，这样缓存永远最新。实际上这个策略有两个隐患：</p>
+      <ul>
+        <li><strong>并发写的覆盖问题</strong>：两个线程同时写不同的值，更新 DB 的顺序和更新缓存的顺序无法保证一致，结果是缓存里可能留下更早的写操作的值，而 DB 里已经是更晚的写操作的值。</li>
+        <li><strong>冷 key 的计算浪费</strong>：某个 key 被写了 100 次，但读只有 1 次——更新缓存意味着做了 99 次无人读取的计算与写入，而删缓存只是在有人读时才重算，是惰性求值。</li>
+      </ul>
+      <p>删缓存是幂等操作：不管多少线程同时删，结果等价于缓存不存在，下一次读时按需回填。这与 Redis 单线程模型配合得恰到好处——<code>DEL</code> 命令是原子的，不存在"删了一半"的中间态。</p>
+
+      <h3>先写 DB 再删缓存的残余竞态</h3>
+      <p>标准做法的顺序：① 更新 DB → ② 删缓存。绝大多数情况下正确。但存在一条概率极低、却并非零的竞态路径：</p>
+      <ol>
+        <li>读线程查缓存，miss，准备从 DB 读旧值（此时写线程还没开始）</li>
+        <li>写线程完成更新 DB + 删缓存</li>
+        <li>读线程从 DB 读到旧值（缓存已删，DB 已是新值——但读线程拿到的是写线程开始前的一致性快照），将旧值回填进缓存</li>
+      </ol>
+      <p>结果：DB 里是新值，缓存里是旧值，持续到缓存 TTL 到期。这条路径需要读线程在写线程 DEL 缓存之后才执行回填，而读线程本身的 DB 查询在写线程之前就已发出——属于极窄的时序窗口，TTL 保底能修复，但强一致场景不能接受。</p>
+
+      <h3>延迟双删</h3>
+      <p>延迟双删（double-delete with delay）：在"写 DB + 删缓存"之后，再 sleep 几百毫秒（估算读线程可能回填的最长时间），然后第二次删缓存。逻辑是：第一次删覆盖正常情况，第二次删清理掉那条竞态路径回填的旧值。</p>
+
+      <div class="callout warning">
+        <span class="label">延迟双删的局限</span>
+        <p>sleep 时长是经验估算，不是保证——如果读线程在第二次删之后才回填，问题仍然存在。延迟双删是 best-effort 方案，适合容忍短暂不一致的场景；对强一致场景，binlog 方案更可靠。sleep 期间写线程被阻塞，对写吞吐有直接影响，通常改成异步延迟任务来规避。</p>
+      </div>
+
+      <h3>binlog / Canal 异步失效</h3>
+      <p>Canal 伪装成 MySQL 从库，订阅 binlog 的 row-format 变更事件。流程：MySQL 提交事务 → binlog 落盘 → Canal 消费 binlog → 发送到 MQ（Kafka / RocketMQ）→ 消费者执行 <code>DEL</code> 失效缓存。</p>
+
+      <p>这条路径把缓存失效从写业务代码里剥离出来：业务代码只写 DB，缓存失效由独立的 Canal 消费链路完成。好处是不依赖 sleep 猜时间，且对 DB 事务提交有可靠的感知（binlog 在事务提交后才落盘）。代价是引入了 Canal + MQ 的额外依赖和运维成本，以及 MQ 到消费者之间的延迟（通常毫秒到几十毫秒）。</p>
+
+      <div class="callout example">
+        <span class="label">为什么不先删缓存再写 DB</span>
+        <p>反过来的顺序（先删缓存再更新 DB）有一条更宽的竞态窗口：删完缓存到 DB 写完之间，任何读线程都会 miss 缓存、从 DB 读到旧值、把旧值回填进去——窗口长度等于 DB 写的耗时，远大于先写 DB 那条路径里的窗口（见 4.2 的想一想）。</p>
+      </div>
+
+      <!-- 图 4.2 双写竞态时序 -->
+      <figure>
+        <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="先写 DB 再删缓存的残余竞态时序图">
+          <defs>
+            <marker id="ar4b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar4b-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- time axis -->
+          <line x1="60" y1="260" x2="720" y2="260" class="diagram-soft"/>
+          <text x="720" y="274" class="edge-label">time →</text>
+
+          <!-- column headers -->
+          <text x="100" y="18" text-anchor="middle" class="edge-label">读线程</text>
+          <text x="380" y="18" text-anchor="middle" class="edge-label">写线程</text>
+          <text x="620" y="18" text-anchor="middle" class="edge-label">Redis 缓存</text>
+
+          <!-- col dividers -->
+          <line x1="240" y1="20" x2="240" y2="255" class="diagram-soft"/>
+          <line x1="500" y1="20" x2="500" y2="255" class="diagram-soft"/>
+
+          <!-- Step 1: 读线程 cache miss -->
+          <rect x="44" y="34" width="112" height="28" rx="4" class="diagram-ink node-fill"/>
+          <text x="100" y="52" text-anchor="middle" class="edge-label">① cache miss</text>
+
+          <!-- Step 2: 写线程 update DB -->
+          <rect x="324" y="72" width="112" height="28" rx="4" class="diagram-ink node-fill"/>
+          <text x="380" y="86" text-anchor="middle" class="edge-label">② UPDATE DB</text>
+
+          <!-- Step 3: 写线程 DEL cache -->
+          <rect x="324" y="118" width="112" height="28" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.4"/>
+          <text x="380" y="136" text-anchor="middle" class="node-label-accent" font-size="12">③ DEL cache</text>
+          <!-- DEL arrow to cache column -->
+          <line x1="436" y1="132" x2="564" y2="132" class="diagram-accent" marker-end="url(#ar4b-accent)"/>
+          <text x="500" y="124" text-anchor="middle" class="branch-label">删除</text>
+
+          <!-- Step 4: 读线程 DB 查回旧值 -->
+          <rect x="44" y="160" width="112" height="28" rx="4" class="diagram-ink node-fill"/>
+          <text x="100" y="175" text-anchor="middle" class="edge-label">④ DB 返回旧值</text>
+          <!-- note: DB read was issued before write, returns old snapshot -->
+          <text x="100" y="192" text-anchor="middle" class="edge-label" font-size="10">（写前发起的查询）</text>
+
+          <!-- Step 5: 读线程 SET cache (old value) -->
+          <rect x="44" y="210" width="112" height="28" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.4"/>
+          <text x="100" y="225" text-anchor="middle" class="node-label-accent" font-size="12">⑤ 回填旧值！</text>
+          <!-- arrow to cache -->
+          <line x1="156" y1="224" x2="564" y2="224" class="diagram-accent" marker-end="url(#ar4b-accent)"/>
+          <text x="360" y="216" text-anchor="middle" class="branch-label">旧值写入缓存</text>
+
+          <!-- cache state label -->
+          <rect x="564" y="118" width="120" height="130" rx="4" class="diagram-soft node-fill"/>
+          <text x="624" y="150" text-anchor="middle" class="edge-label">③ 被删</text>
+          <text x="624" y="230" text-anchor="middle" class="edge-label">⑤ 旧值回填</text>
+          <text x="624" y="244" text-anchor="middle" class="branch-label">← 不一致</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>先写 DB 再删缓存的残余竞态：读线程在写线程删缓存之后才执行回填。<strong>注意</strong>：DB 里已是新值，缓存里被写入旧值，持续到该 key TTL 到期——这是"先写 DB"方案的最坏情况，不是必现，但 TTL 是唯一保底。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 顺序取舍</span>
+        <p>"先删缓存再写 DB" vs "先写 DB 再删缓存"，哪个一致性问题更小？从竞态窗口的长度和出现概率两个维度分析。</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p><strong>先写 DB 再删缓存</strong>的竞态窗口极窄：需要读线程在"写线程已删缓存之后"才执行回填，且读线程的 DB 查询必须在写线程之前发起——两个条件同时满足概率低，TTL 保底。</p>
+          <p><strong>先删缓存再写 DB</strong>的竞态窗口宽得多：删完缓存到 DB 写完之间（通常几毫秒到几十毫秒），所有读线程都会 miss 缓存、读到 DB 旧值（因为 DB 还没写完）、把旧值回填——任何在这个窗口内的读线程都会产生脏数据。窗口长度等于 DB 写的耗时，远大于先写 DB 路径里的窗口。结论：先写 DB 再删缓存是标准做法，问题更小。</p>
+        </details>
+      </div>
+
+      <!-- ====================== 4.3 穿透 ====================== -->
+      <h2 id="penetration"><span class="num">4.3</span><span>缓存穿透（penetration）</span></h2>
+      <p class="one-liner">穿透是查一个根本不存在的 key——缓存和 DB 都没有，每次查询都把压力直接打到 DB。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>缓存只能缓存存在的数据；对于不存在的 key，缓存形同透明，DB 暴露在外。恶意请求或批量无效 ID 查询能用这条路径瞬间压垮 DB。</p>
+      </div>
+
+      <p>触发场景：用户查一个不存在的商品 ID（误操作或攻击构造的无效 ID）。缓存 miss → DB 查询 → 返回空 → 不回填缓存 → 下一次同样 miss → 同样打到 DB。</p>
+
+      <h3>解法一：空值缓存</h3>
+      <p>DB 返回空时，把空值（<code>""</code> 或特殊标记）也写入缓存，设一个较短的 TTL（比如 60 秒）。下次同样 ID 的请求直接命中缓存里的空值，不再穿透到 DB。代价是缓存里多了大量空 key，占用内存；TTL 过长则在数据从无到有时会产生短暂的假缺席（数据已入库但缓存里还是空）。</p>
+
+      <h3>解法二：布隆过滤器（Bloom filter）</h3>
+      <p>布隆过滤器（见 <a href="01-data-structures.html">01 的位图/Bloom</a>）在入口层过滤不存在的 ID：所有合法 ID 在系统初始化或写入时加入过滤器，请求进来先问过滤器——判定"不存在"时一定可信（无假阴性），直接返回空，不打 Redis 也不打 DB；判定"存在"时才继续走缓存路径（可能有假阳性，但概率可配置到极低）。</p>
+
+      <div class="callout insight">
+        <span class="label">为什么布隆过滤器能防穿透，普通缓存挡不彻底</span>
+        <p>普通缓存（包括空值缓存）挡不住的场景：攻击者每次构造一个新的无效 ID，空值缓存只能保护"已经被查过一次"的 ID，第一次查询仍然穿透。布隆过滤器则在系统层面维护所有合法 ID 的集合，未出现过的 ID 直接被挡——无论 ID 是否被查过。关键差异：布隆过滤器没有假阴性（"判定不存在"时 100% 可信），这一点保证了它作为门卫的有效性。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 假阴性 vs 假阳性</span>
+        <p>布隆过滤器有假阳性（把不存在的 ID 判成存在），但没有假阴性（把存在的 ID 判成不存在）。为什么防穿透恰恰依赖"无假阴性"这一特性？假阳性会带来什么后果？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>防穿透的核心逻辑：过滤器判"不存在"时，直接拦截请求不去 DB。这个拦截动作的正确性依赖"判定不存在 → 真的不存在"——即无假阴性。若有假阴性，一个合法 ID 被误判为不存在，真实数据就被错误地屏蔽了，造成正常用户查不到数据。</p>
+          <p>假阳性的后果是：一个不存在的无效 ID 被误判为存在，请求继续往下走，到缓存层 miss，再到 DB 也查不到（DB 里本来就没有），最终返回空。假阳性不影响数据正确性，只是漏掉了一次本可拦截的穿透请求，代价是多了一次 DB 查询——可接受。</p>
+        </details>
+      </div>
+
+      <!-- ====================== 4.4 击穿 ====================== -->
+      <h2 id="breakdown"><span class="num">4.4</span><span>缓存击穿（breakdown）</span></h2>
+      <p class="one-liner">击穿是单个热点 key 在过期的那一瞬间，大量并发请求同时穿透缓存直接打到 DB——惊群效应。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>穿透是打不存在的 key，击穿是打"一瞬间变成不存在"的热 key。两者触发源不同，解法也不一样。击穿的危险在于它在可预期的时刻（TTL 到期）爆发，且压力高度集中在单点。</p>
+      </div>
+
+      <p>典型场景：秒杀商品详情页，TTL 到期的瞬间几千个并发请求同时 miss，每个请求都去 DB 重建缓存，DB 被一次性打满。</p>
+
+      <h3>解法一：互斥锁重建</h3>
+      <p>利用分布式锁（见 <a href="05-distributed.html">05</a>）：miss 后抢分布式锁，抢到的线程查 DB 并回填缓存，抢不到的线程 sleep 短暂时间后重试缓存（此时缓存通常已被回填）。保证同一时刻只有一个线程做 DB 重建，其余等待。代价是有等待延迟，且如果重建慢，等待线程会积压。</p>
+
+      <h3>解法二：逻辑过期（logical expiration）</h3>
+      <p>TTL 不存在 Redis 的 <code>EXPIRE</code> 里，而是存在 value 的字段里（如 JSON 里附带一个 <code>expire_at</code> 时间戳）。物理上这个 key 永不过期（<code>PERSIST</code> 状态）。读到 value 后检查逻辑过期时间：</p>
+      <ul>
+        <li>未过期：直接返回</li>
+        <li>已过期：返回旧值（不阻塞调用方），同时异步启动一个后台线程去 DB 重建并回填（用分布式锁保证只有一个线程做重建）</li>
+      </ul>
+      <p>逻辑过期以一点陈旧性（重建完成前返回旧值）换取零惊群——调用方不等待，无堆积。适合允许短暂数据陈旧的场景（如商品列表、榜单）。</p>
+
+      <h3>解法三：热点永不过期</h3>
+      <p>对提前已知是热点的 key（如节假日促销商品），直接不设 TTL，在业务逻辑里主动失效（写 DB 后 DEL）。风险是热点 key 识别需要提前介入，且 key 一旦被误删不会自动补回。</p>
+
+      <div class="callout example">
+        <span class="label">互斥锁与逻辑过期的取舍</span>
+        <p>互斥锁保证缓存里的数据一定是最新的（重建完成后才返回），但有等待延迟和锁竞争；逻辑过期保证零等待零惊群，但重建期间返回旧值——一致性换可用性。高并发读多写少场景（如商品详情、榜单）通常优先选逻辑过期；支付金额、库存余量等强一致场景选互斥锁或直接不走缓存。</p>
+      </div>
+
+      <!-- ====================== 4.5 雪崩 ====================== -->
+      <h2 id="avalanche"><span class="num">4.5</span><span>缓存雪崩（avalanche）</span></h2>
+      <p class="one-liner">雪崩是大量 key 在同一时刻集中过期，或 Redis 整体不可用，导致所有请求同时砸到 DB。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>击穿是单 key 的惊群，雪崩是全局的击穿——规模放大到整个缓存层，DB 承压是击穿的数百倍。</p>
+      </div>
+
+      <p>常见触发源：① 系统启动时批量预热，所有 key 用同一 TTL，到期时集体失效；② Redis 实例宕机，所有流量无缓存直接落 DB。</p>
+
+      <h3>解法：TTL 加随机抖动</h3>
+      <p>设置 TTL 时加上随机偏移：<code>TTL = base + random(0, jitter)</code>（如 base=300s，jitter=60s）。原本同批写入的 key 过期时间散开在 300–360s 之间，不会同时失效。这是最简单且最有效的雪崩预防手段。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">TTL 随机抖动 · Java (Jedis)</span><span class="lang">java</span><button class="copy" data-copy-target="cb-ttl-jitter">复制</button></div>
+        <pre id="cb-ttl-jitter"><code class="language-java">int baseTtl  = 300;           // 基础 TTL (秒)
+int jitter   = 60;            // 最大抖动范围
+int finalTtl = baseTtl + ThreadLocalRandom.current().nextInt(jitter);
+jedis.setex(key, finalTtl, value);
+// 同批写入的 key 过期时间散布在 300–360s，不会集中失效</code></pre>
+      </div>
+
+      <h3>解法：多级缓存</h3>
+      <p>在 Redis 前置一层本地缓存（如 Caffeine）。Redis 整体宕机时，本地缓存仍能吸收部分请求。代价是多了一层一致性问题（本地缓存无法感知 Redis 的失效事件，需要依赖 TTL 或主动广播）。</p>
+
+      <h3>解法：熔断降级</h3>
+      <p>在 Redis 不可用或 DB 压力过高时，熔断器（如 Sentinel / Resilience4j）触发降级：返回默认值、缓存快照或友好错误，阻止雪崩期间无意义的 DB 重试积累。</p>
+
+      <h3>解法：高可用集群</h3>
+      <p>Redis 宕机引发的雪崩用 Cluster 或哨兵模式（见 <a href="05-distributed.html">05</a>）规避：主节点宕机时从节点自动晋升，服务中断窗口缩短到秒级甚至毫秒级。</p>
+
+      <!-- 图 4.3 三兄弟对比 -->
+      <figure>
+        <svg viewBox="0 0 760 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="穿透、击穿、雪崩三种失败模式的触发条件与压力路径对比">
+          <defs>
+            <marker id="ar4c-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar4c-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- column labels -->
+          <text x="120" y="18" text-anchor="middle" class="node-label-accent" font-size="12">穿透</text>
+          <text x="380" y="18" text-anchor="middle" class="node-label-accent" font-size="12">击穿</text>
+          <text x="630" y="18" text-anchor="middle" class="node-label-accent" font-size="12">雪崩</text>
+          <line x1="250" y1="20" x2="250" y2="275" class="diagram-soft"/>
+          <line x1="500" y1="20" x2="500" y2="275" class="diagram-soft"/>
+
+          <!-- penetration -->
+          <rect x="44" y="34" width="152" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="120" y="56" text-anchor="middle" class="edge-label">不存在的 key</text>
+          <line x1="120" y1="68" x2="120" y2="104" class="diagram-accent" marker-end="url(#ar4c-accent)"/>
+          <rect x="44" y="104" width="152" height="34" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.4"/>
+          <text x="120" y="126" text-anchor="middle" class="node-label-accent" font-size="12">缓存 miss（每次）</text>
+          <line x1="120" y1="138" x2="120" y2="174" class="diagram-accent" marker-end="url(#ar4c-accent)"/>
+          <rect x="44" y="174" width="152" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="120" y="196" text-anchor="middle" class="edge-label">DB 每次被查</text>
+          <rect x="44" y="230" width="152" height="34" rx="4" class="diagram-soft node-fill"/>
+          <text x="120" y="252" text-anchor="middle" class="edge-label">解法：空值 / 布隆</text>
+
+          <!-- breakdown -->
+          <rect x="294" y="34" width="172" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="380" y="56" text-anchor="middle" class="edge-label">热 key TTL 到期</text>
+          <line x1="380" y1="68" x2="380" y2="104" class="diagram-accent" marker-end="url(#ar4c-accent)"/>
+          <rect x="294" y="104" width="172" height="34" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.4"/>
+          <text x="380" y="126" text-anchor="middle" class="node-label-accent" font-size="12">同时大量 miss</text>
+          <line x1="380" y1="138" x2="380" y2="174" class="diagram-accent" marker-end="url(#ar4c-accent)"/>
+          <rect x="294" y="174" width="172" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="380" y="196" text-anchor="middle" class="edge-label">DB 惊群</text>
+          <rect x="294" y="230" width="172" height="34" rx="4" class="diagram-soft node-fill"/>
+          <text x="380" y="252" text-anchor="middle" class="edge-label">解法：互斥锁 / 逻辑过期</text>
+
+          <!-- avalanche -->
+          <rect x="514" y="34" width="212" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="620" y="56" text-anchor="middle" class="edge-label">批量 key 同时到期 / Redis 宕机</text>
+          <line x1="620" y1="68" x2="620" y2="104" class="diagram-accent" marker-end="url(#ar4c-accent)"/>
+          <rect x="514" y="104" width="212" height="34" rx="4" class="diagram-accent node-fill-accent" stroke-width="1.4"/>
+          <text x="620" y="126" text-anchor="middle" class="node-label-accent" font-size="12">全局 miss</text>
+          <line x1="620" y1="138" x2="620" y2="174" class="diagram-accent" marker-end="url(#ar4c-accent)"/>
+          <rect x="514" y="174" width="212" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="620" y="196" text-anchor="middle" class="edge-label">DB 全量承压</text>
+          <rect x="514" y="230" width="212" height="34" rx="4" class="diagram-soft node-fill"/>
+          <text x="620" y="252" text-anchor="middle" class="edge-label">解法：TTL 抖动 / 熔断 / 集群 HA</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.3</span>穿透、击穿、雪崩三种失败模式的触发来源与压力路径对比。<strong>注意</strong>：三者都是 DB 承压，区别在触发源——不存在 key / 单热 key 过期 / 批量过期或整体宕机，解法因此各不相同。</figcaption>
+      </figure>
+
+      <!-- ====================== 4.6 热点 key 与大 key ====================== -->
+      <h2 id="hotkey"><span class="num">4.6</span><span>热点 key 与大 key 工程</span></h2>
+      <p class="one-liner">热点 key 把单节点 CPU 打满，大 key 在读写和删除时阻塞单线程——两者都是单线程模型在生产中最常见的性能陷阱。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Redis 单线程执行（见 <a href="02-single-thread-and-io.html">02</a>）意味着一个慢命令能阻塞所有后续命令。热点 key 和大 key 分别从"频率"和"单次耗时"两个维度触发这个问题。</p>
+      </div>
+
+      <h3>检测</h3>
+      <p>Redis 内置了两个命令行工具：</p>
+      <ul>
+        <li><code>redis-cli --hotkeys</code>：需要 <code>maxmemory-policy</code> 设为 LFU 系列（<code>allkeys-lfu</code> 或 <code>volatile-lfu</code>），基于 LFU 频率估算热点 key。</li>
+        <li><code>redis-cli --bigkeys</code>：扫描全库找各类型里 encoding 大小最大的 key。注意：扫描本身是全量 SCAN，对生产环境有轻微影响，建议在从节点或低峰期执行。</li>
+      </ul>
+
+      <h3>热点 key 处理</h3>
+      <p>单一 Redis 节点对某个热 key 的吞吐上限取决于单核 CPU。两种工程手段：</p>
+      <ul>
+        <li><strong>本地缓存（Caffeine）</strong>：在应用进程内加一层 JVM 堆内缓存，热 key 在本地直接命中，不走网络不压 Redis。代价是多台机器各一份副本、失效需要主动广播（或 TTL 保底）。</li>
+        <li><strong>key 复制分散</strong>：把热 key 写成多份（如 <code>product:123:0</code> 到 <code>product:123:N-1</code>），读时随机选一份。N 个副本分布在 N 个不同的 Redis 节点（Cluster 中 key 带后缀后 hash 到不同槽），将单节点热点分散成 N 份。写时需要更新所有副本，适合读多写极少的场景。</li>
+      </ul>
+
+      <h3>大 key 处理</h3>
+      <p>大 key 的危险不只在读（<code>HGETALL</code> 一个百万字段 hash 会占用主线程几十毫秒），还在删：直接 <code>DEL</code> 一个几百 MB 的 key 会同步释放内存，阻塞时间可达秒级。</p>
+      <p>正确做法：使用 <code>UNLINK</code> 替代 <code>DEL</code>。<code>UNLINK</code>（Redis 4.0+）把实际的内存释放放到后台异步线程（lazy free），主线程只解除引用后立即返回，延迟从秒级降到微秒级（链回 <a href="02-single-thread-and-io.html">02 的 lazy free</a>）。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">大 key 渐进删除示例 · redis-cli</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-bigkey-del">复制</button></div>
+        <pre id="cb-bigkey-del"><code class="language-bash"># 错误做法：直接 DEL 大 hash，主线程同步释放内存，可能阻塞秒级
+DEL big_hash_key
+
+# 正确做法 1：UNLINK 异步释放
+UNLINK big_hash_key
+
+# 正确做法 2：对超大 hash 渐进拆分（每批 HSCAN + HDEL，控制每次 count）
+# 避免单次 HGETALL 占用主线程
+HSCAN big_hash_key 0 COUNT 200
+HDEL big_hash_key field1 field2 ...</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">大 key 的定义</span>
+        <p>没有统一的阈值，经验标准：String value &gt; 10KB，Hash/Set/ZSet 成员数 &gt; 5000 或总大小 &gt; 100KB，List 长度 &gt; 10000。关键是"是否会导致单次命令耗时超出业务 SLA"，而非固定数字——实测 <code>slowlog</code> 才是准确判断依据。</p>
+      </div>
+
+      <!-- ====================== 自测 ====================== -->
+      <section class="self-check">
+        <h2 id="self-check"><span class="num">·</span><span>自测</span></h2>
+        <ol>
+          <li>cache-aside 的写路径为什么是"先更新 DB，再删缓存"而不是"先更新 DB，再更新缓存"？从并发写的角度说明更新缓存会产生什么问题。</li>
+          <li>布隆过滤器防缓存穿透依赖"无假阴性"特性。如果过滤器出现了假阴性（把存在的 ID 判成不存在），会发生什么？这与假阳性的后果有何不同？</li>
+          <li>逻辑过期方案在重建缓存期间返回旧值——这是一个设计上的权衡，不是缺陷。说明它与互斥锁方案在"一致性 vs 可用性"上的取舍，以及各自适合哪类场景。</li>
+          <li>设计判别：一个高并发商品详情页，既要防击穿又要防雪崩，应该如何组合 TTL 策略与缓存重建策略？说明各个手段分别挡住了哪种失败模式。</li>
+        </ol>
+        <details>
+          <summary>展开全部答案</summary>
+          <p><strong>1.</strong> 更新缓存在并发写场景下存在覆盖问题：线程 A 和线程 B 同时写不同值，更新 DB 的顺序（由 DB 串行保证）可能与更新缓存的顺序不同，导致缓存里留下更早写操作的值，而 DB 里已是更新后的值。删缓存是幂等操作，不管哪个线程先删，结果等价于缓存不存在，下一次读时按当时 DB 最新值回填，避免了顺序问题。此外，删缓存是惰性失效——不读就不重算，比更新缓存节省冷 key 的计算开销。</p>
+          <p><strong>2.</strong> 假阴性（把存在的 ID 判成不存在）会导致合法数据被错误屏蔽：真实存在的商品被过滤器拦截，用户查不到，造成业务错误。假阳性（把不存在的 ID 判成存在）的后果是漏掉一次本可拦截的穿透，请求继续走缓存路径并最终从 DB 查到空值——多了一次 DB 查询，不影响数据正确性。两者性质完全不同：假阴性破坏正确性，假阳性降低效率。</p>
+          <p><strong>3.</strong> 互斥锁：重建完成前后续请求等待，缓存里的数据始终是最新值（强一致），但有等待延迟，高并发时锁竞争可能积压请求。适合支付金额、库存余量等强一致场景。逻辑过期：重建期间立即返回旧值（弱一致），调用方无等待无积压（高可用），适合商品列表、榜单等允许短暂陈旧的读多写少场景。取舍本质：互斥锁选一致性放弃即时可用，逻辑过期选可用性接受短暂陈旧。</p>
+          <p><strong>4.</strong> 组合方案：① <strong>TTL 随机抖动</strong>（base + random(0, jitter)）——同批商品过期时间散开，防止集中过期引发雪崩；② <strong>逻辑过期 + 异步重建</strong>——热点商品采用逻辑过期，物理永不过期，过期后异步一个线程重建，其余线程返回旧值，防止热点过期瞬间的惊群（击穿）；③ <strong>本地缓存（Caffeine）</strong>作为第一层——Redis 整体不可用时（雪崩二类触发），本地缓存仍能吸收流量；④ <strong>Redis Cluster / 哨兵</strong>——缩短单节点宕机导致的服务中断窗口。各手段分工：TTL 抖动防集中过期雪崩；逻辑过期防热 key 到期击穿；本地缓存防 Redis 宕机雪崩；集群 HA 缩短宕机窗口。</p>
+        </details>
+      </section>
+
+      <!-- ====================== 进阶挑战 ====================== -->
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>设计热点商品缓存方案</h3>
+        <p>大促期间，某电商平台的爆款商品详情页 QPS 达 50,000+，商品信息更新频率约每 10 分钟一次。设计一套缓存方案，组合使用<strong>逻辑过期</strong>、<strong>TTL 随机抖动</strong>和<strong>本地缓存（Caffeine）</strong>，说明每种手段分别挡住了哪种失败模式，以及三者结合后剩余的最弱一致性窗口是多少。</p>
+        <details>
+          <summary>提示（不给全解）</summary>
+          <p>先明确三种失败模式各自的触发条件：击穿 = 单热 key 过期瞬间；雪崩 = 批量过期或 Redis 整体不可用；穿透在本题中不是主要威胁（爆款有真实数据）。</p>
+          <p>逻辑过期解决击穿问题，但重建期间有陈旧窗口——这个窗口多长？取决于异步重建线程完成 DB 查询和写 Redis 的耗时。</p>
+          <p>TTL 随机抖动解决批量商品集中过期的雪崩，但逻辑过期下物理 key 永不过期——它的作用范围变成什么？（提示：考虑同一批商品的逻辑过期时间是否也需要抖动。）</p>
+          <p>本地缓存（Caffeine）在 Redis 不可用时兜底，但它的 TTL 通常设得比 Redis 短（几秒到几十秒），避免本地缓存过期不感知 Redis 里的失效。此时最弱一致性窗口 = Caffeine TTL + 逻辑过期重建耗时，两者相加是多少量级？</p>
+        </details>
+      </div>
+
+      <!-- ====================== 参考 ====================== -->
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li><a href="https://redis.io/docs/latest/develop/use/patterns/cache/">redis.io · Caching patterns（cache-aside / read-through / write-through）</a>（官方）</li>
+          <li><a href="https://github.com/alibaba/canal">Canal · alibaba/canal</a>（Alibaba Canal 项目，MySQL binlog 订阅与缓存失效）</li>
+          <li><a href="https://redis.io/docs/latest/develop/data-types/probabilistic/bloom-filter/">redis.io · Bloom filter（RedisBloom）</a>（布隆过滤器原理与命令）</li>
+          <li><a href="https://redis.io/docs/latest/commands/unlink/">redis.io · UNLINK 命令</a>（异步惰性删除，Redis 4.0+）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="03-persistence-and-memory.html">
+          <span class="label">← 上一章</span>
+          <span class="title">03 持久化与内存生命周期</span>
+        </a>
+        <a class="next" href="05-distributed.html">
+          <span class="label">下一章 →</span>
+          <span class="title">05 复制 · 哨兵 · 集群 · 分布式锁</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#patterns" data-toc-target="patterns">4.1 缓存模式对比</a></li>
+        <li><a href="#consistency" data-toc-target="consistency">4.2 双写一致性</a></li>
+        <li><a href="#penetration" data-toc-target="penetration">4.3 穿透</a></li>
+        <li><a href="#breakdown" data-toc-target="breakdown">4.4 击穿</a></li>
+        <li><a href="#avalanche" data-toc-target="avalanche">4.5 雪崩</a></li>
+        <li><a href="#hotkey" data-toc-target="hotkey">4.6 热点与大 key</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 原理 · Effect TS</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span><a href="01-concepts.html">01 概念</a><span class="sep">—</span><a href="02-principles.html" class="current">02 原理</a><span class="sep">—</span><a href="03-practice.html">03 实操</a><span class="sep">—</span><a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span><a href="05-capstone.html">05 综合</a><span class="sep">—</span><a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+  <header class="chapter-opener">
+    <p class="chapter-label">Chapter 02</p>
+    <h1>原理：类型如何追踪一切</h1>
+    <p class="recap">01 章建立了词汇：Effect 是值、三通道 A/E/R、创建/运行/组合。这一章下沉一层——看 runtime 如何把这个值<strong>解释执行</strong>，错误如何被类型<strong>累积与相减</strong>，依赖如何在<strong>编译期</strong>被追踪，fiber 如何<strong>协作调度</strong>与<strong>中断</strong>。这是"会用"到"理解"的分界线。</p>
+  </header>
+
+  <section class="schema-panel">
+    <p class="label">本章你将建立的 schema</p>
+    <ul>
+      <li>惰性的代价与回报：为什么"值"让重试/超时/注入变得自然</li>
+      <li>E 通道如何随组合累积、随恢复相减；失败 vs 缺陷；<code>Cause</code> 与 <code>Exit</code> 的结构</li>
+      <li>R 通道是编译期需求集；<code>Layer</code> 如何构建与记忆化</li>
+      <li>fiber 是协作调度的绿色线程；结构化并发与中断如何保证不泄漏、跑清理</li>
+    </ul>
+  </section>
+
+  <h2 id="arch"><span class="num">2.0</span><span>运行时全景：一个解释器</span></h2>
+  <p>先建立全局图景。一个 Effect 值本质是<strong>一棵描述树</strong>（一串 <code>flatMap</code> 步骤）。<code>run*</code> 启动一个 <strong>Fiber</strong>，runtime 像解释器一样逐步遍历这棵树；遍历到外部依赖时从 <code>Context</code> 取实现；走完产出一个 <code>Exit</code>。后面五节就是放大这张图的各个部件。</p>
+
+  <figure>
+    <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="Effect 值被 Fiber runtime 解释执行，结合 Context 产出 Exit">
+      <defs>
+        <marker id="a20" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+        </marker>
+        <marker id="a20s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+        </marker>
+      </defs>
+
+      <rect x="36" y="96" width="170" height="80" rx="6" class="diagram-ink node-fill"/>
+      <text x="121" y="130" text-anchor="middle" class="node-label">Effect 值</text>
+      <text x="121" y="151" text-anchor="middle" class="edge-label">一串 flatMap 步骤</text>
+
+      <line x1="206" y1="136" x2="266" y2="136" class="diagram-ink" marker-end="url(#a20)"/>
+      <text x="236" y="126" text-anchor="middle" class="edge-label">run*</text>
+
+      <rect x="268" y="92" width="180" height="90" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+      <text x="358" y="124" text-anchor="middle" class="node-label-accent">Fiber Runtime</text>
+      <text x="358" y="146" text-anchor="middle" class="edge-label">逐边界步进</text>
+      <text x="358" y="164" text-anchor="middle" class="edge-label">可在步间插入中断</text>
+
+      <rect x="268" y="232" width="180" height="44" rx="6" class="diagram-ink node-fill"/>
+      <text x="358" y="259" text-anchor="middle" class="node-label">Context（服务实现）</text>
+      <line x1="358" y1="232" x2="358" y2="184" stroke="#525252" stroke-width="1.4" marker-end="url(#a20s)"/>
+      <text x="412" y="212" text-anchor="middle" class="edge-label">注入 R</text>
+
+      <line x1="448" y1="136" x2="508" y2="136" class="diagram-ink" marker-end="url(#a20)"/>
+      <text x="478" y="126" text-anchor="middle" class="edge-label">产出</text>
+
+      <rect x="510" y="96" width="176" height="80" rx="6" class="diagram-ink node-fill"/>
+      <text x="598" y="130" text-anchor="middle" class="node-label">Exit&lt;A, E&gt;</text>
+      <text x="598" y="151" text-anchor="middle" class="edge-label">Success | Failure</text>
+    </svg>
+    <figcaption><span class="fig-num">图 2.0</span>一个值，被一个 fiber 解释执行，产出一个 Exit。<strong>注意</strong>：Context 从下方注入——R 通道里的依赖就是在这里被填上的；runtime "逐边界步进"是后面中断能安全发生的根本原因。</figcaption>
+  </figure>
+
+  <h2 id="m1"><span class="num">2.1</span><span>惰性与引用透明</span></h2>
+  <p>Effect 是个值，意味着它<strong>引用透明</strong>：可以被取名、传递、放进数组、去重。"重试三次"不需要特殊机制——把同一个值跑三次即可；"超时"就是 <code>effect.pipe(Effect.timeout("1s"))</code>，给值套一层包装，得到一个新值。Promise 做不到：它一构造就在飞，你拿到的是进行中的结果，没法"再来一次"。</p>
+
+  <table class="compare-table">
+    <caption>表 2.1 · 惰性的备选方案</caption>
+    <thead><tr><th>方案</th><th>优势</th><th>为什么没选</th></tr></thead>
+    <tbody>
+      <tr><td>Promise（即时求值）</td><td>语言原生、心智简单</td><td>构造即执行：无法重试同一个操作、无法在执行前包装超时/中断/注入</td></tr>
+      <tr><td>手写 thunk <code>() =&gt; Promise</code></td><td>延迟了执行</td><td>能延迟但不能组合：错误、依赖仍不在类型里，重试/超时还得手写胶水</td></tr>
+      <tr class="selected"><td>Effect（惰性描述）</td><td>值可组合、可包装、可重跑；错误与依赖进入类型</td><td>选中</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rationale">
+    <span class="label">带来的代价</span>
+    <p>必须记得 <code>run</code>——定义一个 effect（哪怕里面写了 <code>Effect.log</code>）什么都不会发生，新手最常被这点绊倒（04 章陷阱 1）。另外同一个值跑两次就执行两次副作用：这是特性，但也要求你清楚"哪里 run"。</p>
+  </div>
+
+  <h2 id="m2"><span class="num">2.2</span><span>错误如何被类型追踪</span></h2>
+  <p>这是 Effect 最核心、也最反直觉的机制。<strong>错误是被返回的值，不是被抛出的异常</strong>——所以类型系统能看见它。</p>
+
+  <h3>累积与相减</h3>
+  <p>当 <code>flatMap</code>/<code>gen</code> 把两个 effect 串起来，E 通道<strong>取并集</strong>：串联 <code>Effect&lt;_, HttpError&gt;</code> 和 <code>Effect&lt;_, ParseError&gt;</code>，得到 <code>E = HttpError | ParseError</code>。恢复算子则做<strong>减法</strong>：<code>catchTag("HttpError", ...)</code> 把这一项从并集里去掉，<code>catchAll</code> 把整个 E collapse 成 <code>never</code>。所以签名是一份精确、静态可查的"还能怎么失败"清单。</p>
+
+  <div class="code-block">
+    <div class="header"><span class="filename">err-accumulate.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-201">复制</button></div>
+<pre id="c-201"><code class="language-typescript">import { Effect, Data } from "effect"
+
+class HttpError extends Data.TaggedError("HttpError")&lt;{ status: number }&gt; {}
+class ParseError extends Data.TaggedError("ParseError")&lt;{ raw: string }&gt; {}
+
+declare const get: Effect.Effect&lt;string, HttpError&gt;
+declare const parse: (s: string) =&gt; Effect.Effect&lt;number, ParseError&gt;
+
+const pipeline = Effect.gen(function* () {
+  const body = yield* get          // 可能 HttpError
+  return yield* parse(body)         // 可能 ParseError
+})
+// pipeline: Effect&lt;number, HttpError | ParseError&gt;  ← 并集，自动累积
+
+const recovered = pipeline.pipe(
+  Effect.catchTag("HttpError", () =&gt; Effect.succeed(0)),
+)
+// recovered: Effect&lt;number, ParseError&gt;  ← HttpError 被减掉，只剩 ParseError</code></pre>
+  </div>
+
+  <h3>失败 vs 缺陷：两种性质完全不同的"错"</h3>
+  <p class="one-liner">失败（failure）= 预期内、可恢复，进入 E 通道；缺陷（defect）= 意料外的 bug，<strong>不</strong>进 E 通道。</p>
+  <p>只有 <code>Effect.fail(x)</code> 产生的失败才进 E。一个真正 <code>throw</code> 出来的异常（或 <code>Effect.die</code>）是<strong>缺陷</strong>——E 通道保持 <code>never</code>，因为"枚举所有可能的 bug"是不现实的。两者可以互转：<code>Effect.orDie</code> 把失败降级成缺陷（从 E 移除）；<code>Effect.exit</code> / <code>catchAllCause</code> / <code>sandbox</code> 把缺陷捞成可检视的值。</p>
+
+  <div class="callout warning">
+    <span class="label">关键区分</span>
+    <p><code>catchAll</code> <strong>抓不到缺陷</strong>——它只处理 E 通道里的失败。一个在 <code>Effect.sync</code> 里 <code>throw</code> 的异常会绕过所有 <code>catchTag</code>/<code>catchAll</code>。要兜住缺陷得用 <code>catchAllCause</code> 或 <code>Effect.exit</code>。这是 04 章好几个陷阱的根源。</p>
+  </div>
+
+  <h3>Cause 与 Exit：比 Error 多保留的信息</h3>
+  <p>一个 fiber 结束时得到 <code>Exit&lt;A, E&gt;</code> = <code>Success(A)</code> 或 <code>Failure(Cause&lt;E&gt;)</code>。注意失败侧装的是 <code>Cause</code>，不是裸 <code>E</code>——<code>Cause</code> 是完整的失败树，能表达 <code>try/catch</code> 结构上表达不了的东西：<strong>同时发生的多个失败</strong>。两个并发分支都炸了，<code>Cause</code> 用 <code>Parallel</code> 把两个都留着；<code>try/catch</code> 只能抓到一个，另一个被吞。</p>
+
+  <figure>
+    <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="Exit 分为 Success 和 Failure；Failure 装 Cause，Cause 有 Fail/Die/Interrupt/Sequential/Parallel 五种形态">
+      <defs>
+        <marker id="a22" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+        </marker>
+      </defs>
+
+      <rect x="290" y="26" width="140" height="44" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+      <text x="360" y="53" text-anchor="middle" class="node-label-accent">Exit&lt;A, E&gt;</text>
+
+      <line x1="320" y1="70" x2="200" y2="108" stroke="#525252" stroke-width="1.4" marker-end="url(#a22)"/>
+      <line x1="400" y1="70" x2="520" y2="108" stroke="#525252" stroke-width="1.4" marker-end="url(#a22)"/>
+
+      <rect x="120" y="110" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+      <text x="195" y="132" text-anchor="middle" class="node-label">Success</text>
+      <text x="195" y="150" text-anchor="middle" class="edge-label">→ A 成功值</text>
+
+      <rect x="450" y="110" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+      <text x="525" y="132" text-anchor="middle" class="node-label">Failure</text>
+      <text x="525" y="150" text-anchor="middle" class="edge-label">→ Cause&lt;E&gt;</text>
+
+      <line x1="525" y1="160" x2="450" y2="196" stroke="#525252" stroke-width="1.4" marker-end="url(#a22)"/>
+      <rect x="300" y="198" width="160" height="40" rx="6" class="diagram-ink node-fill"/>
+      <text x="380" y="223" text-anchor="middle" class="node-label">Cause&lt;E&gt; 的形态</text>
+
+      <!-- bus to 4 leaves -->
+      <line x1="380" y1="238" x2="380" y2="262" stroke="#525252" stroke-width="1.4"/>
+      <line x1="100" y1="262" x2="620" y2="262" stroke="#525252" stroke-width="1.4"/>
+      <line x1="100" y1="262" x2="100" y2="288" stroke="#525252" stroke-width="1.4" marker-end="url(#a22)"/>
+      <line x1="275" y1="262" x2="275" y2="288" stroke="#525252" stroke-width="1.4" marker-end="url(#a22)"/>
+      <line x1="445" y1="262" x2="445" y2="288" stroke="#525252" stroke-width="1.4" marker-end="url(#a22)"/>
+      <line x1="620" y1="262" x2="620" y2="288" stroke="#525252" stroke-width="1.4" marker-end="url(#a22)"/>
+
+      <rect x="20" y="290" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+      <text x="100" y="313" text-anchor="middle" class="node-label">Fail(e)</text>
+      <text x="100" y="332" text-anchor="middle" class="edge-label">预期失败 · 在 E</text>
+
+      <rect x="195" y="290" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+      <text x="275" y="313" text-anchor="middle" class="node-label">Die(defect)</text>
+      <text x="275" y="332" text-anchor="middle" class="edge-label">缺陷 bug · 不在 E</text>
+
+      <rect x="365" y="290" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+      <text x="445" y="313" text-anchor="middle" class="node-label">Interrupt</text>
+      <text x="445" y="332" text-anchor="middle" class="edge-label">被中断 · 带 fiberId</text>
+
+      <rect x="540" y="290" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+      <text x="620" y="310" text-anchor="middle" class="node-label">Seq / Parallel</text>
+      <text x="620" y="330" text-anchor="middle" class="edge-label">并存多个失败</text>
+    </svg>
+    <figcaption><span class="fig-num">图 2.2</span>失败侧不是裸 <code>E</code>，是一棵 <code>Cause</code> 树。<strong>注意</strong>：最右的 <code>Parallel</code> 能同时保留两个并发失败——这是 <code>try/catch</code>（只能抓一个异常）在结构上做不到的事。</figcaption>
+  </figure>
+
+  <table class="compare-table">
+    <caption>表 2.2 · 错误模型的备选方案</caption>
+    <thead><tr><th>方案</th><th>优势</th><th>为什么没选</th></tr></thead>
+    <tbody>
+      <tr><td><code>throw</code> / 异常</td><td>语言原生、零样板</td><td>对类型系统不可见、沿栈展开；调用方不知道会抛什么，重构易漏</td></tr>
+      <tr><td>返回裸 <code>Error</code> / <code>Result&lt;T, Error&gt;</code></td><td>错误变成值、可检查</td><td>丢失中断信息、丢失"失败 vs 缺陷"区分、无法保留并发的多个失败</td></tr>
+      <tr class="selected"><td>E 通道 + <code>Cause</code> / <code>Exit</code></td><td>失败进类型可穷尽处理；Cause 无损保留全部失败信息</td><td>选中</td></tr>
+    </tbody>
+  </table>
+  <div class="rationale">
+    <span class="label">带来的代价</span>
+    <p>多了一套要学的结构（Cause/Exit、失败/缺陷的边界）和一些样板（定义 TaggedError）。回报是：编译器逼你处理每一种可恢复失败，且重构时错误清单自动更新。</p>
+  </div>
+
+  <div class="predict">
+    <span class="question-label">想一想</span>
+    <p>一段代码 <code>const safe = risky.pipe(Effect.catchAll(() =&gt; Effect.succeed(0)))</code>，<code>risky</code> 里有个 <code>Effect.sync(() =&gt; JSON.parse(bad))</code> 会抛。<code>safe</code> 能兜住这个抛吗？</p>
+    <details>
+      <summary>展开答案（先停 10 秒）</summary>
+      <p>兜不住。<code>JSON.parse</code> 抛出的异常是<strong>缺陷</strong>（用了 <code>sync</code> 而非 <code>try</code>），不在 E 通道，<code>catchAll</code> 只管 E 通道。<code>safe</code> 运行时仍会以缺陷告终。修法：要么用 <code>Effect.try</code> 把异常转成 E 通道的失败，要么用 <code>catchAllCause</code> 兜缺陷。这正是 04 章陷阱 3。</p>
+    </details>
+  </div>
+
+  <h2 id="m3"><span class="num">2.3</span><span>Layer：编译期的依赖注入</span></h2>
+  <p>R 通道是一个<strong>编译期需求集</strong>：每个 <code>yield* SomeTag</code> 往里加一项，每个 <code>provide</code> 去掉对应项。effect 不到 <code>R = never</code> 不能运行——编译器在替你确认"所有依赖都接好了"。运行时这边，<code>Context</code> 就是一个不可变的 <code>Map&lt;Tag, 实现&gt;</code>。</p>
+  <p><code>Layer&lt;ROut, E, RIn&gt;</code> 是"如何构建服务"的配方：它能自己有依赖（<code>RIn</code>）和构建期错误（<code>E</code>）。<code>Layer.provide</code> 把一个 layer 接到另一个 layer 上（接线服务之间的依赖），<code>Effect.provide</code> 把构建好的 layer 接到 effect 上。</p>
+
+  <div class="callout insight">
+    <span class="label">洞察 · 记忆化</span>
+    <p>Layer 在一次构建中按<strong>引用相等</strong>记忆化：同一个 layer 引用被多处依赖，只构建一次、共享一个实例。反过来，把一个"工厂调用"<code>makeLayer()</code> 调两次会得到两个不同引用 = 两个实例。想要单例就<strong>把 layer 存成一个 const、只提供这一个引用</strong>。这是 04 章陷阱 5。</p>
+  </div>
+
+  <table class="compare-table">
+    <caption>表 2.3 · 依赖注入的备选方案</caption>
+    <thead><tr><th>方案</th><th>优势</th><th>为什么没选</th></tr></thead>
+    <tbody>
+      <tr><td>手动透传参数</td><td>显式、无魔法</td><td>深层调用链层层传递，啰嗦；加一个依赖要改一路签名</td></tr>
+      <tr><td>全局单例 / 模块级实例</td><td>取用方便</td><td>测试无法替换实现；隐式耦合，编译器看不见依赖关系</td></tr>
+      <tr><td>运行时 DI 容器（反射）</td><td>解耦</td><td>依赖错误推迟到运行时才暴露；类型不安全</td></tr>
+      <tr class="selected"><td><code>Context.Tag</code> + <code>Layer</code></td><td>依赖进 R 通道、编译期校验；测试/生产换 layer 即可</td><td>选中</td></tr>
+    </tbody>
+  </table>
+  <div class="rationale">
+    <span class="label">带来的代价</span>
+    <p>类型签名变长（R 通道会列出所有未提供的服务），需要理解 layer 的构建图与记忆化语义。回报是依赖关系完全显式、编译期可查、可测试。</p>
+  </div>
+
+  <h2 id="m4"><span class="num">2.4</span><span>Fiber 运行时：协作式调度</span></h2>
+  <p class="one-liner">fiber 是 runtime 模拟的<strong>轻量虚拟线程</strong>（绿色线程）：不是 OS 线程（JS 单线程），不是 Promise；惰性、可观测、可中断。</p>
+  <p>runtime 是个解释器，逐步遍历 effect 这棵描述树，<code>flatMap</code>/<code>gen</code> 的边界就是一"步"。调度是<strong>协作式</strong>的：一个 fiber 一直跑，直到撞上异步挂起点（<code>Effect.sleep</code>、一个 async effect）或主动让出，runtime 才在事件循环上步进别的 fiber。关键在于——因为 runtime 掌控每一步，它能在<strong>步与步之间</strong>插入检查点。这就是为什么中断既便宜又安全：永远不会在一个同步块中途被打断，不会有撕裂状态、不需要锁。</p>
+
+  <figure>
+    <svg viewBox="0 0 720 290" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="两个 fiber 在效应边界处协作交替，runtime 在挂起点切换">
+      <defs>
+        <marker id="a24" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+        </marker>
+      </defs>
+      <line x1="80" y1="40" x2="690" y2="40" stroke="#525252" stroke-width="1.2" marker-end="url(#a24)"/>
+      <text x="690" y="32" text-anchor="end" class="edge-label">时间 →</text>
+
+      <text x="30" y="105" class="edge-label" font-weight="700" fill="#B73B2F">Fiber A</text>
+      <text x="30" y="205" class="edge-label" font-weight="700">Fiber B</text>
+      <line x1="80" y1="100" x2="690" y2="100" class="diagram-soft"/>
+      <line x1="80" y1="200" x2="690" y2="200" class="diagram-soft"/>
+
+      <rect x="90" y="82" width="120" height="36" rx="6" class="diagram-accent node-fill-accent"/>
+      <text x="150" y="105" text-anchor="middle" class="node-label">fetch 请求</text>
+      <rect x="380" y="82" width="120" height="36" rx="6" class="diagram-accent node-fill-accent"/>
+      <text x="440" y="105" text-anchor="middle" class="node-label">解析响应</text>
+
+      <rect x="230" y="182" width="120" height="36" rx="6" class="diagram-ink node-fill"/>
+      <text x="290" y="205" text-anchor="middle" class="node-label">另一个请求</text>
+      <rect x="520" y="182" width="120" height="36" rx="6" class="diagram-ink node-fill"/>
+      <text x="580" y="205" text-anchor="middle" class="node-label">写日志</text>
+
+      <line x1="210" y1="70" x2="210" y2="230" class="diagram-soft" stroke="#B73B2F"/>
+      <text x="210" y="252" text-anchor="middle" class="branch-label">边界 · A 挂起</text>
+      <line x1="500" y1="70" x2="500" y2="230" class="diagram-soft" stroke="#B73B2F"/>
+      <text x="500" y="252" text-anchor="middle" class="branch-label">边界 · 切换</text>
+    </svg>
+    <figcaption><span class="fig-num">图 2.4</span>A 发出请求后在边界处挂起（等 IO），runtime 趁机步进 B。<strong>注意</strong>：切换只发生在<strong>红色边界线</strong>上——所以一个纯 CPU 的同步死循环不会让出，也就不会被中断，直到它撞上一个边界。</figcaption>
+  </figure>
+
+  <table class="compare-table">
+    <caption>表 2.4 · 并发执行模型的备选方案</caption>
+    <thead><tr><th>方案</th><th>优势</th><th>为什么没选</th></tr></thead>
+    <tbody>
+      <tr><td>OS 线程（抢占式）</td><td>真并行、CPU 密集友好</td><td>重量级、抢占点任意 → 撕裂状态需要锁；JS 也没有共享内存线程模型</td></tr>
+      <tr><td>裸 Promise</td><td>原生、轻</td><td>不可取消、不可观测、即时求值；并发只能 <code>Promise.all</code> 这类粗粒度</td></tr>
+      <tr class="selected"><td>Fiber（协作式绿色线程）</td><td>可中断、可观测、惰性；几万个也便宜；中断点安全</td><td>选中</td></tr>
+    </tbody>
+  </table>
+  <div class="rationale">
+    <span class="label">带来的代价</span>
+    <p>协作式意味着一段 CPU 密集的同步代码不会自动让出，也不会响应中断，直到它到达下一个效应边界。需要时得手动插入让出点（把大循环切成 effect 步骤）。</p>
+  </div>
+
+  <h2 id="m5"><span class="num">2.5</span><span>结构化并发与中断</span></h2>
+  <p><code>Effect.fork</code> 把子 fiber 挂到<strong>父 fiber 的作用域</strong>上。父终止时，子自动终止——"不会有 fiber 在你不知情时还在跑"。要让 fiber 活得比父久，得显式 <code>forkDaemon</code>（全局作用域）或 <code>forkScoped</code>（挂到某个外层 <code>Scope</code>）。这就是"结构化"：fiber 的生命周期像调用树一样嵌套。</p>
+  <p>中断的机制：<code>Fiber.interrupt</code> 发出信号，runtime 在<strong>效应之间的边界</strong>观察到它（不会在同步块中途），展开执行栈，按<strong>注册的反序</strong>运行所有 finalizer / <code>onInterrupt</code>，最后得到一个 <code>Cause: Interrupt(fiberId)</code> 的 Exit。</p>
+
+  <figure>
+    <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="中断父 fiber 自动向下中断子 fiber，并按反序运行 finalizer">
+      <defs>
+        <marker id="a25" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+        </marker>
+        <marker id="a25v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+        </marker>
+      </defs>
+
+      <rect x="120" y="58" width="410" height="190" rx="8" class="diagram-soft"/>
+      <text x="210" y="82" class="edge-label" font-weight="700">父 fiber 作用域</text>
+
+      <line x1="24" y1="140" x2="148" y2="140" class="diagram-accent" marker-end="url(#a25v)"/>
+      <text x="86" y="130" text-anchor="middle" class="branch-label">interrupt</text>
+
+      <rect x="150" y="116" width="120" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+      <text x="210" y="145" text-anchor="middle" class="node-label-accent">父 fiber</text>
+
+      <line x1="270" y1="128" x2="356" y2="120" class="diagram-ink" marker-end="url(#a25)"/>
+      <line x1="270" y1="152" x2="356" y2="196" class="diagram-ink" marker-end="url(#a25)"/>
+      <text x="312" y="116" text-anchor="middle" class="edge-label">fork</text>
+
+      <rect x="358" y="98" width="150" height="44" rx="6" class="diagram-ink node-fill"/>
+      <text x="433" y="119" text-anchor="middle" class="node-label">子 fiber 1</text>
+      <text x="433" y="136" text-anchor="middle" class="edge-label" fill="#B73B2F">✗ 随父中断</text>
+
+      <rect x="358" y="176" width="150" height="44" rx="6" class="diagram-ink node-fill"/>
+      <text x="433" y="197" text-anchor="middle" class="node-label">子 fiber 2</text>
+      <text x="433" y="214" text-anchor="middle" class="edge-label" fill="#B73B2F">✗ 随父中断</text>
+
+      <rect x="540" y="120" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+      <text x="615" y="146" text-anchor="middle" class="node-label">finalizer</text>
+      <text x="615" y="165" text-anchor="middle" class="edge-label">反序运行 · 必跑</text>
+    </svg>
+    <figcaption><span class="fig-num">图 2.5</span>中断打到父 fiber，子 fiber 自动跟着中断。<strong>注意</strong>：和 <code>AbortController</code>"翻个标志位等你自己轮询"不同，Effect 保证中断时 finalizer（关连接、释放锁）<strong>一定运行</strong>，且按注册反序。</figcaption>
+  </figure>
+
+  <div class="code-block">
+    <div class="header"><span class="filename">interrupt-finalizer.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-205">复制</button></div>
+<pre id="c-205"><code class="language-typescript">import { Effect, Console } from "effect"
+
+// acquireRelease：acquire 与 release 都不可中断；release 注册为 scope finalizer
+const useConn = Effect.acquireRelease(
+  Console.log("① 打开连接").pipe(Effect.as("conn")),  // acquire
+  () =&gt; Console.log("③ 关闭连接（必跑：成功/失败/中断都跑）"), // release
+)
+
+const program = Effect.gen(function* () {
+  const conn = yield* useConn
+  yield* Console.log("② 用连接做事")
+  yield* Effect.interrupt          // 主动中断
+}).pipe(Effect.scoped)             // scoped 圈定 finalizer 的生命周期
+
+Effect.runPromiseExit(program)
+// 输出顺序：① ② ③，最终 Exit.Failure，Cause 是 Interrupt
+// —— 即使被中断，③ 关闭连接也照常执行</code></pre>
+  </div>
+
+  <table class="compare-table">
+    <caption>表 2.5 · 取消与资源安全的备选方案</caption>
+    <thead><tr><th>方案</th><th>优势</th><th>为什么没选</th></tr></thead>
+    <tbody>
+      <tr><td><code>AbortController</code></td><td>原生、被 fetch 等支持</td><td>只翻标志位，要手动轮询；不保证清理运行；不自动向下传播</td></tr>
+      <tr><td>fire-and-forget（detached promise）</td><td>写起来省事</td><td>无父子链：父结束子还在跑，泄漏；出错无人知</td></tr>
+      <tr class="selected"><td>结构化并发 + 中断 + Scope</td><td>子随父终止、中断必跑 finalizer、资源不泄漏</td><td>选中</td></tr>
+    </tbody>
+  </table>
+  <div class="rationale">
+    <span class="label">带来的代价</span>
+    <p>多了一层运行时机制（Scope、finalizer 注册），要让 fiber 活过父作用域得显式声明。回报是默认就不泄漏、取消即清理。</p>
+  </div>
+
+  <h2 id="synth"><span class="num">2.6</span><span>跨机制综合：一行代码里五个机制</span></h2>
+  <p>把五节串起来。看这一行：</p>
+  <div class="code-block">
+    <div class="header"><span class="filename">synthesis.ts</span><span class="lang">TypeScript</span><button class="copy" data-copy-target="c-206">复制</button></div>
+<pre id="c-206"><code class="language-typescript">const result = fetchWeather("Tokyo").pipe(Effect.timeout("1 second"))
+// fetchWeather(city): Effect&lt;Weather, HttpError, HttpClient&gt;
+// result:            Effect&lt;Weather, HttpError | TimeoutException, HttpClient&gt;</code></pre>
+  </div>
+  <p>这一个表达式同时动用了全部五个机制：</p>
+  <ol>
+    <li><strong>惰性（2.1）</strong>：<code>result</code> 还是个值，什么都没跑；<code>timeout</code> 只是给原值套了层包装得到新值。</li>
+    <li><strong>错误类型（2.2）</strong>：E 通道自动并入 <code>TimeoutException</code>——签名诚实地多出一种失败。</li>
+    <li><strong>依赖（2.3）</strong>：R 仍是 <code>HttpClient</code>，没 <code>provide</code> 就编译不过、跑不了。</li>
+    <li><strong>Fiber（2.4）</strong>：<code>run</code> 时 <code>timeout</code> 把 <code>fetchWeather</code> 与一个 1 秒的 sleep <strong>race</strong>，各跑在自己的 fiber 上。</li>
+    <li><strong>中断（2.5）</strong>：若 sleep 先赢，<code>fetchWeather</code> 的 fiber 在下一个边界被中断，它的 <code>acquireRelease</code> 清理（关连接）照跑，结果是 <code>TimeoutException</code> 失败、<code>Cause</code> 里带 <code>Interrupt</code>。</li>
+  </ol>
+
+  <section class="self-check" id="self-check">
+    <h2><span class="num">§</span><span>本章 self-check</span></h2>
+    <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程作答，再展开对照。</p>
+    <ol>
+      <li>E 通道在串联（<code>flatMap</code>）和恢复（<code>catchTag</code>）时分别发生什么变化？</li>
+      <li>"失败"和"缺陷"的边界在哪？为什么 Effect 要区分它们？</li>
+      <li>为什么 fiber 的中断"既便宜又安全"？这跟协作式调度有什么关系？</li>
+      <li>（综合）<code>Effect.race(a, b)</code> 里 <code>a</code> 先完成，<code>b</code> 会怎样？这和 <code>Promise.race</code> 有何不同？涉及本章哪两个机制？</li>
+    </ol>
+    <details>
+      <summary>答案（先做完再展开）</summary>
+      <ol>
+        <li>串联取并集（错误类型累积成 union）；恢复做减法（<code>catchTag</code> 减掉一项，<code>catchAll</code> collapse 成 <code>never</code>）。签名因此始终是精确的"还能怎么失败"清单。</li>
+        <li>失败 = <code>Effect.fail</code> 产生、预期可恢复、进 E 通道；缺陷 = <code>throw</code>/<code>die</code> 产生的 bug、不进 E。区分的理由：可恢复的应被类型强制处理，而枚举所有 bug 不现实，且 <code>catchAll</code> 故意不碰缺陷。</li>
+        <li>因为 runtime 掌控每一步，中断只在效应边界发生，绝不在同步块中途——没有撕裂状态、不需要锁；fiber 又是轻量绿色线程，创建和切换都便宜。</li>
+        <li><code>b</code> 会被<strong>主动中断</strong>，它的 finalizer 会运行（机制 2.4 fiber + 2.5 中断）。<code>Promise.race</code> 的失败臂会继续跑到底，无法取消、不会清理。</li>
+      </ol>
+    </details>
+  </section>
+
+  <div class="challenge">
+    <span class="label">进阶挑战 · 刚好够不着</span>
+    <h3>预测中断时的输出顺序</h3>
+    <p>一个 <code>scoped</code> 程序依次注册了三个 finalizer F1、F2、F3，然后在第三步被中断。三个 finalizer 的执行顺序是什么？如果 F2 本身又抛了一个错，最终的 <code>Cause</code> 里会有几个失败、什么形态？</p>
+    <details>
+      <summary>提示（卡住再展开）</summary>
+      <p>finalizer 按<strong>注册反序</strong>执行：F3 → F2 → F1。F2 抛错与原本的中断<strong>顺序叠加</strong>，会进入 <code>Cause</code> 的 <code>Sequential</code> 形态——两个失败都保留（一个 Interrupt、一个 F2 的错），而不是丢掉一个。回看图 2.2 的 Cause 形态。</p>
+    </details>
+  </div>
+
+  <footer class="references">
+    <h3>本章参考</h3>
+    <ul>
+      <li><a href="https://effect.website/docs/error-management/two-error-types/">Two Types of Errors</a> · <a href="https://effect.website/docs/data-types/cause/">Cause</a> · <a href="https://effect.website/docs/data-types/exit/">Exit</a>（官方）</li>
+      <li><a href="https://effect.website/docs/requirements-management/services/">Services</a> · <a href="https://effect.website/docs/requirements-management/layers/">Layers</a> · <a href="https://effect.website/docs/requirements-management/layer-memoization/">Layer Memoization</a>（官方）</li>
+      <li><a href="https://effect.website/docs/concurrency/fibers/">Fibers</a> · <a href="https://effect.website/docs/concurrency/basic-concurrency/">Interruptions</a>（官方）</li>
+    </ul>
+  </footer>
+
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a href="01-concepts.html" class="prev"><span class="label">← 上一章</span><span class="title">01 · 概念：Effect 是值</span></a>
+    <a href="03-practice.html" class="next"><span class="label">下一章 →</span><span class="title">03 · 实操：三阶代码递进</span></a>
+  </nav>
+
+</article>
+
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#arch" data-toc-target="arch">2.0 运行时全景</a></li>
+        <li><a href="#m1" data-toc-target="m1">2.1 惰性与引用透明</a></li>
+        <li><a href="#m2" data-toc-target="m2">2.2 错误如何被类型追踪</a></li>
+        <li><a href="#m3" data-toc-target="m3">2.3 Layer 编译期依赖</a></li>
+        <li><a href="#m4" data-toc-target="m4">2.4 Fiber 运行时调度</a></li>
+        <li><a href="#m5" data-toc-target="m5">2.5 结构化并发与中断</a></li>
+        <li><a href="#synth" data-toc-target="synth">2.6 跨机制综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

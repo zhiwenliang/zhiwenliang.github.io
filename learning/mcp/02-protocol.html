@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>协议机制 · MCP 模型上下文协议 深潜</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; font-weight: 500; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+.path-list { list-style: none; padding: 0; margin: 16px 0; }
+.path-list li {
+  padding: 10px 0 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 15px;
+}
+.path-list .who {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--vermilion); letter-spacing: 0.04em;
+  margin-right: 10px;
+}
+.toc-files { list-style: none; padding: 0; margin: 16px 0; }
+.toc-files li { margin: 0 0 10px; }
+.toc-files a {
+  display: block; padding: 12px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-files a:hover { border-color: var(--vermilion); }
+.toc-files .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-files .t { font-weight: 600; }
+.toc-files .d { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-protocol.html" class="current">02 协议</a><span class="sep">—</span>
+    <a href="03-bidirectional.html">03 双向</a><span class="sep">—</span>
+    <a href="04-security.html">04 安全</a><span class="sep">—</span>
+    <a href="05-design-and-frontier.html">05 设计·前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>协议机制：握手、协商与线路</h1>
+        <p class="recap">01 章给了一张控制权地图——谁能发起什么、朝哪个方向。这一章把这套结构放到线路上：它如何用 JSON-RPC 跑起来。从 <code>initialize</code> 握手、capability 协商、三阶 lifecycle，到通知 / 错误模型与两种 transport，逐层下探到比官方文档深一层的字节级细节。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label" style="font-size:10px;font-weight:500;">本章你将建立的 schema</p>
+        <ul>
+          <li>MCP 用 JSON-RPC 2.0 当消息层：三种形态（request / response / notification），靠 id 关联、靠 notification 推送</li>
+          <li><code>initialize</code> 是强制首轮握手：版本是日期串，capability 一次性互相亮牌</li>
+          <li>lifecycle 三阶（Initialization → Operation → Shutdown），shutdown 走 transport 而非协议消息</li>
+          <li>两种现行 transport：stdio（本地，stdout 即线路）与 Streamable HTTP（远程，单端点 + 可选 SSE）</li>
+        </ul>
+      </section>
+
+      <p>沿用 01 章的场景：host（Cursor 或 Claude Desktop）连一个 <strong>GitHub server</strong>，让助手能读 issue、查 PR、提交评论。01 章关心"谁能调谁"，这一章把每一次调用还原成线路上真实流动的 JSON 字节——握手怎么发、能力怎么协商、一次 <code>tools/call</code> 在 stdin/stdout 上长什么样。</p>
+
+      <h2 id="s21"><span class="num">2.1</span><span>为什么是 JSON-RPC 2.0</span></h2>
+      <p class="one-liner">MCP 选 JSON-RPC 2.0 作消息层——它面向"调用一个具名方法"，与 function calling 的心智天然对齐，而非 REST 那套资源 / CRUD 模型。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>MCP 的核心动作是"调用 server 上的某个能力"：<code>tools/call</code>、<code>resources/read</code>、<code>prompts/get</code>。这是 RPC（远程过程调用）的语义，不是 REST 的语义。REST 要把每个能力映射成 URL 路径 + HTTP 动词（资源 + CRUD），而工具调用本质是"执行这个具名函数、给这组参数"——JSON-RPC 的 <code>method</code> + <code>params</code> 直接就是这个形状，不必为每个工具设计一套 URL。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：JSON-RPC 在 MCP 里扛着三个承重属性，缺一个这套协议就立不住。</p>
+      <ul>
+        <li><strong>request id 做关联</strong>：一条长连接上请求和响应是乱序穿插的。每个 request 带一个 <code>id</code>，对应的 response 回填同一个 <code>id</code>——这样在<em>同一条长生命周期双向通道</em>上，发起方能把回来的结果对上是哪一次请求。没有 id，单通道上的多路并发请求就无法解多路复用。</li>
+        <li><strong>notification 做推送</strong>：一类消息<em>没有 id、也不期待回复</em>，专门承载 <code>*/list_changed</code>（列表变更）、progress（进度）、cancellation（取消）。它是单向的"广播一声"，不占用请求-响应的配对。</li>
+        <li><strong>对称（symmetric）</strong>：JSON-RPC 不区分谁是"客户端谁是服务端"——任一端都能发 request。这正是 03 章 server→client 调用（sampling / elicitation）能成立的协议基础：在消息层，server 给 client 发 request 与 client 给 server 发 request 完全同构。</li>
+      </ul>
+      <p>还有一条关键性质：<strong>transport-agnostic</strong>（与传输无关）。同一个 JSON 消息形状，无论跑在 stdio 还是 HTTP 上都不变——2.8 讲的两种 transport 只换"管子"，不换"信件格式"。</p>
+
+      <p>对比 gRPC：gRPC 性能更高，但要求 protobuf 代码生成 + 强制 HTTP/2，调试时是二进制流。MCP 选 JSON-RPC，换来的是<strong>人类可读、可手抓包调试、零 codegen</strong>——一个 server 作者用任何语言拼 JSON 字符串就能对接。代价也实在：放弃了 HTTP 缓存、放弃了原生流式（后来靠 SSE 外挂补上）、放弃了默认强类型（改为每个 tool 自带一份 JSON Schema 描述参数）。</p>
+
+      <div class="callout warning">
+        <span class="label">出人意料 · MCP 砍掉了它名字里那个协议的一部分</span>
+        <p>JSON-RPC 2.0 规范里有 <strong>batching</strong>（把多条消息装进一个 JSON 数组一次发送）这一<em>强制</em>特性。MCP 在 <strong>2025-06-18</strong> 版本经 <strong>PR #416</strong> <strong>移除了对 batching 的支持</strong>，理由是缺乏实际用例。batching 只在 2025-03 至 2025-06 之间短暂存在过——也就是说，MCP 技术上丢掉了它所基于、所命名的那个规范的一个必备部分。结论：<strong>不要按 batching 来实现</strong>，当前 MCP 不支持。</p>
+      </div>
+
+      <h2 id="s22"><span class="num">2.2</span><span>三种消息形态</span></h2>
+      <p class="one-liner">JSON-RPC 在线路上只有三种消息：request（带 id，要回复）、response（回填 id，带 result 或 error）、notification（无 id，不回复）。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>整个 MCP 会话——握手、列工具、调工具、推变更、报进度、传错误——全部由这三种形态拼出来。认清这三种形态，等于拿到了读任何 MCP 抓包的解码表：看到 <code>id</code> + <code>method</code> 是请求，看到 <code>id</code> + <code>result</code> 是应答，看到只有 <code>method</code> 没 <code>id</code> 是通知。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：三种形态用一次 <code>tools/call</code>（让 GitHub server 创建一个 issue）摆出来看。注意 id 的有无如何决定"要不要等回复"。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">request · client → server</span><span class="lang">json</span><button class="copy" data-copy-target="c221">复制</button></div>
+        <pre id="c221"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "create_issue",
+    "arguments": { "title": "登录页 500", "body": "复现步骤见下" }
+  }
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">response · server → client（成功，回填 id 7）</span><span class="lang">json</span><button class="copy" data-copy-target="c222">复制</button></div>
+        <pre id="c222"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "content": [ { "type": "text", "text": "已创建 issue #1423" } ],
+    "isError": false
+  }
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">notification · 无 id，不期待回复</span><span class="lang">json</span><button class="copy" data-copy-target="c223">复制</button></div>
+        <pre id="c223"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "method": "notifications/tools/list_changed"
+}</code></pre>
+      </div>
+
+      <p>三点定死：① request 必带 <code>id</code>（数字或字符串，同会话内唯一）；② response 用同一个 <code>id</code> 回填，<code>result</code> 和 <code>error</code> 二选一、绝不并存；③ notification <strong>没有 <code>id</code> 字段</strong>，发出即忘，对端不得回复。第三种形态正是 2.6 的进度 / 取消 / 列表变更全部走的通道。</p>
+
+      <h2 id="s23"><span class="num">2.3</span><span>initialize 握手</span></h2>
+      <p class="one-liner">每条 MCP 会话的第一笔交换必须是 <code>initialize</code>：三步——client 发请求、server 回响应、client 发 <code>notifications/initialized</code> 收尾。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>两端在通话前互不了解对方的协议版本和能力。<code>initialize</code> 是一次强制的"对暗号"：先把协议版本对齐、把双方支持的 capability 一次性亮清楚，之后才允许进入正常调用。跳过握手直接发 <code>tools/call</code> 是协议违规——握手前只允许 <code>ping</code> 和 logging 两类消息。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：握手是严格的三步，方向交替，不能合并。</p>
+      <ol>
+        <li><strong>client → <code>initialize</code> request</strong>：带 <code>protocolVersion</code>（自己支持的最新版本）、<code>capabilities</code>（client 端能力，如 sampling / roots）、<code>clientInfo</code>（名称 + 版本）。</li>
+        <li><strong>server → <code>initialize</code> response</strong>：回 <em>它自己</em>的 <code>protocolVersion</code>、<code>capabilities</code>（server 端能力，如 tools / resources）、<code>serverInfo</code>，外加可选的 <code>instructions</code>（给模型的使用说明）。</li>
+        <li><strong>client → <code>notifications/initialized</code></strong>：一条通知（无 id），告诉 server 初始化完成。这之后会话才进入 Operation 阶段。</li>
+      </ol>
+
+      <p><strong>版本是一个日期串</strong>（如 <code>2025-06-18</code>），不是语义化版本号。协商规则是一次"降级对齐"：client 在 step 1 发自己支持的最新版本；若 server 不支持该版本，server 在 step 2 回 <em>它自己</em>支持的最新版本；若 client 无法接受 server 回的这个版本，client 直接断开连接。没有来回拉锯，最多一个往返就定下版本或散伙。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="握手时序图：client 在左、server 在右，三步从上到下——initialize 请求向右、initialize 响应向左、initialized 通知向右，之后进入 Operation 阶段">
+          <defs>
+            <marker id="s23-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s23-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- lifelines -->
+          <rect x="78" y="30" width="124" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="55" text-anchor="middle" class="node-label">Client</text>
+          <rect x="518" y="30" width="124" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="580" y="55" text-anchor="middle" class="node-label-accent">Server</text>
+          <line x1="140" y1="70" x2="140" y2="332" class="diagram-soft"/>
+          <line x1="580" y1="70" x2="580" y2="332" class="diagram-soft"/>
+
+          <!-- step 1: initialize request -> -->
+          <text x="360" y="103" text-anchor="middle" class="branch-label">① initialize  (请求)</text>
+          <line x1="140" y1="116" x2="580" y2="116" class="diagram-ink" marker-end="url(#s23-ink)"/>
+          <text x="360" y="133" text-anchor="middle" class="edge-label">protocolVersion · capabilities · clientInfo</text>
+
+          <!-- step 2: initialize response <- -->
+          <text x="360" y="181" text-anchor="middle" class="branch-label">② initialize  (响应)</text>
+          <line x1="580" y1="194" x2="140" y2="194" class="diagram-accent" marker-end="url(#s23-acc)"/>
+          <text x="360" y="211" text-anchor="middle" class="edge-label">protocolVersion · capabilities · serverInfo · instructions?</text>
+
+          <!-- step 3: initialized notification -> -->
+          <text x="360" y="259" text-anchor="middle" class="branch-label">③ notifications/initialized</text>
+          <line x1="140" y1="272" x2="580" y2="272" class="diagram-ink" marker-end="url(#s23-ink)"/>
+          <text x="360" y="289" text-anchor="middle" class="edge-label">通知 · 无 id · 不回复</text>
+
+          <!-- operation phase divider -->
+          <line x1="90" y1="312" x2="630" y2="312" class="diagram-soft"/>
+          <text x="360" y="328" text-anchor="middle" class="edge-label">↓ 此线以下进入 Operation 阶段：可发 tools/call 等</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>三步握手时序：请求 → 响应 → 通知，方向交替，自上而下是时间。<strong>注意</strong>：第 ③ 步是<em>通知</em>而非请求——它没有 id、不等回复；握手未完成前，除 <code>ping</code> / logging 外任何调用都是协议违规。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">step ① initialize 请求</span><span class="lang">json</span><button class="copy" data-copy-target="c231">复制</button></div>
+        <pre id="c231"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {
+      "sampling": {},
+      "roots": { "listChanged": true }
+    },
+    "clientInfo": { "name": "Cursor", "version": "1.4.0" }
+  }
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">step ② initialize 响应</span><span class="lang">json</span><button class="copy" data-copy-target="c232">复制</button></div>
+        <pre id="c232"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2025-06-18",
+    "capabilities": {
+      "tools": { "listChanged": true },
+      "resources": { "subscribe": true, "listChanged": true },
+      "prompts": {}
+    },
+    "serverInfo": { "name": "github-mcp", "version": "0.9.2" },
+    "instructions": "用 create_issue 建 issue 前先 search_code 确认无重复。"
+  }
+}</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>client 在 <code>initialize</code> 里发 <code>protocolVersion: "2025-06-18"</code>，但这个 server 只支持到 <code>2025-03-26</code>。会话会立刻失败吗？如果不会，之后怎么走？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>不会立刻失败。协商是"降级对齐"：server 在 <code>initialize</code> <strong>响应</strong>里回它自己支持的最新版本 <code>2025-03-26</code>。接力交到 client 手里——若 client 能接受 <code>2025-03-26</code>，双方就以该版本继续；若 client 无法接受（比如它依赖只有新版才有的特性），<strong>client 主动断开连接</strong>。关键点：拍板版本的最后一棒是 client，且整个过程最多一个往返，没有反复协商。</p>
+        </details>
+      </div>
+
+      <h2 id="s24"><span class="num">2.4</span><span>能力协商</span></h2>
+      <p class="one-liner">握手时双方各自亮出一个 <code>capabilities</code> 对象；之后两端都只准使用已成功协商的能力，用未声明的特性即协议违规。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>MCP 是个还在快速演进、各家实现进度参差的协议。若靠"版本号锁一切"，一个只实现了 tools 的极简 server 就没法和一个功能齐全的 client 通话——除非两边版本号严丝合缝。capability 协商让能力变成<strong>按需点单（à la carte）</strong>：双方各报各的能力清单，交集即可用，不必为一个小特性做整版升级的 lockstep。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<code>capabilities</code> 是分方向的两套。</p>
+      <ul>
+        <li><strong>server 端能力</strong>：<code>tools</code> / <code>resources</code> / <code>prompts</code> / <code>logging</code>——即 01 章的三大 primitive 加日志。</li>
+        <li><strong>client 端能力</strong>：<code>sampling</code> / <code>roots</code> / <code>elicitation</code>——这正是 01 §1.6 埋下的那条<em>反方向</em>能力（server 反过来请求 client）。03 章把它们逐一展开。</li>
+        <li><strong>子标志（sub-flags）</strong>：能力对象里可带细粒度开关。<code>listChanged: true</code> 表示"列表变更时会主动发 <code>*/list_changed</code> 通知"；resources 还有 <code>subscribe: true</code> 表示"支持订阅单个资源的更新"。</li>
+      </ul>
+
+      <p><strong>运行期硬规则</strong>：协商之后，双方<strong>只能使用握手中成功协商出来的能力</strong>。server 没在 <code>capabilities</code> 里声明 <code>prompts</code>，client 就不准发 <code>prompts/list</code>；client 没声明 <code>sampling</code>，server 就不准向它发起 sampling 请求。用一个未亮过牌的特性，是协议违规——这条规则把"能不能用"从运行期试错提前到了握手期确定。</p>
+
+      <h2 id="s25"><span class="num">2.5</span><span>lifecycle 三阶</span></h2>
+      <p class="one-liner">一条 MCP 会话有三个阶段：Initialization（握手）→ Operation（正常收发）→ Shutdown（关闭），其中 Shutdown 走 transport 层而非协议消息。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>明确的生命周期把"什么时候能发什么"钉死：握手阶段只准 <code>initialize</code> 相关消息（加 <code>ping</code> / logging）；进 Operation 才放开 <code>tools/call</code> 等业务调用；关闭则有确定的收场方式。没有这套阶段约束，连接的状态会含糊不清。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：注意 <strong>Shutdown 没有一条"关闭"的 JSON-RPC 消息</strong>——它由 <em>transport</em> 负责，不同 transport 收场方式不同。</p>
+      <ul>
+        <li><strong>stdio</strong>：client 先关闭 server 的 <code>stdin</code>（发 EOF）；server 若不在合理时间内自行退出，client 再发 <code>SIGTERM</code>，仍不退则 <code>SIGKILL</code>。</li>
+        <li><strong>Streamable HTTP</strong>：直接关闭 HTTP 连接即视为关闭会话。</li>
+      </ul>
+      <p>另一处近期收紧：2025-06-18 把 Operation 阶段一条原为 <strong>SHOULD</strong> 的约束改成了 <strong>MUST</strong>（changelog "Change SHOULD to MUST in Lifecycle Operation"）——两端在 Operation 阶段必须尊重协商出的协议版本与能力，措辞从"建议"升格为"必须"。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="生命周期状态机：三个状态 Initialization、Operation、Shutdown 依次相连，Initialization 到 Operation 由 initialized 通知触发，Operation 到 Shutdown 由 transport 关闭触发">
+          <defs>
+            <marker id="s25-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s25-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- start dot -->
+          <circle cx="40" cy="96" r="6" fill="#0A0A0A"/>
+          <line x1="46" y1="96" x2="92" y2="96" class="diagram-ink" marker-end="url(#s25-ink)"/>
+
+          <!-- state 1 -->
+          <rect x="94" y="66" width="170" height="60" rx="8" class="diagram-ink node-fill"/>
+          <text x="179" y="90" text-anchor="middle" class="node-label">Initialization</text>
+          <text x="179" y="110" text-anchor="middle" class="edge-label">initialize 握手</text>
+
+          <!-- transition 1 -->
+          <line x1="264" y1="96" x2="320" y2="96" class="diagram-ink" marker-end="url(#s25-ink)"/>
+          <text x="292" y="80" text-anchor="middle" class="edge-label">initialized</text>
+
+          <!-- state 2 -->
+          <rect x="322" y="66" width="170" height="60" rx="8" class="diagram-accent node-fill-accent"/>
+          <text x="407" y="90" text-anchor="middle" class="node-label-accent">Operation</text>
+          <text x="407" y="110" text-anchor="middle" class="edge-label">tools/call · 通知 …</text>
+
+          <!-- transition 2 -->
+          <line x1="492" y1="96" x2="548" y2="96" class="diagram-ink" marker-end="url(#s25-ink)"/>
+          <text x="520" y="80" text-anchor="middle" class="edge-label">transport 关闭</text>
+
+          <!-- state 3 -->
+          <rect x="550" y="66" width="170" height="60" rx="8" class="diagram-ink node-fill"/>
+          <text x="635" y="90" text-anchor="middle" class="node-label">Shutdown</text>
+          <text x="635" y="110" text-anchor="middle" class="edge-label">stdin EOF / SIGTERM</text>
+
+          <!-- self loop on operation -->
+          <path d="M 360 66 C 360 30, 454 30, 454 66" class="diagram-accent" marker-end="url(#s25-acc)"/>
+          <text x="407" y="28" text-anchor="middle" class="branch-label">请求 / 响应 / 通知循环</text>
+
+          <!-- note line -->
+          <text x="380" y="176" text-anchor="middle" class="edge-label">注：仅 Initialization → Operation 由 JSON-RPC 消息（initialized）驱动；</text>
+          <text x="380" y="196" text-anchor="middle" class="edge-label">→ Shutdown 由 transport 层关闭驱动，没有"关闭"协议消息</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>生命周期状态机：三状态线性推进，Operation 内部是请求 / 响应 / 通知的循环。<strong>注意</strong>：进入 Operation 靠 <code>initialized</code> 通知触发，但离开靠 <em>transport 关闭</em>——Shutdown 不是一条协议消息，这是初学者最容易找错的地方。</figcaption>
+      </figure>
+
+      <h2 id="s26"><span class="num">2.6</span><span>通知 / 进度 / 取消</span></h2>
+      <p class="one-liner">长操作、取消、动态变更都走 notification——回到 2.2：这类消息没有 id、不期待回复，是单向推送。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>请求-响应是"问一句答一句"的同步配对，扛不住三种场景：一个长跑的工具要<em>中途</em>报进度；一个已发出的请求要被<em>取消</em>；server 的工具列表在运行期<em>变了</em>要通知 client。这三种都是"单向告知，无需对方应答"——正是 notification 的形态。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：三类常见 notification，全部无 id。</p>
+      <ul>
+        <li><strong><code>notifications/cancelled</code></strong>：在 <code>params</code> 里带上要取消的那个请求的 <code>requestId</code>，告知对端"别再处理它了"。因为是按 id 取消的，所以取消的目标必须是一个<em>带 id 的 request</em>——这也反证了 2.2 里"为什么 request 必须有 id"。</li>
+        <li><strong>progress 通知</strong>（<code>notifications/progress</code>）：长操作期间周期性上报进度。前提是发起请求时在 <code>_meta</code> 里带了 <code>progressToken</code>，对端据此把进度关联回那次请求。</li>
+        <li><strong><code>notifications/tools/list_changed</code></strong>（及 <code>resources</code> / <code>prompts</code> 的同类）：server 告诉 client "工具列表变了，重新 <code>tools/list</code> 拉一次"。这就是 MCP 的<strong>动态发现</strong>——工具集不是握手时定死的，可以运行期增删。前提是 server 在握手时声明了 <code>tools.listChanged: true</code>（呼应 2.4 的子标志）。</li>
+      </ul>
+
+      <h2 id="s27"><span class="num">2.7</span><span>错误模型</span></h2>
+      <p class="one-liner">出错时 response 用 <code>error</code> 取代 <code>result</code>，是一个 <code>{ code, message, data }</code> 对象，沿用 JSON-RPC 标准错误码。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：标准错误码区间固定。</p>
+      <ul>
+        <li><code>-32700</code> Parse error（JSON 解析失败）· <code>-32600</code> Invalid Request（不是合法的 request 对象）</li>
+        <li><code>-32601</code> Method not found（方法不存在）· <code>-32602</code> Invalid params（参数非法）· <code>-32603</code> Internal error（内部错误）</li>
+        <li><code>-32000</code> 到 <code>-32099</code>：保留给 server 自定义的实现错误。</li>
+      </ul>
+      <p>MCP 把通用错误码复用到自己的语义上。一个常见例子：<code>initialize</code> 时若请求的协议版本不被支持，server 回 <code>-32602</code>（invalid params），并在 <code>data</code> 里附上 <code>supported</code> 与 <code>requested</code> 两个版本字段，让 client 看清差距。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">error response · 版本不匹配</span><span class="lang">json</span><button class="copy" data-copy-target="c271">复制</button></div>
+        <pre id="c271"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": -32602,
+    "message": "Unsupported protocol version",
+    "data": { "supported": ["2025-03-26"], "requested": "2025-06-18" }
+  }
+}</code></pre>
+      </div>
+
+      <h2 id="s28"><span class="num">2.8</span><span>传输层：stdio 与 Streamable HTTP</span></h2>
+      <p class="one-liner">MCP 当前定义两种 transport：stdio（本地，消息走 stdin/stdout）与 Streamable HTTP（远程，单端点 + 可选 SSE 流）；JSON-RPC 消息形状在两者上完全相同。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>本地 server（如文件系统）和远程 server（如托管在云上的 GitHub server）的连接方式截然不同：前者是父进程拉起子进程、用管道通信；后者要跨网络、要会话标识、要鉴权。transport 把"信件格式"（JSON-RPC）和"投递管道"解耦——同一套消息能落在两种管道上。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：两种 transport 的关键差异。</p>
+      <ul>
+        <li><strong>stdio</strong>（本地）：host 把 server 作为子进程拉起，JSON-RPC 消息<em>就在 stdin / stdout 上逐行流动</em>。<strong>关键陷阱：stdout 就是线路本身</strong>——server 里任何 <code>print()</code> 或写到 stdout 的日志，都会混进 JSON 流、破坏解析，是真实会致命的 bug。所以 <strong>server 的日志必须全部走 stderr</strong>。这条是 04 章会回头点名的坑。</li>
+        <li><strong>Streamable HTTP</strong>（远程）：<em>单个</em> HTTP 端点。client→server 用 HTTP <code>POST</code> 发请求；server→client 的流式（推送通知 / 进度）走可选的 <code>GET</code> + SSE（Server-Sent Events）。会话用 <code>Mcp-Session-Id</code> 响应头标识；自 2025-06-18 起，后续 HTTP 请求<strong>必须</strong>带 <code>MCP-Protocol-Version</code> 头（PR #548）声明协商出的版本。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">已废弃 · 不要学旧写法</span>
+        <p>Streamable HTTP 之前是 <strong>HTTP+SSE 双端点</strong> transport（一个端点收 POST、另一个独立端点开 SSE 长连接）。它在 <strong>2025-03-26</strong> 被废弃，由 Streamable HTTP 取代。读旧教程 / 旧 SDK 时若看到"两个 endpoint"的 HTTP 写法，那是过时方案——当前远程 transport 只有 Streamable HTTP 这一个端点。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两种 transport 对比：上半为 stdio，host 拉起子进程 server，JSON-RPC 走 stdin 与 stdout、日志走 stderr；下半为 Streamable HTTP，client 用 POST 发请求、server 用 SSE 推流，带会话头">
+          <defs>
+            <marker id="s28-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s28-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== top: stdio ===== -->
+          <text x="40" y="32" text-anchor="start" class="branch-label">stdio · 本地</text>
+
+          <rect x="40" y="44" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="68" text-anchor="middle" class="node-label">Host</text>
+          <text x="115" y="87" text-anchor="middle" class="edge-label">含 client</text>
+
+          <rect x="560" y="44" width="160" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="640" y="68" text-anchor="middle" class="node-label-accent">Server 子进程</text>
+          <text x="640" y="87" text-anchor="middle" class="edge-label">被 host 拉起</text>
+
+          <!-- stdin -->
+          <line x1="190" y1="60" x2="560" y2="60" class="diagram-ink" marker-end="url(#s28-ink)"/>
+          <text x="375" y="52" text-anchor="middle" class="edge-label">stdin → JSON-RPC 请求</text>
+          <!-- stdout -->
+          <line x1="560" y1="84" x2="190" y2="84" class="diagram-ink" marker-end="url(#s28-ink)"/>
+          <text x="375" y="100" text-anchor="middle" class="edge-label">stdout → JSON-RPC 响应（即线路）</text>
+
+          <!-- stderr drains away -->
+          <line x1="640" y1="100" x2="640" y2="138" class="diagram-soft" marker-end="url(#s28-ink)"/>
+          <text x="640" y="154" text-anchor="middle" class="branch-label">stderr → 日志（绝不能进 stdout）</text>
+
+          <!-- divider -->
+          <line x1="30" y1="178" x2="730" y2="178" class="diagram-soft"/>
+
+          <!-- ===== bottom: Streamable HTTP ===== -->
+          <text x="40" y="208" text-anchor="start" class="branch-label">Streamable HTTP · 远程</text>
+
+          <rect x="40" y="220" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="244" text-anchor="middle" class="node-label">Client</text>
+          <text x="115" y="263" text-anchor="middle" class="edge-label">跨网络</text>
+
+          <rect x="560" y="220" width="160" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="640" y="244" text-anchor="middle" class="node-label-accent">Server</text>
+          <text x="640" y="263" text-anchor="middle" class="edge-label">单一 /mcp 端点</text>
+
+          <!-- POST -->
+          <line x1="190" y1="236" x2="560" y2="236" class="diagram-ink" marker-end="url(#s28-ink)"/>
+          <text x="375" y="228" text-anchor="middle" class="edge-label">HTTP POST → 请求</text>
+          <!-- SSE -->
+          <line x1="560" y1="260" x2="190" y2="260" class="diagram-accent" marker-end="url(#s28-acc)"/>
+          <text x="375" y="276" text-anchor="middle" class="edge-label">GET + SSE → 流式推送（可选）</text>
+
+          <text x="375" y="300" text-anchor="middle" class="edge-label">头：Mcp-Session-Id · MCP-Protocol-Version（2025-06-18 起必带）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>两种 transport 的消息流：stdio 走进程管道（stdout 即线路），Streamable HTTP 走单端点（POST 上行 + SSE 下行）。<strong>注意</strong>：stdio 下 <code>stderr</code> 是日志唯一的出口——一行误入 stdout 的 <code>print</code> 就会污染 JSON 流，让会话整条崩掉。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>用 Python 写了个 stdio server，本地手动跑没问题，但接进 Claude Desktop 后 client 报 JSON 解析错、连不上。代码里有几句 <code>print("server started")</code> 和 <code>print(f"got request: {req}")</code> 做调试。问题出在哪？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>那几句 <code>print</code> 是元凶。stdio transport 下 <strong>stdout 就是 JSON-RPC 线路本身</strong>，<code>print()</code> 默认写到 stdout，于是 <code>server started</code> 这种纯文本被混进了本应只有 JSON 的流里，client 一解析就报错。修法：把所有调试输出改写到 <strong>stderr</strong>（Python 里 <code>print(..., file=sys.stderr)</code> 或用 logging 配到 stderr）。手动跑之所以"没问题"，是因为没有 client 在解析 stdout——一接真实 client 立刻暴露。这正是 2.8 强调、04 章还会回访的致命坑。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>JSON-RPC 的三种消息形态各靠什么字段区分？哪一种没有 <code>id</code>、不期待回复？</li>
+          <li><code>initialize</code> 握手的三步分别由谁发、是请求还是通知？协议版本协商若 server 不支持 client 报的版本，之后怎么走？</li>
+          <li>能力协商的"运行期硬规则"是什么？举一个"违规使用未协商能力"的具体例子。</li>
+          <li>stdio transport 下，为什么 server 的日志绝不能写到 stdout？会造成什么后果？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>request = 带 <code>id</code> + <code>method</code>（要回复）；response = 回填同一 <code>id</code> + <code>result</code> 或 <code>error</code>（二选一）；notification = 只有 <code>method</code>、<strong>无 <code>id</code></strong>、不回复。没有 id 的是 notification。</li>
+            <li>① client 发 <code>initialize</code> 请求；② server 回 <code>initialize</code> 响应；③ client 发 <code>notifications/initialized</code> 通知（前两步是请求 / 响应，第三步是通知）。版本协商：server 在响应里回它自己支持的最新版本，若 client 不能接受则主动断开——最后一棒在 client。</li>
+            <li>规则：双方只能使用握手中成功协商出的能力，用未声明的特性即协议违规。例：server 没声明 <code>prompts</code>，client 却发 <code>prompts/list</code>；或 client 没声明 <code>sampling</code>，server 却向它发起 sampling 请求。</li>
+            <li>因为 stdio 下 stdout 就是 JSON-RPC 线路本身，任何写入 stdout 的文本会混进 JSON 流、破坏 client 的解析，导致会话崩溃。日志必须走 stderr。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把一次"调工具"从握手到结果全程画成线路</h3>
+        <p>场景：Cursor（client）连远程 GitHub server（Streamable HTTP），用户触发一次 <code>search_code</code>。按顺序写出线路上依次出现的 JSON-RPC 消息——从建立会话到拿到结果——并标注：哪些是 request（带 id）、哪些是 notification（无 id）、哪一步用了哪个 HTTP 方法、哪个头是 2025-06-18 起必带的。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>骨架顺序：① <code>POST</code> <code>initialize</code> 请求（id=1）→ ② <code>initialize</code> 响应（id=1，响应头带 <code>Mcp-Session-Id</code>）→ ③ <code>POST</code> <code>notifications/initialized</code> 通知（无 id）→ 进入 Operation → ④ <code>POST</code> <code>tools/list</code> 请求（id=2）拿到工具清单 → ⑤ <code>tools/list</code> 响应（id=2）→ ⑥ <code>POST</code> <code>tools/call</code> 请求（id=3，<code>name: "search_code"</code>）→ ⑦ <code>tools/call</code> 响应（id=3，结果在 <code>result.content</code>）。其中 ③ 是唯一的 notification；自 step ③ 起每个 <code>POST</code> 都必须带 <code>MCP-Protocol-Version</code> 头。若 search_code 是长操作，④–⑦ 之间还可能穿插无 id 的 <code>notifications/progress</code>（走 SSE 下行）。这道题把 2.2–2.8 串成一条完整线路，06 章会以变体重现。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle">MCP Spec — Lifecycle</a>（initialize 三步、版本协商、能力协商、三阶生命周期的规范定义）</li>
+          <li><a href="https://modelcontextprotocol.io/specification/2025-06-18/basic/transports">MCP Spec — Transports</a>（stdio 与 Streamable HTTP、<code>Mcp-Session-Id</code> / <code>MCP-Protocol-Version</code> 头）</li>
+          <li><a href="https://modelcontextprotocol.io/specification/2025-06-18/changelog">2025-06-18 Changelog</a>（移除 JSON-RPC batching · PR #416；协议版本头 · PR #548；SHOULD→MUST）· <a href="https://www.jsonrpc.org/specification">JSON-RPC 2.0 Specification</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 概念与架构</span>
+        </a>
+        <a href="03-bidirectional.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 双向会话（反向箭头展开）</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 为什么 JSON-RPC</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 三种消息形态</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 initialize 握手</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 能力协商</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 lifecycle 三阶</a></li>
+        <li><a href="#s26" data-toc-target="s26">2.6 通知/进度/取消</a></li>
+        <li><a href="#s27" data-toc-target="s27">2.7 错误模型</a></li>
+        <li><a href="#s28" data-toc-target="s28">2.8 传输层</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 原理 · Kafka 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html" class="current">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>原理与设计取舍</h1>
+        <p class="recap">上一章把 Kafka 框成<a href="01-concepts.html#log-model">一条按分区切分、可重放的提交日志</a>，给了一套能用来描述系统的词汇——topic / partition / offset / leader / follower / consumer group。这章把那条日志拆开：它在磁盘上<strong>怎么存</strong>、在副本之间<strong>怎么复制</strong>、被消费组<strong>怎么读</strong>、跨重启与失败<strong>怎么保证语义</strong>。每个机制都配一张备选方案对比表——记住"为什么不选另一条路"，比记住"选了什么"更经得起面试官追问。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>日志为什么快：append-only + segment 索引 + page cache + 零拷贝，以及它们各自的失效边界</li>
+          <li>顺序与并行同一个单位：partition——key 哈希定分区、sticky 批处理、并行度上限</li>
+          <li>持久性的真实来源：LEO / HW / ISR 三者关系，以及"<code>acks=all</code> 不等于所有副本"</li>
+          <li>再平衡的三代协议：eager → cooperative → KIP-848，以及"心跳活着也会被判死"</li>
+          <li>投递语义的真实边界：幂等 producer、事务、EOS 只在 Kafka 闭环内、只在同会话同分区成立</li>
+          <li>元数据也是一条日志：KRaft 用 Raft 复制 <code>__cluster_metadata</code>，取代 ZooKeeper</li>
+        </ul>
+      </section>
+
+      <!-- ============================== 整体架构图 ============================== -->
+      <figure>
+        <svg viewBox="0 0 860 430" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Kafka 整体架构：producer 写 leader、follower 同步、consumer group 读 leader、KRaft 管理元数据">
+          <defs>
+            <marker id="a-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="a-soft" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- Broker cluster boundary -->
+          <rect x="250" y="78" width="370" height="290" rx="8" class="diagram-soft"/>
+          <text x="266" y="98" class="edge-label" font-weight="700">BROKER 集群</text>
+
+          <!-- Leader partition (accent) -->
+          <rect x="300" y="120" width="270" height="62" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="435" y="146" text-anchor="middle" class="node-label-accent">Partition leader</text>
+          <text x="435" y="166" text-anchor="middle" class="edge-label">唯一写入点 · 持有完整日志</text>
+
+          <!-- Follower 1 -->
+          <rect x="300" y="222" width="125" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="362" y="245" text-anchor="middle" class="node-label">follower 1</text>
+          <text x="362" y="263" text-anchor="middle" class="edge-label">fetch 同步</text>
+
+          <!-- Follower 2 -->
+          <rect x="445" y="222" width="125" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="507" y="245" text-anchor="middle" class="node-label">follower 2</text>
+          <text x="507" y="263" text-anchor="middle" class="edge-label">fetch 同步</text>
+
+          <!-- KRaft controller quorum -->
+          <rect x="300" y="312" width="270" height="40" rx="6" class="diagram-soft"/>
+          <text x="435" y="337" text-anchor="middle" class="edge-label" font-weight="700">KRaft controller quorum（元数据日志）</text>
+
+          <!-- Producer -->
+          <rect x="40" y="120" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="143" text-anchor="middle" class="node-label">Producer</text>
+          <text x="115" y="161" text-anchor="middle" class="edge-label">acks 等待确认</text>
+
+          <!-- Consumer group -->
+          <rect x="680" y="120" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="755" y="143" text-anchor="middle" class="node-label">Consumer group</text>
+          <text x="755" y="161" text-anchor="middle" class="edge-label">各自维护 offset</text>
+
+          <!-- Producer -> leader (hot path, accent) -->
+          <line x1="190" y1="148" x2="300" y2="148" class="diagram-accent" marker-end="url(#a-verm)"/>
+          <text x="245" y="138" text-anchor="middle" class="branch-label">写 (热)</text>
+
+          <!-- leader -> consumer (hot path, accent) -->
+          <line x1="570" y1="148" x2="680" y2="148" class="diagram-accent" marker-end="url(#a-verm)"/>
+          <text x="625" y="138" text-anchor="middle" class="branch-label">读 (热)</text>
+
+          <!-- follower fetch from leader (follower pulls; arrow points to leader) -->
+          <line x1="362" y1="222" x2="380" y2="182" class="diagram-ink" marker-end="url(#a-ink)"/>
+          <line x1="507" y1="222" x2="490" y2="182" class="diagram-ink" marker-end="url(#a-ink)"/>
+          <text x="435" y="208" text-anchor="middle" class="edge-label">follower 主动 fetch</text>
+
+          <!-- KRaft manages (dashed) -->
+          <line x1="435" y1="312" x2="435" y2="282" class="diagram-soft" marker-end="url(#a-soft)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.0</span>Kafka 运行时的四股数据流，挂在同一条分区日志上。
+          <strong>注意</strong>：朱红是热路径（producer 写 leader、consumer 读 leader），follower 是<strong>自己主动 fetch</strong>（箭头指向 leader，不是 leader 推送），KRaft 用虚线管元数据——它不在消息热路径上。</figcaption>
+      </figure>
+
+      <p>这张图是本章的地图。后面六节各放大其中一块：<a href="#storage">§2.1 存储</a>看 leader 那条日志在磁盘上长什么样；<a href="#partition-order">§2.2 分区与顺序</a>看一条 topic 为什么要切成多个 partition；<a href="#replication">§2.3 副本与 ISR</a>看 follower 的 fetch 如何决定"哪些数据对 consumer 可见";<a href="#rebalance">§2.4 消费组与再平衡</a>看右边那个 consumer group 内部怎么分配分区；<a href="#delivery">§2.5 投递语义</a>看一条记录从写到读"恰好一次"到底意味着什么；<a href="#kraft">§2.6 KRaft</a>看底部那条元数据日志。</p>
+
+      <!-- ============================================================
+           §2.1 存储原理
+           ============================================================ -->
+      <h2 id="storage"><span class="num">2.1</span><span>存储原理：日志为什么快</span></h2>
+
+      <p class="one-liner">每个 partition 是一个 append-only 文件序列，切成定长 segment、配稀疏索引，靠操作系统 page cache 和零拷贝把磁盘的顺序 I/O 跑到接近内存的速度。</p>
+
+      <h3>运行方式</h3>
+      <p>一个 partition 在磁盘上不是一个大文件，而是一串<strong>segment</strong>（日志段，由 <code>log.segment.bytes</code> 控制大小，默认 1GB）。任何时刻只有最后一个 active segment 在被追加写；写满就滚动出新的一个，旧的变成只读。每个 segment 旁边配两个索引文件：<code>.index</code> 把 offset 映射到该 segment 内的字节位置，<code>.timeindex</code> 把时间戳映射到 offset。两个索引都是<strong>稀疏</strong>的（不是每条记录都建索引，而是每隔几 KB 建一条），所以查一条记录是先二分索引定位到附近、再顺序扫一小段——O(log N) 定位而不是全文件扫描。</p>
+
+      <p>关键在于读写都是<strong>顺序 I/O</strong>：写永远是追加到文件末尾，读是从某个 offset 起连续往后。Kafka <strong>不在 JVM 进程内缓存消息</strong>，而是直接依赖操作系统的 <strong>page cache</strong>——写入的数据先进 page cache（由 OS 异步刷盘），消费者读最近的数据时几乎总是直接命中 page cache，根本不碰磁盘。消费者读取走<strong>零拷贝</strong>（<code>sendfile</code> / <code>FileChannel.transferTo()</code>）：数据从 page cache 直接进网卡缓冲区，<strong>不经过 JVM 用户态</strong>——省掉了 "内核态→用户态→内核态" 的两次拷贝和上下文切换。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">partition 目录结构</span>
+          <span class="lang">bash</span>
+          <button class="copy" data-copy-target="cb-storage">复制</button>
+        </div>
+<pre id="cb-storage"><code class="language-bash"># topic "orders" 的分区 0 在 broker 数据目录下：
+$ ls -lh /var/kafka-logs/orders-0/
+00000000000000000000.log        # segment：实际记录（base offset = 0）
+00000000000000000000.index      # 稀疏 offset→字节位置 索引
+00000000000000000000.timeindex  # 稀疏 时间戳→offset 索引
+00000000000000368912.log        # 下一个 segment，base offset = 368912
+00000000000000368912.index
+00000000000000368912.timeindex
+leader-epoch-checkpoint         # leader 任期记录（截断时用，见 §2.3）
+
+# 文件名 = 该 segment 第一条记录的 offset（base offset）。
+# 查 offset 400000：文件名二分 → 落在 368912.log → .index 二分定位到附近字节 → 顺序扫到 400000。</code></pre>
+      </div>
+
+      <p>保留策略有两种。默认是<strong>按时间/大小删整段</strong>（<code>retention.ms</code> / <code>retention.bytes</code>，到期把最旧的 segment 整个删掉）。另一种是 <strong>log compaction</strong>（日志压缩）：对每个 key 只保留最新一条 value，老版本被清理——把 topic 变成一份"可恢复的状态快照"。写一条 value 为 <code>null</code> 的记录叫 <strong>tombstone</strong>（墓碑），表示"这个 key 被删除"，compaction 在保留窗口后把该 key 连同墓碑一起清掉。<code>__consumer_offsets</code>（消费位移）和 Kafka Streams 的 changelog 就是靠 compaction 实现的——这也是<a href="01-concepts.html#log-model">第 1 章"日志可重放"</a>能延伸成"日志可作状态存储"的机制。</p>
+
+      <h3>备选方案对比</h3>
+
+      <table class="compare-table">
+        <caption>表 2.1a · 消息缓存放哪里</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>JVM 堆内缓存（进程内对象池）</td>
+            <td>访问对象零序列化、命中即返回</td>
+            <td>与 OS page cache <strong>双份缓冲</strong>（同一份数据存两遍）；几十 GB 缓存进堆会制造灾难性 GC 停顿；进程一重启缓存全冷</td>
+          </tr>
+          <tr>
+            <td>堆外 + 自管缓存（off-heap 自己淘汰）</td>
+            <td>绕开 GC、可控大小</td>
+            <td>等于重写一个比 OS 还差的 page cache；故障/重启仍丢缓存；复杂度全压给应用</td>
+          </tr>
+          <tr class="selected">
+            <td>OS page cache（不在进程内缓存）</td>
+            <td>无 GC 压力、32GB 机器约 28-30GB 可用作缓存、进程重启缓存仍在内核、零拷贝可直接从它发网卡</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="compare-table">
+        <caption>表 2.1b · 磁盘上的数据结构</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>B-Tree / LSM（数据库式索引）</td>
+            <td>支持任意 key 随机读写、范围查询</td>
+            <td>写要随机寻道 + 页分裂 + 加锁，O(log N) 且放大写；Kafka 根本不需要"按任意 key 改某条记录"，只需要"按 offset 顺序追加和顺序读"</td>
+          </tr>
+          <tr>
+            <td>每条消息一个文件</td>
+            <td>删除单条简单</td>
+            <td>海量小文件耗尽 inode 和文件句柄；丢失顺序 I/O 的全部好处</td>
+          </tr>
+          <tr class="selected">
+            <td>append-only 日志 + 稀疏索引 + 定长 segment</td>
+            <td>追加 O(1)、顺序磁盘 I/O 接近内存带宽、删除按段 O(1)、稀疏索引省内存</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="rationale">
+        <span class="label">为什么这么设计</span>
+        <p>顺序磁盘 I/O 的吞吐接近内存、<strong>远高于随机 I/O</strong>（机械盘上差几个数量级，SSD 上也有明显差距）。进程内缓存会与 page cache 重复存储、还加重 GC，所以把缓存这件事整个交给 OS。append-only 追加是 O(1)，对比 B-Tree 的 O(log N) 随机寻道加锁。compaction 让一个 topic 能当 changelog / 状态快照用，而不只是消息管道。</p>
+      </div>
+
+      <h3>带来的代价 / 失效模式</h3>
+      <div class="callout warning">
+        <span class="label">代价</span>
+        <p><strong>① TLS 绕过零拷贝。</strong><code>sendfile</code> 要求内核能直接把文件字节送上网卡。一旦开启传输加密（broker 间或 client-broker TLS），数据必须先进用户态加密再发出——零拷贝失效，CPU 和延迟都上升。这是"开了 TLS 吞吐就掉一截"的根因。</p>
+        <p><strong>② 冷读污染 page cache。</strong>page cache 的前提是"消费者读的就是刚写的热数据"。一个严重滞后的消费者去读几小时前的旧数据，会把磁盘上的冷 segment 拉进 page cache，<strong>挤掉</strong>正在服务热生产者的页——一个掉队的消费者能拖慢整个 broker。Tiered Storage（KIP-405，3.9 GA）把冷数据下沉到对象存储正是为缓解这点。</p>
+        <p><strong>③ compaction 是最终去重，不是即时。</strong>compaction 只在脏数据比例超过 <code>min.cleanable.dirty.ratio</code>（默认 0.5）时才触发；tombstone 在 <code>delete.retention.ms</code> 内仍然存在以便下游消费者看到删除。所以"写了新值老值就没了""写了墓碑 key 立刻消失"都是错的——是最终一致的去重。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>你给一个 topic 开了 TLS、又有一个消费者从 <code>offset 0</code> 全量重刷历史数据。这两件事各自怎么影响 broker 的吞吐？它们打击的是同一个机制吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>打击的是<strong>两个不同机制</strong>。TLS 关掉的是<strong>零拷贝</strong>：数据被迫走用户态加密，CPU 上升、每条消息多两次拷贝。全量重刷打击的是 <strong>page cache 命中率</strong>：从 offset 0 读的全是冷 segment，把热生产者的页挤出缓存，命中率暴跌、磁盘随机读上升。</p>
+          <p>设计洞察：Kafka 的"快"建立在两个独立假设上——零拷贝（数据不进用户态）+ 热数据局部性（读的就是刚写的）。TLS 破坏前者，滞后消费者破坏后者。理解这两条，就能解释绝大多数"Kafka 突然变慢"的现场。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           §2.2 分区与顺序
+           ============================================================ -->
+      <h2 id="partition-order"><span class="num">2.2</span><span>分区与顺序：并行和有序的同一个单位</span></h2>
+
+      <p class="one-liner">partition 同时是顺序的单位和并行的单位——同一个 key 永远落同一个 partition（murmur2 哈希）因而有序，不同 partition 之间并行；顺序只在分区内成立。</p>
+
+      <h3>运行方式</h3>
+      <p>一条记录写到哪个 partition，由 producer 端决定。带 key 时：<code>partition = murmur2(key) % 分区数</code>——相同 key 永远算出同一个 partition，因此<strong>同一个 key 的记录在该分区内严格有序</strong>（同一订单的所有事件按写入顺序排好）。不带 key 时，3.0 以后默认用 <strong>sticky partitioner</strong>（KIP-480）：先把一个分区的 batch 填满再换下一个分区，而不是旧的 round-robin 逐条轮询。批越满，每批的固定开销摊得越薄，端到端延迟约减半。</p>
+
+      <p>这就是<a href="01-concepts.html#topic-partition-offset">第 1 章里"顺序只在分区内保证"</a>的机制根源：offset 是<em>每个分区</em>独立递增的序号，跨分区没有全局序。消费侧的并行度也由分区数决定——一个 consumer group 里，一个 partition 最多被一个消费者持有，所以消费者数超过分区数就有人闲置（详见 <a href="#rebalance">§2.4</a>）。</p>
+
+      <table class="compare-table">
+        <caption>表 2.2a · 顺序保证的范围</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>全 topic 全局总序（所有消息一条线排序）</td>
+            <td>消费者看到的就是绝对时间序，推理最简单</td>
+            <td>全局有序需要<strong>单一写入点</strong>序列化所有写——无法水平扩展，吞吐被一台机器锁死；一个分区杀掉整个并行</td>
+          </tr>
+          <tr>
+            <td>完全不保证顺序（纯负载均衡分发）</td>
+            <td>写入和消费都可无限并行</td>
+            <td>无法表达"同一实体的事件有先后"——订单"创建→支付→发货"可能乱序到达，业务无法处理</td>
+          </tr>
+          <tr class="selected">
+            <td>每分区有序（按 key 哈希分区）</td>
+            <td>顺序廉价（分区内天然有序）、并行度可扩到分区数、同 key 同序满足绝大多数业务</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <table class="compare-table">
+        <caption>表 2.2b · 无 key 时的分区策略</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>round-robin（逐条轮询分区）</td>
+            <td>分区间负载绝对均匀</td>
+            <td>每条记录可能进不同分区的 batch，导致大量半满小批发送——请求数多、吞吐低、延迟高</td>
+          </tr>
+          <tr>
+            <td>随机分区（每条随机选）</td>
+            <td>实现简单、长期均匀</td>
+            <td>同样打散 batch，且短期可能不均；没有解决批处理问题</td>
+          </tr>
+          <tr class="selected">
+            <td>sticky partitioner（KIP-480，先填满再换）</td>
+            <td>batch 更满 → 请求更少 → 延迟约减半；长期看分区仍大致均匀</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="rationale">
+        <span class="label">为什么这么设计</span>
+        <p>全局有序与水平扩展是矛盾的：要么有单写入点（不能扩展），要么放弃全局序。Kafka 选择把"有序"的粒度降到分区——业务真正需要的几乎都是"同一实体内有序"（同一用户、同一订单），用 key 哈希就能廉价拿到，同时分区数给了并行的旋钮。sticky 则是在"无序消息"这个子问题上，用牺牲瞬时均匀换批处理效率。</p>
+      </div>
+
+      <h3>带来的代价 / 失效模式</h3>
+      <div class="callout warning">
+        <span class="label">代价</span>
+        <p><strong>① 并行度上限 = 分区数。</strong>一个 consumer group 的消费并行度卡在分区数。分区开少了，加再多消费者也无法提速（多出来的消费者空转）；分区开多了，抬高 controller 元数据负担、故障切换时间、文件句柄消耗（每 segment 占 2 个文件，默认 ulimit 1024 很容易触顶）。</p>
+        <p><strong>② 加分区会永久打乱 key 顺序。</strong>分区数<strong>只能加不能减</strong>。而一旦给带 key 的 topic 加分区，<code>murmur2(key) % 新分区数</code> 的结果变了——同一个 key 的新记录可能落到与历史记录不同的分区，<strong>跨分区的全局顺序无从保证</strong>，所有依赖按 key 顺序的下游消费者被静默破坏。要扩容只能保守预估，或新建 topic 迁移。</p>
+        <p><strong>③ 热 key 倾斜压垮单分区。</strong>哈希只保证 key 均匀，不保证<em>流量</em>均匀。若 90% 流量集中在少数 key（如按租户分区而某个大租户占大头），这些 key 全挤进同一个分区，该分区的 leader 和它的消费者被打爆，其余分区闲置。Kafka 不会自动均衡倾斜——只能选高基数的 key（用 orderId 而不是 userId）。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个有 6 个分区、按 <code>userId</code> 分区的 topic，运行半年后为了扩容把分区加到 12 个。下游有个消费者依赖"同一用户的操作严格有序"。它会立刻报错吗？如果不报错，问题什么时候暴露？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不会立刻报错——这正是它危险的地方。加分区是个成功的管理操作，没有任何异常。但从加分区那一刻起，某个 <code>userId</code> 的<strong>新</strong>记录算出的分区（<code>% 12</code>）可能不同于它<strong>历史</strong>记录所在的分区（<code>% 6</code>）。于是同一用户的事件流被劈到两个分区，两个分区由不同消费者并行消费，先后顺序彻底丢失。</p>
+          <p>问题在"恰好某个用户的新旧事件被并发处理、且顺序敏感"时才暴露——可能是几天后一次诡异的状态错乱，而且极难复现。所以 ctx 里把它列为"静默破坏"：没有报错的破坏最贵。生产上对有 key 且顺序敏感的 topic，要么一开始就把分区数开够，要么新建 topic 做带迁移的切换。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           §2.3 副本与 ISR
+           ============================================================ -->
+      <h2 id="replication"><span class="num">2.3</span><span>副本与 ISR：持久性的真实来源</span></h2>
+
+      <p class="one-liner">每个分区一个 leader 加若干 follower，follower 像消费者一样主动 fetch；HW（高水位）= ISR 中最小的 LEO，消费者只能读到 HW——已 ack 的记录未必立刻可见，而持久性来自 <code>min.insync.replicas</code> 不是 <code>acks</code>。</p>
+
+      <h3>运行方式</h3>
+      <p>每个分区有一个 leader 副本和若干 follower 副本。所有读写都走 leader；follower <strong>主动向 leader fetch</strong>（和普通消费者用同一套 fetch 机制，只是 fetch 的是分区日志去复制）。两个关键水位：</p>
+      <ul>
+        <li><strong>LEO（Log End Offset）</strong>：某个副本<em>下一条</em>要写入的 offset，也就是它当前日志的末尾。leader 的 LEO 总是最靠前，follower 的 LEO 落在后面（差着 fetch 的延迟）。</li>
+        <li><strong>HW（High Watermark，高水位）</strong>：<strong>ISR 集合里所有副本 LEO 的最小值</strong>，即"已经被所有同步副本完整复制到的最高 offset"。</li>
+      </ul>
+      <p><strong>消费者只能读到 ≤ HW 的记录。</strong>HW 之上、leader 已写但还没被所有 ISR 复制完的那段，对消费者不可见——因为那段一旦 leader 故障、由某个 follower 顶上，可能会消失。HW 这道门控保证消费者读到的都是"即使现在 leader 挂了也不会丢"的记录。</p>
+
+      <p><strong>ISR（In-Sync Replicas，同步副本集）</strong>是当前跟得上 leader 的副本集合（含 leader 本身）。某个 follower 若超过 <code>replica.lag.time.max.ms</code>（默认 30s）没追上 leader 的末尾，就被踢出 ISR；追上后再加回来。ISR 是<strong>动态可变</strong>的——这是理解后面所有失效模式的关键。</p>
+
+      <figure>
+        <svg viewBox="-40 0 870 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="HW 与 LEO：一条分区日志上 leader LEO 在前、两个 follower LEO 落后、HW 是 ISR 最小 LEO、消费者只能读到 HW">
+          <defs>
+            <marker id="r-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- offset ruler note -->
+          <text x="40" y="36" class="edge-label" font-weight="700">offset →</text>
+
+          <!-- helper: each cell 44px wide, start x=70, 11 cells (0..10) -->
+          <!-- LEADER row -->
+          <text x="40" y="86" class="node-label" text-anchor="end">leader</text>
+          <g>
+            <rect x="70"  y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="114" y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="158" y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="202" y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="246" y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="290" y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="334" y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="378" y="64" width="44" height="40" class="diagram-ink node-fill"/>
+            <!-- uncommitted region (above HW): faint fill -->
+            <rect x="422" y="64" width="44" height="40" class="diagram-ink node-fill-accent"/>
+            <rect x="466" y="64" width="44" height="40" class="diagram-ink node-fill-accent"/>
+          </g>
+          <text x="532" y="88" class="edge-label">LEO=10</text>
+
+          <!-- FOLLOWER 1 row (LEO=9) -->
+          <text x="40" y="156" class="node-label" text-anchor="end">follower 1</text>
+          <g>
+            <rect x="70"  y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="114" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="158" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="202" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="246" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="290" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="334" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="378" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="422" y="134" width="44" height="40" class="diagram-ink node-fill"/>
+          </g>
+          <text x="510" y="158" class="edge-label">LEO=9</text>
+
+          <!-- FOLLOWER 2 row (LEO=8) — sets HW -->
+          <text x="40" y="226" class="node-label" text-anchor="end">follower 2</text>
+          <g>
+            <rect x="70"  y="204" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="114" y="204" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="158" y="204" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="202" y="204" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="246" y="204" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="290" y="204" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="334" y="204" width="44" height="40" class="diagram-ink node-fill"/>
+            <rect x="378" y="204" width="44" height="40" class="diagram-ink node-fill"/>
+          </g>
+          <text x="466" y="228" class="edge-label">LEO=8（最小）</text>
+
+          <!-- HW vertical line at x=422 (offset 8 boundary) -->
+          <line x1="422" y1="50" x2="422" y2="290" class="diagram-accent"/>
+          <text x="422" y="312" text-anchor="middle" class="branch-label">HW = 8</text>
+          <text x="422" y="328" text-anchor="middle" class="edge-label">= ISR 最小 LEO</text>
+
+          <!-- consumer can read up to HW -->
+          <line x1="120" y1="290" x2="120" y2="266" class="diagram-ink" marker-end="url(#r-ink)"/>
+          <text x="245" y="284" text-anchor="middle" class="node-label">consumer 可读区间：offset 0 .. 7（&lt; HW）</text>
+
+          <!-- label uncommitted -->
+          <text x="600" y="88" class="edge-label" fill="#B73B2F">↑ 已写未提交</text>
+          <text x="600" y="104" class="edge-label" fill="#B73B2F">  对消费者不可见</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>HW 由 ISR 中<strong>最慢</strong>的副本（follower 2，LEO=8）决定，消费者只能读到 HW 左侧。
+          <strong>注意</strong>：leader 上 offset 8、9 这两格（朱红）已经写入并可能已经 ack 给 producer，但因为还没被所有 ISR 复制完，对消费者<strong>不可见</strong>——这就是"已 ack ≠ 已可见"，HW 永远滞后 leader 一个 fetch 轮。</figcaption>
+      </figure>
+
+      <h3>acks 与 min.insync.replicas 的真实关系</h3>
+      <p>producer 的 <code>acks</code> 决定"写入要等到什么程度才算成功":</p>
+      <ul>
+        <li><code>acks=0</code>：发出去就算成功，不等任何确认——最快，leader 没写成也不知道，丢数据风险最高。</li>
+        <li><code>acks=1</code>：leader 写入本地日志就 ack——leader 写完、还没被任何 follower 复制就宕机，那些已 ack 的记录<strong>永久丢失</strong>。</li>
+        <li><code>acks=all</code>（即 <code>acks=-1</code>）：等到<strong>当前 ISR 里所有副本</strong>都复制完才 ack。</li>
+      </ul>
+      <p>这里是面试最容易露馅的一点：<strong><code>acks=all</code> 等的是"所有 <em>ISR</em> 成员"，不是"所有副本"。</strong>ISR 是会缩的——如果两个 follower 都掉队被踢出 ISR，ISR 只剩 leader 一个，此时 <code>acks=all</code> 实际只写到 leader 一台，<strong>悄悄退化成了 <code>acks=1</code></strong>，下一次故障就丢。</p>
+
+      <p>真正的持久性闸门是 <code>min.insync.replicas</code>：它要求 ISR 至少有这么多成员在线，否则 producer 的写入直接被拒（收到 <code>NotEnoughReplicas</code> / <code>NotEnoughReplicasAfterAppend</code>）。所以<strong>持久性来自 <code>min.insync.replicas</code>，不是 <code>acks</code></strong>——<code>acks=all</code> 负责"等所有 ISR"，<code>min.insync.replicas</code> 负责"ISR 不许缩到不安全"。两者必须配合：典型生产配置是 <code>replication.factor=3</code> + <code>min.insync.replicas=2</code> + <code>acks=all</code>，含义是"至少 2 个副本拿到才算写成功，否则宁可拒写"。这套组合留到 <a href="04-pitfalls.html#data-loss">§4.1 数据丢失</a>里逐条对照。</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · 复制法定集：多数派 quorum vs ISR</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选（或选中理由）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>多数派 quorum（Raft/Paxos 式，2f+1 副本容忍 f 故障）</td>
+            <td>提交只需多数派，单个慢副本不拖累；成员是否在线靠投票自然处理</td>
+            <td>要容忍 f 个故障需 <strong>2f+1</strong> 个副本（容忍 2 个故障要 5 副本）——存储和带宽成本翻倍多；对"写多读多"的日志太贵</td>
+          </tr>
+          <tr>
+            <td>全副本同步（写必须等全部副本）</td>
+            <td>任意 f&lt;RF 故障都不丢，逻辑最简单</td>
+            <td>最慢的那个副本决定写延迟；任何一个副本卡住或宕机就停写，可用性差</td>
+          </tr>
+          <tr class="selected">
+            <td>ISR 可变法定集（f+1 副本 + 动态 ISR）</td>
+            <td>容忍 f 故障只需 <strong>f+1</strong> 副本（容忍 2 个故障只要 3 副本）；掉队副本被移出 ISR 不拖慢写；用 <code>min.insync.replicas</code> 显式调持久性/可用性平衡</td>
+            <td>选中（更省副本，代价见下）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="rationale">
+        <span class="label">为什么这么设计</span>
+        <p>多数派 quorum 为了"无需等慢副本"付出了 2f+1 的副本成本。Kafka 的洞察是：日志数据量大、副本成本敏感，而它已经有了"踢掉慢副本"的机制（ISR）——所以用 f+1 个副本 + 动态 ISR 就能容忍 f 个故障，省掉将近一半副本。代价是把"持久性 vs 可用性"的旋钮（<code>min.insync.replicas</code>、<code>unclean.leader.election</code>）交给运维显式决定，而不是协议帮你定死。</p>
+      </div>
+
+      <h3>带来的代价 / 失效模式</h3>
+      <div class="callout warning">
+        <span class="label">代价</span>
+        <p><strong>① HW 滞后一个 fetch 轮。</strong>HW 的推进依赖 follower 下一轮 fetch 上报自己的 LEO。所以一条记录即使已经被所有 ISR 复制、已经 ack 给 producer，consumer 也要再等一个 fetch RTT 才能看到它（如图 2.1）。"已 ack 未必立刻可见"是设计使然，不是 bug。</p>
+        <p><strong>② <code>acks=all</code> + <code>min.insync.replicas=2</code> 在 RF=3 下：挂 1 台仍可写，挂 2 台分区停写。</strong>这是<em>故意</em>用可用性换持久性——剩 1 个副本时与其欠复制地写（将来丢），不如拒写让 producer 知道。能不能接受停写，是个业务决策。</p>
+        <p><strong>③ unclean leader election 静默丢数据。</strong>若开启 <code>unclean.leader.election.enable=true</code>，当 ISR 里的副本全挂、只剩一个<em>落后的</em>非 ISR 副本时，Kafka 允许它当 leader 以恢复可用性。但它的日志比之前已提交的短——比如 producer 已 ack 到 offset 100，这个落后副本只到 80，于是 81-100 被<strong>静默截断、永久丢失</strong>。这就是 <code>leader-epoch-checkpoint</code> 文件存在的场景：靠 leader 任期来判断哪段日志需要截断。默认值在新版已是 <code>false</code>（宁可分区不可用也不丢）。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>某 topic 配置 <code>replication.factor=3</code>、<code>acks=all</code>，但<strong>没有</strong>设 <code>min.insync.replicas</code>（用默认值 1）。平时一切正常。某天两个 follower 因网络抖动同时掉出 ISR，运维没注意。这段时间 producer 的写入安全吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不安全，而且是看不见的不安全。<code>min.insync.replicas=1</code> 意味着 ISR 只剩 leader 一个时仍允许写。两个 follower 掉出 ISR 后，ISR={leader}，此时 <code>acks=all</code> 的"all"就是 leader 自己——<strong>每次写实际只落到一台</strong>，等价于 <code>acks=1</code>。producer 收到的全是成功 ack，毫无察觉。只要这期间 leader 宕机，这批"成功"的记录全部丢失。</p>
+          <p>洞察：<code>acks=all</code> 单独配置是<strong>不够</strong>的——它的强度被 ISR 的当前大小绑架。<code>min.insync.replicas=2</code> 才能在 ISR 缩到 1 时让写入<strong>被拒</strong>而不是悄悄降级。这正是 §2.3 的核心命题"持久性来自 <code>min.insync.replicas</code>"的实战形态，也是 04 章数据丢失类的头号案例。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           §2.4 消费组与再平衡
+           ============================================================ -->
+      <h2 id="rebalance"><span class="num">2.4</span><span>消费组与再平衡：分区如何分配，成员如何被判死</span></h2>
+
+      <p class="one-liner">broker 端的 group coordinator 通过 JoinGroup/SyncGroup 把分区分给组内消费者；再平衡协议从 eager（全停）演进到 cooperative（只动该动的）再到 KIP-848（broker 端驱动），而成员存活由 <code>poll()</code> 证明、不是心跳。</p>
+
+      <h3>运行方式</h3>
+      <p>每个 consumer group 由 broker 端一个 <strong>group coordinator</strong> 管理。新成员加入或老成员离开时触发<strong>再平衡</strong>，分两步：<strong>JoinGroup</strong>（所有成员向 coordinator 报到，coordinator 选出其中一个当 group leader）→ <strong>SyncGroup</strong>（group leader 在客户端算出"谁拿哪些分区"的分配方案，回传给 coordinator 下发）。注意分配逻辑跑在<em>客户端</em>的 group leader 上，broker 不关心用什么策略分——这让分配策略可插拔。</p>
+
+      <p>消费位移（offset）提交到内部 topic <code>__consumer_offsets</code>（一个 compaction 的 topic，每个 <code>(group, topic, partition)</code> 只保留最新 offset）。提交可以自动（<code>enable.auto.commit</code>，按 <code>auto.commit.interval.ms</code> 定时）或手动（<code>commitSync()</code> / <code>commitAsync()</code>）。</p>
+
+      <p><strong>成员存活判定有两条独立的线，这是最容易混淆的地方：</strong></p>
+      <ul>
+        <li>后台<strong>心跳线程</strong>按 <code>heartbeat.interval.ms</code> 给 coordinator 发心跳，<code>session.timeout.ms</code> 内没心跳就判死——这检测的是"进程/网络是否还活着"。</li>
+        <li>但真正证明"消费者还在干活"的是<strong>调用 <code>poll()</code></strong>。两次 <code>poll()</code> 间隔超过 <code>max.poll.interval.ms</code>（默认 5 分钟），coordinator 判定这个成员<strong>卡死</strong>，把它踢出组触发再平衡——即使它的心跳线程还在后台正常跳。</li>
+      </ul>
+
+      <h3>三代再平衡协议</h3>
+      <p><strong>eager（急切式）：</strong>每次再平衡，所有成员先<strong>放弃全部</strong>分区（一个 stop-the-world 屏障），等新分配下来再重新认领。简单、分配干净，但再平衡期间<strong>整个组停止消费</strong>。</p>
+      <p><strong>cooperative / incremental（协作增量式，2.4+）：</strong>遵循"没必要动的资源不要停"——只<strong>收回需要转移</strong>的那部分分区，没变动的分区<strong>继续消费</strong>；分两轮收敛。</p>
+      <p><strong>KIP-848（4.0 GA）：</strong>把再平衡逻辑从客户端<strong>移到 broker 端</strong>，由 coordinator 增量驱动，不再有客户端侧的全局屏障，加入/退出更平滑。经典 eager 协议计划在 5.0 移除。</p>
+
+      <p><strong>static membership（静态成员，KIP-345）：</strong>给消费者配一个固定的 <code>group.instance.id</code>。配了之后，成员短暂重启（如滚动发布）能<strong>认领回原来的分区</strong>而不触发再平衡——把"重启"和"成员变更"解耦。</p>
+
+      <figure>
+        <svg viewBox="0 0 820 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="eager 与 cooperative 再平衡对比：左侧所有分区被收回停止，右侧只有迁移的分区被收回其余继续">
+          <defs>
+            <marker id="rb-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- divider -->
+          <line x1="410" y1="20" x2="410" y2="320" class="diagram-soft"/>
+
+          <!-- LEFT: eager -->
+          <text x="205" y="40" text-anchor="middle" class="node-label-accent">eager（急切式）</text>
+          <text x="205" y="58" text-anchor="middle" class="edge-label">再平衡时全部收回 · stop-the-world</text>
+
+          <!-- consumers C1,C2 + new C3 -->
+          <rect x="40" y="80" width="100" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="90" y="105" text-anchor="middle" class="node-label">C1</text>
+          <rect x="155" y="80" width="100" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="205" y="105" text-anchor="middle" class="node-label">C2</text>
+          <rect x="270" y="80" width="100" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="320" y="105" text-anchor="middle" class="node-label-accent">C3 新加入</text>
+
+          <!-- partitions row (all revoked => dashed, "停") -->
+          <rect x="40"  y="170" width="48" height="40" rx="4" class="diagram-soft"/>
+          <text x="64" y="195" text-anchor="middle" class="edge-label">P0停</text>
+          <rect x="100" y="170" width="48" height="40" rx="4" class="diagram-soft"/>
+          <text x="124" y="195" text-anchor="middle" class="edge-label">P1停</text>
+          <rect x="160" y="170" width="48" height="40" rx="4" class="diagram-soft"/>
+          <text x="184" y="195" text-anchor="middle" class="edge-label">P2停</text>
+          <rect x="220" y="170" width="48" height="40" rx="4" class="diagram-soft"/>
+          <text x="244" y="195" text-anchor="middle" class="edge-label">P3停</text>
+          <rect x="280" y="170" width="48" height="40" rx="4" class="diagram-soft"/>
+          <text x="304" y="195" text-anchor="middle" class="edge-label">P4停</text>
+          <rect x="340" y="170" width="48" height="40" rx="4" class="diagram-soft"/>
+          <text x="364" y="195" text-anchor="middle" class="edge-label">P5停</text>
+
+          <text x="205" y="250" text-anchor="middle" class="branch-label">全部 6 个分区暂停消费</text>
+          <text x="205" y="270" text-anchor="middle" class="edge-label">直到新分配下发</text>
+
+          <!-- RIGHT: cooperative -->
+          <text x="615" y="40" text-anchor="middle" class="node-label-accent">cooperative（协作增量式）</text>
+          <text x="615" y="58" text-anchor="middle" class="edge-label">只收回要迁移的分区 · 其余继续流动</text>
+
+          <rect x="450" y="80" width="100" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="500" y="105" text-anchor="middle" class="node-label">C1</text>
+          <rect x="565" y="80" width="100" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="615" y="105" text-anchor="middle" class="node-label">C2</text>
+          <rect x="680" y="80" width="100" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="730" y="105" text-anchor="middle" class="node-label-accent">C3 新加入</text>
+
+          <!-- partitions: P0-P4 keep (ink, flowing), only P5 revoked->C3 (accent dashed) -->
+          <rect x="450" y="170" width="48" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="474" y="195" text-anchor="middle" class="edge-label">P0✓</text>
+          <rect x="510" y="170" width="48" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="534" y="195" text-anchor="middle" class="edge-label">P1✓</text>
+          <rect x="570" y="170" width="48" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="594" y="195" text-anchor="middle" class="edge-label">P2✓</text>
+          <rect x="630" y="170" width="48" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="654" y="195" text-anchor="middle" class="edge-label">P3✓</text>
+          <rect x="690" y="170" width="48" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="714" y="195" text-anchor="middle" class="edge-label">P4✓</text>
+          <rect x="750" y="170" width="48" height="40" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="774" y="195" text-anchor="middle" class="edge-label" fill="#B73B2F">P5↦</text>
+
+          <!-- arrow: P5 moves to C3 -->
+          <line x1="774" y1="170" x2="740" y2="122" class="diagram-accent" marker-end="url(#rb-ink)"/>
+
+          <text x="615" y="250" text-anchor="middle" class="branch-label">只有 P5 短暂暂停并迁移给 C3</text>
+          <text x="615" y="270" text-anchor="middle" class="edge-label">P0–P4 全程不间断消费</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>同样是新增一个消费者 C3，eager 让全部 6 个分区停摆，cooperative 只动 P5。
+          <strong>注意</strong>：取舍在"屏障的范围"——eager 用全局停顿换取一次性干净分配；cooperative 用两轮收敛和稍复杂的协议，换来"不该停的分区一秒都不停"。大集群里这就是再平衡从十几分钟降到秒级的差别。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 2.4 · 三代再平衡协议</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么被取代 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>eager（急切式，stop-the-world）</td>
+            <td>协议简单、分配干净，一轮收敛</td>
+            <td>每次再平衡<strong>整组暂停</strong>消费；成员越多、分区越多停顿越久（900 任务的组启动要 12-14 分钟）——5.0 将移除</td>
+          </tr>
+          <tr>
+            <td>cooperative / incremental（协作增量式，2.4+）</td>
+            <td>只收回需迁移的分区，其余继续消费；同样规模启动从十几分钟降到约 60 秒</td>
+            <td>分两轮收敛、协议更复杂，且仍在客户端驱动——被 KIP-848 进一步改进</td>
+          </tr>
+          <tr class="selected">
+            <td>KIP-848（4.0 GA，broker 端驱动增量）</td>
+            <td>再平衡逻辑移到 broker 端、增量推进、无客户端全局屏障；加入/退出最平滑</td>
+            <td>选中（当前方向；旧 eager 5.0 移除）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="rationale">
+        <span class="label">为什么这么设计</span>
+        <p>eager 的 stop-the-world 屏障保证了分配的简单和正确，但代价随集群规模线性放大——大组的每次扩缩容都是一次全组停顿。cooperative 把原则换成"不动的资源不要停"，用协议复杂度换可用性。KIP-848 再进一步：客户端驱动的协商在大规模下本身就脆弱（客户端版本不一、网络分区），把它收归 broker 端能更可控地增量推进。三代的主线是同一个：<strong>把再平衡的"暂停面"越缩越小</strong>。</p>
+      </div>
+
+      <h3>带来的代价 / 失效模式</h3>
+      <div class="callout warning">
+        <span class="label">代价</span>
+        <p><strong>心跳活着，poll 超时仍被判死 → 重复处理。</strong>这是最反直觉的失效。后台心跳线程和业务处理是两回事：消费者在 <code>poll()</code> 之后花了 6 分钟处理这批记录（一个慢的 DB 批写、一次卡住的 HTTP 调用），心跳一直正常跳，但因为超过了 <code>max.poll.interval.ms</code>（默认 5 分钟）没有再调 <code>poll()</code>，coordinator 已经把它判死、把它的分区分给了别人。等它处理完想提交 offset，发现自己已被踢出组，提交失败；那批记录被新 owner <strong>重复处理</strong>了一遍。</p>
+        <p>这是<a href="04-pitfalls.html#performance">再平衡风暴</a>的种子：处理慢 → 被踢 → 重新加入 → 又处理慢 → 再被踢，吞吐可以归零。缓解：调小 <code>max.poll.records</code>（每次少拿点）、把重活卸到工作线程并用 <code>pause()</code>/<code>resume()</code>、开启协作式再平衡 + static membership。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>有人把 <code>session.timeout.ms</code> 调到 5 分钟，理由是"防止消费者因为偶尔的网络抖动被误判死"。处理逻辑每批要跑 8 分钟。会发生什么？调 <code>session.timeout.ms</code> 解决得了吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>解决不了，因为他调错了旋钮。<code>session.timeout.ms</code> 管的是<strong>心跳</strong>那条线——进程/网络是否存活。但 8 分钟的处理超时触发的是<strong>另一条线</strong>：<code>max.poll.interval.ms</code>（默认 5 分钟）。处理跑 8 分钟没调 <code>poll()</code>，不管心跳多正常，到 5 分钟就被判定为"卡死"踢出组。</p>
+          <p>正确做法是认清两条线各管什么：要容忍长处理，调大的是 <code>max.poll.interval.ms</code>（或减小 <code>max.poll.records</code> 让每批处理更快返回 <code>poll()</code>），而不是 <code>session.timeout.ms</code>。把心跳超时调到 5 分钟反而有害——真宕机的消费者要拖 5 分钟才被发现。理解"存活由 <code>poll()</code> 证明、不是心跳"是这道题的全部。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           §2.5 投递语义
+           ============================================================ -->
+      <h2 id="delivery"><span class="num">2.5</span><span>投递语义：幂等、事务与 EOS 的真实边界</span></h2>
+
+      <p class="one-liner">at-least-once 是默认；幂等 producer 用 (PID, 分区) + 序列号在 broker 端去重并强制保序；事务用 transactional.id + epoch 把"输出写 + offset 提交"做成原子——但 exactly-once 只在 Kafka 闭环内、且幂等只在同一会话同一分区成立。</p>
+
+      <h3>三种语义的来源</h3>
+      <ul>
+        <li><strong>at-most-once（至多一次）</strong>：先提交 offset 再处理。处理崩了 offset 已提交，这条不会重投——但也<strong>可能丢</strong>。</li>
+        <li><strong>at-least-once（至少一次，默认）</strong>：先处理再提交 offset。处理完崩在提交前，重启会重投这条——不丢，但<strong>可能重复</strong>。</li>
+        <li><strong>exactly-once（精确一次）</strong>：靠幂等 producer + 事务达成，且只在特定边界内成立（见下）。</li>
+      </ul>
+
+      <h3>幂等 producer：PID + 序列号</h3>
+      <p>开启 <code>enable.idempotence=true</code>（4.0 起默认开）后，每个 producer 会话拿到一个 <strong>PID（Producer ID）</strong>。producer 给发出的每条记录按 <code>(PID, 分区)</code> 维度打一个单调递增的<strong>序列号</strong>。broker 为每个 <code>(PID, 分区)</code> 记住"已接受的最高序列号",只接受序列号<strong>恰好 +1</strong> 的 append：</p>
+      <ul>
+        <li>收到重复的序列号（重试导致的重发）→ 直接丢弃，<strong>去重</strong>。这解决"broker 写成功但 ack 在网络上丢了、producer 重发"导致的重复。</li>
+        <li>收到有空洞的序列号（比预期跳号）→ 抛 <code>OutOfOrderSequenceException</code>。</li>
+      </ul>
+      <p>因为只接受恰好 +1，幂等 producer <strong>顺便强制了顺序</strong>：它会拒绝乱序到达的 batch，所以同时解决了"<code>max.in.flight.requests &gt; 1</code> 时重试导致消息乱序"这个老问题（幂等下 in-flight 可达 5 仍保序）。</p>
+
+      <h3>事务：transactional.id + epoch + 两阶段提交</h3>
+      <p>幂等只覆盖单个 producer 会话、且只去重不跨"多分区写 + offset 提交"。事务（配 <code>transactional.id</code>）补上这两块：</p>
+      <ul>
+        <li><strong>跨重启的身份与僵尸隔离</strong>：<code>transactional.id</code> 是稳定的（重启不变），每次初始化会把 <strong>epoch</strong> 加一。旧实例（僵尸）带着旧 epoch 再来写会被拒——避免"以为死了其实没死"的旧进程污染数据。</li>
+        <li><strong>原子的"输出 + offset"</strong>：transaction coordinator 跑两阶段提交，给事务涉及的每个分区写一个 <strong>commit / abort marker</strong>。"消费-转换-生产"里，把<em>下游输出</em>和<em>上游 offset 提交</em>放进同一个事务——要么都成功，要么都回滚，不会出现"输出写了但 offset 没提交"导致的重复。</li>
+        <li><strong>读侧配合</strong>：消费者设 <code>isolation.level=read_committed</code> 后，会跳过 aborted 和未决事务的数据，且读取不能越过 <strong>LSO（Last Stable Offset，最后稳定位移）</strong>——即最早的未决事务之前的位置。</li>
+      </ul>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">TransactionalProducer.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-txn">复制</button>
+        </div>
+<pre id="cb-txn"><code class="language-java">// "消费 → 转换 → 生产" 的 EOS 闭环：输出写 + 上游 offset 提交在一个事务里
+Properties p = new Properties();
+p.put("transactional.id", "order-enricher-1");   // 稳定 ID，重启不变 → epoch 隔离僵尸
+p.put("enable.idempotence", "true");              // 事务隐含开启幂等
+KafkaProducer&lt;String, String&gt; producer = new KafkaProducer&lt;&gt;(p);
+producer.initTransactions();                       // 领 PID、把 epoch +1，挤掉僵尸旧实例
+
+while (true) {
+    ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(200));
+    producer.beginTransaction();
+    try {
+        for (ConsumerRecord&lt;String, String&gt; r : records) {
+            producer.send(new ProducerRecord&lt;&gt;("orders-enriched", r.key(), enrich(r.value())));
+        }
+        // 关键：上游 offset 也写进同一个事务，而不是 consumer.commitSync()
+        producer.sendOffsetsToTransaction(offsetsOf(records), consumer.groupMetadata());
+        producer.commitTransaction();              // 写 commit marker，原子生效
+    } catch (KafkaException e) {
+        producer.abortTransaction();               // 写 abort marker，read_committed 端跳过
+    }
+}</code></pre>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.5 · 达成"不重复"的两条路</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>at-least-once + 消费侧幂等（下游用主键去重 / upsert）</td>
+            <td>producer/consumer 配置简单、无事务开销；对外部系统（DB）天然适用</td>
+            <td>把去重责任推给每个下游，每个消费者都要自己实现且实现正确；不解决"Kafka 到 Kafka 的多分区原子写"</td>
+          </tr>
+          <tr>
+            <td>at-most-once（先提交后处理）</td>
+            <td>绝不重复、实现最简单</td>
+            <td>用<strong>丢失</strong>换"不重复"——崩在处理前那条就没了，绝大多数业务不可接受</td>
+          </tr>
+          <tr class="selected">
+            <td>事务 EOS（幂等 producer + transactional.id + read_committed）</td>
+            <td>Kafka 闭环内"消费-转换-生产"原子且精确一次；跨会话靠 epoch 存活；服务端去重让客户端简单</td>
+            <td>选中（边界与代价见下）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">EOS 的真实边界（面试高频）</span>
+        <p><strong>① 幂等只在"同一个 <code>(PID, 分区)</code> 且同一 producer 会话"内去重。</strong>producer 一旦崩溃重启，会领到一个<strong>新 PID</strong>，broker 不认识它和旧 PID 的关系——跨重启<strong>不去重</strong>。要跨会话精确一次，必须用事务：<code>transactional.id</code> 靠 epoch 跨重启保持身份。所以"开了 <code>enable.idempotence=true</code> 就端到端精确一次"是被普遍过度宣称的误解。</p>
+        <p><strong>② "exactly-once" 只在 Kafka 的"消费-转换-生产"闭环内成立，不覆盖外部副作用。</strong>事务能保证的是"Kafka 输出 + Kafka offset 提交"这件事原子。但事务里如果还写了数据库、调了 REST、发了邮件——这些外部动作<strong>不在事务范围内</strong>，事务回滚不会撤销它们，重试会再触发一次。要把外部系统也纳入精确一次，得在外部侧做幂等（如带幂等键的 upsert），Kafka 事务本身管不了。</p>
+      </div>
+
+      <div class="rationale">
+        <span class="label">为什么这么设计</span>
+        <p>把去重和隔离做在<strong>服务端</strong>（broker 维护 PID→seq、coordinator 管 marker），客户端就能保持简单——不用每个应用都重写一遍去重逻辑。而事务复用了已有的副本机制（事务日志、marker 都是普通的、被复制的日志记录）来保证自身的持久性，没有另起炉灶。代价是 marker + LSO 带来的延迟与队头阻塞（见下）。</p>
+      </div>
+
+      <h3>带来的代价 / 失效模式</h3>
+      <div class="callout warning">
+        <span class="label">代价</span>
+        <p><strong>① marker + LSO 增加延迟。</strong>每个事务要额外写 commit/abort marker，<code>read_committed</code> 消费者要等事务定下来才能越过 LSO 读取——实测约增加 3%（@100ms 提交间隔）的延迟。提交越频繁，marker 开销占比越高。</p>
+        <p><strong>② 长事务造成队头阻塞。</strong><code>read_committed</code> 消费者读取不能越过 LSO。一个迟迟不提交的长事务会把 LSO 钉在原地，<strong>卡住该分区所有 <code>read_committed</code> 读者</strong>——哪怕后面已经有大量已提交的数据，也读不到。事务要短。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个服务"从 topic A 消费 → 写一行到 MySQL → 往 topic B 生产",全程用了 Kafka 事务（<code>sendOffsetsToTransaction</code> + <code>commitTransaction</code>）。开发者声称"现在端到端精确一次了"。MySQL 那行会不会重复？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>会重复。Kafka 事务保证的是"<strong>topic B 的输出</strong> + <strong>topic A 的 offset 提交</strong>"这两件 Kafka 内部的事原子。MySQL 的写<strong>不在事务范围内</strong>——它是个外部副作用。设想：写完 MySQL、还没 <code>commitTransaction</code> 时进程崩溃。Kafka 这边事务未提交、会回滚（topic A 的 offset 没推进），重启后这批记录被<strong>重新消费</strong>，于是 MySQL 那行<strong>被写第二遍</strong>。Kafka 的回滚撤不掉已经发生的 MySQL 写。</p>
+          <p>洞察：EOS 的边界是"Kafka 闭环"。一旦事务里掺进任何外部系统，就要在那个系统侧另做幂等（MySQL 用幂等键 upsert / 唯一约束）。"用了 Kafka 事务 = 全链路精确一次"是 06 章会专门考的红旗答案。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           §2.6 KRaft
+           ============================================================ -->
+      <h2 id="kraft"><span class="num">2.6</span><span>KRaft：元数据本身也是一条日志</span></h2>
+
+      <p class="one-liner">集群元数据被建模成一条内部日志 <code>__cluster_metadata</code>，由 controller quorum 用 Raft 复制；active controller 是唯一写入者，其余节点回放日志并把元数据全量驻留内存——故障切换几乎瞬时，不再需要 ZooKeeper。</p>
+
+      <h3>运行方式</h3>
+      <p>4.0（2025-03）起，Kafka <strong>彻底移除了 ZooKeeper</strong>，KRaft 成为唯一的元数据模式（不是可选项）。它的核心思路非常 Kafka：<strong>把元数据也当成一条日志</strong>。集群的所有元数据（有哪些 topic、分区分布、ISR、配置……）记录在一个内部的、单分区的 topic <code>__cluster_metadata</code> 里，由一组 <strong>controller</strong> 组成的 <strong>quorum</strong> 用 Raft 协议复制。</p>
+      <p>其中一个 controller 是 <strong>active controller</strong>，是元数据日志的<strong>唯一写入者</strong>;其余 controller 作为 standby <strong>回放</strong>这条日志、把最新元数据<strong>全量驻留在内存</strong>。这样当 active controller 故障时,某个 standby 接管几乎是瞬时的——它的内存里已经是最新状态,不需要从外部系统重新加载。这正好呼应<a href="01-concepts.html#log-model">第 1 章的本质命题</a>:连"管理集群"这件事,Kafka 都用它自己的"日志"原语来解。</p>
+
+      <table class="compare-table">
+        <caption>表 2.6 · 元数据存哪里：外部 ZooKeeper vs 内部 KRaft 日志</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么被取代 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>外部 ZooKeeper 集群（4.0 前的模式）</td>
+            <td>成熟的分布式协调系统、久经考验</td>
+            <td>是<strong>独立部署</strong>的第二套系统（多一份运维与故障面）；controller 故障切换要从 ZK <strong>全量重载</strong>元数据，分区一多重载就慢，限制了集群规模与恢复速度</td>
+          </tr>
+          <tr>
+            <td>每个 broker 各自持久化元数据（去中心、无 quorum）</td>
+            <td>无单独协调组件</td>
+            <td>没有单一可信来源,分歧难以收敛;元数据一致性要自己从头解决——等于重造一个共识系统</td>
+          </tr>
+          <tr class="selected">
+            <td>KRaft：元数据即日志 + controller quorum（Raft）</td>
+            <td>无外部依赖；standby 内存常驻最新状态 → 故障切换近乎瞬时 → 支持百万级分区；元数据用 Kafka 自己的日志/复制原语</td>
+            <td>选中（4.0 起唯一模式）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="rationale">
+        <span class="label">为什么这么设计</span>
+        <p>ZooKeeper 是一套独立系统,带来两个根本问题:多一套要运维和会故障的组件;controller 切换时要把全部元数据从 ZK 重新拉一遍、在内存重建,分区规模越大越慢。KRaft 把元数据变成一条用 Raft 复制的日志后,standby controller 持续回放、内存里始终是热的,切换不需要重载——故障恢复时间与分区数<strong>解耦</strong>,这才打开了百万级分区的天花板。</p>
+      </div>
+
+      <h3>带来的代价 / 失效模式</h3>
+      <div class="callout warning">
+        <span class="label">代价</span>
+        <p><strong>controller quorum 多数派挂掉 = 元数据层失去可用性。</strong>Raft 靠多数派推进。3 个 controller 能容忍挂 1 个;一旦挂掉多数(3 个里挂 2 个),quorum 无法选出 active controller、无法提交元数据变更——创建 topic、leader 选举、ISR 变更等全部停摆(已有分区的纯数据读写可短时间靠缓存的元数据继续,但任何需要元数据变更的操作都会阻塞)。所以 controller 节点的部署(数量、跨机架/可用区)要按"保住多数派"来规划。</p>
+        <p><strong>升级路径约束(截至 2026-06)。</strong>不能从 ZooKeeper 集群<strong>直接跳到 4.0</strong>——必须先在 3.x 上用迁移工具迁到 KRaft(3.9 是推荐的最后一个桥接版),再升 4.0。把"先迁 KRaft 再升大版本"当硬约束。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>有人说"KRaft 把 controller 和 broker 合并了,所以集群里随便挂几台都没事"。一个 3 controller + 5 broker 的集群,如果挂掉的恰好是 2 个 controller 节点,会发生什么?</p>
+        <details>
+          <summary>展开答案(先停 10 秒再点)</summary>
+          <p>"随便挂几台都没事"是错的——要看挂的是不是 controller、有没有破坏 controller 的多数派。3 个 controller 的多数派是 2;挂掉 2 个,只剩 1 个,<strong>无法构成多数派</strong>,选不出 active controller。后果:元数据层冻结——不能建/删 topic、leader 故障后选不出新 leader、ISR 变更无法提交。已有分区如果 leader 还活着、元数据没变,数据读写可能还能撑一阵(靠各 broker 缓存的元数据),但集群已经失去自愈能力,任何一个分区 leader 再挂就无人接管。</p>
+          <p>洞察:KRaft 的可用性建立在 <strong>controller quorum 的多数派</strong>上,和 broker 数量是两回事。容量规划要分别保证"broker 副本够容忍故障"(§2.3 的 RF/ISR)和"controller 多数派够容忍故障"。把两者混为一谈是常见误区。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           跨概念综合
+           ============================================================ -->
+      <h2 id="end-to-end"><span class="num">2.7</span><span>把六个机制串起来：一条记录的一生</span></h2>
+
+      <p>前六节各讲一个机制。但生产里它们是<strong>协同</strong>工作的——理解协同,才算真的理解。跟一条记录走完"producer 写入 → follower 同步 → HW 推进 → consumer 读取"这条链,看每一步踩在哪个机制上。</p>
+
+      <figure>
+        <svg viewBox="0 0 840 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一条记录从 producer 写入到 consumer 可见的五步时序，每步标注涉及的机制">
+          <defs>
+            <marker id="e2e-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="e2e-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 5 step boxes in a row -->
+          <rect x="20"  y="70" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="95" y="96"  text-anchor="middle" class="node-label">① producer 写</text>
+          <text x="95" y="114" text-anchor="middle" class="edge-label">key→分区 · acks=all</text>
+          <text x="95" y="156" text-anchor="middle" class="edge-label">§2.2 §2.5</text>
+
+          <rect x="195" y="70" width="150" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="270" y="96"  text-anchor="middle" class="node-label-accent">② leader 追加</text>
+          <text x="270" y="114" text-anchor="middle" class="edge-label">append-only segment</text>
+          <text x="270" y="156" text-anchor="middle" class="edge-label">§2.1</text>
+
+          <rect x="370" y="70" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="445" y="96"  text-anchor="middle" class="node-label">③ follower fetch</text>
+          <text x="445" y="114" text-anchor="middle" class="edge-label">ISR 复制 · 更新 LEO</text>
+          <text x="445" y="156" text-anchor="middle" class="edge-label">§2.3</text>
+
+          <rect x="545" y="70" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="620" y="96"  text-anchor="middle" class="node-label">④ HW 推进</text>
+          <text x="620" y="114" text-anchor="middle" class="edge-label">达 min.insync 才 ack</text>
+          <text x="620" y="156" text-anchor="middle" class="edge-label">§2.3</text>
+
+          <rect x="690" y="180" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="765" y="206" text-anchor="middle" class="node-label">⑤ consumer 读</text>
+          <text x="765" y="224" text-anchor="middle" class="edge-label">读 ≤ HW · 提交 offset</text>
+          <text x="765" y="266" text-anchor="middle" class="edge-label">§2.4</text>
+
+          <!-- arrows between 1..4 -->
+          <line x1="170" y1="102" x2="195" y2="102" class="diagram-accent" marker-end="url(#e2e-verm)"/>
+          <line x1="345" y1="102" x2="370" y2="102" class="diagram-ink" marker-end="url(#e2e-ink)"/>
+          <line x1="520" y1="102" x2="545" y2="102" class="diagram-ink" marker-end="url(#e2e-ink)"/>
+          <!-- 4 -> 5 (down-right) -->
+          <line x1="695" y1="134" x2="740" y2="180" class="diagram-ink" marker-end="url(#e2e-ink)"/>
+          <text x="745" y="158" class="edge-label">仅 HW 之内</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>一条记录的五步,每步压在不同机制上。
+          <strong>注意</strong>:第 ④ 步是枢纽——只有当复制满足 <code>min.insync.replicas</code>、HW 推进过这条记录,producer 才收到成功 ack,<em>且</em>consumer 才可见。持久性(向 producer 确认)和可见性(对 consumer 暴露)被 HW 这一个点同时门控。</figcaption>
+      </figure>
+
+      <p>逐步拆解,注意每一步的"如果失败会怎样":</p>
+      <ul>
+        <li><strong>① producer 写(§2.2 + §2.5)</strong>:记录按 <code>murmur2(key) % 分区数</code> 选定分区,带着幂等序列号发给该分区的 leader,<code>acks=all</code> 表示要等所有 ISR 确认。<em>若 key 选得差</em> → 热分区倾斜;<em>若没开幂等</em> → 重试可能乱序或重复。</li>
+        <li><strong>② leader 追加(§2.1)</strong>:leader 把记录顺序追加到 active segment 末尾,进 page cache,LEO +1。这一步是 O(1) 顺序写。</li>
+        <li><strong>③ follower fetch(§2.3)</strong>:ISR 里的 follower 各自 fetch 这条记录、写入自己的日志、推进自己的 LEO。<em>若某 follower 掉队超过 <code>replica.lag.time.max.ms</code></em> → 被踢出 ISR,不再参与 HW 计算。</li>
+        <li><strong>④ HW 推进 + ack(§2.3)</strong>:当 ISR 里所有副本的 LEO 都越过这条记录,HW 推进;此时若在线 ISR 数 ≥ <code>min.insync.replicas</code>,producer 收到成功 ack。<em>若 ISR 缩到不足</em> → producer 收到 <code>NotEnoughReplicas</code>、写被拒(而不是悄悄降级)。</li>
+        <li><strong>⑤ consumer 读(§2.4)</strong>:consumer <code>poll()</code> 拉取,只能看到 ≤ HW 的记录;处理完按 at-least-once 提交 offset 到 <code>__consumer_offsets</code>。<em>若处理超过 <code>max.poll.interval.ms</code> 没再 <code>poll()</code></em> → 被判死、分区转移、这批被重复处理。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 一个点门控两件事</span>
+        <p>这条链最值得记住的是 <strong>HW 是持久性和可见性的共同闸门</strong>。同一个 HW:对 producer 侧,它(配合 <code>min.insync.replicas</code>)决定"何时算写成功";对 consumer 侧,它决定"何时能读到"。所以"已 ack 的记录消费者要等一个 fetch 轮才看得到"不是两个独立现象,而是同一个 HW 推进过程的一体两面。把这点讲清,面试里"acks/ISR/HW/可见性"这一串就不会散架。</p>
+      </div>
+
+      <!-- ============================================================
+           self-check
+           ============================================================ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程,把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>Kafka 为什么不在 JVM 堆里缓存消息?把缓存交给 OS page cache 换来了什么、又在哪两种情况下失效?</li>
+          <li>给一个带 <code>key</code> 的 topic 加分区,为什么会"静默破坏"按 key 的顺序?为什么不能减分区?</li>
+          <li>用一句话说清 LEO、HW、ISR 三者的关系。为什么消费者读不到 leader 上最新写入的那几条?</li>
+          <li><code>acks=all</code> 和 <code>min.insync.replicas</code> 各自负责什么?为什么只配 <code>acks=all</code> 不够、会在什么时候悄悄退化成 <code>acks=1</code>?</li>
+          <li>消费者的心跳一直正常,为什么还会被判死、导致重复处理?该调哪个参数、不该调哪个?</li>
+          <li>幂等 producer 的去重边界是什么?为什么"开了 <code>enable.idempotence=true</code> 就端到端精确一次"是错的?</li>
+          <li><strong>(跨机制综合)</strong> 一个服务"消费 topic A → 调一个外部支付 API → 生产 topic B",要求"绝不漏处理、且支付绝不重复扣款"。把 §2.3 的 <code>acks</code>/ISR、§2.4 的 offset 提交时机、§2.5 的事务/幂等边界串起来:Kafka 能保证哪部分?哪部分必须在 Kafka 之外解决、怎么解决?</li>
+        </ol>
+        <details>
+          <summary>答案(先做完再展开)</summary>
+          <ol>
+            <li>堆内缓存会和 OS page cache <strong>双份存储</strong>、且几十 GB 数据进堆制造灾难性 GC。交给 page cache 换来:无 GC 压力、32GB 机器近 30GB 可用作缓存、进程重启缓存仍在内核、还能配合零拷贝直接发网卡。失效:(a) 开 TLS 时零拷贝被迫走用户态加密;(b) 滞后消费者冷读历史数据,把冷 segment 拉进缓存挤掉热数据。</li>
+            <li>分区由 <code>murmur2(key) % 分区数</code> 决定,加分区改变了分母,同一个 key 的<strong>新</strong>记录可能落到与<strong>历史</strong>记录不同的分区,于是同 key 事件被劈到两个分区并行消费、顺序丢失;且无任何报错,故"静默"。不能减分区是因为减少会让已有记录的 key→分区映射失配、且要丢弃或迁移整段日志,Kafka 不支持。</li>
+            <li>LEO 是某副本下一条要写的 offset(日志末尾);HW = <strong>ISR 中最小的 LEO</strong>(已被所有同步副本复制到的最高位);消费者只能读到 ≤ HW。读不到 leader 最新几条,是因为那几条还没被所有 ISR 复制完(在 HW 之上)——一旦 leader 挂、follower 顶上它们可能消失,所以 HW 门控不让消费者看到。</li>
+            <li><code>acks=all</code> 负责"等当前 <strong>ISR</strong> 所有成员确认才算写成功";<code>min.insync.replicas</code> 负责"ISR 不许缩到这个数以下,否则<strong>拒写</strong>"。只配 <code>acks=all</code> 不够,因为 ISR 会缩——两个 follower 掉出 ISR 后 ISR 只剩 leader,"all"就是一台,等价 <code>acks=1</code> 且 producer 无感知。<code>min.insync.replicas=2</code> 才能在这时让写入被拒。</li>
+            <li>因为存活由<strong>调用 <code>poll()</code></strong> 证明,不是心跳。心跳线程在后台独立运行,但处理一批记录超过 <code>max.poll.interval.ms</code>(默认 5 分钟)没再 <code>poll()</code>,coordinator 就判死、转移分区,导致重复处理。该调大的是 <code>max.poll.interval.ms</code>(或减小 <code>max.poll.records</code> 让每批更快返回);不该调 <code>session.timeout.ms</code>——那管的是心跳/进程存活,与此无关。</li>
+            <li>幂等只在<strong>同一个 <code>(PID, 分区)</code> 且同一 producer 会话</strong>内去重。producer 崩溃重启领到新 PID,broker 不认得它与旧 PID 的关系,跨重启不去重;且幂等只管 producer 到 broker 这一跳,不管"多分区写 + offset 提交"的原子性,也不覆盖外部副作用。要跨会话精确一次得用事务(<code>transactional.id</code> + epoch)。</li>
+            <li><strong>综合题:</strong>Kafka 这边:用 <code>acks=all</code> + <code>min.insync.replicas=2</code> + <code>RF=3</code> 保证 topic A/B 的数据不丢;消费侧用 at-least-once(处理后再提交 offset)保证"绝不漏处理";如果只在 Kafka 内部("消费 A → 生产 B"),可以用事务把 B 的输出和 A 的 offset 提交做成原子(精确一次)。<strong>但支付 API 是外部副作用,不在 Kafka 事务范围内</strong>——Kafka 回滚撤不掉已发生的扣款。所以"支付绝不重复"必须在<strong>支付侧用幂等键</strong>(同一订单的支付请求带同一幂等 token,支付服务据此去重)解决。结论:Kafka 负责消息不丢 + 内部精确一次;"不重复扣款"靠外部幂等。把"用了 Kafka 事务就全链路精确一次"当成立是错的。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>为什么 unclean leader election 能"绕过" min.insync.replicas 的保护?</h3>
+        <p>你已经用 <code>acks=all</code> + <code>min.insync.replicas=2</code> + <code>RF=3</code> 把写入路径锁得很死:任何时候 ISR 不足 2 就拒写,看起来已提交的记录绝不会丢。但 <code>unclean.leader.election.enable=true</code> 仍能让你丢已提交的数据。说清楚这条路径:为什么"写入侧的 <code>min.insync.replicas</code> 保护"挡不住"选举侧的 unclean 截断"?这两个机制分别在记录生命周期的哪个阶段起作用?</p>
+        <details>
+          <summary>提示(卡住再展开)</summary>
+          <p><code>min.insync.replicas</code> 是<strong>写入时</strong>的闸门——它保证一条记录被 ack 时至少在 2 个副本上。unclean leader election 是<strong>故障恢复时</strong>的选择——当那 2 个(及以上)持有该记录的副本<strong>全都不可用</strong>、ISR 空了,unclean 允许一个<em>从来没复制到这条记录的</em>落后副本当 leader。它的日志更短,新 leader 上任后,那条"曾经满足 min.insync 地提交过"的记录在新日志里<strong>根本不存在</strong>,被当作从未发生而截断。想想 <code>leader-epoch-checkpoint</code> 在这里扮演什么角色,以及为什么默认值是 <code>false</code>——这是一道"持久性 vs 可用性,且发生在不同时间窗口"的题。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/#design">Apache Kafka — Documentation: Design</a>(官方,存储/复制/语义的权威来源)</li>
+          <li><a href="https://engineering.linkedin.com/distributed-systems/log-what-every-software-engineer-should-know-about-real-time-datas-unifying">Jay Kreps — The Log: What every software engineer should know about real-time data's unifying abstraction</a>(日志抽象的奠基长文)</li>
+          <li><a href="https://www.confluent.io/blog/transactions-apache-kafka/">Confluent — Transactions in Apache Kafka(EOS / 事务原理)</a></li>
+          <li><a href="https://www.confluent.io/blog/incremental-cooperative-rebalancing-in-kafka/">Confluent — Incremental Cooperative Rebalancing in Apache Kafka(再平衡演进)</a></li>
+          <li><a href="https://www.confluent.io/blog/why-replace-zookeeper-with-kafka-raft-the-log-of-all-logs/">Confluent — Why Replace ZooKeeper with KRaft: The Log of All Logs</a></li>
+          <li><a href="https://developer.confluent.io/learn/kraft/">developer.confluent.io — KRaft 入门</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念与日志心智模型</span>
+        </a>
+        <a href="03-practice.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · Java 实操与本地 KRaft 启动</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#storage" data-toc-target="storage">2.1 存储原理</a></li>
+        <li><a href="#partition-order" data-toc-target="partition-order">2.2 分区与顺序</a></li>
+        <li><a href="#replication" data-toc-target="replication">2.3 副本与 ISR</a></li>
+        <li><a href="#rebalance" data-toc-target="rebalance">2.4 消费组与再平衡</a></li>
+        <li><a href="#delivery" data-toc-target="delivery">2.5 投递语义</a></li>
+        <li><a href="#kraft" data-toc-target="kraft">2.6 KRaft</a></li>
+        <li><a href="#end-to-end" data-toc-target="end-to-end">2.7 串起来</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 架构 · Milvus 深潜教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale {
+  background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft);
+  margin: 16px 0; font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink { stroke: var(--ink); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill { fill: var(--bg); }
+.node-fill-accent { fill: var(--vermilion-soft); }
+.node-label { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-architecture.html" class="current">02 架构</a><span class="sep">—</span>
+    <a href="03-index-internals.html">03 索引</a><span class="sep">—</span>
+    <a href="04-search-and-consistency.html">04 检索·一致性</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>架构：流式分布式与日志即事实源</h1>
+        <p class="recap">01 钉实了 Collection / Segment / shard / 一致性这些名词——这一章解释把这些名词组织起来的那套系统：Milvus 凭什么是 4 个独立伸缩的服务 + 3 个存储后端，而不是“FAISS 套一层 REST”。读完，存算分离、四层职责、以及“一条写入在哪一刻算落定”会变成一张能在脑子里跑的图。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>存算分离：持久状态只在 etcd + 对象存储 + WAL（日志），计算节点全部无状态、可随时重建。</li>
+          <li>四层职责：接入层 Proxy / 协调层 MixCoord / 工作层 Streaming·Query·Data node / 存储层。</li>
+          <li>日志即事实源：一条写入 append 到 WAL 那一刻即算完成，WAL 是持久性边界，节点是日志的派生态。</li>
+          <li>写入路径与 segment 生命周期·compaction：从一次 insert 走到不可变 binlog，以及删除为何要靠 compaction 才回收。</li>
+        </ul>
+      </section>
+
+      <p>这一章讲的是<strong>设计取舍</strong>，不是组件清单。每个机制按同一套结构推：一句话定位 → 为什么需要它 → 比文档深一层的机制 → 带边界的类比。重点放在两组对照表上——存储后端的选型、以及“写日志 vs 写节点”的取舍，是这套架构的核心，也是面试里最能问出深浅的地方。读路径与一致性机制（TSO 怎么发、guarantee timestamp 怎么卡）留到 <a href="04-search-and-consistency.html">04 章</a>；索引内部留到 <a href="03-index-internals.html">03 章</a>。</p>
+
+      <h2 id="s21"><span class="num">2.1</span><span>存储计算分离</span></h2>
+      <p class="one-liner">Milvus 把存储和计算拆成各自独立伸缩的层，计算节点不持有任何不可丢的状态。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>单机向量库（FAISS）把数据、索引、查询挤在同一块进程内存里：要扩容只能换更大的机器（纵向扩展有天花板），机器崩了内存里的东西全没。把存储和计算拆开后，加 query 节点就加查询吞吐、加 data 节点就加离线处理能力，各层按各自的瓶颈独立伸缩；任一计算节点崩了，数据一行不丢，新节点重新加载即可顶上。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：这套设计的关键不在“分层”，而在<strong>持久状态的边界被收得极窄</strong>。整个集群里只有三处持有不可丢的状态——etcd（元数据）、对象存储（binlog 与索引文件）、WAL（写入日志）。除此之外的一切——query node 内存里加载的 sealed 段、streaming node 持有的 growing 段、proxy 缓存的拓扑——都是这三处状态的<strong>派生态</strong>：能从对象存储重新加载、能从 WAL 重放、能从 etcd 重新拉取。所以计算层“无状态”不是说它内存里没数据，而是说它内存里的数据<strong>全都能被重建</strong>，丢了不心疼。这条边界决定了故障恢复和弹性伸缩为什么对 Milvus 来说是同一件事的两面。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="存算分离对比：左侧 FAISS 进程内单机，右侧 Milvus 拆成多层加共享存储事实源">
+          <text x="170" y="30" text-anchor="middle" class="node-label">FAISS：进程内单机</text>
+          <rect x="40" y="46" width="260" height="200" rx="6" class="diagram-ink node-fill"/>
+          <text x="170" y="120" text-anchor="middle" class="node-label">数据 + 索引 + 查询</text>
+          <text x="170" y="142" text-anchor="middle" class="edge-label">同一块进程内存</text>
+          <text x="170" y="196" text-anchor="middle" class="edge-label">扩容 = 换更大的机器</text>
+          <text x="170" y="214" text-anchor="middle" class="edge-label">崩了 = 内存全丢</text>
+
+          <text x="565" y="30" text-anchor="middle" class="node-label-accent">Milvus：拆成独立伸缩的层</text>
+          <rect x="450" y="46" width="230" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="565" y="69" text-anchor="middle" class="node-label">接入层 · Proxy</text>
+          <rect x="450" y="90" width="230" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="565" y="113" text-anchor="middle" class="node-label">协调层 · MixCoord</text>
+          <rect x="450" y="134" width="230" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="565" y="157" text-anchor="middle" class="node-label">工作层 · 无状态计算节点</text>
+          <rect x="450" y="186" width="230" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="565" y="210" text-anchor="middle" class="node-label-accent">共享存储 = 事实源</text>
+          <text x="565" y="230" text-anchor="middle" class="edge-label">etcd · 对象存储 · WAL</text>
+
+          <line x1="565" y1="82"  x2="565" y2="90"  class="diagram-soft"/>
+          <line x1="565" y1="126" x2="565" y2="134" class="diagram-soft"/>
+          <line x1="565" y1="170" x2="565" y2="186" class="diagram-soft"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>FAISS 把数据/索引/查询绑死在一块进程内存里；Milvus 把它们拆成独立的层，真相沉到底部的共享存储。<strong>注意</strong>：FAISS 扩容只能纵向换大机器；Milvus 计算层无状态、各层按各自瓶颈横向独立伸缩，崩了不丢数据。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界</span>
+        <p>像一组无状态 Web 服务 + 一个共享数据库：业务进程随便重启，状态都在库里。边界在于：这里的“数据库”被进一步拆成三块各司其职的后端——<strong>元数据（etcd）、写入日志（WAL）、对象存储（binlog/索引）</strong>。不是一个全能数据库，而是三种为不同访问模式优化的存储：etcd 存小而关键、强一致的元数据；WAL 存顺序追加的写入流；对象存储存海量、不可变的大文件。把它们当成一块来理解，就会错判每一层的伸缩与故障特性。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：分离只是骨架。骨架立起来之后，每一层具体由谁来干活、各自只负责什么——这就是下一节的四层职责划分。</p>
+
+      <h2 id="s22"><span class="num">2.2</span><span>四层架构：各组件的单一职责</span></h2>
+      <p class="one-liner">Milvus 自上而下是四层：接入层 Proxy、协调层 MixCoord、工作层三类 node、存储层三种后端，每个组件只担一件事。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>把“接收请求”“做决策调度”“干实际计算”“持久化”这四类职责彻底分开，每一类才能按自己的负载独立扩缩、独立部署、独立失败。请求暴涨就加 Proxy，查询变重就加 Query node，离线积压就加 Data node——互不牵连。这是分层架构（自上而下、上层依赖下层、同层无状态可水平扩展）在向量库上的落地。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：这套划分里藏着一条贯穿全章的红线——<strong>上三层（Proxy / MixCoord / 工作 node）全部无状态，真相只沉在最底层</strong>。Proxy 不存数据、MixCoord 把权威元数据写进 etcd 而非自己内存、工作 node 内存里的段都能从存储重建。更要注意 2.6 在协调层和工作层各做了一次方向相反的整合：协调层把原先 root / query / data / index 四个独立 coordinator <strong>合并成一个 MixCoord</strong>（少了跨进程协调的复杂度）；工作层则<strong>新拆出一个 streaming node</strong>（把“流式写入与 growing 段查询”从原来混在 data/query 里的职责中独立出来）。下面这张表把每个组件的职责和状态属性钉死。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 四层组件：职责与状态（2.6 GA 拓扑）</caption>
+        <thead><tr><th>层 / 组件</th><th>只负责这件事</th><th>有无持久状态</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>接入层 · <strong>Proxy</strong></td>
+            <td>无状态门面：校验请求、按 shard 路由写入、把各分片返回的结果做最终 reduce（跨段/跨分片合并 top-k）</td>
+            <td>无（拓扑从 etcd / MixCoord 拉取，可缓存）</td>
+          </tr>
+          <tr>
+            <td>协调层 · <strong>MixCoord</strong></td>
+            <td>集群大脑：发 TSO 全局时间戳、管 DDL/DCL、维护查询拓扑与负载均衡、调度 compaction 与建索引（2.6 合并了原 root/query/data/index 四个 coordinator）</td>
+            <td>无（权威元数据落 etcd，自身可重启）</td>
+          </tr>
+          <tr>
+            <td>工作层 · <strong>Streaming node</strong></td>
+            <td>分片级（2.6 新增）：持有 WAL 读写、服务 growing 段的实时查询、做查询委派（把请求分发给持有相关段的节点）</td>
+            <td>无（growing 段可从 WAL 重放重建）</td>
+          </tr>
+          <tr>
+            <td>工作层 · <strong>Query node</strong></td>
+            <td>从对象存储加载 sealed 段（及其索引）并执行向量检索</td>
+            <td>无（sealed 段可从对象存储重新加载）</td>
+          </tr>
+          <tr>
+            <td>工作层 · <strong>Data node</strong></td>
+            <td>离线活：flush（growing→binlog）、compaction（合并小段+清删除）、建索引</td>
+            <td>无（输入是 WAL/对象存储，输出回写对象存储）</td>
+          </tr>
+          <tr class="selected">
+            <td>存储层 · <strong>三后端</strong></td>
+            <td>etcd 存 schema/checkpoint/服务注册；WAL（Pulsar/Kafka 或 2.6 的 Woodpecker）存写入日志；对象存储（S3/MinIO/Azure Blob）存 binlog/索引/结果</td>
+            <td><strong>持久状态唯一所在地</strong></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 760 392" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="四层架构横带图：接入层 Proxy、协调层 MixCoord、工作层三类节点、存储层三种后端，左侧标无状态计算与持久状态">
+          <text transform="rotate(-90 30 120)" x="30" y="120" text-anchor="middle" class="edge-label" font-weight="700">无状态计算</text>
+          <text transform="rotate(-90 30 330)" x="30" y="330" text-anchor="middle" class="branch-label">持久状态</text>
+
+          <rect x="56" y="20" width="688" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="400" y="44" text-anchor="middle" class="node-label">① 接入层 · Proxy</text>
+          <text x="400" y="63" text-anchor="middle" class="edge-label">无状态门面 · 校验 · 路由 · 最终 reduce</text>
+
+          <rect x="56" y="92" width="688" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="400" y="116" text-anchor="middle" class="node-label">② 协调层 · MixCoord</text>
+          <text x="400" y="135" text-anchor="middle" class="edge-label">2.6 合并版 · TSO 时钟 + 调度 + DDL</text>
+
+          <text x="400" y="180" text-anchor="middle" class="edge-label">③ 工作层 · 无状态计算节点</text>
+          <rect x="56"  y="190" width="218" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="165" y="214" text-anchor="middle" class="node-label">Streaming node</text>
+          <text x="165" y="233" text-anchor="middle" class="edge-label">WAL · growing 段查询</text>
+          <rect x="291" y="190" width="218" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="400" y="214" text-anchor="middle" class="node-label">Query node</text>
+          <text x="400" y="233" text-anchor="middle" class="edge-label">加载 sealed 段 · 检索</text>
+          <rect x="526" y="190" width="218" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="635" y="214" text-anchor="middle" class="node-label">Data node</text>
+          <text x="635" y="233" text-anchor="middle" class="edge-label">flush · compaction · 建索引</text>
+
+          <text x="400" y="280" text-anchor="middle" class="branch-label">④ 存储层 · 持久状态唯一所在地</text>
+          <rect x="56"  y="290" width="218" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="165" y="316" text-anchor="middle" class="node-label-accent">etcd</text>
+          <text x="165" y="336" text-anchor="middle" class="edge-label">元数据 · checkpoint</text>
+          <rect x="291" y="290" width="218" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="400" y="316" text-anchor="middle" class="node-label-accent">WAL / Woodpecker</text>
+          <text x="400" y="336" text-anchor="middle" class="edge-label">日志 = 事实源</text>
+          <rect x="526" y="290" width="218" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="635" y="316" text-anchor="middle" class="node-label-accent">对象存储 S3</text>
+          <text x="635" y="336" text-anchor="middle" class="edge-label">binlog + 索引</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>四层自上而下：接入 / 协调 / 工作 / 存储。<strong>注意</strong>：上三层全部无状态、可随意增删实例；真相只在最底层的三种后端里——这正是 §2.1 那条窄持久边界在拓扑上的样子。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">版本撞车 · 必须分清</span>
+        <p>网上大量 Milvus 架构图还停在 2.x 早期：画着 RootCoord / QueryCoord / DataCoord / IndexCoord 四个独立 coordinator，且没有 streaming node。那是旧拓扑。<strong>2.6 把四个 coordinator 合并成一个 MixCoord</strong>，又<strong>新增了 streaming node</strong>。看架构图先认版本——拿旧图套 2.6 的行为，排查时会找错组件。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 query node 进程突然崩溃。集群里的数据会丢吗？这个节点重启（或被新节点替换）后，要从哪里把状态拿回来？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>数据<strong>一行不丢</strong>。query node 内存里只有从对象存储加载来的 sealed 段（及其索引）——这些是<strong>派生态</strong>，权威副本一直在对象存储里。节点崩了，MixCoord 检测到拓扑变化，把这些段重新分派给其他（或新起的）query node，对象重新加载即可。</p>
+          <p>这正是“计算无状态”的实操含义：恢复一个计算节点 = 重新加载它本就该加载的段，不涉及任何数据找回。故障恢复和扩容因此是同一套机制。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：表里反复出现“真相只在底层、节点是派生态”。这句话的支点是存储层里那个 WAL——它凭什么能当“事实源”，让所有节点都甘当派生态？下一节专讲这条。</p>
+
+      <h2 id="s23"><span class="num">2.3</span><span>日志即事实源</span></h2>
+      <p class="one-liner">一条写入 append 到 WAL（write-ahead log，预写日志）那一刻即视为完成——WAL 是持久性的边界，不是某个具体节点。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>若“写成功”绑定在某个具体节点的内存上，那个节点崩了就要面对“到底写没写进去”的歧义。把持久性边界挪到一条独立的、顺序追加的日志上，写入与任何计算节点解耦：节点崩了，从 WAL 的 checkpoint（检查点，记录已处理到日志的哪个位置）往后重放即可恢复，不依赖崩掉的那台机器还活着。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：每条写入按 vchannel（逻辑写入流，见 <a href="01-concepts.html#s13">01 §1.3</a>）的顺序、带着 TSO 时间戳，append 进 WAL。这条日志是<strong>全局唯一的、有序的事实源</strong>；集群里其余一切状态都是“把这条日志重放出来”得到的派生态——growing 段是 streaming node 重放尚未 flush 的日志尾巴、sealed 段是 data node 把一段日志固化成 binlog 的产物。所以一条写入<strong>在落 WAL 的瞬间就已经持久且不可丢</strong>，与它后来有没有进对象存储、哪个节点在服务它，全部无关。这一点是 §2.4 写入路径的地基，也是“为什么节点能随意崩、随意加”的根本原因。2.6 在这里还做了一步关键演进：把日志本身做成<strong>云原生</strong>——新组件 <strong>Woodpecker</strong> 直接把日志 append 到对象存储，零本地盘、无需再运维一套 Pulsar/Kafka 集群。</p>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 写入持久性方案的取舍（为什么是“先写日志”而非“直接写节点”）</caption>
+        <thead><tr><th>方案</th><th>“写成功”意味着什么</th><th>为何 Milvus 不这么选 / 选它</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>直接写工作节点内存</td>
+            <td>数据进了某个节点的内存就算成功</td>
+            <td><strong>否决</strong>：持久性绑死在单点，该节点崩了写入有歧义、有丢失风险；恢复要靠节点自己还活着</td>
+          </tr>
+          <tr>
+            <td>同步刷盘到节点本地磁盘</td>
+            <td>落到处理节点的本地盘才算成功</td>
+            <td><strong>否决</strong>：把状态钉死在某台机器，破坏“计算无状态”，弹性伸缩与故障迁移全失效</td>
+          </tr>
+          <tr class="selected">
+            <td>先 append 到 WAL（事实源）</td>
+            <td>进了独立的、有序的日志即算成功</td>
+            <td><strong>选它</strong>：持久性与计算节点彻底解耦；任一节点崩了从 checkpoint 重放即恢复，节点纯派生态</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>WAL 这一层用什么实现，本身也是一组取舍。2.6 之前依赖外部消息队列（Pulsar 或 Kafka）做日志层；2.6 引入内置的 Woodpecker 把这块收进 Milvus 自己、直接架在对象存储上。两条路线的对照：</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · 日志层实现：外部 Pulsar/Kafka vs 内置 Woodpecker（2.6）</caption>
+        <thead><tr><th>维度</th><th>外部 Pulsar / Kafka</th><th>内置 Woodpecker（2.6）</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>部署形态</td>
+            <td>需独立运维一套消息队列集群（broker、ZooKeeper 等）</td>
+            <td>零额外集群，直接 append 到对象存储</td>
+          </tr>
+          <tr>
+            <td>本地磁盘</td>
+            <td>broker 依赖本地盘做持久化</td>
+            <td>零本地盘（zero-disk），持久层就是对象存储</td>
+          </tr>
+          <tr>
+            <td>运维与成本</td>
+            <td>多一套有状态中间件要扩容、调优、监控</td>
+            <td>少一层运维面，云上成本更贴近对象存储计价</td>
+          </tr>
+          <tr class="selected">
+            <td>定位</td>
+            <td>成熟、生态广，仍受支持的选项</td>
+            <td>2.6 主推的云原生默认路线，专为 WAL 这一访问模式设计</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界</span>
+        <p>像数据库的 WAL（redo log）：先把变更顺序写进日志、确认持久，再慢慢应用到数据文件；崩溃后靠重放日志恢复。边界在于：传统数据库的 WAL 通常是单机本地文件，而 Milvus 的 WAL 是<strong>分布式、按 vchannel 分流、带全局 TSO 排序</strong>的——它同时承担了“持久性边界”和“多节点之间的有序广播通道”两个角色。Kafka 用过的话，把它想成“带数据库 redo 语义的有序 topic”更贴切。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：既然落 WAL 即算持久，那一次 insert 从进 Proxy 到落 WAL、再到固化成 binlog，中间到底经过哪些手？下一节把这条路径一步步走完。</p>
+
+      <h2 id="s24"><span class="num">2.4</span><span>写入路径：一次 insert 的全程</span></h2>
+      <p class="one-liner">一次 insert 的路径：Proxy 校验并按主键哈希分流 → streaming node 分配 TSO 并 append 到 WAL（此刻已持久）→ growing 段 → flush 时 data node 固化成 binlog 落对象存储、段转 sealed。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>把前三节的概念串成一条可在脑子里跑的流水线，才能判断一次写入在每个时刻的真实状态：哪一刻算持久、哪一刻才可被索引检索、节点在哪一步介入。这条路径也是 04 章读路径与一致性判定的镜像——读要“看到所有 ≤ guarantee ts 的写”，就得先搞清写是怎么带着 TSO 落进来的。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制</strong>：路径上有一个最反直觉的分界点——<strong>持久性发生在“落 WAL”那一步，而不是“落对象存储”那一步</strong>。很多人下意识以为数据要写进 S3 才算安全，实际上 append 进 WAL 的瞬间就已不可丢；后续 flush 落 binlog 只是把它从“日志尾巴上的增量”固化成“可加载、可建索引的不可变文件”，是性能与可检索性的优化，不是持久性的获得时刻。再看分流：一条 insert 先按 <code>hash(主键)</code> 选定 shard → 进对应 vchannel；vchannel 映射到底层 WAL 的 pchannel（物理通道），每个 pchannel 由<strong>一个</strong> streaming node 持有读写——这就是 shard 数即写入并行度的由来（呼应 <a href="01-concepts.html#s13">01 §1.3</a>）。TSO 由 MixCoord 作为全局时钟统一发放，保证跨节点写入有一个全局可比较的时间序。</p>
+
+      <figure>
+        <svg viewBox="0 0 880 200" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="写入路径左到右流程：insert 经 Proxy、vchannel、WAL、growing 段、data node 落 binlog 到 sealed">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <rect x="14"  y="62" width="96"  height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="62"  y="86"  text-anchor="middle" class="node-label">insert</text>
+          <text x="62"  y="105" text-anchor="middle" class="edge-label">客户端</text>
+
+          <rect x="150" y="62" width="118" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="209" y="86"  text-anchor="middle" class="node-label">Proxy</text>
+          <text x="209" y="105" text-anchor="middle" class="edge-label">校验 · 分流</text>
+
+          <rect x="308" y="62" width="150" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="383" y="86"  text-anchor="middle" class="node-label-accent">WAL（落日志）</text>
+          <text x="383" y="105" text-anchor="middle" class="edge-label">分配 TSO · 已持久</text>
+
+          <rect x="498" y="62" width="138" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="567" y="86"  text-anchor="middle" class="node-label">growing 段</text>
+          <text x="567" y="105" text-anchor="middle" class="edge-label">内存 · 可追加</text>
+
+          <rect x="676" y="62" width="190" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="771" y="86"  text-anchor="middle" class="node-label">binlog → sealed</text>
+          <text x="771" y="105" text-anchor="middle" class="edge-label">落对象存储 · 不可变</text>
+
+          <line x1="110" y1="90" x2="150" y2="90" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <line x1="268" y1="90" x2="308" y2="90" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="288" y="50" text-anchor="middle" class="edge-label">vchannel</text>
+          <line x1="458" y1="90" x2="498" y2="90" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="478" y="50" text-anchor="middle" class="edge-label">streaming node</text>
+          <line x1="636" y1="90" x2="676" y2="90" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="656" y="50" text-anchor="middle" class="edge-label">data node · flush</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>一次 insert 的左→右路径：每个箭头标出经手方。<strong>注意</strong>：数据在“落 WAL”那一刻就已持久（红框），不是在“落对象存储”那一刻；后面的 flush→binlog 只是把它固化成可检索的不可变文件。</figcaption>
+      </figure>
+
+      <p>把每一步的状态拆开看，这条路径上有四个值得记住的时刻：</p>
+      <ul>
+        <li><strong>过 Proxy 时</strong>：仅完成校验（schema 合法性）与路由（<code>hash(主键)</code> 定 shard），数据还没持久，此刻进程崩了写入失败、需重试。</li>
+        <li><strong>append 进 WAL 时</strong>：streaming node 分配 TSO、做一致性检查、写入日志——<strong>此刻起数据不可丢</strong>，客户端可收到写入确认。</li>
+        <li><strong>进 growing 段时</strong>：数据驻留 streaming node 内存、可被实时查询，但只能暴力扫描（还没建索引，呼应 <a href="01-concepts.html#s14">01 §1.4</a>）。</li>
+        <li><strong>flush 后转 sealed 时</strong>：data node 把 growing 段固化成 binlog 落对象存储、段变只读不可变（呼应 <a href="01-concepts.html#s15">01 §1.5</a>），随后异步建索引，自此可被 query node 加载并走向量索引检索。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">最易错的一点</span>
+        <p>“写入确认”和“可被高效检索”是<strong>两个不同时刻</strong>，中间隔着整个 growing→sealed→indexed 的异步过程。从关系库迁移过来的工程师常默认“insert 返回成功 = 立刻能高效查到”，在 Milvus 里这不成立：返回成功只保证已落 WAL（持久），可见性还要看一致性级别（04 章），高效检索还要等 sealed+indexed。</p>
+      </div>
+
+      <h2 id="s25"><span class="num">2.5</span><span>Segment 生命周期与 compaction</span></h2>
+      <p class="one-liner">sealed 段是不可变 binlog；删除只写 tombstone（删除标记）到 delta binlog，空间要等 compaction 才真正回收。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>向量 binlog 设计成不可变，是为了让它能被任意 query node 安全地并发加载、缓存、共享，无需加锁。但不可变带来一个直接后果：数据没法原地删、原地改。删除因此退化成“追加一条删除标记”，再靠后台的 compaction 把标记和被删数据一起清掉、顺便把碎掉的小段合并——这是 01 §1.4 那张生命周期图里“只前进、靠 compaction 重走”的物理原因。</p>
+      </div>
+
+      <p><strong>比文档深一层的机制（比 01 深一层）</strong>：sealed 段的 binlog 一旦落盘就<strong>永不修改</strong>。一次删除（按主键删一行）不会去改那个 binlog，而是往该段对应的 <strong>delta binlog</strong> 追加一条 tombstone；检索时 query node 把 sealed 段的数据和 delta binlog 一起加载，<strong>在结果里过滤掉被标记删除的行</strong>——所以删除是“逻辑上立刻生效、物理上延迟回收”。被删行占的存储、以及越积越多的小段，由 <strong>compaction</strong> 统一处理：它把多个小段合并成大段、把 delta 里的删除真正落实（被删行不再写进新段），合并完旧段作废。compaction 由 MixCoord <strong>自动触发</strong>，常见阈值如某段的 delta 超过约 20% 行数、或 delta 体积超过约 10MB（具体阈值随版本配置变化）。</p>
+
+      <table class="compare-table">
+        <caption>表 2.4 · 不可变 binlog 带来的代价（痛点 → 设计回应）</caption>
+        <thead><tr><th>代价 / 痛点</th><th>根因</th><th>设计回应 / 缓解</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>写放大</td>
+            <td>删除/更新不能原地改，只能追加 tombstone，数据被重复写若干次</td>
+            <td>用顺序追加换并发只读的简单性；compaction 阶段一次性收敛</td>
+          </tr>
+          <tr>
+            <td>compaction 占资源</td>
+            <td>合并大段 + 重建索引是 CPU/IO 密集的离线活</td>
+            <td>放在独立的 data node 上、与查询路径隔离；MixCoord 按阈值调度，不抢在线查询资源</td>
+          </tr>
+          <tr>
+            <td>小段过多 → 查询扇出加重</td>
+            <td>每个 sealed 段各建一份索引，一次检索要在所有相关段上各跑一次再合并</td>
+            <td>compaction 合并小段降低段数；反过来也警示：手动频繁 flush 会制造小段风暴（呼应 01 §1.5）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界</span>
+        <p>和 LSM-tree（RocksDB/LevelDB）的 tombstone + compaction 几乎同构：删除先写墓碑、空间靠后台合并回收。边界在于：LSM 的 compaction 主要重排键的有序性，Milvus 的 compaction 还要<strong>重建被合并段的向量索引</strong>——多了一笔索引重算的成本。学过 RocksDB 的写放大问题，这里的取舍会很眼熟，只是又叠了一层“索引也要重来”。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>对一个有 1000 万行的 collection，按主键删掉其中 100 万行。删除调用返回成功的瞬间，对象存储里 binlog 占的空间会立刻减少吗？这些被删的行还会出现在检索结果里吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>空间<strong>不会立刻减少</strong>。删除只往 delta binlog 追加了 100 万条 tombstone，原 binlog 一字未动，存储占用反而<strong>短暂上升</strong>（多了 delta）。真正的回收要等 compaction 把这些段重写、被删行不再写进新段时才发生。</p>
+          <p>但被删的行<strong>不会再出现在检索结果里</strong>：query node 加载段时连 delta binlog 一起加载，在结果中把带 tombstone 的行过滤掉。所以是“逻辑立刻生效、物理延迟回收”——可见性与空间回收是两条独立的时间线。</p>
+        </details>
+      </div>
+
+      <h2 id="s26"><span class="num">2.6</span><span>把全章串起来：一个高频写入场景</span></h2>
+      <p class="one-liner">综合写入路径 + segment 状态 + 01 的 shard/partition，去推断一条数据在不同时刻的真实状态。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前五节各讲一个机制，真正的理解发生在把它们叠起来推一个具体场景的时候——什么时候持久、什么时候可被索引检索、为什么改 shard 数这么贵。这一节用一个贴近生产的场景把全章（以及 01 的 shard/segment）拧成一股。</p>
+      </div>
+
+      <p><strong>场景</strong>：一个日志检索 collection，设了 <strong>4 个 shard</strong>，按租户 ID 做 partition key。线上持续<strong>高频写入</strong>（每秒上千条），同时<strong>偶发查询</strong>（运维偶尔来搜相似日志）。围绕“一条刚写入的数据”，把全章串起来推这三问：</p>
+
+      <table class="compare-table">
+        <caption>表 2.5 · 同一条新数据，在三个关键时刻的真实状态</caption>
+        <thead><tr><th>时刻</th><th>它在哪 / 什么状态</th><th>能被检索吗 / 怎么检索</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>刚 append 进 WAL</td>
+            <td>已持久（事实源），在某个 vchannel 的日志尾巴上，由一个 streaming node 持有</td>
+            <td>已落定不可丢；可见性取决于一致性级别（04 章）</td>
+          </tr>
+          <tr>
+            <td>进了 growing 段</td>
+            <td>驻留该 streaming node 内存，可持续追加</td>
+            <td>能查，但只能<strong>暴力扫描</strong>（无索引），偶发查询下尚可接受</td>
+          </tr>
+          <tr class="selected">
+            <td>flush 后 sealed + indexed</td>
+            <td>固化成 binlog 落对象存储、不可变，索引就绪</td>
+            <td>由 query node 加载、走<strong>向量索引</strong>高效检索</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>顺着这张表，三个推断自然落地：</p>
+      <ul>
+        <li><strong>数据何时持久</strong>：落 WAL 那一刻（§2.3 / §2.4），不是落对象存储那一刻。高频写入下，绝大多数最新数据其实还在 growing 段、尚未 flush，但它们<strong>早已持久</strong>——崩了能从 WAL 重放。</li>
+        <li><strong>何时可被索引检索</strong>：要等 growing → sealed → flushed → indexed 走完（§2.5）。所以“偶发查询查最新日志偏慢”是预期内的——最新的还在 growing 段被暴力扫。持续高频写还会不停催生新 sealed 小段，加重查询扇出，正是 compaction 要去收敛的（表 2.4）。</li>
+        <li><strong>改 shard 数为何要重排</strong>：4 个 shard 绑定 4 个 vchannel→pchannel，每个 pchannel 由一个 streaming node 持有（§2.4，呼应 <a href="01-concepts.html#s13">01 §1.3</a>）。改 shard 数 = 改 <code>hash(主键)</code> 到通道的映射，已写入的数据所属的日志流要全部重新分配——等于重排整条 WAL 的分区，因此 shard 数建表定死、事后难改。partition（按租户裁剪查询）则可随时加，与此正交。</li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="label">承前启后</span>
+        <p>本章定义清楚的 TSO、streaming/query node、MixCoord、guarantee 之前的写入序，正是 <a href="04-search-and-consistency.html">04 章</a>读路径与一致性的输入：读要“看到所有 ≤ guarantee timestamp 的写”，靠的就是这里每条写入带着 TSO 落 WAL 的有序性。而每个 sealed 段“各建一份索引、检索时各跑一次再合并”里的索引内部，是 <a href="03-index-internals.html">03 章</a>的主线。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>Milvus 集群里，持久状态一共存在哪几处？给定这个答案，为什么说所有计算节点都是“无状态”的？</li>
+          <li>一次 insert 在哪一步算“已持久、不可丢”？这一步和“数据落进对象存储 binlog”是不是同一时刻？差别说明了什么？</li>
+          <li>2.6 相比早期 2.x，协调层和工作层各发生了一次什么方向相反的拓扑变化？各自的动机是什么？</li>
+          <li>（设计题）若把 WAL 换成“写入直接同步刷到处理节点的本地磁盘才算成功”，存算分离架构会在哪两个能力上崩掉？为什么 append 到独立日志能同时保住这两点？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>三处：<strong>etcd</strong>（schema/checkpoint/服务注册）、<strong>对象存储</strong>（binlog/索引/结果）、<strong>WAL</strong>（写入日志）。计算节点内存里的段全是这三处的<strong>派生态</strong>——能从对象存储重新加载、从 WAL 重放、从 etcd 重拉，丢了可重建，故称无状态。</li>
+            <li>在 <strong>append 进 WAL</strong> 那一步即算持久。它和“落对象存储 binlog”<strong>不是同一时刻</strong>：落 WAL 是持久性边界，落 binlog 只是把日志尾巴固化成可加载、可建索引的不可变文件（性能/可检索性优化）。差别说明持久性与具体节点、与对象存储都解耦了。</li>
+            <li>协调层做<strong>合并</strong>：原 root/query/data/index 四个 coordinator 合成一个 <strong>MixCoord</strong>（降低跨进程协调复杂度）；工作层做<strong>拆分</strong>：新增 <strong>streaming node</strong>，把流式写入与 growing 段查询从原混杂职责中独立出来（让分片级流式处理成为一等公民）。</li>
+            <li>会崩掉<strong>弹性伸缩</strong>和<strong>故障迁移</strong>两点：状态被钉死在某台机器的本地盘上，节点不再可随意增删、崩了数据找不回。append 到独立有序日志则把持久性从节点剥离——任一节点崩了从 checkpoint 重放即恢复，节点回到纯派生态，伸缩与迁移因此都成立。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>沿着写入路径反推一次故障恢复</h3>
+        <p>一个 collection 有 4 个 shard，正以每秒数千条的速度写入。某一刻，持有 shard-2 对应 pchannel 的那个 streaming node 进程崩溃，此时它内存里的 growing 段还没来得及 flush。</p>
+        <p>(a) shard-2 上“崩溃前一秒刚 append 的写入”丢了吗？依据是什么？(b) 接管的新 streaming node 要怎样把 shard-2 的 growing 段恢复出来、恢复到哪个位置为止？(c) 在这次崩溃和恢复期间，shard-0 / shard-1 / shard-3 的写入会受影响吗？为什么？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>(a) 想清楚“持久性边界在 WAL 还是在 growing 段内存”——崩的是持有内存段的节点，但日志在哪？(b) growing 段是“日志尾巴的派生态”，恢复 = 从某个位置开始重放 WAL；那个起点就是 checkpoint，终点是日志当前末尾。(c) 每个 shard 绑各自的 pchannel、由各自的 streaming node 持有——它们是不是共享命运？这正是把 collection 切成多 shard 在故障域上的收益。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://milvus.io/docs/architecture_overview.md">Milvus Architecture Overview</a>（官方架构总览）</li>
+          <li><a href="https://milvus.io/docs/four_layers.md">Storage/Compute Disaggregation &amp; Four Layers</a>（官方，存算分离与四层）</li>
+          <li><a href="https://milvus.io/docs/data_processing.md">Data Processing</a>（官方，写入/读取数据流与 segment 状态）</li>
+          <li><a href="https://milvus.io/blog/introduce-milvus-2-6.md">Milvus 2.6 发布说明</a>（MixCoord 合并、Streaming node、Woodpecker）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+        <a href="03-index-internals.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 索引内核</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 存储计算分离</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 四层架构</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 日志即事实源</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 写入路径</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 Segment 生命周期</a></li>
+        <li><a href="#s26" data-toc-target="s26">2.6 综合场景</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

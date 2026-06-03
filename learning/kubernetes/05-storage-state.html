@@ -1,0 +1,1248 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update <title>
+    3. Update the .learning-path breadcrumb (mark current chapter with .current)
+    4. Fill in <article> with chapter content using the reusable HTML
+       snippets defined in references/tutorial_template.md
+    5. Update sticky TOC links (aside.toc-sidebar > ul) to match in-article anchors
+    6. Update prev/next nav at bottom
+
+  Class names you'll use (full reference in tutorial_template.md):
+    .learning-path   .chapter-opener (now uses .chapter-label, not .numeral)
+    .schema-panel   .one-liner   .rationale   .annotations
+    .code-block (with .header > .filename .lang .copy)
+    .callout (.warning .tip .example .insight — only .warning shows accent)
+    .compare-table (tr.selected)
+    figure > svg > figcaption (figcaption > .fig-num)
+    .predict   details > summary
+    .self-check   .challenge   .references   .chapter-nav
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>存储与状态：控制循环的又一次复用 · Kubernetes 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 对象模型</a><span class="sep">—</span>
+    <a href="02-control-loop.html">02 控制循环</a><span class="sep">—</span>
+    <a href="03-scheduling.html">03 调度与资源</a><span class="sep">—</span>
+    <a href="04-networking.html">04 网络模型</a><span class="sep">—</span>
+    <a href="05-storage-state.html" class="current">05 存储与状态</a><span class="sep">—</span>
+    <a href="06-frontier.html">06 现状与前沿</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 05</p>
+        <h1>存储与状态：控制循环的又一次复用</h1>
+        <p class="recap">前几章的对象大多无状态、可替换。这一章讲 K8s 如何处理配置与持久状态——你会看到核心模式仍是第 2 章的控制循环，只是换了主角: PVC 是期望、PV 是供给，又一个 reconcile 把它们绑在一起。</p>
+      </header>
+
+      <section class="schema-panel" id="schema-panel">
+        <p class="label">本章脉络</p>
+        <ul>
+          <li>ConfigMap/Secret 改了为什么不会自动生效</li>
+          <li>PV(供给) / PVC(申领) 的绑定就是一次 reconcile</li>
+          <li>StorageClass 与动态供给</li>
+          <li>StatefulSet 给 Pod 稳定身份，Deployment 不行</li>
+          <li>用 Deployment 跑有状态应用为什么会出事</li>
+        </ul>
+      </section>
+
+      <p>第 2 章给出了贯穿全书的那把钥匙: Kubernetes 是一组 <strong>level-triggered 的控制循环</strong>——每个控制器读取「期望状态」与「实际状态」，算出差异，朝期望收敛(reconcile)，然后再读一遍。无状态对象(Deployment/ReplicaSet/Pod)是这套机制最干净的展示场。本章把同一把钥匙插进一把看似不同的锁: <strong>配置注入</strong>与<strong>持久存储</strong>。结论先摆出来——存储并不是另起炉灶的新机制，PVC 与 PV 的绑定<em>本身就是又一个 reconcile 循环</em>。把这一点看穿，本章的大半内容就只是第 2 章的换皮复述。</p>
+
+      <!-- ════════════════════════ §5.1 ════════════════════════ -->
+      <h2 id="s51"><span class="num">5.1</span><span>配置注入与「改了不生效」的失败模式</span></h2>
+
+      <p class="one-liner">ConfigMap/Secret 把配置从镜像里剥离出来，通过环境变量或挂载卷注入容器；但注入方式决定了它改了之后会不会生效。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>把数据库地址、日志级别、密钥直接烤进镜像，意味着每改一个值就要重新构建、重新推送镜像，且同一镜像无法跨环境复用。ConfigMap(明文配置) 与 Secret(敏感数据，base64 编码 + 可选静态加密) 把这些值抽成独立对象，让镜像保持环境无关。注入有两条路: 写进容器的<strong>环境变量</strong>，或挂成一个<strong>卷</strong>，把每个 key 变成一个文件。</p>
+      </div>
+
+      <p>两种注入方式的代码形态如下——同一个 ConfigMap，既可以摊平成环境变量，也可以挂成目录里的文件。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">configmap-inject.yaml</span>
+          <span class="lang">yaml</span>
+          <button class="copy" data-copy-target="code-cm-inject">复制</button>
+        </div>
+<pre><code id="code-cm-inject" class="language-yaml">apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  LOG_LEVEL: "info"
+  config.yaml: |
+    server:
+      timeout: 30s
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web
+spec:
+  containers:
+    - name: app
+      image: myapp:1.0
+      env:                          # 路线 A：注成环境变量
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: LOG_LEVEL
+      volumeMounts:                 # 路线 B：挂成卷（文件）
+        - name: cfg
+          mountPath: /etc/app
+  volumes:
+    - name: cfg
+      configMap:
+        name: app-config</code></pre>
+      </div>
+
+      <p>差别在于<strong>生效时机</strong>，而这正是第 2 章控制循环视角能一眼看穿的地方。</p>
+
+      <p><strong>环境变量在容器启动那一刻只读一次。</strong> kubelet 创建容器时把 <code>LOG_LEVEL</code> 的值固化进进程环境，此后这个值就是进程内存里的一个常量。现在去 <code>kubectl edit configmap app-config</code> 把它改成 <code>debug</code>——什么都不会发生。关键在于: 改 ConfigMap <strong>没有改动任何 Pod 的 spec 字段</strong>。Deployment 控制器盯的是 Pod 模板的 spec，spec 没变，diff 为空,reconcile 认为「实际已等于期望」,于是不滚动、不重建 Pod。运行中的容器里那个环境变量,纹丝不动。</p>
+
+      <p><strong>挂载成卷的 key 文件<em>会</em>更新</strong>——但只更新到一半。kubelet 有一个周期性的同步循环，会把 ConfigMap 的新内容刷新到挂载卷的文件里(通过原子替换符号链接，存在最长约一分钟的传播延迟)。所以 <code>/etc/app/config.yaml</code> 的<em>文件内容</em>确实变了。可应用进程通常是在启动时把配置文件读进内存就不再回看——文件变了，进程内的配置没变。除非应用自己实现了 watch/inotify 或 SIGHUP 重载，否则新值同样躺在磁盘上睡大觉。</p>
+
+      <div class="callout warning">
+        <span class="label">失败模式 · 改了 ConfigMap 却不生效</span>
+        <p>改完 ConfigMap/Secret 后,运行中的 Pod 行为不变,日志级别还是旧的。根因不是「同步太慢」,而是<strong>这次修改根本没触动 reconcile</strong>: 控制器只对 <em>Pod spec 的变化</em>做出反应,而改 ConfigMap 不改 Pod spec→diff 为空→不滚动。三种修复(按显式程度排序): ① <code>kubectl rollout restart deployment/web</code> 强制滚动一轮,让新 Pod 在启动时读到新值; ② 在 Pod 模板里加一个内容哈希注解(如 <code>checksum/config: &lt;sha256&gt;</code>),配置一变哈希就变→Pod spec 真的变了→<em>自动</em>触发滚动; ③ 部署 <a href="https://github.com/stakater/Reloader">Reloader</a> 这类控制器,它 watch ConfigMap/Secret 并自动给关联工作负载打滚动。三者的共同本质都是「制造一个 spec 变化让控制循环重新跑」。</p>
+      </div>
+
+      <p>方案 ② 的哈希注解值得单独点出,因为它把失败模式的成因直接翻译成了修复手段: 既然 reconcile 只认 spec 变化,那就让配置的内容参与到 spec 里去。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">checksum-annotation.yaml</span>
+          <span class="lang">yaml</span>
+          <button class="copy" data-copy-target="code-checksum">复制</button>
+        </div>
+<pre><code id="code-checksum" class="language-yaml">spec:
+  template:
+    metadata:
+      annotations:
+        # 配置内容的哈希；ConfigMap 一改，这个值就变，
+        # Pod 模板的 spec 随之改变 → 自动触发滚动更新
+        checksum/config: "5d41402abc4b2a76b9719d911017c592"</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个 Secret 同时被「环境变量」和「挂载卷」两种方式注入同一个容器。你更新了这个 Secret。容器里通过这两条路径看到的值,会出现什么不一致?</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>环境变量路径: 值<strong>完全不变</strong>——它在容器启动时已固化,更新 Secret 不改 Pod spec、不触发重建,进程内的环境变量是个常量。</p>
+          <p>挂载卷路径: 对应的 key <strong>文件内容会被刷新</strong>(kubelet 同步循环,最长约一分钟延迟),但应用是否「看见」取决于它会不会重新读文件。</p>
+          <p>于是同一个容器内出现分裂: <code>env</code> 里是旧值、<code>/etc/secret/...</code> 文件里是新值。这正是「注入方式决定生效时机」的直接后果,也是把环境变量当作可热更新配置会踩的陷阱。彻底对齐两条路径的唯一可靠手段,仍是触发一次滚动(rollout restart 或哈希注解)。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════ §5.2 ════════════════════════ -->
+      <h2 id="s52"><span class="num">5.2</span><span>Volume 与 PV/PVC 绑定: 存储就是又一次 reconcile</span></h2>
+
+      <p class="one-liner">PV 是「一块已存在或可被供给的存储」(供给),PVC 是「应用对存储的申领」(期望);一个控制平面循环把二者按容量、访问模式、StorageClass 一对一双向绑定——这跟第 2 章的控制循环是<em>同一个模式</em>。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>容器的文件系统随容器销毁而消失;Pod 又是可被随时杀掉重建的。要让数据活过 Pod 的生命周期,就需要把存储抽象成独立于 Pod 的对象。但这里有个职责分裂: <em>管什么样的存储</em>(NFS、云盘、本地盘——是集群管理员的事)与<em>要多大、什么访问模式</em>(应用开发者的事)应当解耦。K8s 用一对对象切开这道缝: <strong>PV</strong>(PersistentVolume,代表一块真实存储,由管理员预备或动态生成)是<em>供给侧</em>; <strong>PVC</strong>(PersistentVolumeClaim,声明「需要 10Gi、RWO」)是<em>期望侧</em>。应用只跟 PVC 打交道,不关心背后是哪块盘。</p>
+      </div>
+
+      <p>把这两个对象并排看,第 2 章的句式立刻浮出来: <strong>PVC 是期望状态、PV 是实际供给,中间缺的那一步——撮合——正是一个 reconcile 循环干的活。</strong> 这个循环叫 PV 控制器(PersistentVolume controller),它的工作和 Deployment 控制器在结构上一模一样: 读一批未绑定的 PVC(期望) 与一批可用的 PV(实际),按规则算出哪个 PV 满足哪个 PVC,然后把它们绑定(写入双向引用),再循环。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="PVC 与 PV 的绑定是一个 reconcile 循环：左 PVC 期望、中绑定控制器撮合、右 PV 实际">
+          <defs>
+            <marker id="ar-ink-51" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm-51" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- left: PVC (期望) -->
+          <rect x="40" y="110" width="150" height="68" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="138" text-anchor="middle" class="node-label">PVC</text>
+          <text x="115" y="157" text-anchor="middle" class="edge-label">期望: 10Gi · RWO</text>
+          <text x="115" y="96" text-anchor="middle" class="edge-label">应用申领</text>
+
+          <!-- center: binding controller (reconcile) -->
+          <rect x="270" y="104" width="160" height="80" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="350" y="134" text-anchor="middle" class="node-label-accent">绑定控制器</text>
+          <text x="350" y="153" text-anchor="middle" class="edge-label">reconcile: 撮合</text>
+          <text x="350" y="169" text-anchor="middle" class="edge-label">期望 ↔ 供给</text>
+
+          <!-- right: PV (实际) -->
+          <rect x="510" y="110" width="150" height="68" rx="6" class="diagram-ink node-fill"/>
+          <text x="585" y="138" text-anchor="middle" class="node-label">PV</text>
+          <text x="585" y="157" text-anchor="middle" class="edge-label">实际: 某块磁盘</text>
+          <text x="585" y="96" text-anchor="middle" class="edge-label">管理员/动态供给</text>
+
+          <!-- PVC -> controller -->
+          <line x1="190" y1="144" x2="270" y2="144" class="diagram-ink" marker-end="url(#ar-ink-51)"/>
+          <!-- controller -> PV -->
+          <line x1="430" y1="144" x2="510" y2="144" class="diagram-ink" marker-end="url(#ar-ink-51)"/>
+          <!-- bind: bidirectional ClaimRef, drawn as accent line below -->
+          <line x1="190" y1="200" x2="510" y2="200" class="diagram-accent"
+                marker-start="url(#ar-verm-51)" marker-end="url(#ar-verm-51)"/>
+          <text x="350" y="218" text-anchor="middle" class="branch-label">双向绑定 · ClaimRef</text>
+
+          <!-- phase annotation -->
+          <text x="350" y="255" text-anchor="middle" class="edge-label">相位: Available → Bound</text>
+          <text x="350" y="276" text-anchor="middle" class="edge-label">(回收后 → Released)</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>PVC↔PV 的绑定是一个 reconcile 循环: 期望(PVC) 与供给(PV) 由绑定控制器撮合。<strong>注意</strong>: 这跟第 2 章的控制循环是<em>同一个模式</em>——期望与实际供给的撮合,不是存储专属的特例。</figcaption>
+      </figure>
+
+      <p>撮合的判据是几个硬约束的交集,绑定必须<strong>同时</strong>满足:</p>
+      <ul>
+        <li><strong>容量</strong>: PV 的 <code>capacity</code> ≥ PVC 申请的容量。</li>
+        <li><strong>访问模式</strong>: PV 支持的 <code>accessModes</code> 覆盖 PVC 要求的——<code>RWO</code>(ReadWriteOnce,单节点读写)、<code>ROX</code>(ReadOnlyMany)、<code>RWX</code>(ReadWriteMany)。</li>
+        <li><strong>StorageClass</strong>: 两者的 <code>storageClassName</code> 必须一致。</li>
+        <li><strong>选择器/卷模式</strong>等其余约束(如有)也要匹配。</li>
+      </ul>
+
+      <p>绑定一旦达成,就是<strong>一对一且排他</strong>的: PV 的 <code>spec.claimRef</code> 指回那个 PVC,PVC 的 <code>spec.volumeName</code> 指向那个 PV——双向引用焊死,别的 PVC 再也绑不上这个 PV。这正是「一块盘只能被一个申领占用」在对象层面的实现。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">pv-pvc-bind.yaml</span>
+          <span class="lang">yaml</span>
+          <button class="copy" data-copy-target="code-pv-pvc">复制</button>
+        </div>
+<pre><code id="code-pv-pvc" class="language-yaml">apiVersion: v1
+kind: PersistentVolume           # 供给侧：实际存在的一块存储
+metadata:
+  name: pv-data
+spec:
+  capacity:
+    storage: 20Gi
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  # ...底层来源（nfs / hostPath / csi ...）
+---
+apiVersion: v1
+kind: PersistentVolumeClaim      # 期望侧：应用的申领
+metadata:
+  name: data-claim
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi              # 要 10Gi，pv-data 的 20Gi 能满足 → 绑定</code></pre>
+      </div>
+
+      <p>PV 的生命周期是一台明确的状态机,相位(<code>status.phase</code>) 在控制循环的推动下流转:</p>
+      <ul>
+        <li><strong>Available</strong>: 空闲,等待被某个 PVC 绑定。</li>
+        <li><strong>Bound</strong>: 已与一个 PVC 绑定,正被使用。</li>
+        <li><strong>Released</strong>: 绑定它的 PVC 被删了,但 PV 上的数据还没按回收策略(<code>persistentVolumeReclaimPolicy</code>: Retain/Delete) 处理,因此<em>尚不可</em>被重新绑定。</li>
+        <li><strong>Failed</strong>: 自动回收过程出错。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">回扣第 2 章</span>
+        <p>相位流转不是定时脚本驱动的,而是 level-triggered: 控制器每轮都重新观察 PVC 与 PV 的当前状态,与期望比对,把 PV 朝正确的相位推进。删掉一个 PVC,下一轮 reconcile 观察到「绑定它的 PVC 不见了」,于是把 PV 置为 Released——和 Deployment 观察到「副本少了一个」就补一个,是<em>字面意义上的同一套机制</em>。存储没有发明新范式,它复用了门槛。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>集群里有一个 50Gi、<code>RWO</code> 的 Available PV。你提交一个申请 10Gi、<code>RWX</code> 的 PVC。它会绑上这个 PV 吗?</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>不会。容量这一项满足(50Gi ≥ 10Gi),但<strong>访问模式不满足</strong>: PV 只支持 <code>RWO</code>(单节点读写),而 PVC 要求 <code>RWX</code>(多节点读写)。绑定要求所有约束的交集,任何一项不满足都不绑。这个 PVC 会停在 <code>Pending</code>,直到出现一个支持 <code>RWX</code> 且容量足够、StorageClass 匹配的 PV(或由动态供给造出一个)。这也说明: 访问模式不是「建议」,是绑定撮合的硬条件——它直接决定了 §5.5 那个多副本争用的失败模式。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════ §5.3 ════════════════════════ -->
+      <h2 id="s53"><span class="num">5.3</span><span>StorageClass 与动态供给</span></h2>
+
+      <p class="one-liner">没有人工预备 PV 时,PVC 指定一个 StorageClass,provisioner 按需即时创建出一块 PV 再绑定——把「先备货」变成「按订单生产」。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§5.2 默认了一个前提: 集群里已经躺着一批管理员手工建好的 PV,等着被 PVC 认领(静态供给)。在几百个应用、存储需求各异的真实集群里,这套「先备货」既繁琐又浪费——预备多了闲置,预备少了 PVC 卡在 Pending。<strong>StorageClass</strong> 把它翻成「按订单生产」: 它描述一类存储「怎么造」(用哪个 provisioner、什么参数、什么回收策略),PVC 只要写上 <code>storageClassName</code>,就等于下了一张订单。</p>
+      </div>
+
+      <p>动态供给把绑定循环又拆细了一层。当一个 PVC 指定了 StorageClass 而集群里没有现成 PV 能满足它时,流程是:</p>
+      <ul>
+        <li>PVC 提交,带 <code>storageClassName: fast-ssd</code>,此刻没有匹配的 Available PV。</li>
+        <li>该 StorageClass 指定的 <strong>provisioner</strong>(通常是一个 CSI 驱动)观察到这个待供给的 PVC。</li>
+        <li>provisioner 真的去后端(云厂商 API、存储阵列等)<em>即时创建</em>一块满足规格的盘,并据此生成一个对应的 PV 对象。</li>
+        <li>新 PV 一出现,§5.2 那个绑定循环立刻把它和 PVC 绑上。PVC 从 Pending 转为 Bound。</li>
+      </ul>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">storageclass-dynamic.yaml</span>
+          <span class="lang">yaml</span>
+          <button class="copy" data-copy-target="code-sc">复制</button>
+        </div>
+<pre><code id="code-sc" class="language-yaml">apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ssd
+provisioner: ebs.csi.aws.com         # 由谁来「造盘」
+parameters:
+  type: gp3
+reclaimPolicy: Delete                # PVC 删除后，连同盘一起删
+volumeBindingMode: WaitForFirstConsumer   # 等 Pod 被调度后再供给（见下）
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-claim
+spec:
+  storageClassName: fast-ssd         # 下订单：没有现成 PV 就动态造一个
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi</code></pre>
+      </div>
+
+      <p><strong>代价与一个关键参数。</strong> 动态供给把存储的创建权交给了 provisioner,便利的反面是: 这些盘通常是真实计费资源,<code>reclaimPolicy: Delete</code> 意味着删 PVC 会连数据盘一起删掉(对数据库这类场景应改用 <code>Retain</code>)。另一个常被忽略的参数是 <code>volumeBindingMode</code>: 默认 <code>Immediate</code> 会在 PVC 一提交就立刻供给——可此时 Pod 还没调度,造出的盘会落在一个未必能被 Pod 触达的可用区,导致后续挂载失败。<code>WaitForFirstConsumer</code> 把供给推迟到 Pod 被调度之后,让存储跟着 Pod 的落点走——这又一次呼应了第 3 章调度与第 4 章拓扑: 各控制循环的决策彼此牵连。</p>
+
+      <!-- ════════════════════════ §5.4 ════════════════════════ -->
+      <h2 id="s54"><span class="num">5.4</span><span>StatefulSet vs Deployment: 谁给 Pod 稳定身份</span></h2>
+
+      <p class="one-liner">Deployment 的 Pod 是可互换的、躲在一个 ReplicaSet 后、共享同一个 PVC;StatefulSet 给每个 Pod 稳定且唯一的身份——序号、主机名、专属 PVC——并按序操作。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Deployment 的整个设计前提是「Pod 可互换」: 三个副本是三个无差别的克隆,谁挂了换一个新的、名字随机、共享同一份后端,毫无影响——这对无状态 Web 服务完美。但数据库、消息队列、共识集群这类<em>有状态</em>应用打破了这个前提: 每个实例有自己的那份磁盘数据(MySQL 主从各存各的)、靠稳定的网络身份互相寻址(<code>mysql-0</code> 是主、其余是从)、升级时必须按确定顺序逐个来(先从后主)。Deployment 一样都给不了。<strong>StatefulSet</strong> 就是为「每个 Pod 都是一个有名有姓、带着自己存储的个体」而生的工作负载。</p>
+      </div>
+
+      <p>两者的机制差异集中在<strong>身份</strong>这一个词上。Deployment → ReplicaSet → Pod 这条链里,Pod 名字是随机后缀(如 <code>web-7d9f8-x2k4p</code>),挂了重建就换一个全新名字,所有副本通过 Service 共享一个负载均衡入口、且常常共用同一个 PVC。StatefulSet 则给每个 Pod 一套<em>黏在它身上、跨重建保持不变</em>的身份:</p>
+      <ul>
+        <li><strong>有序序号 + 稳定主机名</strong>: 副本被命名为 <code>web-0</code>、<code>web-1</code>……<code>web-(N-1)</code>。<code>web-0</code> 挂了重建,新 Pod 仍叫 <code>web-0</code>。</li>
+        <li><strong>每 Pod 专属 PVC</strong>: 通过 <code>volumeClaimTemplates</code>,StatefulSet 为每个 Pod <em>单独</em>创建一个 PVC(<code>data-web-0</code>、<code>data-web-1</code>……),Pod 重建后<em>重新绑回自己原来那一个</em>,数据不丢、不混。</li>
+        <li><strong>有序滚动</strong>: 创建按 0→N-1 顺序、删除按 N-1→0 逆序、升级逐个进行,保证集群成员关系的有序变更。</li>
+        <li><strong>配合 headless Service</strong>: <code>clusterIP: None</code> 的 Service 不做负载均衡,而是为每个 Pod 提供一个稳定 DNS 名(<code>web-0.svc...</code>),让成员之间能点对点寻址。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 700 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Deployment 三个相同 Pod 共享一个 PVC，StatefulSet 三个有名 Pod 各带专属 PVC">
+          <defs>
+            <marker id="ar-ink-52" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm-52" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ============ TOP ROW: Deployment ============ -->
+          <text x="30" y="40" class="edge-label" font-weight="700">DEPLOY</text>
+          <text x="30" y="56" class="edge-label">可互换</text>
+
+          <!-- three identical pods, random names -->
+          <rect x="130" y="24" width="120" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="190" y="46" text-anchor="middle" class="node-label">Pod</text>
+          <text x="190" y="62" text-anchor="middle" class="edge-label">web-x2k4p</text>
+
+          <rect x="290" y="24" width="120" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="46" text-anchor="middle" class="node-label">Pod</text>
+          <text x="350" y="62" text-anchor="middle" class="edge-label">web-9fhz2</text>
+
+          <rect x="450" y="24" width="120" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="510" y="46" text-anchor="middle" class="node-label">Pod</text>
+          <text x="510" y="62" text-anchor="middle" class="edge-label">web-pl7nq</text>
+
+          <!-- one shared PVC -->
+          <rect x="290" y="120" width="120" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="350" y="142" text-anchor="middle" class="node-label-accent">1 个 PVC</text>
+          <text x="350" y="158" text-anchor="middle" class="edge-label">共享</text>
+
+          <!-- all three pods -> shared PVC -->
+          <line x1="190" y1="70" x2="320" y2="120" class="diagram-ink" marker-end="url(#ar-ink-52)"/>
+          <line x1="350" y1="70" x2="350" y2="120" class="diagram-ink" marker-end="url(#ar-ink-52)"/>
+          <line x1="510" y1="70" x2="380" y2="120" class="diagram-ink" marker-end="url(#ar-ink-52)"/>
+
+          <!-- divider -->
+          <line x1="30" y1="195" x2="670" y2="195" class="diagram-soft"/>
+
+          <!-- ============ BOTTOM ROW: StatefulSet ============ -->
+          <text x="30" y="240" class="edge-label" font-weight="700">STS</text>
+          <text x="30" y="256" class="edge-label">有稳定身份</text>
+
+          <!-- three named pods -->
+          <rect x="130" y="224" width="120" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="190" y="251" text-anchor="middle" class="node-label">web-0</text>
+
+          <rect x="290" y="224" width="120" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="251" text-anchor="middle" class="node-label">web-1</text>
+
+          <rect x="450" y="224" width="120" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="510" y="251" text-anchor="middle" class="node-label">web-2</text>
+
+          <!-- each own PVC -->
+          <rect x="130" y="300" width="120" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="190" y="322" text-anchor="middle" class="node-label-accent">data-web-0</text>
+          <text x="190" y="338" text-anchor="middle" class="edge-label">专属</text>
+
+          <rect x="290" y="300" width="120" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="350" y="322" text-anchor="middle" class="node-label-accent">data-web-1</text>
+          <text x="350" y="338" text-anchor="middle" class="edge-label">专属</text>
+
+          <rect x="450" y="300" width="120" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="510" y="322" text-anchor="middle" class="node-label-accent">data-web-2</text>
+          <text x="510" y="338" text-anchor="middle" class="edge-label">专属</text>
+
+          <!-- each pod -> its own PVC (1:1, vertical) -->
+          <line x1="190" y1="270" x2="190" y2="300" class="diagram-accent" marker-end="url(#ar-verm-52)"/>
+          <line x1="350" y1="270" x2="350" y2="300" class="diagram-accent" marker-end="url(#ar-verm-52)"/>
+          <line x1="510" y1="270" x2="510" y2="300" class="diagram-accent" marker-end="url(#ar-verm-52)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>同样跑 3 副本,身份模型截然不同。<strong>注意</strong>: 上排 Deployment 的 Pod 名字随机、可互换、共享一个 PVC;下排 StatefulSet 的每个 Pod 名字稳定(web-0/1/2) 且各绑一个专属 PVC——重建后 web-0 仍绑回 data-web-0。</figcaption>
+      </figure>
+
+      <p>对应的声明里,<code>volumeClaimTemplates</code> 是 StatefulSet 独有的字段——它不是「一个 PVC」,而是「一张为每个副本各印一份 PVC 的模板」。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">statefulset.yaml</span>
+          <span class="lang">yaml</span>
+          <button class="copy" data-copy-target="code-sts">复制</button>
+        </div>
+<pre><code id="code-sts" class="language-yaml">apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: web
+spec:
+  serviceName: web-headless        # 配合 headless Service（clusterIP: None）
+  replicas: 3
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: app
+          image: myapp:1.0
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/data
+  volumeClaimTemplates:            # 关键：为每个 Pod 各建一个 PVC
+    - metadata:
+        name: data                 # → data-web-0, data-web-1, data-web-2
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: fast-ssd
+        resources:
+          requests:
+            storage: 10Gi</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个 3 副本的 StatefulSet,<code>web-1</code> 所在节点宕机,Pod 被重建到另一个节点。它会拿到一块新的空盘,还是原来那份数据?</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>原来那份数据。<code>web-1</code> 的 PVC 是 <code>data-web-1</code>,这个 PVC 对象<em>独立于 Pod 存在</em>,Pod 重建时 StatefulSet 让新的 <code>web-1</code> 重新绑回 <code>data-web-1</code>(进而绑回那个 PV、那块盘)。这正是「稳定身份」里最关键的一半: 不只是名字稳定,<strong>名字和它专属的那份存储是焊在一起的</strong>。前提是底层卷支持跨节点重新挂载(对 <code>RWO</code> 云盘要求新旧节点在同一可用区,这也是 §5.3 用 <code>WaitForFirstConsumer</code> 的原因)。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════ §5.5 ════════════════════════ -->
+      <h2 id="s55"><span class="num">5.5</span><span>失败模式: 用 Deployment 跑有状态应用</span></h2>
+
+      <p class="one-liner">给一个多副本 Deployment 挂一块 RWO 的 PVC,等于让所有副本去抢同一块只能单节点挂载的盘——结果是 Pod 卡住、调度受限、或数据互相覆盖。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它(看清这个失败模式)</span>
+        <p>这是把 §5.4 的机制差异忽视后最常见的事故。Deployment 的 Pod 模板对所有副本是<em>同一份</em>: 模板里引用哪个 PVC,三个副本就都引用同一个 PVC、同一块底层卷。当这块卷是 <code>RWO</code>(绝大多数云盘的默认且唯一可靠模式) 时,「只能被单个节点挂载读写」的物理约束就和「多个副本分散在多个节点」直接冲突。</p>
+      </div>
+
+      <p>把副本数从 1 调到 3,会按底层卷类型走向以下几种结局,无一是好的:</p>
+      <ul>
+        <li><strong>第 2、3 个副本卡在 ContainerCreating。</strong> 它们被调度到了别的节点,而 RWO 卷已被第一个副本所在节点独占挂载,新节点 attach 失败,Pod 永远起不来。</li>
+        <li><strong>调度被强行挤到同一节点。</strong> 若靠亲和性把副本都摁在 RWO 卷所在的那个节点,就失去了多副本的容灾意义——节点一挂全挂,且单节点资源成为天花板。</li>
+        <li><strong>数据互相覆盖(最危险)。</strong> 万一卷是 <code>RWX</code> 或某些文件系统允许多挂载,几个并不为并发写设计的应用进程同时往同一份文件/数据目录写,没有协调,数据损坏。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">失败模式 · Deployment + RWO PVC + 多副本</span>
+        <p>表象多变(Pod Pending、挂载报错、或数据诡异损坏),根因唯一: <strong>Deployment 假设副本无差别、共享后端,而有状态应用要求每副本独占自己的存储与身份</strong>。这不是调参能救的——加内存、改亲和性都只是绕。正解是换工作负载类型: 用 <strong>StatefulSet</strong>,靠 <code>volumeClaimTemplates</code> 给每个副本发一个<em>独立</em>的 PVC(<code>data-web-0/1/2</code>),每个副本独占自己的卷,从根上消除争用。判断口诀: <em>实例之间是否需要各存各的数据 / 各有各的身份</em>——只要答案是「是」,就不该用 Deployment。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>Deployment vs StatefulSet · 四维对照</caption>
+        <thead>
+          <tr><th>维度</th><th>Deployment</th><th>StatefulSet</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>身份</td>
+            <td>随机名、可互换;副本无差别</td>
+            <td>稳定序号 + 主机名(web-0…N-1),跨重建不变</td>
+          </tr>
+          <tr class="selected">
+            <td>存储</td>
+            <td>模板共享 → 所有副本指向<em>同一个</em> PVC</td>
+            <td><code>volumeClaimTemplates</code> → 每副本一个<em>专属</em> PVC</td>
+          </tr>
+          <tr>
+            <td>滚动顺序</td>
+            <td>无序、可并行替换</td>
+            <td>有序: 创建 0→N-1、删除逆序、逐个升级</td>
+          </tr>
+          <tr>
+            <td>网络</td>
+            <td>普通 Service 做负载均衡,共享入口</td>
+            <td>headless Service,每 Pod 一个稳定 DNS 名</td>
+          </tr>
+          <tr>
+            <td>适用场景</td>
+            <td>无状态服务: Web、API、无状态 worker</td>
+            <td>有状态服务: 数据库、消息队列、共识集群</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>把本章收束回那条贯穿全书的主线: 配置注入的「改了不生效」、PV/PVC 的绑定、StatefulSet 的有序操作——<strong>没有一个引入了新范式</strong>。它们都是同一组 level-triggered 控制循环在不同对象上的展开: 控制器观察期望与实际、算差异、收敛、再观察。存储只是又一次 reconcile;有状态只是给参与 reconcile 的对象加了「身份」这一约束。第 2 章那把钥匙,到这里依然是同一把。</p>
+
+      <!-- ════════════════════════ self-check ════════════════════════ -->
+      <section class="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>用环境变量注入的 ConfigMap,改了值之后为什么运行中的 Pod 不生效?这件事和「控制器只对 spec 变化做出反应」有什么关系?</li>
+          <li>PVC 和 PV 分别对应控制循环里的哪一侧(期望 / 实际)?把它们绑起来的是什么,这个动作和第 2 章的 reconcile 是不是同一个模式?</li>
+          <li>(设计层)为什么数据库应该用 StatefulSet 而不是 Deployment?从「身份」和「存储」两个维度各给一条理由。</li>
+          <li>(设计层)一个 PVC 申请 <code>RWX</code>,集群里只有 <code>RWO</code> 的 Available PV,绑定会发生吗?这对「多副本共享存储」的设计意味着什么?</li>
+        </ol>
+        <details>
+          <summary>展开参考答案</summary>
+          <p><strong>1.</strong> 环境变量在容器启动时只读一次、固化进进程;改 ConfigMap 不改动任何 Pod spec 字段,diff 为空,reconcile 不滚动、不重建,进程里的值就不变。修复手段(rollout restart / 哈希注解 / Reloader) 本质都是「制造一次 spec 变化」让控制循环重新跑。</p>
+          <p><strong>2.</strong> PVC = 期望(应用申领多少、什么模式),PV = 实际供给(真实存在的一块盘)。绑定它们的是 PV 控制器,它读未绑定的 PVC 与可用 PV、按容量/访问模式/StorageClass 撮合、写双向引用——这与 Deployment 控制器把副本数收敛到期望是字面意义上的同一套 level-triggered 机制。</p>
+          <p><strong>3.</strong> 身份维度: 数据库实例要靠稳定网络名互相寻址(谁是主、谁是从),StatefulSet 给 web-0…N-1 稳定主机名,Deployment 的随机名做不到。存储维度: 每个数据库实例存各自的数据,StatefulSet 用 <code>volumeClaimTemplates</code> 给每副本发专属 PVC,Deployment 让所有副本共享一个 PVC,数据会争用/覆盖。</p>
+          <p><strong>4.</strong> 不会绑——访问模式是绑定的硬约束,<code>RWO</code> 的 PV 满足不了 <code>RWX</code> 的申领,PVC 停在 Pending。这意味着「多副本共享同一块存储」在 RWO 卷上根本不成立;要么用支持 <code>RWX</code> 的存储(如 NFS/CephFS),要么改用 StatefulSet 让每副本各持一块 RWO 卷——后者通常才是正解。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>把副本数从 1 调到 3,哪里会出问题?</h3>
+        <p>你给一个 Deployment 挂了一个 PVC,跑得好好的。现在把 <code>replicas</code> 从 1 调到 3。哪里会出问题?换成什么能解决?</p>
+        <details>
+          <summary>展开提示与思路</summary>
+          <p><strong>问题</strong>: Deployment 的 Pod 模板对 3 个副本是同一份,它们会全部引用<em>同一个</em> PVC、同一块底层卷。若卷是 <code>RWO</code>(最常见),只能被单节点挂载: 第一个副本占住后,被调度到别的节点的另外两个副本会卡在 ContainerCreating(attach 失败);若强行用亲和性把三者摁到同一节点,又丢了容灾;若卷恰好允许多挂载,几个不为并发写设计的进程同写一份数据 → 损坏。</p>
+          <p><strong>解决</strong>: 换成 <strong>StatefulSet</strong>。用 <code>volumeClaimTemplates</code> 为每个副本各建一个独立 PVC(<code>data-web-0/1/2</code>),每个副本独占自己的卷、有稳定身份(web-0/1/2)、按序滚动,从根上消除对单块 RWO 卷的争用。配合 headless Service 让副本之间能点对点寻址。</p>
+        </details>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">动手画一遍</span>
+        <p>不看本章,在纸上画出图 5.1: 左边放 PVC、右边放 PV、中间放绑定控制器,标出哪边是「期望」、哪边是「实际」,并把箭头方向画对。然后翻回去对照——你有没有把「绑定」画成单向?它其实是<em>双向</em>引用(ClaimRef + volumeName)。这一笔画对了,就说明你真的把存储看成了 reconcile,而不是一条单向的「申请→分配」流水线。</p>
+      </div>
+
+      <!-- ════════════════════════ references ════════════════════════ -->
+      <section class="references">
+        <h3>延伸阅读</h3>
+        <ul>
+          <li><a href="https://kubernetes.io/docs/concepts/storage/persistent-volumes/">Persistent Volumes</a> — 官方: PV/PVC 生命周期、相位、回收策略、绑定规则</li>
+          <li><a href="https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/">StatefulSets</a> — 官方: 稳定身份、volumeClaimTemplates、有序保证、headless Service</li>
+          <li><a href="https://kubernetes.io/docs/concepts/configuration/configmap/">ConfigMaps</a> — 官方: 配置注入两种方式与更新传播行为</li>
+          <li><a href="https://kubernetes.io/docs/concepts/storage/storage-classes/">Storage Classes</a> — 官方: 动态供给、provisioner、reclaimPolicy、volumeBindingMode</li>
+        </ul>
+      </section>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="04-networking.html">
+          <span class="label">上一章</span>
+          <span class="title">04 · 网络模型</span>
+        </a>
+        <a class="next" href="06-frontier.html">
+          <span class="label">下一章</span>
+          <span class="title">06 · 现状与前沿</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s51" data-toc-target="s51">5.1 配置注入与不生效</a></li>
+        <li><a href="#s52" data-toc-target="s52">5.2 PV/PVC 绑定即 reconcile</a></li>
+        <li><a href="#s53" data-toc-target="s53">5.3 StorageClass 与动态供给</a></li>
+        <li><a href="#s54" data-toc-target="s54">5.4 StatefulSet vs Deployment</a></li>
+        <li><a href="#s55" data-toc-target="s55">5.5 失败模式: Deployment 跑有状态</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

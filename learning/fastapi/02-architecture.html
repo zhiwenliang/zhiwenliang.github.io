@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分层架构与请求生命周期 · FastAPI 深潜教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-architecture.html" class="current">02 架构</a><span class="sep">—</span>
+    <a href="03-principles.html">03 原理</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>分层架构与请求生命周期</h1>
+        <p class="recap">上一章把 FastAPI 的部件逐个命名了——path operation、类型注解即规约、Pydantic 模型、<code>response_model</code>、<code>Depends</code>、三层封装——这一章把它们装回机器里，看一个请求从网线到 JSON 响应实际穿过哪几层。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>ASGI 三件套契约：<code>scope</code> / <code>receive</code> / <code>send</code>，以及为什么是消息传递而非返回值</li>
+          <li>Starlette 的职责边界：路由、Request/Response、中间件、线程池都归它，唯独不含服务器</li>
+          <li>FastAPI 加的那一层：每个 path operation 外面的校验·DI·序列化·OpenAPI 封装</li>
+          <li>请求生命周期 7 阶段：从 socket 字节到 JSON，Pydantic 校验落在你的函数之前</li>
+        </ul>
+      </section>
+
+      <p>一个 FastAPI 应用在内存里不是单一的整体，而是三段代码叠在一起：最底下是 <strong>Uvicorn</strong>（一个 ASGI 服务器，负责和操作系统的 socket 打交道），中间是 <strong>Starlette</strong>（路由与请求对象的所有者），最上面是 <strong>FastAPI</strong>（在每个 path operation 外面加校验和文档的那一层）。三者靠一份叫 <strong>ASGI</strong> 的协议（asynchronous server gateway interface，异步服务器网关接口）咬合在一起。看懂这三层的分工，才能解释 01 章那句"其余一切都是架在 ASGI 协议之上的一层薄封装"到底薄在哪、厚在哪。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="FastAPI 四层架构：你的代码、FastAPI 封装、Starlette、ASGI+Uvicorn">
+          <defs>
+            <marker id="ar-down" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- Left gutter layer tags -->
+          <text x="18" y="56" class="edge-label" font-weight="700">APP</text>
+          <text x="18" y="139" class="edge-label" font-weight="700" fill="#B73B2F">CORE</text>
+          <text x="18" y="222" class="edge-label" font-weight="700">MID</text>
+          <text x="18" y="305" class="edge-label" font-weight="700">IMPL</text>
+
+          <!-- Layer 1: APP -->
+          <rect x="96" y="28" width="556" height="56" rx="5" class="diagram-ink node-fill"/>
+          <text x="374" y="52" text-anchor="middle" class="node-label">你的代码（path operation 函数）</text>
+          <text x="374" y="71" text-anchor="middle" class="edge-label">业务逻辑 · 你写的部分</text>
+
+          <!-- Layer 2: FastAPI (highlighted) -->
+          <rect x="96" y="110" width="556" height="60" rx="5" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="374" y="135" text-anchor="middle" class="node-label-accent">FastAPI 封装</text>
+          <text x="374" y="155" text-anchor="middle" class="edge-label">每个 endpoint：校验 · DI · 序列化 · OpenAPI</text>
+
+          <!-- Layer 3: Starlette -->
+          <rect x="96" y="196" width="556" height="60" rx="5" class="diagram-ink node-fill"/>
+          <text x="374" y="221" text-anchor="middle" class="node-label">Starlette（ASGI 应用本体）</text>
+          <text x="374" y="241" text-anchor="middle" class="edge-label">路由 · Request/Response · 中间件 · 线程池</text>
+
+          <!-- Layer 4: IMPL -->
+          <rect x="96" y="282" width="556" height="46" rx="5" class="diagram-ink node-fill"/>
+          <text x="374" y="310" text-anchor="middle" class="node-label">ASGI 协议  ←  Uvicorn 服务器</text>
+
+          <!-- Connectors between layers -->
+          <line x1="180" y1="84" x2="180" y2="108" stroke="#525252" stroke-width="1.5" marker-end="url(#ar-down)"/>
+          <line x1="180" y1="170" x2="180" y2="194" stroke="#525252" stroke-width="1.5" marker-end="url(#ar-down)"/>
+          <line x1="180" y1="256" x2="180" y2="280" stroke="#525252" stroke-width="1.5" marker-end="url(#ar-down)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>FastAPI 只是中间那一层高亮的薄封装，它继承下面的 Starlette。<strong>注意</strong>：路由、Request/Response 对象其实在 Starlette 层，<em>不在</em> FastAPI——FastAPI 唯一新增的是每个 endpoint 外面的校验·DI·序列化·OpenAPI。</figcaption>
+      </figure>
+
+      <h2 id="a-asgi"><span class="num">2.1</span><span>ASGI 协议——底下的契约</span></h2>
+
+      <p class="one-liner">ASGI 把一个 web 应用定义成<em>一个</em> async 可调用对象 <code>async def app(scope, receive, send)</code>，三个参数就是它和服务器之间的全部约定。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>服务器（Uvicorn）和框架（Starlette/FastAPI）由不同的人写。两者要协作，就需要一份双方都遵守的接口规约：服务器该怎么把一个请求交给框架、框架该怎么把响应交回去。ASGI 就是这份规约。没有它，每个框架都得绑死一个特定服务器。</p>
+      </div>
+
+      <p>三个参数各司其职：<code>scope</code> 是这条连接的元数据 dict——<code>type</code>（<code>"http"</code> 还是 <code>"websocket"</code>）、<code>method</code>、<code>path</code>、<code>headers</code> 都在里面，它在连接建立时就备好、整条连接期间不变。<code>receive</code> 是一个 async 可调用对象，<code>await</code> 它会<em>拉取</em>一个客户端事件 dict（例如请求体分块 <code>{"type": "http.request", "body": b"...", "more_body": False}</code>）。<code>send</code> 也是一个 async 可调用对象，把事件 dict <em>推送</em>回客户端——先发一个 <code>http.response.start</code>（带状态码和响应头），再发一个或多个 <code>http.response.body</code>。</p>
+
+      <p>关键不在三个名字，而在<strong>交互形态是消息传递，不是返回值</strong>。应用不 <code>return</code> 一个响应；它通过 <code>await send(...)</code> 把响应一块一块推出去。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">asgi_callable.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-asgi">复制</button>
+        </div>
+<pre id="code-asgi"><code class="language-python"># 一个最小的 ASGI 应用：不依赖任何框架，纯协议
+# 这正是 Uvicorn 期待拿到的可调用对象形状
+async def app(scope, receive, send):
+    assert scope["type"] == "http"          # scope=连接元数据 dict
+
+    event = await receive()                  # 拉取一个客户端事件
+    # event 形如：{"type": "http.request", "body": b"", "more_body": False}
+
+    await send({                             # 推送响应开始：状态 + 头
+        "type": "http.response.start",
+        "status": 200,
+        "headers": [(b"content-type", b"text/plain")],
+    })
+    await send({                             # 推送响应体（可调用多次）
+        "type": "http.response.body",
+        "body": b"hello from raw ASGI",
+    })
+</code></pre>
+      </div>
+      <div class="annotations">
+        <span class="line-ref">scope</span>连接级、只读、一次备好；
+        <span class="line-ref">receive</span>await 一次得到一个入站事件；
+        <span class="line-ref">send</span>可被调用多次——这是流式响应的根。
+      </div>
+
+      <h3>为什么不沿用 WSGI</h3>
+
+      <p>Python 上一代的同步协议 WSGI（web server gateway interface）把应用定义成 <code>app(environ, start_response) -&gt; iterable</code>：一次同步函数调用，<code>environ</code> 进、一个可迭代的字节响应出。一进一出、调用结束即终结。这个形状无法建模<strong>一条连接上多次双向收发事件</strong>——WebSocket 的每一帧、SSE（server-sent events，服务器推送事件）的每一条消息，都是连接存活期间陆续到来的；也无法在等待 I/O 时把控制权<code>await</code> 让出去给别的连接。</p>
+
+      <p>ASGI 用"<code>receive</code> 可以 await 任意多次、<code>send</code> 可以调用任意多次"换来了这两种能力。<code>send</code> 能被反复调用，正是流式输出和 WebSocket 成立的根基——这一点对要把 LLM token 一段段吐给前端的后端尤其重要（03 章会展开 async 并发的代价）。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · ASGI 之前，同样的"服务器↔框架解耦"可以怎么做</caption>
+        <thead>
+          <tr><th>方案</th><th>形态 / 优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>WSGI 同步协议</td>
+            <td><code>app(environ, start_response)</code> 一进一出；生态成熟、实现简单</td>
+            <td>单次同步调用建模不了一条连接上的多次收发，无 WebSocket / 原生流式；阻塞式，无让出点</td>
+          </tr>
+          <tr>
+            <td>框架自带专用服务器</td>
+            <td>框架和服务器同源，能用任意私有接口、零适配</td>
+            <td>框架与服务器绑死，换服务器即换框架；每个框架重复造服务器轮子</td>
+          </tr>
+          <tr class="selected">
+            <td>ASGI 异步消息协议</td>
+            <td>统一 <code>scope</code>/<code>receive</code>/<code>send</code> 契约；同一个 app 可换任意 ASGI 服务器；原生支持流式 / WebSocket / 让出</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>整套接口是 async 的，应用代码必须活在事件循环里。这就为 03 章那个反直觉结论埋了雷：在 <code>async def</code> 里写一个不让出的阻塞调用（同步 DB 驱动、<code>time.sleep</code>），会卡住<em>整个</em>单线程事件循环，所有其它连接一起停摆。同步世界里"一个请求慢只拖累它自己"的直觉，在这里失效。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>上面那个裸 ASGI 应用，把代码里第二次 <code>await send({"type": "http.response.body", ...})</code> 复制成连续三次、每次带不同的 <code>body</code> 字节、且前两次加 <code>"more_body": True</code>，客户端会收到什么？换成 WSGI，能做到等价的事吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>客户端会收到一个响应、其 body 是三段字节依次拼接——这就是分块流式输出。因为 <code>send</code> 可以被调用多次，服务器把每次的 <code>body</code> 顺序写进同一条 HTTP 响应。</p>
+          <p>WSGI 也能返回一个 generator 逐块 yield 字节，看似类似；但 WSGI 调用是同步的，逐块之间无法 <code>await</code> 让出，一条慢连接会占住一个 worker 线程/进程不放。ASGI 的多次 <code>send</code> 之间可以穿插 <code>await</code>，让事件循环在等待下一块数据时去服务别的连接——这才是它为流式/WebSocket 而生的本质区别。</p>
+        </details>
+      </div>
+
+      <h2 id="a-starlette"><span class="num">2.2</span><span>Starlette——那个 ASGI 应用本体</span></h2>
+
+      <p class="one-liner">Starlette <em>就是</em>图 2.1 里的那个 <code>async def app(scope, receive, send)</code>；它拥有路由、Request/Response、中间件、WebSocket、线程池，唯独不自带服务器。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>裸 ASGI 应用（上一节那段）能跑，但要手写：从 <code>scope["path"]</code> 解析 URL 再 if/else 分发、自己拼 <code>http.response.start</code> 的状态码和头、自己循环 <code>receive</code> 把请求体分块拼起来。Starlette 把这些重复劳动收成对象：<code>Request</code> 包住 <code>scope</code>/<code>receive</code>、<code>Response</code> 包住 <code>send</code>、<code>Router</code> 负责 path→endpoint 匹配。</p>
+      </div>
+
+      <p>具体清单（这些<strong>全是 Starlette 的，不是 FastAPI 的</strong>，01 章三层封装那节已点过名）：</p>
+      <ul>
+        <li><strong>路由表</strong>：把 <code>scope["method"]</code> + <code>scope["path"]</code> 匹配到一个 endpoint。01 章说的"装饰器在导入时把函数注册进路由表"，那张表就在这里。</li>
+        <li><strong><code>Request</code> / <code>Response</code></strong>：把原始 <code>scope</code>/<code>receive</code>/<code>send</code> 包成可读对象（<code>request.headers</code>、<code>request.query_params</code>、<code>await request.body()</code>）。</li>
+        <li><strong>中间件栈</strong>：在 endpoint 外层裹一圈的 ASGI 应用洋葱（CORS、GZip、会话）。</li>
+        <li><strong>WebSocket、BackgroundTasks、<code>lifespan</code></strong>（启停钩子的上下文管理器）、以及 <code>run_in_threadpool</code>——把同步 <code>def</code> 函数丢进工作线程的那个调度原语（03 章并发模型的主角）。</li>
+      </ul>
+
+      <p>它<strong>不</strong>自带服务器：Starlette 是被调用的那个 app，需要你另配一个 ASGI 服务器（默认 Uvicorn）去真正监听端口、读写 socket、调用它。</p>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 路由 + Request 这层，可以放在哪</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选（作为通用底座）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>每个应用自己手写在裸 ASGI 上</td>
+            <td>零依赖、完全可控</td>
+            <td>路由 / 请求解析 / 中间件每个项目重写一遍，且容易出错</td>
+          </tr>
+          <tr>
+            <td>把服务器也打包进来（单体框架）</td>
+            <td>开箱即用、无需配 Uvicorn</td>
+            <td>框架与服务器耦合，部署形态被锁死，违背 ASGI 解耦的初衷</td>
+          </tr>
+          <tr class="selected">
+            <td>Starlette：只做 ASGI 应用层</td>
+            <td>路由 / Request / 中间件 / WebSocket 一套俱全，服务器可任意替换</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>Starlette 刻意不校验、不序列化、不生成文档——它只把 <code>scope</code> 包成 <code>Request</code> 就交给你的 endpoint。要类型校验、自动 JSON、OpenAPI，必须自己写，或者上一层封装来补。这正是 FastAPI 存在的理由，也是下一节的主题。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>如果只用裸 Starlette 写一个 <code>POST /items</code>，请求体是一段 JSON，你要拿到其中的字段，需要亲手做哪几步？哪一步会决定"字段缺失时返回 422 还是 500"？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>至少三步：① <code>body = await request.body()</code> 取原始字节；② <code>data = json.loads(body)</code> 解析成 dict（这步若 JSON 非法会抛异常，得自己 try/except 决定返回什么状态码）；③ 手动 <code>data["name"]</code> 取字段并逐个校验类型/必填。</p>
+          <p>"422 还是 500"完全由你这层手写代码决定——Starlette 不替你判断。FastAPI 把②③这套用 Pydantic 自动化了，并约定校验失败统一返回 422（详见 2.4 阶段④）。</p>
+        </details>
+      </div>
+
+      <h2 id="a-fastapi"><span class="num">2.3</span><span>FastAPI 加了什么</span></h2>
+
+      <p class="one-liner">FastAPI <em>继承</em> Starlette，在每个路由处理函数<em>外面</em>再包一层：签名自省 → Pydantic 校验 → 序列化 → <code>Depends</code> 解析 → 自动 OpenAPI。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>2.2 末尾那段手写苦力——取请求体、解析、逐字段校验、拼错误响应、再单独维护一份接口文档——在每个 endpoint 上重复，且代码与文档极易脱节。FastAPI 用 01 章那条"类型注解即规约"把它一次性消掉：读一遍函数签名，校验、序列化、文档全自动派生。</p>
+      </div>
+
+      <p>机制上，<code>app = FastAPI()</code> 创建的对象是 Starlette 应用的<strong>子类</strong>。路由匹配、<code>Request</code> 对象、中间件栈、<code>run_in_threadpool</code> 线程池调度——全是继承来的，FastAPI 一行没改。它<em>新增</em>的只有每个 path operation 外面那层 per-endpoint 封装：用 <code>inspect.signature()</code> 读注解 → 按 path/query/body 规则定位参数来源 → 喂给 Pydantic 编译好的校验器 → 跑你的函数 → 用 <code>response_model</code> 的序列化器把返回值转成 JSON → 顺带把这套类型信息汇成 OpenAPI schema。这层封装薄，但承担了 01 章整章的编程模型。</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · 写一个带校验和文档的 HTTP API：裸 Starlette vs Flask vs FastAPI</caption>
+        <thead>
+          <tr><th>方案</th><th>校验 / 序列化 / 文档怎么来</th><th>代价 / 何时仍然合适</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>裸 Starlette</td>
+            <td>全手写：<code>await request.body()</code> → <code>json.loads</code> → 逐字段校验 → 手拼 422 → 另写 OpenAPI 文件</td>
+            <td>样板代码多、文档与代码易脱节；只在"纯转发、不要校验和文档"时划算（见 04 章判别题）</td>
+          </tr>
+          <tr>
+            <td>Flask（WSGI）</td>
+            <td><code>request.args.get()</code> 手取参数；校验靠 marshmallow 等第三方；文档靠插件，与代码两套 schema</td>
+            <td>同步生态成熟、模板渲染强；但无原生 async/流式，校验与文档非内建、需自己拼装</td>
+          </tr>
+          <tr class="selected">
+            <td>FastAPI</td>
+            <td>一份类型注解自动派生校验 + 序列化 + OpenAPI；失败自动 422</td>
+            <td>强耦合于类型注解，复杂动态参数要用 <code>Annotated</code> 绕；换来零样板、文档永不脱节</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">带来的代价</span>
+        <p>这层封装把"程序的真相"绑死在类型注解上。注解写得动态或不精确（例如收一个结构不定的 <code>dict</code>），校验和文档就同步退化——框架能给你的，恰好以你愿意写多准的类型为上限。便利和约束是同一枚硬币的两面。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>既然路由、<code>Request</code>、中间件都是从 Starlette 继承来的，那么一个用裸 Starlette 写好的中间件，能不能原样塞进 FastAPI 应用？为什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>能。<code>FastAPI</code> 是 <code>Starlette</code> 的子类，<code>app.add_middleware(...)</code>、中间件协议、<code>Request</code>/<code>Response</code> 对象全部继承自 Starlette，接口完全一致。FastAPI 没有重写这部分。</p>
+          <p>这正印证了图 2.1 的断言：中间件这类机制活在 Starlette 层。FastAPI 的新增物只有每个 endpoint 外面那层校验·DI·序列化·OpenAPI，其余都是继承。</p>
+        </details>
+      </div>
+
+      <h2 id="a-lifecycle"><span class="num">2.4</span><span>请求生命周期 7 阶段</span></h2>
+
+      <p class="one-liner">一个请求从 socket 字节到 JSON 响应，按固定顺序穿过 7 个阶段；其中 Pydantic 校验（阶段④）发生在你的函数（阶段⑤）<em>之前</em>。</p>
+
+      <p>前三节是静态分层，这一节是动态流程：同一个请求在这三层里依次经过哪些处理。这是本章的核心，也是 01 章"类型注解即规约"真正发力的地方——同一份注解会在这条链上被读到两次。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="请求生命周期 7 阶段横向流程，Pydantic 校验在你的函数之前">
+          <defs>
+            <marker id="flow" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="flow-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Row labels -->
+          <text x="14" y="44" class="edge-label" font-weight="700">入站</text>
+          <text x="14" y="232" class="edge-label" font-weight="700">出站</text>
+
+          <!-- ===== Row 1 (left → right): ① ② ③ ④ ===== -->
+          <!-- ① -->
+          <rect x="34" y="56" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="109" y="83" text-anchor="middle" class="node-label">① Uvicorn 收字节</text>
+          <text x="109" y="103" text-anchor="middle" class="edge-label">建 scope+收发</text>
+          <!-- ② -->
+          <rect x="202" y="56" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="277" y="83" text-anchor="middle" class="node-label">② Starlette 路由</text>
+          <text x="277" y="103" text-anchor="middle" class="edge-label">method+path 匹配</text>
+          <!-- ③ -->
+          <rect x="370" y="56" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="445" y="83" text-anchor="middle" class="node-label">③ 依赖图解析</text>
+          <text x="445" y="103" text-anchor="middle" class="edge-label">Depends DFS</text>
+          <!-- ④ (accent) -->
+          <rect x="538" y="56" width="150" height="64" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="613" y="83" text-anchor="middle" class="node-label-accent">④ Pydantic 校验</text>
+          <text x="613" y="103" text-anchor="middle" class="edge-label">失败→422</text>
+
+          <!-- Row-1 arrows -->
+          <line x1="184" y1="88" x2="200" y2="88" class="diagram-ink" marker-end="url(#flow)"/>
+          <line x1="352" y1="88" x2="368" y2="88" class="diagram-ink" marker-end="url(#flow)"/>
+          <line x1="520" y1="88" x2="536" y2="88" class="diagram-ink" marker-end="url(#flow)"/>
+
+          <!-- Serpentine down from ④ to ⑤ (accent: marks the before/after seam) -->
+          <polyline points="613,120 613,150 277,150 277,176" class="diagram-accent" fill="none" marker-end="url(#flow-v)"/>
+          <text x="445" y="143" text-anchor="middle" class="branch-label">校验通过后才进函数</text>
+
+          <!-- ===== Row 2 (left → right): ⑤ ⑥ ⑦ ===== -->
+          <!-- ⑤ -->
+          <rect x="202" y="178" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="277" y="205" text-anchor="middle" class="node-label">⑤ 你的函数执行</text>
+          <text x="277" y="225" text-anchor="middle" class="edge-label">循环 / 线程池</text>
+          <!-- ⑥ -->
+          <rect x="370" y="178" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="445" y="205" text-anchor="middle" class="node-label">⑥ 序列化</text>
+          <text x="445" y="225" text-anchor="middle" class="edge-label">response_model→JSON</text>
+          <!-- ⑦ -->
+          <rect x="538" y="178" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="613" y="205" text-anchor="middle" class="node-label">⑦ send 发响应</text>
+          <text x="613" y="225" text-anchor="middle" class="edge-label">http.response.*</text>
+
+          <!-- Row-2 arrows -->
+          <line x1="352" y1="210" x2="368" y2="210" class="diagram-ink" marker-end="url(#flow)"/>
+          <line x1="520" y1="210" x2="536" y2="210" class="diagram-ink" marker-end="url(#flow)"/>
+
+          <!-- Teardown note below row 2 -->
+          <line x1="613" y1="242" x2="613" y2="276" stroke="#525252" stroke-width="1.4" stroke-dasharray="3 3" marker-end="url(#flow)"/>
+          <rect x="438" y="278" width="250" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="563" y="300" text-anchor="middle" class="node-label">事后：清理 + 后台任务</text>
+          <text x="563" y="318" text-anchor="middle" class="edge-label">AsyncExitStack 按 LIFO 展开</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>请求生命周期 7 阶段，分两行：入站①–④、出站⑤–⑦。<strong>注意</strong>：朱红那条线标出关键时序——Pydantic 校验（④）跑在你的函数（⑤）<em>之前</em>，所以非法输入永远到不了你的业务代码。</figcaption>
+      </figure>
+
+      <h3>逐阶段：每一阶段在哪一层、做了什么</h3>
+      <ul>
+        <li><strong>① Uvicorn 解析 socket 字节</strong>（IMPL 层）：从 TCP 连接读出原始 HTTP 字节，解析成 <code>scope</code> dict，备好 <code>receive</code>/<code>send</code>，然后 <code>await</code> 调用上层那个 ASGI app（即 Starlette/FastAPI）。</li>
+        <li><strong>② Starlette 路由匹配</strong>（MID 层）：拿 <code>scope["method"]</code> + <code>scope["path"]</code> 在路由表里查，命中 FastAPI 为这个 path operation 注册的处理器。没命中→404。</li>
+        <li><strong>③ 依赖图解析</strong>（CORE 层）：解析这个 endpoint 的 <code>Depends</code> 图——子依赖深度优先（先子后父），按需缓存，<code>yield</code> 型依赖的 setup 段推入一个 <code>AsyncExitStack</code> 待命（解析顺序与缓存的代价详见 03 章 DI 节）。</li>
+        <li><strong>④ 参数解析 + Pydantic 校验</strong>（CORE 层，<span style="color:var(--vermilion);font-weight:600;">本阶段是关键</span>）：按 01 章的来源规则从 path/query/headers/body 取值，喂给类定义时就编译好的（Rust）校验器。任一字段不合规→框架<em>在这里</em>构造 422 响应直接返回，<strong>你的函数根本不会被调用</strong>。</li>
+        <li><strong>⑤ 处理函数执行</strong>（APP 层）：到这一步入参已是合法、类型正确的 Python 对象。<code>async def</code> 路由直接在事件循环上跑；普通 <code>def</code> 路由被 <code>await run_in_threadpool(fn)</code> 丢进线程池（03 章并发模型展开）。</li>
+        <li><strong>⑥ <code>response_model</code> 序列化</strong>（CORE 层）：返回值过一遍 <code>response_model</code> 的（Rust）序列化器——这就是 01 章说的"返回值被<em>再次</em>跑过模型"，能借此过滤掉模型没声明的字段、转成 JSON 可写的形态。</li>
+        <li><strong>⑦ 经 <code>send</code> 发出响应</strong>（一路下沉回 IMPL 层）：序列化后的 JSON 通过 <code>send</code> 推出——先 <code>http.response.start</code>（状态+头），再 <code>http.response.body</code>。这正是 2.1 那个裸协议动作。</li>
+        <li><strong>事后</strong>：响应发出<em>之后</em>，<code>AsyncExitStack</code> 按 LIFO（后进先出）展开，跑各 <code>yield</code> 依赖 yield 之后的清理段；BackgroundTasks 也在此时执行。</li>
+      </ul>
+
+      <h3 id="lifecycle-synthesis">把 01 章的 <code>item: Item</code> 放进这条生命周期走一遍</h3>
+
+      <p>01 章那个 <code>def create_item(item: Item)</code>——参数注解是 Pydantic 模型 <code>Item</code>，按规则被当成请求体。现在跟着它穿过上面的 7 阶段，看<strong>同一份注解</strong>如何在两个不同阶段各被用一次：</p>
+
+      <table class="compare-table">
+        <caption>表 2.4 · 一份 <code>item: Item</code> 注解在生命周期里的两次登场</caption>
+        <thead>
+          <tr><th>阶段</th><th><code>item: Item</code> 此刻是什么</th><th>注解被用来做什么</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>① 入站字节</td><td>请求体还是一段 JSON 字节 <code>b'{"name":"pen","price":3}'</code></td><td>尚未触及注解</td></tr>
+          <tr><td>④ 校验</td><td>字节先解析成 dict，再被 <code>Item</code> 的校验器构造成 <code>Item</code> 实例</td><td><strong>注解第一次登场</strong>：作为校验规约，缺字段/类型错→422</td></tr>
+          <tr><td>⑤ 你的函数</td><td><code>item</code> 是一个合法的 <code>Item</code> 对象，可直接 <code>item.price</code></td><td>注解此刻只是普通类型，函数体正常用</td></tr>
+          <tr class="selected"><td>⑥ 序列化</td><td>返回值依据 <code>response_model</code>（常仍是 <code>Item</code> 或其裁剪版）转回 JSON</td><td><strong>注解第二次登场</strong>：作为序列化规约，过滤未声明字段</td></tr>
+        </tbody>
+      </table>
+
+      <p>一份 <code>item: Item</code>，进来时当校验器（阶段④）、出去时当序列化器（阶段⑥），中间在你函数里只是个普通对象。这就是 01 章 threshold 那句"你写的类型签名<em>就是</em>规约，没有第二份 schema"在运行时的具体兑现——没有"输入 schema"和"输出 schema"两份东西在同步，是同一份注解在生命周期的两端各被读了一次。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>客户端 POST 一个缺了必填 <code>price</code> 字段的 JSON。它会走到上面 7 个阶段里的第几阶段为止？你的 <code>create_item</code> 函数体里的任何一行代码（比如一句日志打印）会被执行吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>走到阶段④（Pydantic 校验）就终止。校验器发现 <code>price</code> 缺失，框架直接构造一个 422 响应交给阶段⑦发出，<em>跳过</em>阶段⑤和⑥。</p>
+          <p>你函数体里的任何代码——包括第一行的日志——都不会执行，因为函数压根没被调用。这正是图 2.2 朱红时序线的实际后果：校验是函数执行的前置闸门。</p>
+        </details>
+      </div>
+
+      <!-- ===================== self-check ===================== -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>ASGI 把一个应用定义成什么形状的对象？三个参数 <code>scope</code> / <code>receive</code> / <code>send</code> 各自负责什么？</li>
+          <li>路由表、<code>Request</code> 对象、中间件、线程池调度，这四样归 Starlette 还是 FastAPI？FastAPI 真正新增的是哪一层？</li>
+          <li>（跨机制综合）为什么一个 422 错误能在你的函数<em>执行之前</em>就返回？把它落到 7 阶段里的具体阶段编号来回答。</li>
+          <li>（设计题）一份 <code>item: Item</code> 注解在请求生命周期里被用到两次，分别在哪两个阶段、各扮演什么角色？这对应了 01 章哪一句本质？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>定义成一个 async 可调用对象 <code>async def app(scope, receive, send)</code>。<code>scope</code>=连接元数据 dict（type/method/path/headers，连接期不变）；<code>receive</code>=await 它拉取入站事件 dict；<code>send</code>=推送出站事件 dict，可多次调用（流式/WebSocket 的根基）。</li>
+            <li>全归 <strong>Starlette</strong>——FastAPI 继承它，这部分一行没改。FastAPI 新增的只有每个 path operation 外面那层 per-endpoint 封装：签名自省 + Pydantic 校验 + 序列化 + <code>Depends</code> + 自动 OpenAPI。</li>
+            <li>因为校验是阶段④，处理函数执行是阶段⑤，④在⑤之前。参数解析后喂给 Pydantic 校验器，任一字段不合规，框架在阶段④直接构造 422 经阶段⑦返回，跳过⑤⑥，函数从不被调用。</li>
+            <li>阶段④（校验，作为输入规约：缺字段/类型错→422）和阶段⑥（序列化，作为输出规约：过滤未声明字段转 JSON）。对应 01 章"你写的类型签名<em>就是</em>规约，没有第二份 schema"——同一份注解在生命周期两端各被读一次，而非两份 schema 在同步。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一个 <code>yield</code> 依赖里开的数据库连接，在哪个阶段关闭？</h3>
+        <p>给 <code>create_item</code> 加一个 <code>db = Depends(get_db)</code>，其中 <code>get_db</code> 是 <code>yield</code> 型依赖（yield 前开连接、yield 后关连接）。这个连接在 7 阶段的<em>哪一步</em>被关闭？如果函数在阶段⑤抛了异常，连接还会被关吗？再想：把响应体写成流式（边算边 <code>send</code>），清理时机会不会被这个"流"推后？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>看图 2.2 最下面那个虚线框的位置——清理跑在响应发出<em>之后</em>，由 <code>AsyncExitStack</code> 按 LIFO 展开。异常情况下上下文管理器的 <code>__aexit__</code> 仍会被调用，所以连接照样关闭（这正是 <code>yield</code> 依赖被当上下文管理器用的好处）。流式响应会把"响应发出完成"这个点推后到最后一块 <code>send</code> 之后——清理也随之推后，03 章 DI 节会精确化这个时序。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://asgi.readthedocs.io/en/latest/specs/main.html">ASGI Specification</a>（官方协议规约：scope / receive / send 与事件类型）</li>
+          <li><a href="https://www.starlette.io/">Starlette 文档</a>（官方：Routing / Requests / Responses / Middleware / WebSockets）</li>
+          <li><a href="https://fastapi.tiangolo.com/async/">FastAPI · Concurrency and async / await</a>（官方：def 路由进线程池、async 路由进事件循环）</li>
+          <li><a href="https://peps.python.org/pep-3333/">PEP 3333 — Python WSGI v1.0.1</a>（对照：WSGI 的 <code>app(environ, start_response)</code> 单次同步契约）</li>
+          <li><a href="https://www.uvicorn.org/">Uvicorn 文档</a>（默认 ASGI 服务器：如何监听 socket 并调用 ASGI app）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+        <a href="03-principles.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 底层机制与设计权衡</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#a-asgi" data-toc-target="a-asgi">2.1 ASGI 协议</a></li>
+        <li><a href="#a-starlette" data-toc-target="a-starlette">2.2 Starlette</a></li>
+        <li><a href="#a-fastapi" data-toc-target="a-fastapi">2.3 FastAPI 加了什么</a></li>
+        <li><a href="#a-lifecycle" data-toc-target="a-lifecycle">2.4 请求生命周期 7 阶段</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

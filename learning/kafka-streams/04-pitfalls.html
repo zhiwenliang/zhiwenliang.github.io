@@ -1,0 +1,1269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 陷阱 · Kafka Streams 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html" class="current">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>陷阱与失败模式</h1>
+        <p class="recap">03 章把 DSL 跑通了，前三章合起来交付了一个能用的 Streams 应用：消费组撑起 task、本地 RocksDB 存状态、changelog 当真相源、窗口靠 stream-time 推进、EOS 把读-处理-写包进一个事务。那是机制按设计工作的样子。本章是同一批机制被违反时的样子——八个具名失败模式，每个都能回链到 02 章某条原理。读完应能在症状出现前就认出隐患，而不是等到生产环境 OOMKilled 才回头查内存模型。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>每个生产事故都是某条 02 章原理被违反的可观测后果——症状是表象，根因在机制</li>
+          <li>三类失败模式：状态恢复/再平衡、正确性、资源/语义——对应三组锚点</li>
+          <li>最反直觉的两条：OOMKilled 时 JVM 堆是诱饵（真因在堆外 RocksDB），join 无输出时没有任何报错（共分区静默失败）</li>
+          <li>修复几乎都是"显式声明本来被自动推断的东西"：显式 Serde、显式 grace、显式 LRUCache、显式 standby</li>
+        </ul>
+      </section>
+
+      <p>八个失败模式按归因分三组。每组先给一张地图（<a href="#taxonomy">见 §4.0 分类图</a>），再逐条拆 <strong>症状 → 根因 → 修复 → 如何避免</strong>。根因一律回链 <a href="02-principles.html">02 章</a>对应机制——记不清机制本身时点回去补，本章不重讲机制，只讲机制被违反后会观察到什么。</p>
+
+      <figure id="taxonomy">
+        <svg viewBox="0 0 760 430" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="八个失败模式按类别和严重度二维分布，并标出改 key 到隐藏 repartition topic 的因果链">
+          <defs>
+            <marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrow-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Axes -->
+          <line x1="150" y1="40" x2="150" y2="350" class="diagram-ink" marker-start="url(#arrow-ink)"/>
+          <line x1="150" y1="350" x2="730" y2="350" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+          <text x="60" y="44" class="edge-label" font-weight="700">严重度 ↑</text>
+          <text x="690" y="344" class="edge-label" font-weight="700">类别 →</text>
+
+          <!-- Column band labels -->
+          <text x="242" y="372" text-anchor="middle" class="edge-label">恢复/再平衡</text>
+          <text x="432" y="372" text-anchor="middle" class="edge-label">正确性</text>
+          <text x="630" y="372" text-anchor="middle" class="edge-label">资源/语义</text>
+
+          <!-- Severity tier guides (dashed) -->
+          <line x1="150" y1="120" x2="730" y2="120" class="diagram-soft"/>
+          <line x1="150" y1="230" x2="730" y2="230" class="diagram-soft"/>
+          <text x="156" y="92" class="edge-label">高 · 拖垮可用性</text>
+          <text x="156" y="202" class="edge-label">中 · 结果错或变慢</text>
+          <text x="156" y="312" class="edge-label">低 · 配置/边界</text>
+
+          <!-- Column 1: restore — node ① high, ⑦ low -->
+          <rect x="180" y="60" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="242" y="80" text-anchor="middle" class="node-label">① 恢复卡顿</text>
+          <text x="242" y="97" text-anchor="middle" class="edge-label">回放 changelog</text>
+
+          <rect x="180" y="270" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="242" y="290" text-anchor="middle" class="node-label">⑦ 扩不动</text>
+          <text x="242" y="307" text-anchor="middle" class="edge-label">上限=分区数</text>
+
+          <!-- Column 2: correctness — ④ join + ⑤ serde high-ish, ③ repartition mid -->
+          <rect x="370" y="60" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="432" y="80" text-anchor="middle" class="node-label">④ join 无输出</text>
+          <text x="432" y="97" text-anchor="middle" class="edge-label">未共分区</text>
+
+          <rect x="370" y="160" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="432" y="180" text-anchor="middle" class="node-label">⑤ serde 崩溃</text>
+          <text x="432" y="197" text-anchor="middle" class="edge-label">默认 serde</text>
+
+          <rect x="370" y="270" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="432" y="290" text-anchor="middle" class="node-label">③ 隐藏重分区</text>
+          <text x="432" y="307" text-anchor="middle" class="edge-label">改 key</text>
+
+          <!-- Column 3: resource — ⑥ OOMKill accent high, ⑧ EOS mid -->
+          <rect x="568" y="60" width="124" height="46" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="630" y="80" text-anchor="middle" class="node-label-accent">⑥ OOMKilled</text>
+          <text x="630" y="97" text-anchor="middle" class="edge-label">堆外 RocksDB</text>
+
+          <rect x="568" y="160" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="630" y="180" text-anchor="middle" class="node-label">⑧ EOS 慢/重复</text>
+          <text x="630" y="197" text-anchor="middle" class="edge-label">100ms+外部</text>
+
+          <rect x="568" y="270" width="124" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="630" y="290" text-anchor="middle" class="node-label">⑥' 迟到丢失</text>
+          <text x="630" y="307" text-anchor="middle" class="edge-label">过 grace</text>
+
+          <!-- Causal-chain accent annotation: ③ repartition is the seed of latency+storage -->
+          <path d="M 432 270 C 432 245, 530 240, 560 200" class="diagram-accent" fill="none" marker-end="url(#arrow-verm)"/>
+          <text x="455" y="244" class="branch-label">改 key→延迟+存储</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.0</span>八个失败模式按类别（横轴）× 严重度（纵轴）落位；编号与下文 §4.1–§4.8 一一对应。<strong>注意</strong>：右上角朱红的 ⑥ OOMKilled 是最反直觉的一条——它落在"高严重度"是因为容器被内核杀掉、堆指标却全程正常；底部那条朱红曲线提醒"改 key（③）"是延迟与存储成本的同一个源头。</figcaption>
+      </figure>
+
+      <!-- ============================================================
+           GROUP 1 — restore / rebalance
+           ============================================================ -->
+      <h2 id="restore"><span class="num">4.A</span><span>状态恢复与再平衡类</span></h2>
+
+      <p>这组失败模式的共同根：<strong>有状态 task 的状态住在本地 RocksDB，真相源却是 Kafka 里的 changelog 日志</strong>（<a href="02-principles.html#state-store">回 §2.1 状态存储</a>）。task 一旦换了 owner，新 owner 手上没有本地副本，只能从头回放 changelog 重建——状态越大、带宽越窄，这段重建越长。缩放也卡在同一处：并行度被分区数钉死（<a href="02-principles.html#rebalance-scaling">回 §2.2 再平衡与缩放</a>）。</p>
+
+      <h3 id="p1">陷阱 ① · 再平衡时状态恢复卡顿数分钟</h3>
+      <p><strong>症状</strong>：滚动重启或扩容后，新实例的 task 卡在 <code>RESTORING</code> 状态数分钟，期间这些分区的输入完全不处理；端到端延迟出现分钟级尖峰；日志里刷 <code>Restoration in progress</code>，恢复速率受限于 changelog 读取带宽。重启越频繁，停顿越频繁。</p>
+      <p><strong>根因</strong>：有状态 task 被重新分配给新实例时，新 owner 本地没有 RocksDB 副本，必须从 changelog topic 的最早 offset 回放、逐条重建状态存储后才能开始处理（<a href="02-principles.html#state-store">§2.1</a> 讲的就是这条恢复路径）。多 GB 状态 + 受限带宽 = 分钟级阻塞，这是 Streams 头号运维痛点。容器编排里"重启即丢盘"会让每次重启都触发全量回放。</p>
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">streams.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="code-p1">复制</button>
+        </div>
+<pre id="code-p1"><code class="language-properties"># 错误：默认 0 个 standby，任何故障转移都从零回放 changelog
+# num.standby.replicas=0
+
+# 正确：至少 1 个热备，故障转移从"分钟回放"降到"秒级追尾"
+num.standby.replicas=1
+
+# rack-aware standby（KIP-925，3.2+）：把 standby 摆到另一可用区，
+# 同时挡住"主实例挂 + 同机架 standby 一起挂"
+rack.aware.assignment.tags=zone
+client.tag.zone=az-a
+
+# 提高恢复并行度：恢复用独立线程拉 changelog，不占处理线程
+# （默认即开，确认未被调低）</code></pre>
+      </div>
+      <p>另外两条在部署层，不在配置文件：</p>
+      <ul>
+        <li><strong>持久卷（StatefulSet + PVC）</strong>：让 RocksDB 目录跨 Pod 重启存活。重启后本地状态还在，Streams 只补 changelog 尾部增量，而非全量回放——这是把"每次重启分钟级"压回"秒级"的最大杠杆。</li>
+        <li><strong>static membership</strong>（<code>group.instance.id</code>）：给实例固定身份，滚动重启时 group coordinator 不把它当成新成员、不触发 task 重分配。<strong>但注意</strong>见下方警告——KIP-1071 新再平衡协议下它还不支持。</li>
+      </ul>
+      <p><strong>如何避免</strong>：上线前就按"状态大小 ÷ changelog 读带宽"估算最坏恢复时长，写进容量规划；把 <code>num.standby.replicas≥1</code> 和持久卷设成有状态 Streams 应用的默认基线，而不是出事后才补。把"无状态滚动重启"和"有状态滚动重启"当成两种运维动作——后者必须先确认 standby 已追平（看 <code>standby-tasks</code> 指标）再滚下一个实例。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · stream-time 不是唯一会"冻结"的东西</span>
+        <p>static membership 能消掉滚动重启的再平衡，但 <strong>KIP-1071 的新 Streams 再平衡协议（4.2 起新集群默认开）当前还不支持 static membership、也不支持运行中改 topology、不支持在线 classic→streams 迁移</strong>（截至 2026-06，Kafka 4.3）。如果新集群默认开了 <code>streams.version=1</code>，别假设旧的 static membership 配置还生效——先确认协议版本，再决定靠 standby 还是靠 static membership 压恢复时间。</p>
+      </div>
+
+      <h3 id="p7">陷阱 ⑦ · 加机器也扩不过 N 个消费者</h3>
+      <p><strong>症状</strong>：输入 topic 有 6 个分区，部署到 10 个实例（或把 <code>num.stream.threads</code> 开到很大），却发现只有 6 份工作在跑，多出来的实例/线程 <code>ASSIGNED</code> 了零个 task、CPU 全程空转；吞吐怎么加机器都不涨。</p>
+      <p><strong>根因</strong>：Streams 没有独立调度器，并行单位是 task，而 <strong>task 数 = 子拓扑最大输入分区数，运行时不可改</strong>（<a href="02-principles.html#rebalance-scaling">§2.2</a>）。task 多于线程则一个线程多路复用几个 task；线程多于 task 则多出的线程闲置。并行天花板就是分区数，加再多实例也越不过去。</p>
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">scaling.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="code-p7">复制</button>
+        </div>
+<pre id="code-p7"><code class="language-properties"># 现状：6 分区输入 → 最多 6 个 task
+
+# 错误：单实例把线程开到 16，超过 6 的 10 个线程全闲置
+# num.stream.threads=16
+
+# 正确：先把每实例线程提到接近 task 数，再横向加实例直到 task 摊满
+# 例如 2 实例 × 3 线程 = 6 个 slot，正好 1 task/slot
+num.stream.threads=3
+# 然后部署 2 个实例
+
+# 要超过 6 路并行：只能重分区输入 topic（破坏性，需停机/双写迁移）
+# kafka-topics --alter --partitions 12 ...  ← 不可逆地改变 key→分区映射</code></pre>
+      </div>
+      <p><strong>如何避免</strong>：在创建输入 topic 时就按未来吞吐峰值定分区数——分区是缩放上限，事后加分区会打乱 <code>key→分区</code> 映射、破坏既有有状态算子的共分区前提，代价远高于一开始多给几个分区。监控时看 <code>assigned-tasks</code> 而非实例数：实例数涨、assigned-tasks 不涨，就是撞到了分区天花板。</p>
+
+      <!-- ============================================================
+           GROUP 2 — correctness
+           ============================================================ -->
+      <h2 id="correctness"><span class="num">4.B</span><span>正确性类</span></h2>
+
+      <p>这组的危险在于<strong>不报错</strong>：拓扑照常运行、指标一片绿，但结果悄悄偏了——多了隐藏 topic、少了本该有的 join 输出、或在某条 null key 上崩在一个看似无关的位置。根都在"改 key"与"共分区"两条机制（<a href="02-principles.html#repartition">§2.3 repartition</a> / <a href="02-principles.html#joins">§2.5 join</a>）。</p>
+
+      <h3 id="p3">陷阱 ③ · 隐藏的 repartition topic 抬高存储与延迟</h3>
+      <p><strong>症状</strong>：拓扑里没显式建任何 topic，broker 上却冒出一批 <code>&lt;app-id&gt;-&lt;name&gt;-repartition</code> 内部 topic，吃掉额外磁盘；端到端延迟比预期高一截，因为每条记录在聚合/join 前多走了一次 produce→re-consume 往返。改 key 的算子越多，往返越多。</p>
+      <p><strong>根因</strong>：聚合和等值 join 要求相同 key 落在同一 task/分区。<strong>任何改 key 的操作（<code>selectKey</code> / <code>map</code> / <code>flatMap</code> / <code>groupBy</code>）都会给下游打上"需重分区"标志</strong>，于是下游 stateful 算子自动建一个 repartition topic 把数据重洗一遍（<a href="02-principles.html#repartition">§2.3</a> 讲的正是这个自动机制及其隐藏成本）。默认正确，但成本不可见。</p>
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">RepartitionFix.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="code-p3">复制</button>
+        </div>
+<pre id="code-p3"><code class="language-java">// 错误：map 改了 key（哪怕 value 没动），再 groupBy 又改一次 →
+// 触发一次甚至两次重分区往返
+KStream&lt;String, Order&gt; s = orders
+    .map((k, v) -&gt; KeyValue.pair(v.userId(), v))   // 改 key → 标记需重分区
+    .groupBy((k, v) -&gt; v.userId())                 // 又改 key → 又一次重分区
+    .count(...);                                    // 实际建了多余的 repartition topic
+
+// 正确①：value 变换用 mapValues（不碰 key，不触发重分区）
+KStream&lt;String, Long&gt; amounts = orders
+    .mapValues(Order::amount);                      // key 不变，零重分区
+
+// 正确②：key 已经对了就用 groupByKey（绝不重分区），别用 groupBy
+KTable&lt;String, Long&gt; perUser = orders
+    .selectKey((k, v) -&gt; v.userId())               // selectKey 是 lazy：自己不建 topic
+    .groupByKey(Grouped.with(Serdes.String(), orderSerde))
+    .count();                                       // 这里才物化一次重分区，且仅一次
+
+// 正确③：必须重 key 时，用 Repartitioned 命名 + 控分区数，让它可观测可控
+KStream&lt;String, Order&gt; rk = orders
+    .selectKey((k, v) -&gt; v.userId())
+    .repartition(Repartitioned.&lt;String, Order&gt;as("orders-by-user")
+        .withNumberOfPartitions(12));</code></pre>
+      </div>
+      <p><strong>如何避免</strong>：把 <code>topology.describe()</code> 的输出当成 code review 的一部分——它会列出实际生成的每一个 repartition / changelog 内部 topic，数量对不上预期就说明有多余的改 key 操作。习惯性优先 <code>mapValues</code> 而非 <code>map</code>、<code>groupByKey</code> 而非 <code>groupBy</code>，只在 key 真的需要变时才 <code>selectKey</code>。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · selectKey 是 lazy 的，别被它骗了</span>
+        <p><code>selectKey</code> 单独存在时<strong>不建任何 topic</strong>——它只是给流打上"key 变了"的标记。真正物化 repartition topic 的是下游<strong>依赖 key</strong> 的算子（<code>groupByKey</code> / <code>join</code> / <code>aggregate</code>）。所以"我只 selectKey 了一下，怎么会有 repartition 成本"是错的归因：成本由下游触发，看 <code>topology.describe()</code> 才数得准，数源码里 <code>selectKey</code> 的次数没用。</p>
+      </div>
+
+      <h3 id="p4">陷阱 ④ · join 静默无输出</h3>
+      <p><strong>症状</strong>：两个流/表 join，逻辑看着完全正确，输出 topic 却一条都没有，且<strong>没有任何异常或错误日志</strong>。改 key、改 join 窗口都不见效。最折磨人的是它不崩——只是安静地什么都不发。</p>
+      <p><strong>根因</strong>：等值 join 要求两侧<strong>共分区</strong>——相同分区数 + 相同分区方式（同一个 producer 分区器把同一 key 落到同一编号分区）。分区数不一致时拓扑启动会直接失败；但<strong>分区方式不一致（分区数相同、分区器不同）时，Streams 校验通过、却把本该匹配的记录路由到不同 task，匹配全部丢失，零输出零报错</strong>（<a href="02-principles.html#joins">§2.5 join 与共分区</a> 讲的就是这条静默失败路径）。</p>
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">JoinFix.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="code-p4">复制</button>
+        </div>
+<pre id="code-p4"><code class="language-java">// 错误：clicks 上游被某个外部 producer 用了不同分区器写入，
+// 与 impressions 分区数相同但分区方式不同 → join 静默丢匹配
+KStream&lt;String, Joined&gt; bad = impressions
+    .join(clicks,
+          (imp, clk) -&gt; merge(imp, clk),
+          JoinWindows.ofTimeDifferenceAndGrace(
+              Duration.ofMinutes(5), Duration.ofMinutes(1)));
+
+// 正确①：join 前对至少一侧显式 repartition，强制 Streams 用自己的
+// 默认分区器重洗，对齐分区方式（也对齐分区数）
+KStream&lt;String, Click&gt; alignedClicks = clicks
+    .repartition(Repartitioned.&lt;String, Click&gt;as("clicks-aligned")
+        .withNumberOfPartitions(impressionsPartitions));
+
+KStream&lt;String, Joined&gt; good = impressions.join(alignedClicks, ...);
+
+// 正确②：维表小且慢变，用 GlobalKTable —— 每实例全分区副本，
+// 天然免共分区，是这条陷阱的逃生口
+GlobalKTable&lt;String, User&gt; users = builder.globalTable("users");
+KStream&lt;String, Enriched&gt; enriched = events.join(
+    users,
+    (eventKey, event) -&gt; event.userId(),   // 从流记录提 join key
+    (event, user) -&gt; enrich(event, user));</code></pre>
+      </div>
+      <p><strong>如何避免</strong>：把"join 前两侧共分区"列成上线 checklist 的硬项——确认两侧分区数相同，且要么都由本 Streams 应用写入（同一默认分区器），要么对其中一侧显式 <code>repartition</code> 重洗。小维表一律考虑 <code>GlobalKTable</code> 或外键 join（KIP-213），两者都免共分区。监控 join 输出 topic 的 records-out：长期为 0 而输入不为 0，第一个怀疑对象就是共分区。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 静默无输出比崩溃更难查</span>
+        <p>分区<strong>数</strong>不符会让拓扑启动报错——这种 fail-fast 反而友好。真正吃人的是分区<strong>方式</strong>不符：校验通过、进程健康、指标全绿，唯独结果是空的。遇到"join 没输出又不报错"，别先怀疑业务逻辑或窗口大小，先验共分区。</p>
+      </div>
+
+      <h3 id="p5">陷阱 ⑤ · serde 与 null key 崩溃</h3>
+      <p><strong>症状</strong>：运行中抛 <code>ClassCastException</code> 或 <code>SerializationException</code>，栈顶指向某个序列化器，但报错位置和你"觉得"该出错的算子对不上；或者聚合结果莫名少了一批记录，怎么查都查不到它们去哪了。schema 升级后老消息开始反序列化失败。</p>
+      <p><strong>根因</strong>：三件事。其一，依赖 <code>default.key/value.serde</code> 但某个分支的类型和默认 serde 不符——Streams 会用默认 serde 去序列化它，类型不匹配就在那个算子炸。其二，<strong>key 为 null 的记录在进入聚合/join 前会被静默丢弃</strong>（有状态算子按 key 分组，null key 无处归属），表现为"结果少了一批"而非报错。其三，schema 漂移让历史消息反序列化失败。前两条都源自"让运行时替你猜类型/猜归属"。</p>
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">SerdeNullFix.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="code-p5">复制</button>
+        </div>
+<pre id="code-p5"><code class="language-java">// 错误：依赖全局默认 serde；不同分支类型不同时会用错 serde 炸；
+// null key 直接进 groupByKey 被悄悄丢
+KStream&lt;String, Payment&gt; payments = builder.stream("payments");  // 用 default serde
+KTable&lt;String, Long&gt; bad = payments
+    .groupByKey()                                  // null key 记录在此静默消失
+    .count();
+
+// 正确：每个 source/sink/store 显式传 Serde；先过滤 null key 再聚合
+KStream&lt;String, Payment&gt; typed = builder.stream(
+    "payments",
+    Consumed.with(Serdes.String(), paymentSerde)); // 显式 key/value serde
+
+KTable&lt;String, Long&gt; good = typed
+    .filter((k, v) -&gt; k != null &amp;&amp; v != null)      // 显式处理 null，而非让它静默蒸发
+    .groupByKey(Grouped.with(Serdes.String(), paymentSerde))
+    .count(Materialized.with(Serdes.String(), Serdes.Long())); // store 也显式 serde</code></pre>
+      </div>
+      <p><strong>如何避免</strong>：把"显式 <code>Consumed</code> / <code>Produced</code> / <code>Grouped</code> / <code>Materialized</code> 传 Serde"当成纪律，少依赖全局默认——默认 serde 是"省事但把类型错误推迟到运行时"的交易。在聚合/join 前显式决定 null key 该丢还是该补默认值，让它成为代码里看得见的一行。用 Schema Registry 的兼容模式（backward/forward）兜住 schema 演进。</p>
+
+      <!-- ============================================================
+           GROUP 3 — resource / semantics
+           ============================================================ -->
+      <h2 id="resource"><span class="num">4.C</span><span>资源与语义类</span></h2>
+
+      <p>最后一组踩的是"机制在 JVM 之外"和"语义边界在你以为之外"：RocksDB 的内存不归 <code>-Xmx</code> 管，stream-time 只在有数据时前进，EOS 的原子性只覆盖 Kafka 之内。三条都因为读者把边界画错了地方。</p>
+
+      <h3 id="p6">陷阱 ⑥ · 容器 OOMKilled，但 JVM 堆指标全程正常</h3>
+      <p>这条最反直觉，讲透。<strong>症状</strong>：容器被内核 OOMKill（<code>exit code 137</code>），Pod 反复重启；可你盯着 JVM 堆指标——<code>used heap</code> 离 <code>-Xmx</code> 还很远，GC 日志平静，full GC 没几次。把 <code>-Xmx</code> 调大反而让 OOMKill 来得更快。监控面板上 JVM 一切正常，容器却在被杀。</p>
+      <p><strong>根因</strong>：<strong>RocksDB 在堆外（off-heap）分配内存，<code>-Xmx</code> 完全管不到它</strong>。每个有状态 task 的每个 store 都有自己的 block cache（默认约 50 MiB）+ memtable（写缓冲）+ index/filter 块，全在 native 内存。一个应用几十个有状态 task，堆外内存能轻松到几个 GB。容器内存上限同时盖住"堆 + 堆外 + 线程栈 + 元空间"；JVM 堆离 <code>-Xmx</code> 还远，但堆 + 堆外的总和已经顶破容器上限，内核就 OOMKill 整个进程。<strong>把 <code>-Xmx</code> 调大等于把更多额度划给堆、留给堆外的更少，OOMKill 反而更早</strong>——这就是"调大堆反而更糟"的来由。根在 <a href="02-principles.html#state-store">§2.1</a>：选 RocksDB 是为本地亚毫秒读，代价之一就是这部分内存逃出了 JVM 的视野。</p>
+
+      <figure id="rocksdb-mem">
+        <svg viewBox="0 0 720 400" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="JVM 进程内堆与堆外内存对比，RocksDB 在堆外按每 store 分配，-Xmx 管不到，总和顶破容器上限触发 OOMKill">
+          <defs>
+            <marker id="arrow-ink2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrow-verm2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Container memory limit boundary (dashed accent), the kill line -->
+          <rect x="40" y="50" width="470" height="310" rx="8" class="diagram-accent" stroke-width="2" fill="none" stroke-dasharray="6 4"/>
+          <text x="52" y="42" class="branch-label">容器内存上限（内核盯着这条线）</text>
+
+          <!-- JVM process box inside the container -->
+          <rect x="64" y="74" width="422" height="262" rx="6" class="diagram-ink node-fill"/>
+          <text x="76" y="94" class="edge-label" font-weight="700">JVM 进程</text>
+
+          <!-- Heap region (left) -->
+          <rect x="86" y="108" width="180" height="210" rx="5" class="diagram-ink node-fill"/>
+          <text x="176" y="130" text-anchor="middle" class="node-label">堆 (heap)</text>
+          <text x="176" y="150" text-anchor="middle" class="edge-label">-Xmx 管这里</text>
+          <text x="176" y="168" text-anchor="middle" class="edge-label">GC 看着正常</text>
+          <line x1="106" y1="186" x2="246" y2="186" class="diagram-soft"/>
+          <text x="176" y="212" text-anchor="middle" class="edge-label">used heap</text>
+          <text x="176" y="230" text-anchor="middle" class="edge-label">离 -Xmx 还远</text>
+          <rect x="106" y="244" width="140" height="58" rx="4" class="diagram-soft" fill="rgba(163,163,163,0.10)"/>
+          <text x="176" y="277" text-anchor="middle" class="edge-label">空余（误导信号）</text>
+
+          <!-- Off-heap region (right) -->
+          <rect x="286" y="108" width="180" height="210" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="376" y="130" text-anchor="middle" class="node-label-accent">堆外 (off-heap)</text>
+          <text x="376" y="148" text-anchor="middle" class="edge-label">RocksDB · 每 store 一份</text>
+          <text x="376" y="166" text-anchor="middle" class="edge-label">-Xmx 管不到</text>
+          <!-- per-store stacked little boxes -->
+          <rect x="300" y="178" width="152" height="34" rx="3" class="diagram-ink node-fill"/>
+          <text x="376" y="199" text-anchor="middle" class="edge-label">block cache ≈50MiB</text>
+          <rect x="300" y="218" width="152" height="34" rx="3" class="diagram-ink node-fill"/>
+          <text x="376" y="239" text-anchor="middle" class="edge-label">memtable 写缓冲</text>
+          <rect x="300" y="258" width="152" height="34" rx="3" class="diagram-ink node-fill"/>
+          <text x="376" y="279" text-anchor="middle" class="edge-label">index/filter 块</text>
+          <text x="376" y="308" text-anchor="middle" class="edge-label">× N 个 store</text>
+
+          <!-- Kill arrow: off-heap pushes past the container line -->
+          <line x1="466" y1="150" x2="520" y2="150" class="diagram-accent" marker-end="url(#arrow-verm2)"/>
+          <text x="540" y="138" class="node-label-accent">顶破上限</text>
+          <text x="540" y="158" class="edge-label">堆+堆外 &gt; 容器</text>
+          <text x="540" y="176" class="edge-label">→ 内核 OOMKill</text>
+          <text x="540" y="194" class="edge-label">(exit 137)</text>
+
+          <!-- "raise -Xmx makes it worse" note -->
+          <line x1="540" y1="240" x2="540" y2="270" class="diagram-soft" marker-end="url(#arrow-ink2)"/>
+          <text x="540" y="232" class="edge-label">调大 -Xmx</text>
+          <text x="540" y="288" class="edge-label">→ 堆吃更多额度</text>
+          <text x="540" y="306" class="edge-label">→ 堆外更挤</text>
+          <text x="540" y="324" class="branch-label">OOMKill 反而更早</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>OOMKill 的真因在于堆外那一列：RocksDB 的 block cache / memtable / index 块按"每 store 一份 × N 个 store"在 JVM 堆之外累加，<code>-Xmx</code> 完全看不到它。<strong>注意</strong>：左侧"堆还有空余"是个诱饵信号——内核盯的是朱红虚线那条"堆+堆外"总和的容器上限，所以调大 <code>-Xmx</code> 只会挤掉堆外额度、让 OOMKill 更早到。</figcaption>
+      </figure>
+
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">BoundedRocksDBConfig.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="code-p6">复制</button>
+        </div>
+<pre id="code-p6"><code class="language-java">// 错误：不管 RocksDB 内存，每个 store 各自一份 block cache + memtable，
+// 堆外随 task 数线性膨胀，最终顶破容器上限被 OOMKill
+
+// 正确：自定义 RocksDBConfigSetter，让所有 store 共享一个有上限的
+// LRUCache + WriteBufferManager —— 把堆外内存钉成一个常数
+public class BoundedRocksDBConfig implements RocksDBConfigSetter {
+    // static：进程内所有 task 的所有 store 共用这两个对象
+    private static final long TOTAL_OFF_HEAP = 256L * 1024 * 1024; // 256 MiB 总上限
+    private static final long TOTAL_MEMTABLE = 128L * 1024 * 1024;
+
+    private static final Cache CACHE = new LRUCache(TOTAL_OFF_HEAP);
+    private static final WriteBufferManager WBM =
+        new WriteBufferManager(TOTAL_MEMTABLE, CACHE); // memtable 也计入同一池
+
+    @Override
+    public void setConfig(String storeName, Options options,
+                          Map&lt;String, Object&gt; configs) {
+        BlockBasedTableConfig table =
+            (BlockBasedTableConfig) options.tableFormatConfig();
+        table.setBlockCache(CACHE);                       // 共享 cache
+        table.setCacheIndexAndFilterBlocks(true);         // index/filter 也进 cache，纳入上限
+        options.setWriteBufferManager(WBM);               // 共享写缓冲池
+        options.setTableFormatConfig(table);
+    }
+
+    @Override public void close(String storeName, Options options) {}
+}</code></pre>
+      </div>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">deploy.env / streams.properties</span>
+          <span class="lang">Properties</span>
+          <button class="copy" data-copy-target="code-p6b">复制</button>
+        </div>
+<pre id="code-p6b"><code class="language-properties"># 挂上 config setter
+rocksdb.config.setter=com.example.BoundedRocksDBConfig
+
+# 容器内存 = 堆(-Xmx) + 堆外上限(LRUCache+WBM) + 线程栈/元空间 + 余量
+# 例：-Xmx2g + 256MiB cache + ~512MiB 余量 → 容器 limit ≥ 2.75g
+
+# 抑制 glibc 多 arena 造成的 native 内存碎片（容器里尤其明显）
+# 作为环境变量设置：MALLOC_ARENA_MAX=2</code></pre>
+      </div>
+      <p><strong>如何避免</strong>：把容器内存预算显式拆成"堆 + 堆外缓存上限 + 余量"三项分别算，而不是"给个 <code>-Xmx</code> 再加点"。任何上 RocksDB 的有状态 Streams 应用，默认就配 <code>RocksDBConfigSetter</code> 共享 <code>LRUCache</code> + <code>WriteBufferManager</code>，把堆外钉成常数——否则堆外随 task 数线性涨，迟早撞上限。监控容器 RSS（而非只看 JVM 堆），RSS 才反映堆 + 堆外的真实占用。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · JVM 堆是 OOMKill 的诱饵</span>
+        <p>容器被 OOMKill 时第一反应往往是"加 <code>-Xmx</code>"或"看 GC"——两条都走偏。<strong>RocksDB 的内存在堆外，<code>-Xmx</code> 与 GC 指标对它一无所知</strong>。判断依据应是容器 RSS 对容器 limit，不是 used heap 对 <code>-Xmx</code>。<code>exit code 137</code> + 堆指标正常 = 几乎必是堆外（RocksDB 或 直接 ByteBuffer）顶破了上限。</p>
+      </div>
+
+      <h3 id="p6prime">陷阱 ⑥' · 迟到事件无声消失</h3>
+      <p><strong>症状</strong>：明明收到了带较早事件时间的记录，窗口聚合结果却没把它算进去，且<strong>没有任何错误</strong>——只在 <code>dropped-records</code> 指标上加了 1（不看这个指标就完全无感）。补数据、回放历史时尤其常见：旧时间戳的记录大批被丢。</p>
+      <p><strong>根因</strong>：窗口有宽限期 grace，一旦 <code>stream-time ≥ window_end + grace</code>，迟到记录被静默丢弃，只计入 dropped 指标（<a href="02-principles.html#windowing-time">§2.4 窗口与时间</a>）。再叠加两个放大因素：event-time 与 processing-time 混淆导致时间判断错位；以及历史上某些默认 grace 行为会无声丢弃很久——所以"没显式设 grace"最危险。</p>
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">GraceFix.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="code-p6prime">复制</button>
+        </div>
+<pre id="code-p6prime"><code class="language-java">// 错误：没显式声明 grace，迟到记录何时被丢由默认行为决定，不可控
+TimeWindows badWin = TimeWindows.ofSizeWithNoGrace(Duration.ofMinutes(5));
+
+// 正确：显式声明窗口大小 + grace，把"容忍迟到多久"写成代码里看得见的决策
+TimeWindows win = TimeWindows.ofSizeAndGrace(
+    Duration.ofMinutes(5),    // 窗口大小
+    Duration.ofMinutes(10));  // grace：窗口关后还容忍 10 分钟的迟到
+
+KTable&lt;Windowed&lt;String&gt;, Long&gt; counts = events
+    .groupByKey()
+    .windowedBy(win)
+    .count()
+    // suppress：只在窗口彻底关闭后发一个最终结果，避免下游看到中间态
+    .suppress(Suppressed.untilWindowCloses(
+        Suppressed.BufferConfig.unbounded()));
+
+// 同时：changelog/窗口 store 的 retention 必须 ≥ 窗口 + grace，否则
+// 状态先于 grace 被清掉，迟到记录连匹配的窗口都找不到
+// Materialized.as(...).withRetention(Duration.ofMinutes(20))</code></pre>
+      </div>
+      <p><strong>如何避免</strong>：永远用 <code>ofSizeAndGrace</code> 显式声明 grace，禁止依赖默认；把 grace 当成一条业务决策（"业务能容忍多久的迟到"）而非一个被忽略的参数。给 dropped-records 指标配告警——它从 0 开始涨，就是有迟到事件在被丢。窗口 store 的 retention 设成 ≥ 窗口 + grace，并在回放历史/补数时单独评估 grace 是否够大。</p>
+
+      <h3 id="p8">陷阱 ⑧ · 开 EOS 后延迟变高或外部副作用意外重复</h3>
+      <p><strong>症状</strong>：把 <code>processing.guarantee</code> 切到 <code>exactly_once_v2</code> 后，端到端延迟明显上升、下游 <code>read_committed</code> 消费者吞吐降 15-30%；或者更糟——你以为"精确一次"了，外部系统（数据库 / HTTP / 短信）却仍然收到重复调用。</p>
+      <p><strong>根因</strong>：两件被画错的边界。其一，<strong>EOS 把 <code>commit.interval.ms</code> 默认从 30000ms 改成 100ms</strong>——频繁提交事务是延迟上升和吞吐下降的真因，不是"事务本身慢"（<a href="02-principles.html#eos">§2.6 EOS v2</a>）。其二，<strong>EOS 的原子性只覆盖单个 Kafka 集群内的"offset 提交 + 状态 changelog 写 + 输出 produce"，完全不延伸到外部副作用</strong>——你在 processor 里发的 HTTP / 写的 DB，在事务 abort 重试时会再执行一次。EOS 不是"全世界精确一次"，只是"Kafka 内精确一次"。</p>
+      <h3>修复</h3>
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">EosFix.java / streams.properties</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="code-p8">复制</button>
+        </div>
+<pre id="code-p8"><code class="language-java">// 配置：EOS 下 commit.interval.ms 默认 100ms，按延迟/吞吐权衡调整
+// （properties）
+//   processing.guarantee=exactly_once_v2
+//   commit.interval.ms=200        # 在延迟和吞吐之间找平衡，不必死守 100
+//   # EOS 需要 ≥3 个 broker（事务状态有副本要求）
+
+// 错误：在 EOS 拓扑里直接做外部副作用，以为 EOS 会保证它精确一次
+stream.foreach((k, order) -&gt; {
+    paymentGateway.charge(order);   // 事务 abort 重试时会重复扣款！EOS 管不到外部
+});
+
+// 正确：外部副作用走幂等或 outbox —— 让"重复"在外部侧被吸收
+// ① 幂等：用 event-id 做外部 upsert，重复写无副作用
+stream.foreach((k, order) -&gt;
+    db.upsertByKey(order.eventId(), order));   // 同一 eventId 重复执行结果一致
+
+// ② outbox：Streams 只写一条 Kafka 输出（受 EOS 保护），
+//    由独立消费者带去重地投递给外部系统
+KStream&lt;String, Charge&gt; outbox = orders
+    .mapValues(o -&gt; new Charge(o.eventId(), o.amount()));
+outbox.to("charge-outbox");        // 外部投递在另一进程按 eventId 去重</code></pre>
+      </div>
+      <p><strong>如何避免</strong>：开 EOS 前先做两道判断。第一，延迟预算能否吃下 100ms 量级的提交间隔——吃不下就调 <code>commit.interval.ms</code> 权衡，或重新评估是否真需要 EOS（很多场景 <code>at_least_once</code> + 下游幂等就够）。第二，拓扑里有没有外部副作用——有就一律走幂等（按 event-id upsert）或 outbox 模式，绝不指望 EOS 替你保证外部精确一次。部署时确认 broker ≥ 3。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · EOS 的"精确一次"只在 Kafka 边界内成立</span>
+        <p><code>exactly_once_v2</code> 绑定的是 offset 提交 + changelog 写 + 输出 produce 三者的 Kafka 内原子性，下游必须 <code>read_committed</code> 才看得到这层保证。它<strong>不覆盖任何外部系统</strong>：processor 里的 DB 写、HTTP 调用、发短信，在事务重试时都会重复。面试里把 EOS 说成"端到端精确一次"是减分项——正确说法是"Kafka 内事务性精确一次，外部要靠幂等/outbox"。</p>
+      </div>
+
+      <!-- ============================================================
+           Anti-patterns + when NOT to use
+           ============================================================ -->
+      <h2 id="anti-patterns"><span class="num">4.D</span><span>反模式与"何时不该用 Streams"</span></h2>
+
+      <p>八个失败模式之外，还有几条不在单条陷阱里、但会反复出现的反模式，以及一个更诚实的问题：什么时候根本不该上 Streams。</p>
+
+      <table class="compare-table">
+        <caption>表 4.1 · 反模式速查</caption>
+        <thead>
+          <tr><th>反模式</th><th>为什么是错的</th><th>正确做法</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>用 GlobalKTable 装大表</td>
+            <td>每实例全量加载，磁盘+内存+启动 bootstrap 延迟都随表大小线性涨</td>
+            <td>只给"小而慢变"的维表用 GlobalKTable；大表用共分区的 KTable join 或外键 join</td>
+          </tr>
+          <tr>
+            <td>在低流量/空闲分区上等窗口结果</td>
+            <td>stream-time 只在有记录到达时前进；没数据则时间冻结、窗口永不关、结果不发</td>
+            <td>理解 stream-time 是数据驱动的；低流量场景考虑用心跳记录推进，或接受结果延迟到下一条记录</td>
+          </tr>
+          <tr>
+            <td>把 suppress 当"最终结果"保证，却用 emitEarlyWhenFull</td>
+            <td>内存压力下 <code>emitEarlyWhenFull</code> 会发非最终的中间结果，违背"只发最终值"的预期</td>
+            <td>要严格最终结果用 <code>shutDownWhenFull</code>；用 <code>emitEarlyWhenFull</code> 就接受可能有中间态</td>
+          </tr>
+          <tr>
+            <td>运行中改 topology 还想热升级</td>
+            <td>topology 变更改变内部 topic / task 划分；KIP-1071 新协议也不支持在线改 topology</td>
+            <td>topology 变更走停机部署 + 评估状态兼容；改 <code>application.id</code> 等于全新应用（状态从头建）</td>
+          </tr>
+          <tr>
+            <td>无状态简单转发也上 Streams</td>
+            <td>白白引入 changelog / 状态恢复 / 再平衡复杂度，换不来对应价值</td>
+            <td>纯过滤/转发/路由用原生 consumer-producer 就够；状态/窗口/join/EOS 才值得上 Streams</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>什么时候不该用 Kafka Streams（诚实回答）</h3>
+      <ul>
+        <li><strong>源和汇主要不是 Kafka</strong>：Streams 的容错、EOS、共分区全建在 Kafka 之上。如果数据主要来自数据库/对象存储、要写去多个异构外部系统，Streams 的优势用不上，反而要为它的 Kafka 中心假设买单。</li>
+        <li><strong>需要跨多个 Kafka 集群的处理</strong>：EOS 只在单集群内原子（<a href="#p8">陷阱 ⑧</a>），跨集群 join / 事务不在 Streams 的能力内。</li>
+        <li><strong>复杂 CEP 或机器学习管线</strong>：需要复杂事件模式匹配、迭代计算、ML 推理编排时，专门的流处理引擎（Flink）或批/流统一框架更合适——它们有独立集群 + checkpoint 模型，承载得起这类负载。</li>
+        <li><strong>只是简单消费</strong>：只要消费一个 topic 做点无状态处理，原生 consumer 更轻、心智负担更小（见上表最后一行）。</li>
+      </ul>
+      <p>判别口径：<strong>要本地状态 / 窗口 / join / EOS，且源汇都在一个 Kafka 集群里——才是 Streams 的甜区</strong>。偏离这两条越远，越该换工具。这条判别会在 <a href="05-capstone.html">05 章综合实战</a>里被反复用到。</p>
+
+      <!-- ============================================================
+           Self-check
+           ============================================================ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>容器报 <code>exit code 137</code> 反复重启，但 JVM <code>used heap</code> 离 <code>-Xmx</code> 还很远、GC 平静。最可能的根因是什么？为什么"调大 <code>-Xmx</code>"会让情况更糟？应该看哪个指标判断？</li>
+          <li>两个流 join，逻辑正确、进程健康、零异常，输出 topic 却一条都没有。第一个该怀疑的是什么？分区"数"不符和分区"方式"不符，哪一种更难查、为什么？</li>
+          <li>同事说"我只在代码里 <code>selectKey</code> 了一次，怎么会有 repartition topic 的存储和延迟成本？" 他的归因错在哪？用什么命令能数清实际建了几个内部 topic？</li>
+          <li>（设计层）某团队把 <code>processing.guarantee</code> 切到 <code>exactly_once_v2</code>，期望"用户绝不会被重复扣款"。这个期望哪里站不住？要真正做到"不重复扣款"，正确的架构是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>根因是 RocksDB 在<strong>堆外</strong>分配内存（block cache + memtable + index/filter，每 store 一份），<code>-Xmx</code> 管不到它；容器上限盖的是"堆 + 堆外"总和，堆还有空余但总和已顶破上限，被内核 OOMKill。调大 <code>-Xmx</code> 把更多额度划给堆、留给堆外的更少，OOMKill 反而更早。判断应看<strong>容器 RSS 对容器 limit</strong>，不是 used heap 对 <code>-Xmx</code>。修复：<code>RocksDBConfigSetter</code> 共享 <code>LRUCache</code> + <code>WriteBufferManager</code> 把堆外钉成常数（<a href="#p6">§4.A 陷阱 ⑥</a>、图 4.1）。</li>
+            <li>第一个该怀疑<strong>共分区</strong>：等值 join 要求两侧相同分区数 + 相同分区方式。分区<strong>数</strong>不符会让拓扑启动直接报错（fail-fast，反而好查）；分区<strong>方式</strong>不符（数相同、分区器不同）校验通过却把记录路由到不同 task，匹配全丢、零输出零报错——<strong>静默失败更难查</strong>。修复：join 前对一侧显式 <code>repartition</code> 对齐，或小维表用 <code>GlobalKTable</code>（<a href="#p4">陷阱 ④</a>）。</li>
+            <li>归因错在：<code>selectKey</code> 是 <strong>lazy</strong> 的，单独存在<strong>不建任何 topic</strong>，只打"key 变了"的标记；真正物化 repartition topic 的是下游<strong>依赖 key</strong> 的算子（<code>groupByKey</code> / <code>join</code> / <code>aggregate</code>）。所以数源码里 selectKey 的次数没意义，要用 <code>topology.describe()</code> 看实际生成了几个内部 topic（<a href="#p3">陷阱 ③</a>）。</li>
+            <li>期望站不住，因为 <code>exactly_once_v2</code> 的原子性<strong>只覆盖单个 Kafka 集群内</strong>的 offset 提交 + changelog 写 + 输出 produce，<strong>不延伸到外部系统</strong>；processor 里直接调支付网关，在事务 abort 重试时会重复扣款。正确架构：外部副作用走<strong>幂等</strong>（按 event-id 对外部 upsert，重复无副作用）或 <strong>outbox</strong>（Streams 只写一条受 EOS 保护的 Kafka 输出，独立消费者按 event-id 去重后投递给支付系统）。同时注意 EOS 把 <code>commit.interval.ms</code> 默认改成 100ms 带来的延迟代价（<a href="#p8">陷阱 ⑧</a>）。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个有状态 Streams 应用做"生产就绪体检"</h3>
+        <p>设拓扑：<code>orders</code>（12 分区）经 <code>selectKey(userId)</code> 后与 <code>users</code> 表 join，再按 5 分钟滚动窗口聚合每用户下单额，开 <code>exactly_once_v2</code> 输出到下游并同时给风控系统发 HTTP 告警。部署在 Kubernetes，每 Pod <code>-Xmx2g</code>、容器 limit 2.5g、<code>num.standby.replicas=0</code>、<code>users</code> 用普通 KTable。请只凭本章的八个失败模式，列出这套配置里<strong>所有</strong>会出事的点，并给每个点一句话修复。目标是一次体检命中 ≥6 处。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>逐条对号入座：①恢复——<code>standby=0</code> + 没提持久卷；③隐藏重分区——<code>selectKey</code> 下游 join/聚合会物化 repartition topic，<code>topology.describe()</code> 数一下；④join——<code>users</code> 与 <code>orders</code> 是否共分区（12 分区？同分区器？），不确定就 GlobalKTable 或 repartition 对齐；⑥OOMKill——容器 2.5g 只比 <code>-Xmx2g</code> 多 0.5g，没给 RocksDB 堆外留额度、也没 <code>RocksDBConfigSetter</code>；⑥'迟到——窗口有没有显式 grace + retention；⑧EOS——HTTP 告警是外部副作用，EOS 管不到、重试会重复发，且 100ms 提交间隔的延迟代价 + broker 是否 ≥3。⑦扩缩——12 分区是并行上限，线程/实例别超。把这些连起来就是一份体检报告。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/streams/">Kafka Streams 官方文档</a>（官方）</li>
+          <li><a href="https://www.confluent.io/blog/how-to-tune-rocksdb-kafka-streams-state-stores-performance/">Confluent: How to Tune RocksDB for Kafka Streams State Stores</a>（维护者博客 · 陷阱 ⑥ 内存模型）</li>
+          <li><a href="https://www.confluent.io/blog/enabling-exactly-once-kafka-streams/">Confluent: Enabling Exactly-Once in Kafka Streams</a>（设计文档 · 陷阱 ⑧ EOS 边界）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1071%3A+Streams+Rebalance+Protocol">KIP-1071: Streams Rebalance Protocol</a>（设计文档 · 陷阱 ① static membership 限制）</li>
+          <li><a href="https://developer.confluent.io/courses/kafka-streams/internals/">developer.confluent.io · Kafka Streams Internals</a>（恢复 / 共分区 / repartition 机制）</li>
+          <li><a href="https://kafka.apache.org/blog/2026/05/22/apache-kafka-4.3.0-release-announcement/">Apache Kafka 4.3.0 Release Announcement</a>（官方 · KIP-1035 恢复加速，截至 2026-06）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-practice.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 实操</span>
+        </a>
+        <a href="05-capstone.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 综合实战</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#taxonomy" data-toc-target="taxonomy">4.0 分类图</a></li>
+        <li><a href="#restore" data-toc-target="restore">4.A 恢复/再平衡</a></li>
+        <li><a href="#p1" data-toc-target="p1">① 恢复卡顿</a></li>
+        <li><a href="#p7" data-toc-target="p7">⑦ 扩不动</a></li>
+        <li><a href="#correctness" data-toc-target="correctness">4.B 正确性</a></li>
+        <li><a href="#p3" data-toc-target="p3">③ 隐藏重分区</a></li>
+        <li><a href="#p4" data-toc-target="p4">④ join 无输出</a></li>
+        <li><a href="#p5" data-toc-target="p5">⑤ serde/null</a></li>
+        <li><a href="#resource" data-toc-target="resource">4.C 资源/语义</a></li>
+        <li><a href="#p6" data-toc-target="p6">⑥ OOMKilled</a></li>
+        <li><a href="#p6prime" data-toc-target="p6prime">⑥' 迟到丢失</a></li>
+        <li><a href="#p8" data-toc-target="p8">⑧ EOS 慢/重复</a></li>
+        <li><a href="#anti-patterns" data-toc-target="anti-patterns">4.D 反模式</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

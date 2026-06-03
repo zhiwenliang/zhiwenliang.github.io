@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 变更 · Server Actions 与 Route Handlers</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 660px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref { font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500; }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-routing.html">01 路由</a><span class="sep">—</span>
+    <a href="02-components.html">02 组件</a><span class="sep">—</span>
+    <a href="03-rendering.html">03 渲染</a><span class="sep">—</span>
+    <a href="04-data-fetching.html">04 取数</a><span class="sep">—</span>
+    <a href="05-caching.html">05 缓存</a><span class="sep">—</span>
+    <a href="06-mutations.html" class="current">06 变更</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 06</p>
+        <h1>变更：Server Actions 与 Route Handlers</h1>
+        <p class="recap">上一章讲了缓存：数据怎么存、怎么失效。失效通常由一次写操作触发——这一章讲怎么写。Server Actions 把 <a href="02-components.html">02 章</a>那条"函数不能跨边界"的规则开了一个受控的口子；Route Handlers 则是给机器用的标准 HTTP 端点。写完之后，用 <a href="05-caching.html">05 章</a>的 <code>revalidateTag</code> / <code>revalidatePath</code> 让 UI 更新。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>Server Action（<code>'use server'</code>）：一个被编译成"加密 POST 端点"的函数，可从客户端直接调用，或绑到 <code>&lt;form action={fn}&gt;</code></li>
+          <li>安全模型：每个 action 都是公开端点——必须校验输入、校验权限（不只是认证）；闭包捕获的变量会被加密签名后传到客户端</li>
+          <li>Route Handler（<code>route.ts</code>）：标准 HTTP 端点，给 webhook / 第三方 / 移动端 / 公开读 API</li>
+          <li>写完必须让缓存失效（接 05 章）；Server Action 与 Route Handler 的选择规则</li>
+        </ul>
+      </section>
+
+      <h2 id="s61"><span class="num">6.1</span><span>Server Action：可跨界调用的函数</span></h2>
+      <p class="one-liner">在函数（或文件）顶部写 <code>'use server'</code>，它就成为一个可以从客户端直接 <code>await</code> 调用的服务端函数——表面是函数调用，底层是一次 POST 请求。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它（呼应 02 章）</span>
+        <p>02 章给过一条硬规则：函数不能从服务端传给客户端，因为函数序列化不了（见 <a href="02-components.html#s24">§2.4</a> 那张跨界 props 表的最后两行）。Server Action 是那条规则的<strong>唯一例外</strong>。<code>'use server'</code> 让编译器把这个函数变成一个 POST 端点，按一个"加密的、每次构建生成的 action ID"路由——这个 ID 是源码位置的 hash，不可猜测。客户端拿到的不是函数本体，而是一个指向该端点的引用；调用这个引用，等价于向那个端点发一次 POST。未被任何地方引用的 action ID 会被 tree-shake 掉，不进产物。</p>
+        <p>绑到 <code>&lt;form action={fn}&gt;</code> 时还多一层好处：渐进增强。表单在 JS 尚未加载完时也能提交，因为 React 扩展了原生表单的 POST 行为——浏览器原生表单不依赖 JS。</p>
+      </div>
+
+      <p>下面是一个 <code>'use server'</code> 的 <code>createTodo</code>，先绑到表单，再演示从一个 Client Component 里直接 <code>await</code> 调用同一个函数。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">app/todos/actions.ts</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-action">复制</button>
+        </div>
+<pre id="c-action"><code class="language-tsx">'use server'                          // ← 整个文件的导出函数都成为 Server Action
+import { db } from '@/lib/db'
+import { revalidateTag } from 'next/cache'
+
+export async function createTodo(formData: FormData) {
+  const title = formData.get('title') as string
+  await db.todo.create({ title })     // 在服务端写库
+  revalidateTag('todos', 'max')       // 写完让缓存失效（详见 §6.3）
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">app/todos/page.tsx（表单绑定 · Server Component）</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-form">复制</button>
+        </div>
+<pre id="c-form"><code class="language-tsx">import { createTodo } from './actions'
+
+export default function TodosPage() {
+  return (
+    &lt;form action={createTodo}&gt;       {/* 把 action 直接交给 form */}
+      &lt;input name="title" /&gt;
+      &lt;button type="submit"&gt;新增&lt;/button&gt;
+    &lt;/form&gt;
+  )
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">app/todos/quick-add.tsx（直接调用 · Client Component）</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-call">复制</button>
+        </div>
+<pre id="c-call"><code class="language-tsx">'use client'
+import { createTodo } from './actions'
+
+export function QuickAdd() {
+  async function onClick() {
+    const fd = new FormData()
+    fd.set('title', '买牛奶')
+    await createTodo(fd)              // 像调本地函数，底层是一次 POST
+  }
+  return &lt;button onClick={onClick}&gt;一键添加&lt;/button&gt;
+}</code></pre>
+      </div>
+
+      <div class="annotations">
+        <p><span class="line-ref">actions.ts</span>文件顶部一行 <code>'use server'</code> 把所有导出函数标成 Server Action。函数体永远在服务端执行——<code>db</code> 不会进客户端 bundle。</p>
+        <p><span class="line-ref">quick-add.tsx</span>是 Client Component，却能 <code>import</code> 并 <code>await</code> 这个服务端函数。它拿到的是一个 action 引用，<code>await createTodo(fd)</code> 实际触发了向加密端点的一次 POST，再拿回返回值。这正是 02 章那条规则的例外。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Server Action 调用流程：客户端提交触发携带加密 action ID 的 POST，服务端执行函数写库，调用 revalidateTag，新的 RSC payload 流回，UI 更新">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- client box -->
+          <rect x="40" y="120" width="180" height="80" rx="6" class="diagram-ink node-fill"/>
+          <text x="130" y="150" text-anchor="middle" class="node-label">客户端</text>
+          <text x="130" y="170" text-anchor="middle" class="edge-label">表单提交 / await 调用</text>
+          <text x="130" y="186" text-anchor="middle" class="edge-label">乐观更新可先发生</text>
+
+          <!-- server box -->
+          <rect x="300" y="40" width="200" height="80" rx="6" class="diagram-ink node-fill"/>
+          <text x="400" y="70" text-anchor="middle" class="node-label">服务端执行 action</text>
+          <text x="400" y="90" text-anchor="middle" class="edge-label">校验 → 写库</text>
+          <text x="400" y="106" text-anchor="middle" class="edge-label">revalidateTag</text>
+
+          <!-- result UI box -->
+          <rect x="540" y="120" width="180" height="80" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="630" y="150" text-anchor="middle" class="node-label-accent">UI 更新</text>
+          <text x="630" y="170" text-anchor="middle" class="edge-label">收到新 RSC payload</text>
+          <text x="630" y="186" text-anchor="middle" class="edge-label">列表反映新数据</text>
+
+          <!-- POST edge client -> server -->
+          <path d="M 200 132 L 300 86" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="232" y="98" text-anchor="middle" class="edge-label">POST</text>
+          <text x="244" y="114" text-anchor="middle" class="branch-label">加密 action ID</text>
+
+          <!-- RSC payload edge server -> result -->
+          <path d="M 500 86 L 600 120" class="diagram-accent" marker-end="url(#ar-ver)"/>
+          <text x="560" y="92" text-anchor="middle" class="edge-label">RSC payload</text>
+          <text x="566" y="108" text-anchor="middle" class="branch-label">流回</text>
+
+          <!-- caption note edge result -> client (state preserved) -->
+          <path d="M 540 184 L 224 184" class="diagram-soft"/>
+          <text x="382" y="176" text-anchor="middle" class="edge-label">同一棵客户端树 · 状态保留</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>一次 Server Action 调用的完整往返：客户端触发 → 携带加密 action ID 的 POST → 服务端校验并写库 → <code>revalidateTag</code> → 新的 RSC payload 流回 → UI 更新。<strong>注意</strong>：流回的是 RSC payload 而非整页 HTML（呼应 <a href="02-components.html#s23">§2.3</a>），所以更新被 reconcile 进当前还活着的组件树，客户端状态不丢。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>把一个<strong>普通</strong>服务端函数（没写 <code>'use server'</code>）作为 prop 传给一个客户端按钮的 <code>onClick</code>，能成吗？给这个函数加上 <code>'use server'</code> 之后呢？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>不加 <code>'use server'</code>：<strong>报错</strong>。这正是 02 章 <a href="02-components.html#s24">§2.4</a> 的规则——普通函数序列化不了，跨不了网络边界，不能作为 prop 从服务端传给客户端。</p>
+          <p>加上 <code>'use server'</code> 之后：<strong>能</strong>。它不再是普通函数，而被编译成一个可跨界的 action 引用（指向加密端点）。传给客户端的是这个引用，客户端 <code>onClick</code> 调用它就发一次 POST。Server Action 是那条规则唯一被官方打开的口子。</p>
+        </details>
+      </div>
+
+      <h2 id="s62"><span class="num">6.2</span><span>安全模型：公开端点要当敌意输入处理</span></h2>
+      <p class="one-liner">每个 Server Action 编译后都是一个任何人都能打的公开 POST 端点，所以它必须自己校验输入、校验"这个用户有没有权限动这条数据"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它（比文档深一层）</span>
+        <p>第一个错觉来自类型。TypeScript 的类型在运行时被擦除——参数标注成 <code>{ id: number }</code> 挡不住一个手写的恶意请求，对方完全可以传任意 JSON 打这个端点。所以"靠类型保证安全"是假的，必须<strong>运行时校验</strong>（如用 Zod 解析）。</p>
+        <p>第二个、也是更致命的错觉是把<strong>认证</strong>当成了<strong>授权</strong>。"检查用户登录了没"（authentication）只回答"你是谁"；它不回答"你能不能动<em>这一条</em>"（authorization）。只做前者会留下越权漏洞——攻击者把请求里的 <code>id</code> 换成别人的，就动了别人的数据（IDOR，Insecure Direct Object Reference）。每个 action 都要重新校验：当前用户对<em>这个具体对象</em>是否有权限。</p>
+        <p>Next 提供了一层内置防护：Origin / Host 校验防 CSRF、只接受 POST、action ID 加密不可猜。还有一个容易忽略的点——action 闭包里捕获的变量会被用构建期密钥<strong>加密签名后下发</strong>到客户端，再随调用传回。所以不要在闭包里捕获 secret（如 API key）；用 <code>.bind()</code> 绑定的参数则是显式、不加密地传递的。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">app/posts/actions.ts（校验输入 + 校验所属权）</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-secure">复制</button>
+        </div>
+<pre id="c-secure"><code class="language-tsx">'use server'
+import { z } from 'zod'
+import { auth } from '@/lib/auth'
+import { db } from '@/lib/db'
+import { revalidateTag } from 'next/cache'
+
+const Input = z.object({ postId: z.string(), title: z.string().min(1) })
+
+export async function renamePost(raw: unknown) {
+  // 1) 运行时校验输入——类型在运行时不存在，挡不住恶意请求
+  const { postId, title } = Input.parse(raw)
+
+  // 2) 认证：你是谁
+  const session = await auth()
+  if (!session) throw new Error('未登录')
+
+  // 3) 授权：你能不能动「这一条」——少了这步就是越权漏洞(IDOR)
+  const post = await db.post.find(postId)
+  if (post.ownerId !== session.userId) throw new Error('无权操作')
+
+  await db.post.update(postId, { title })
+  revalidateTag('posts', 'max')
+}</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">常见误用</span>
+        <p>把 Server Action 当成"私有内部函数"，或拿它来做<strong>读取</strong>。两者都错。它不是私有的——编译后是一个公开可调用的端点，谁都能打，所以"反正只有自己的 UI 会调"不成立。它也不该用来读：用 action 读会绕过 05 章的缓存体系（每次都是一次未缓存的 POST 往返），还白白多暴露一个端点。读用 Server Component 直接 <code>await</code> 数据源（04 章），写才用 Server Action。</p>
+      </div>
+
+      <h2 id="s63"><span class="num">6.3</span><span>写完让缓存失效（接 05 章）</span></h2>
+      <p class="one-liner">Server Action 改了数据库后，缓存仍持有旧渲染；在 action 末尾调用 <code>revalidateTag</code> / <code>revalidatePath</code>（05 章）让相关页面下次请求重新渲染。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>写库只改了<strong>数据源</strong>，不会自动碰 05 章那四层缓存里的任何一层。Data Cache 里那份旧查询结果、Full Route Cache 里那份旧渲染产物，仍然原封不动——下次访问命中的还是旧值。所以"写"和"失效"在 App Router 里是<strong>成对出现</strong>的两步：写完必须显式告诉框架"哪些缓存作废了"。</p>
+        <p><code>revalidateTag('todos')</code> 让所有带 <code>todos</code> 这个 tag 的缓存条目失效，下次访问时重新渲染、重新拿数据。需要"写完<em>当前这次请求内</em>就读到新值"（读己写一致）时，用 <code>updateTag</code> 而非 <code>revalidateTag</code>——前者立即更新当前渲染，后者只标记下次失效。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">app/todos/actions.ts（写 + 失效成对出现）</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-reval">复制</button>
+        </div>
+<pre id="c-reval"><code class="language-tsx">'use server'
+import { db } from '@/lib/db'
+import { revalidateTag } from 'next/cache'
+
+export async function createTodo(formData: FormData) {
+  const title = formData.get('title') as string
+  await db.todo.create({ title })       // 第一步：写数据源
+
+  // 第二步：让缓存失效——少了这步，页面继续显示旧列表
+  // 注：Next 16 起 revalidateTag 需要 profile 参数（如 'max'），呼应 05 章
+  revalidateTag('todos', 'max')
+}</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 Server Action 成功写了数据库（数据库里确实多了一行），但刷新页面前，列表仍显示旧数据。最容易漏掉哪一步？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>漏了 <strong>revalidate</strong>。action 只完成了"写数据源"那一步，没调用 <code>revalidateTag</code> / <code>revalidatePath</code>，于是 05 章那几层缓存仍持有旧渲染，页面命中的是缓存里的旧列表。补上 <code>revalidateTag('todos', 'max')</code> 即可——写库永远不会自动让缓存失效，这是两件事。</p>
+        </details>
+      </div>
+
+      <h2 id="s64"><span class="num">6.4</span><span>Server Action vs Route Handler</span></h2>
+      <p class="one-liner">人从你自己的 UI 触发的变更，用 Server Action；机器经 HTTP 访问（webhook、第三方、移动端、公开读 API）的，用 Route Handler。</p>
+
+      <div class="rationale">
+        <span class="label">为什么是两种工具</span>
+        <p>Route Handler 是 <code>app/api/.../route.ts</code> 里导出的 <code>GET</code> / <code>POST</code> 等函数，签名是标准的 <code>Request → Response</code>。你完全掌控 HTTP 细节——状态码、响应头、缓存策略——并且它能被<em>任意</em>客户端调用（curl、Stripe、安卓 App 都行）。代价是手写：要自己解析请求、自己序列化响应、自己处理 CSRF。</p>
+        <p>Server Action 把这些都省掉了：没有手写 fetch、没有手写端点、没有手写序列化，内置 CSRF 防护和渐进增强。代价是它<strong>只为"你的应用自己的 UI"设计</strong>——它不是一个稳定的公开 HTTP 契约，外部系统不该依赖它。经验比例：约 90% 的内部变更用 Action，对外契约用 Handler。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 6.1 · Server Action 与 Route Handler 的分工</caption>
+        <thead>
+          <tr><th>维度</th><th>Server Action</th><th>Route Handler</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>触发者</td><td>你自己应用的 UI（人点击 / 提交表单）</td><td>任意 HTTP 客户端（机器）</td></tr>
+          <tr><td>典型场景</td><td>保存草稿、点赞、改资料、表单提交</td><td>webhook、第三方回调、移动端、公开读 API</td></tr>
+          <tr><td>HTTP 控制</td><td>不暴露，框架代管</td><td>完全掌控状态码 / 响应头 / 缓存</td></tr>
+          <tr><td>CSRF 防护</td><td>内置（Origin/Host 校验 + 仅 POST）</td><td>自己负责</td></tr>
+          <tr><td>渐进增强</td><td>有（<code>&lt;form action&gt;</code> 免 JS 可用）</td><td>无（就是个端点）</td></tr>
+          <tr class="selected"><td>何时选</td><td>变更由你的 UI 触发 → 选它（约 90% 内部变更）</td><td>需要公开契约 / 自定义 HTTP 响应 → 选它</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="变更工具决策树：先问谁来触发，人或你的UI走向需要公开或自定义响应的判断，机器或HTTP直接到Route Handler">
+          <defs>
+            <marker id="ar-ink2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-ver2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Q1 diamond -->
+          <polygon points="170,40 280,90 170,140 60,90" class="diagram-ink node-fill"/>
+          <text x="170" y="86" text-anchor="middle" class="node-label">谁来触发？</text>
+          <text x="170" y="104" text-anchor="middle" class="edge-label">trigger source</text>
+
+          <!-- Q2 diamond -->
+          <polygon points="170,200 290,256 170,312 50,256" class="diagram-ink node-fill"/>
+          <text x="170" y="250" text-anchor="middle" class="node-label">需要公开端点</text>
+          <text x="170" y="268" text-anchor="middle" class="node-label">或自定义响应？</text>
+
+          <!-- terminal: Server Action -->
+          <rect x="430" y="218" width="220" height="62" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="540" y="246" text-anchor="middle" class="node-label-accent">Server Action</text>
+          <text x="540" y="265" text-anchor="middle" class="edge-label">省 fetch · 内置 CSRF · 渐进增强</text>
+
+          <!-- terminal: Route Handler -->
+          <rect x="430" y="34" width="220" height="62" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="62" text-anchor="middle" class="node-label">Route Handler</text>
+          <text x="540" y="81" text-anchor="middle" class="edge-label">route.ts · 掌控 HTTP</text>
+
+          <!-- Q1 -> Q2 (人 / 你的UI) -->
+          <line x1="170" y1="140" x2="170" y2="200" class="diagram-ink" marker-end="url(#ar-ink2)"/>
+          <text x="170" y="174" text-anchor="middle" class="branch-label">人 / 你的 UI</text>
+
+          <!-- Q1 -> Route Handler (机器 / HTTP) -->
+          <path d="M 280 80 L 430 66" class="diagram-ink" marker-end="url(#ar-ink2)"/>
+          <text x="356" y="62" text-anchor="middle" class="branch-label">机器 / HTTP</text>
+
+          <!-- Q2 -> Server Action (否) -->
+          <path d="M 290 256 L 430 250" class="diagram-accent" marker-end="url(#ar-ver2)"/>
+          <text x="362" y="244" text-anchor="middle" class="branch-label">否</text>
+
+          <!-- Q2 -> Route Handler (是) -->
+          <path d="M 240 224 C 330 150, 380 120, 452 96" class="diagram-ink" marker-end="url(#ar-ink2)"/>
+          <text x="332" y="150" text-anchor="middle" class="branch-label">是</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.2</span>变更工具的决策树。<strong>注意</strong>：第一个分叉只看触发者——只要是<em>机器经 HTTP</em>就直接走 Route Handler；只有"人从你自己 UI 触发"才进第二问，而第二问只有在确实需要公开契约或自定义 HTTP 响应时才回到 Handler，否则落在 Server Action。</figcaption>
+      </figure>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>02 章说函数不能从服务端传到客户端。Server Action 为什么是例外？它底层被编译成了什么？</li>
+          <li>为什么"Server Action 里已经检查了用户已登录"还不够安全？还需要检查什么？</li>
+          <li>一个 Server Action 成功写了数据库，但页面仍显示旧数据。最容易漏掉哪一步？为什么写库不会自动刷新页面？</li>
+          <li>（设计层）你要接收 Stripe 的支付成功 webhook，并在用户点"保存草稿"时存草稿。这两件事分别该用 Server Action 还是 Route Handler？为什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>因为 <code>'use server'</code> 让编译器把它变成一个<strong>加密的 POST 端点</strong>（按源码位置 hash 出的、不可猜的 action ID 路由）。传给客户端的不是函数本体——那序列化不了，正是 02 章的规则——而是一个指向该端点的<strong>引用</strong>；调用引用等于发一次 POST。这是那条规则官方打开的唯一口子。</li>
+            <li>因为"已登录"只是<strong>认证</strong>（你是谁），不是<strong>授权</strong>（你能不能动这一条）。每个 action 都是公开端点，攻击者可以把请求里的 <code>id</code> 换成别人的对象。必须额外校验"当前用户对<em>这个具体对象</em>是否有权限"，否则就是越权漏洞（IDOR）。另外别忘了运行时校验输入——TS 类型在运行时已被擦除。</li>
+            <li>漏了 <strong>revalidate</strong>（<code>revalidateTag</code> / <code>revalidatePath</code>）。写库只改了数据源，不会自动碰 05 章那四层缓存；Data Cache / Full Route Cache 仍持有旧渲染，页面命中旧值。写和失效是成对的两步。</li>
+            <li>Stripe webhook → <strong>Route Handler</strong>：触发者是<em>机器经 HTTP</em>，需要一个稳定的公开端点、自定义响应（给 Stripe 返 200）、自己验签。保存草稿 → <strong>Server Action</strong>：触发者是<em>人从你自己的 UI</em>，省掉手写 fetch/端点，内置 CSRF 与渐进增强。判别只看第一个分叉：谁来触发。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>"点赞"：乐观 UI + 写库 + 多端最终一致</h3>
+        <p>设计一个点赞功能：点击后<strong>立即</strong>在 UI 上 +1（不等服务端往返），同时把变更写到服务端，并保证多个客户端最终看到一致的计数。三块拼图怎么组合——Client Component（乐观 UI）、Server Action（写库 + 校验授权）、revalidate（05 章）？三者各自负责哪一段，失败时又该怎么回退？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>乐观那一段用 React 19 的 <code>useOptimistic</code>：在 Client Component 里点击瞬间把本地计数 +1 渲染出去，不阻塞等待。写那一段用一个 <code>'use server'</code> action：它先<strong>校验"这个用户能不能给这个对象点赞"</strong>（授权，§6.2 那条不能省），再写库。写完调 <code>revalidateTag('likes', ...)</code>（§6.3）让其他客户端下次请求拿到真实计数——这就是"多端最终一致"的来源。失败回退：action 抛错时，<code>useOptimistic</code> 的乐观值会在这次 transition 结束后自动丢弃，UI 回到真实值，因此乐观更新天然是"先假设成功、失败再退回"。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://nextjs.org/docs/app/building-your-application/data-fetching/server-actions-and-mutations">Next.js · Server Actions and Mutations</a>（官方）</li>
+          <li><a href="https://nextjs.org/docs/app/building-your-application/routing/route-handlers">Next.js · Route Handlers</a>（官方）</li>
+          <li><a href="https://nextjs.org/blog/security-nextjs-server-components-actions">Security in Server Components and Actions</a>（action 的安全模型）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-caching.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 缓存模型</span>
+        </a>
+        <a href="07-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">07 · 自测</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s61" data-toc-target="s61">6.1 可跨界的函数</a></li>
+        <li><a href="#s62" data-toc-target="s62">6.2 安全模型</a></li>
+        <li><a href="#s63" data-toc-target="s63">6.3 写完让缓存失效</a></li>
+        <li><a href="#s64" data-toc-target="s64">6.4 Action vs Handler</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

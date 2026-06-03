@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 回收与持久化：VACUUM、冻结、WAL · PostgreSQL 核心机制教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; line-height: 1.6; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav a.full { grid-column: 1 / -1; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+.toc-sidebar .toc-group {
+  font-family: var(--mono);
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 700;
+  margin: 14px 0 4px 10px;
+}
+.toc-sidebar .toc-group:first-of-type { margin-top: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-storage.html">01 存储</a><span class="sep">—</span>
+    <a href="02-mvcc.html">02 MVCC</a><span class="sep">—</span>
+    <a href="03-vacuum-wal.html" class="current">03 回收·WAL</a><span class="sep">—</span>
+    <a href="04-indexes.html">04 索引</a><span class="sep">—</span>
+    <a href="05-planner.html">05 规划器</a><span class="sep">—</span>
+    <a href="06-vs-mysql.html">06 对比MySQL</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">第 03 章</p>
+        <h1>回收与持久化：VACUUM、冻结、WAL</h1>
+        <p class="recap">上一章揭示了死元组和膨胀——这一章讲 PG 怎么回收它们、怎么防止事务 ID 用尽、以及怎么保证崩溃后不丢数据。<a href="02-mvcc.html#dead-tuple">死元组</a>是 MVCC「写从不原地改」的必然产物，<a href="02-mvcc.html#bloat">膨胀</a>是它在物理层的账单。本章把这笔账结清：<strong>VACUUM 回收空间、冻结防住事务 ID 回卷、WAL 保证一行写下去就再也不丢。</strong></p>
+      </header>
+
+      <p>第 2 章留下两个悬而未决的问题：堆里那些再没人能看到的旧版本（死元组）谁来清？以及，<code>xmin</code>/<code>xmax</code> 这些事务 ID 是有限的 32 位整数，用完了会怎样？这一章给出 PG 的两个答案——<strong>VACUUM</strong>（兼管回收与冻结）和 <strong>WAL</strong>（兼管持久与恢复）。前者是 MVCC 的后勤部队，把「为并发把清理后移」这笔账按时结掉；后者是另一条独立的主线——它不解决可见性，而是回答「机器断电的那一刻，已提交的数据凭什么还在」。两条线在本章交汇：VACUUM 决定数据库能不能<em>长期</em>健康运行，WAL 决定它能不能在<em>崩溃</em>后原样醒来。</p>
+
+      <section class="schema-panel" id="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li><strong>普通 VACUUM 原地标记可复用</strong>——扫描表，把死元组占的空间在 free space map 里标为「可再用」，不加排他锁、读写照常，但<em>不</em>把文件还给操作系统。</li>
+          <li><strong>VACUUM FULL 重写才还盘给 OS</strong>——把整表重写进新文件，加全表排他锁；这是唯一能让磁盘占用<em>真正下降</em>的内置手段。</li>
+          <li><strong>冻结防 xid 回卷</strong>——事务 ID 是 32 位、会绕回原点；VACUUM 把足够老的版本标为「永远可见」，否则回卷后老数据会突然消失。</li>
+          <li><strong>可见性图同时服务回收与查询</strong>——一份 per-page 的元数据，既让 VACUUM 跳过整页全可见的页，又让 index-only scan 免去回堆。</li>
+          <li><strong>WAL 先写日志保证持久与恢复</strong>——改数据页之前先把变更顺序写进日志；崩溃后重放日志即可恢复到一致状态。把随机写换成顺序写。</li>
+        </ul>
+      </section>
+
+      <h2 id="vacuum"><span class="num">§1</span><span>普通 VACUUM：原地标记可复用，不还盘</span></h2>
+
+      <p class="one-liner">普通 VACUUM 扫描表，把死元组的空间在 free space map 里标为可复用，不加排他锁、不缩小文件。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>第 2 章立下因果链：为让<strong>读不阻塞写、写不阻塞读</strong>，PG 把旧版本的清理工作后移。这笔被后移的债，由 VACUUM 来还。它必须满足一个苛刻条件——<em>清理本身不能再次阻塞业务</em>，否则就是拆东墙补西墙。所以普通 VACUUM 的全部设计都围绕「在线、不打断读写」展开：它只做最轻的动作（把死元组的空间标记为可复用），而把代价最重的动作（搬数据、缩文件）留给另一条命令。理解了这条边界，就理解了为什么「VACUUM 跑完表却没变小」不是 bug，而是设计。</p>
+      </div>
+
+      <p>普通 VACUUM（不带 <code>FULL</code>）做的事，可以拆成三个动作：</p>
+      <ul>
+        <li><strong>找死元组。</strong> 扫描表的各个 <a href="01-storage.html#page">Page</a>，对每个 tuple 用「最老仍在运行的事务」做判定：若这个版本连最老的事务都看不到了，它就是死元组，可以回收。</li>
+        <li><strong>标记空间可复用。</strong> 死元组占的槽位被释放，其空间登记进该表的 <strong>free space map（FSM，空闲空间图）</strong>。后续 <code>INSERT</code>/<code>UPDATE</code> 找落脚点时会查 FSM，把新版本塞进这些被腾出的空洞。</li>
+        <li><strong>顺带维护索引与可见性图。</strong> 清理指向死元组的索引项，并更新 <a href="#visibility-map">可见性图</a>（§4）。</li>
+      </ul>
+
+      <p>两个关键事实，必须钉死：</p>
+      <p><strong>其一，普通 VACUUM 不加排他锁。</strong> 它只取一个较弱的锁（<code>SHARE UPDATE EXCLUSIVE</code>），允许并发的 <code>SELECT</code>/<code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code> 继续跑——它和业务读写共存，这正是它能作为日常后台任务（§2 的 autovacuum）不停运行的前提。</p>
+      <p><strong>其二，普通 VACUUM 不把文件还给操作系统。</strong> 死元组的空间被标为「内部可复用」，但表文件的总大小（高水位线）不下降。从操作系统看，这张表占的磁盘一个字节都没少；省下的空间只是被 PG 留作内部周转。</p>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 为什么普通 VACUUM 宁可不还盘？因为还盘要付两笔它不愿付的代价。第一，把文件尾部缩短需要保证尾部的 Page 全空，这往往要先把存活 tuple 从尾部搬到前面的空洞里——搬数据就得改它们的物理位置，进而要更新所有指向它们的索引，开销直逼重写。第二，绝大多数表的大小是<em>波动</em>的：今天清出 200MB 空闲，明天的写入又会把它填回去；现在费力还给 OS、明天再向 OS 申请，等于做了两趟无用功，中间还会引发文件系统层的碎片。于是 PG 的判断是：<strong>把空闲留在表内周转，是比「还盘—再申请」更省的稳态</strong>。只有当一张表确实<em>一次性</em>清出了大量、且预期不会再涨回去的空间时，归还才划算——那时才动用 §3 的 VACUUM FULL 或 <code>pg_repack</code>。这条「轻量回收是常态、还盘是例外」的取舍，是理解 PG 运维的第一性原理。</p>
+
+      <div class="callout tip">
+        <span class="label">类比 · 图书馆还书车</span>
+        <p>普通 VACUUM 像图书馆里的「待上架车」：读者还回的书（死元组）不立刻搬回原书架的物理槽，而是先登记到一张「哪些位置空了」的清单（FSM），等下一本同类新书来，直接填进最近的空位。书架本身（表文件）的长度不变。<strong>类比边界</strong>：图书馆的书是唯一的；而 PG 里同一行会因更新留下多个版本，VACUUM 清的是「再没有任何读者的借阅快照能借到」的那些旧版本——这个「按快照判定能否回收」是普通还书车类比覆盖不到的，正是它必须依赖「最老运行事务」这把尺子的原因（见 §10 的预测题）。</p>
+      </div>
+
+      <h2 id="autovacuum"><span class="num">§2</span><span>autovacuum：什么时候自动触发</span></h2>
+
+      <p class="one-liner">后台进程按「死元组数超过阈值 + 比例」自动触发 VACUUM，并按比例顺带触发 ANALYZE。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>VACUUM 既然是日常债务，就不能靠人记着手动还。autovacuum 是 PG 自带的后台守护进程，盯着每张表的死元组累积量，到点自动派 worker 去清理。它存在的意义是把「回收」从一次性的人工操作，变成与写入速率自适应的<em>常态后台过程</em>——写得多就清得勤，写得少就少打扰。绝大多数 PG 实例的健康，取决于 autovacuum 有没有跟上写入节奏。</p>
+      </div>
+
+      <p>对一张表，autovacuum 触发 VACUUM 的判据是一个阈值公式。当该表的死元组数（<code>n_dead_tup</code>）超过下面这个动态阈值，就触发：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">autovacuum 触发阈值（VACUUM）</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="code-av-threshold">复制</button>
+        </div>
+<pre><code id="code-av-threshold" class="language-sql">触发阈值 = autovacuum_vacuum_threshold          -- 默认 50
+         + autovacuum_vacuum_scale_factor       -- 默认 0.2
+         × reltuples                            -- 该表的估算总行数
+
+-- 例：一张 100 万行的表
+--   阈值 = 50 + 0.2 × 1,000,000 = 200,050 个死元组</code></pre>
+      </div>
+
+      <p>常数项 <code>autovacuum_vacuum_threshold</code>（默认 50）是给小表兜底的下限；比例项 <code>autovacuum_vacuum_scale_factor</code>（默认 0.2）让阈值随表规模线性放大——一张百万行的表，要攒到约 20 万死元组才会被清。这个设计避免了大表上 autovacuum 过于频繁，但也埋了一个尾巴：超大表的 0.2 比例意味着要积累海量死元组才触发，常需手工把这两个参数<em>按表</em>调小。</p>
+
+      <p>同一套机制还驱动 <strong>ANALYZE</strong>。autovacuum 按一个并行的公式（<code>autovacuum_analyze_threshold</code> 默认 50、<code>autovacuum_analyze_scale_factor</code> 默认 0.1，乘以表的<em>变更</em>行数）触发 ANALYZE，重新采样、更新该表的统计信息。统计信息是查询规划器估算行数与代价的依据——它准不准，直接决定规划器选对还是选错执行计划（这条链留到 <a href="05-planner.html#statistics">第 5 章 §统计信息</a>展开）。所以 autovacuum 实际上一岗双责：<strong>既维护物理健康（回收），又维护规划健康（统计）。</strong></p>
+
+      <div class="callout warning">
+        <span class="label">常见失败模式 · autovacuum 跟不上</span>
+        <p>当写入速率持续超过 autovacuum 的清理速率，死元组的产生快过回收，表就会单调膨胀——表现为表/索引体积持续上涨、顺序扫描越来越慢。根因通常是默认的 <code>scale_factor=0.2</code> 对大表太宽松，或 autovacuum worker 数量/<code>autovacuum_vacuum_cost_limit</code> 限速太保守。处置方向：对高写入表用 <code>ALTER TABLE ... SET (autovacuum_vacuum_scale_factor = 0.01)</code> 之类按表调小阈值，并放宽 worker 的成本限速。这不是参数玄学，而是让回收速率重新追上写入速率。</p>
+      </div>
+
+      <h2 id="vacuum-full"><span class="num">§3</span><span>VACUUM FULL：重写整表，把空间还给 OS</span></h2>
+
+      <p class="one-liner">VACUUM FULL 把整表重写进一个新文件、加全表排他锁，是唯一能把磁盘真正还给操作系统的内置方式。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>普通 VACUUM 永远不缩小文件——可总有需要缩的时候：一张表删掉了 90% 的数据、或经历过一次失控膨胀，几十 GB 的文件里大半是空洞，且<em>预期不会再涨回去</em>。这时「把空闲留在表内周转」的逻辑失效了，那些空间就该真正交还给操作系统。VACUUM FULL 就是为这个例外场景准备的重武器。它存在的全部理由，就是普通 VACUUM 刻意不做的那件事——还盘。</p>
+      </div>
+
+      <p>VACUUM FULL 的机制与普通 VACUUM 完全不同：它不是「就地标记」，而是<strong>把整张表的存活 tuple 逐个搬进一个全新的文件</strong>，新文件紧凑无空洞、索引一并重建，然后用新文件替换旧文件、把旧文件交还操作系统。三个直接后果：</p>
+      <ul>
+        <li><strong>加 <code>ACCESS EXCLUSIVE</code> 锁——全表阻塞。</strong> 这是 PG 最强的表级锁，重写期间该表的所有读和写全部被挡在门外。表越大，阻塞越久。</li>
+        <li><strong>临时占用接近双倍磁盘。</strong> 重写过程中新旧两个文件同时存在，峰值磁盘占用约为表体积的两倍；磁盘紧张时这本身就会让操作失败。</li>
+        <li><strong>结束后磁盘真正下降。</strong> 旧文件释放后，操作系统看到的占用随之回落——这是普通 VACUUM 做不到的。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="普通 VACUUM 与 VACUUM FULL 的对比">
+          <defs>
+            <marker id="m-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- left: plain VACUUM -->
+          <text x="160" y="28" text-anchor="middle" class="node-label">普通 VACUUM</text>
+          <text x="160" y="45" text-anchor="middle" class="edge-label">同一文件 · 大小不变</text>
+
+          <!-- before file (left) -->
+          <rect x="60" y="60" width="84" height="240" rx="4" class="diagram-ink node-fill"/>
+          <rect x="64" y="64" width="76" height="40" class="diagram-ink node-fill"/>
+          <text x="102" y="88" text-anchor="middle" class="edge-label">live</text>
+          <rect x="64" y="106" width="76" height="40" class="node-fill-accent" stroke="none"/>
+          <text x="102" y="130" text-anchor="middle" class="branch-label">dead</text>
+          <rect x="64" y="148" width="76" height="40" class="diagram-ink node-fill"/>
+          <text x="102" y="172" text-anchor="middle" class="edge-label">live</text>
+          <rect x="64" y="190" width="76" height="40" class="node-fill-accent" stroke="none"/>
+          <text x="102" y="214" text-anchor="middle" class="branch-label">dead</text>
+          <rect x="64" y="232" width="76" height="64" class="diagram-ink node-fill"/>
+          <text x="102" y="268" text-anchor="middle" class="edge-label">live</text>
+
+          <line x1="148" y1="180" x2="186" y2="180" class="diagram-ink" marker-end="url(#m-ink)"/>
+
+          <!-- after file (left) - same size, dead marked reusable -->
+          <rect x="190" y="60" width="84" height="240" rx="4" class="diagram-ink node-fill"/>
+          <rect x="194" y="64" width="76" height="40" class="diagram-ink node-fill"/>
+          <text x="232" y="88" text-anchor="middle" class="edge-label">live</text>
+          <rect x="194" y="106" width="76" height="40" class="diagram-soft node-fill"/>
+          <text x="232" y="124" text-anchor="middle" class="edge-label">可复用</text>
+          <text x="232" y="140" text-anchor="middle" class="edge-label">空洞</text>
+          <rect x="194" y="148" width="76" height="40" class="diagram-ink node-fill"/>
+          <text x="232" y="172" text-anchor="middle" class="edge-label">live</text>
+          <rect x="194" y="190" width="76" height="40" class="diagram-soft node-fill"/>
+          <text x="232" y="208" text-anchor="middle" class="edge-label">可复用</text>
+          <text x="232" y="224" text-anchor="middle" class="edge-label">空洞</text>
+          <rect x="194" y="232" width="76" height="64" class="diagram-ink node-fill"/>
+          <text x="232" y="268" text-anchor="middle" class="edge-label">live</text>
+          <text x="232" y="316" text-anchor="middle" class="edge-label">文件等长</text>
+          <text x="160" y="338" text-anchor="middle" class="branch-label">不还盘 · 不锁表</text>
+
+          <!-- divider -->
+          <line x1="320" y1="56" x2="320" y2="320" class="diagram-soft"/>
+
+          <!-- right: VACUUM FULL -->
+          <text x="480" y="28" text-anchor="middle" class="node-label-accent">VACUUM FULL</text>
+          <text x="480" y="45" text-anchor="middle" class="edge-label">重写到新文件 · 还盘</text>
+
+          <!-- old file (right) -->
+          <rect x="370" y="60" width="84" height="240" rx="4" class="diagram-soft node-fill"/>
+          <rect x="374" y="64" width="76" height="40" class="diagram-ink node-fill"/>
+          <text x="412" y="88" text-anchor="middle" class="edge-label">live</text>
+          <rect x="374" y="106" width="76" height="40" class="node-fill-accent" stroke="none"/>
+          <text x="412" y="130" text-anchor="middle" class="branch-label">dead</text>
+          <rect x="374" y="148" width="76" height="40" class="diagram-ink node-fill"/>
+          <text x="412" y="172" text-anchor="middle" class="edge-label">live</text>
+          <rect x="374" y="190" width="76" height="40" class="node-fill-accent" stroke="none"/>
+          <text x="412" y="214" text-anchor="middle" class="branch-label">dead</text>
+          <rect x="374" y="232" width="76" height="64" class="diagram-ink node-fill"/>
+          <text x="412" y="268" text-anchor="middle" class="edge-label">live</text>
+          <text x="412" y="316" text-anchor="middle" class="branch-label">旧文件释放</text>
+
+          <line x1="458" y1="160" x2="520" y2="160" class="diagram-accent" marker-end="url(#m-verm)"/>
+          <text x="489" y="150" text-anchor="middle" class="branch-label">重写</text>
+
+          <!-- new file (right) - smaller, packed -->
+          <rect x="524" y="120" width="84" height="120" rx="4" class="diagram-accent node-fill" stroke-width="2"/>
+          <rect x="528" y="124" width="76" height="36" class="diagram-ink node-fill"/>
+          <text x="566" y="146" text-anchor="middle" class="edge-label">live</text>
+          <rect x="528" y="162" width="76" height="36" class="diagram-ink node-fill"/>
+          <text x="566" y="184" text-anchor="middle" class="edge-label">live</text>
+          <rect x="528" y="200" width="76" height="36" class="diagram-ink node-fill"/>
+          <text x="566" y="222" text-anchor="middle" class="edge-label">live</text>
+          <text x="566" y="256" text-anchor="middle" class="branch-label">紧凑 · 变小</text>
+          <text x="566" y="316" text-anchor="middle" class="edge-label">ACCESS EXCL 锁</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>普通 VACUUM（左）在同一文件内把死元组标为可复用空洞，文件大小<strong>不变</strong>、不锁表；VACUUM FULL（右）把存活行<strong>重写进新文件</strong>、旧文件释放还盘给 OS，代价是全程 <code>ACCESS EXCLUSIVE</code> 锁全表阻塞。<strong>注意</strong>：表「瘦下来还盘」只有 FULL 能做，且重写时新旧文件并存、峰值占用近双倍。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> VACUUM FULL 与普通 VACUUM 的分野，本质是「就地标记 vs 整体搬迁」两种回收哲学的代价分配。就地标记（普通）把成本压到最低、可在线运行，但永远换不来文件收缩；整体搬迁（FULL）能换来收缩，但搬迁必然要冻结全表、且过程中双份占用。生产环境里 VACUUM FULL 的全表锁往往不可接受，因此社区的事实标准是扩展 <code>pg_repack</code>：它在线重建表（用触发器捕获重写期间的增量改动，最后只在极短的切换瞬间持锁），达到「收缩文件」的效果而几乎不阻塞业务。<strong>结论</strong>：VACUUM FULL 是「能还盘但要停服」的内置兜底，<code>pg_repack</code> 是「能还盘且基本不停服」的生产首选——但两者都只在「确实需要还盘」这个例外场景出场，日常仍靠 autovacuum。</p>
+
+      <h2 id="freeze"><span class="num">§4</span><span>冻结：把老版本标为永远可见</span></h2>
+
+      <p class="one-liner">VACUUM 把足够老的版本的 xmin 改写为「已冻结」，使其对所有未来事务永久可见。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>第 2 章的可见性判定，靠的是把 tuple 的 <a href="02-mvcc.html#snapshot">快照</a>里的事务 ID 与 <code>xmin</code>/<code>xmax</code> 比大小。这个「比大小」隐含一个致命前提：事务 ID 单调递增、可比较。可事务 ID 是有限的 32 位整数——它会用完、绕回原点。一旦绕回，「比大小」的语义就崩了：一个很老的 <code>xmin</code> 会显得比当前事务<em>还新</em>。冻结就是为这个绝境准备的：把老到「肯定对所有人可见」的版本，从「按 xid 比大小」的体系里<em>豁免</em>出去，永久标记为可见，于是它的 <code>xmin</code> 数值大小再不参与判定。冻结不是性能优化，是防止数据凭空消失的硬约束。</p>
+      </div>
+
+      <p>机制本身不复杂：VACUUM 在扫描时，对那些 <code>xmin</code> 对应的事务已经老到「早于所有仍在运行的事务」的 tuple，把它的状态标记为 <strong>frozen（已冻结）</strong>。被冻结的 tuple 在可见性判定时被无条件视为「其创建事务已提交、对所有人可见」，不再去比 <code>xmin</code> 的数值。冻结信息记录在 tuple 头的标志位里（现代 PG 用 <code>xmin</code> 的提交标志位表达，无需真的改写 <code>xmin</code> 的数值，但效果等价于「永久可见」）。</p>
+
+      <p>这一节和 §5 是同一个问题的两面：<strong>冻结是手段，回卷是它要防的灾难。</strong> 先把手段记牢——「老到一定程度的版本会被冻结成永久可见」，§5 解释不冻结会塌方成什么样。</p>
+
+      <h2 id="wraparound"><span class="num">§5</span><span>事务 ID 回卷：不冻结，老数据会消失</span></h2>
+
+      <p class="one-liner">事务 ID 是 32 位、约 21 亿个可见范围后绕回；不及时冻结，回卷会让老行突然不可见。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>理解回卷，才理解 PG 为什么宁可<em>停止写入</em>也要逼着 VACUUM 跑。这是 PG 运维里最硬的一条红线：可以容忍膨胀、容忍慢查询，但绝不能容忍事务 ID 用尽。因为前两者是性能问题，后者是<strong>正确性</strong>问题——数据会看起来凭空消失。</p>
+      </div>
+
+      <p>事务 ID（txid）是 32 位无符号整数。但 PG 的可见性判定不是用整个 2³² 空间，而是用<strong>环形比较</strong>：对任意一个事务，「过去」是它之前的约 2³¹（约 21 亿）个 ID，「未来」是它之后的约 2³¹ 个 ID。整个 ID 空间被想象成一个环，每个事务站在环上某点，一半环是它的过去、一半是未来。</p>
+
+      <p>问题来了：随着新事务不断分配，这个「当前点」沿环移动。一个 tuple 的 <code>xmin</code> 固定不动，但「当前点」在追它。当当前点绕环走了超过 2³¹，那个老 <code>xmin</code> 就从「在当前点过去 21 亿以内」滑进了「在当前点未来一侧」——<strong>它会突然显得像是「一个尚未发生的未来事务创建的」，于是对当前所有事务都不可见。</strong>那一行数据明明还在磁盘上，却再也查不出来，看起来像凭空消失。</p>
+
+      <figure>
+        <svg viewBox="0 0 520 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="事务 ID 回卷环：冻结安全区与未冻结的危险区">
+          <defs>
+            <marker id="m-verm-r" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="m-ink-r" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- the ring -->
+          <circle cx="260" cy="195" r="120" class="diagram-ink"/>
+
+          <!-- "current xid" pointer at top -->
+          <circle cx="260" cy="75" r="5" fill="#0A0A0A"/>
+          <text x="260" y="52" text-anchor="middle" class="node-label">当前 xid</text>
+          <text x="260" y="38" text-anchor="middle" class="edge-label">环上不断前移</text>
+
+          <!-- past half (right side, safe-ish) arrow direction -->
+          <path d="M 305 92 A 120 120 0 0 1 348 240" class="diagram-ink" fill="none" marker-end="url(#m-ink-r)"/>
+          <text x="372" y="150" text-anchor="middle" class="edge-label">过去</text>
+          <text x="372" y="166" text-anchor="middle" class="edge-label">2³¹ 内</text>
+
+          <!-- danger zone label (far side / approaching future) -->
+          <path d="M 172 240 A 120 120 0 0 1 215 92" class="diagram-soft" fill="none"/>
+          <text x="148" y="150" text-anchor="middle" class="branch-label">危险区</text>
+          <text x="148" y="166" text-anchor="middle" class="edge-label">看似在未来</text>
+
+          <!-- bottom: wrap point -->
+          <text x="260" y="332" text-anchor="middle" class="edge-label">0 / 2³² 回卷点</text>
+
+          <!-- old tuple position (left, sliding toward danger) -->
+          <circle cx="155" cy="270" r="5" fill="#B73B2F"/>
+          <text x="118" y="290" text-anchor="middle" class="branch-label">老行 xmin</text>
+
+          <!-- frozen safe zone callout box -->
+          <rect x="200" y="160" width="120" height="70" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="260" y="188" text-anchor="middle" class="node-label-accent">frozen</text>
+          <text x="260" y="208" text-anchor="middle" class="edge-label">不参与比大小</text>
+          <text x="260" y="223" text-anchor="middle" class="edge-label">永久可见</text>
+
+          <!-- arrow: old tuple slides toward danger if not frozen -->
+          <path d="M 150 260 A 120 120 0 0 1 168 150" class="diagram-accent" fill="none" marker-end="url(#m-verm-r)"/>
+          <text x="95" y="210" text-anchor="middle" class="branch-label">不冻结则滑入</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>事务 ID 回卷环。当前 xid 沿环不断前移，老行的 <code>xmin</code> 相对地「被追上」；一旦当前点绕过 2³¹，老 <code>xmin</code> 就从「过去」滑进「看似在未来」的危险区而不可见。冻结把老行<strong>移出这套比大小的体系</strong>、永久可见。<strong>注意</strong>：冻结不是优化，是防数据消失的硬要求。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> PG 用两道防线把回卷挡在门外，且越逼近上限手段越激进。第一道：每张表的 <code>pg_class</code> 里记着一个 <code>relfrozenxid</code>——「这张表里最老的、尚未冻结的 <code>xmin</code>」。一个数据库的回卷风险，由全库最老的那个 <code>relfrozenxid</code> 决定，用 <code>age(datfrozenxid)</code> 度量（这个 age 离 2³¹ 越近越危险，§9 会亲手查它）。第二道：当某张表的年龄超过 <code>autovacuum_freeze_max_age</code>（默认 2 亿）时，PG 会对它强制发起一次 <strong>anti-wraparound（防回卷）autovacuum</strong>——这种 VACUUM 即使你关闭了 autovacuum 也照常运行，专门去推进 <code>relfrozenxid</code>、冻结老行。若连这道防线都被无视，年龄逼近硬上限时，PG 会进入自保模式：<strong>停止接受新的写入事务</strong>（只读、报错要求手动 VACUUM），以阻止年龄继续增长、用拒绝服务来保住数据正确性。<strong>结论</strong>：「数据库突然只读、报 wraparound 警告」不是故障，是 PG 用停摆换数据不丢的最后手段——而触发它的根因，几乎总是 autovacuum 长期没跟上。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个一直开着、迟迟不提交的事务（比如某个忘了关的 <code>BEGIN</code>），为什么会同时推高<strong>整库的回卷风险</strong>，又让 VACUUM 清不动死元组？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>两个后果同源，都源于这个老事务<strong>钉住了「最老仍在运行的事务」这把尺子</strong>。</p>
+          <p><strong>清不动死元组：</strong> 普通 VACUUM 判定一个版本能否回收，标准是「连最老的运行事务都看不到它」。只要那个老 <code>BEGIN</code> 还开着，它的快照就仍有权看到这些旧版本，于是<em>所有</em>晚于它的死元组都不能被回收——VACUUM 照常跑，却几乎清不掉东西，表持续膨胀。</p>
+          <p><strong>推高回卷风险：</strong> 同一把尺子也卡住了冻结。VACUUM 不能把「比最老运行事务还新」的版本冻结掉，而那个老事务把这条线死死压在过去——于是 <code>relfrozenxid</code> 推不动，全库年龄持续逼近 <code>autovacuum_freeze_max_age</code>，回卷风险一路上涨。</p>
+          <p><strong>结论：</strong> 长事务是 PG 头号隐患——它一个人就能同时瘫痪回收与冻结两条命脉。监控 <code>pg_stat_activity</code> 里的长事务、设 <code>idle_in_transaction_session_timeout</code>，是比调任何 VACUUM 参数都更治本的手段。</p>
+        </details>
+      </div>
+
+      <h2 id="visibility-map"><span class="num">§6</span><span>可见性图：回收与查询共用的枢纽</span></h2>
+
+      <p class="one-liner">可见性图给每个 Page 两位，标记 all-visible / all-frozen；VACUUM 据它跳页，index-only scan 据它免回堆。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>VACUUM 要扫全表很贵，可一张大表里大部分 Page 在两次 VACUUM 之间根本没被改过——重复扫它们是纯浪费。需要一份「哪些 Page 自上次清理后就没动过」的备忘，让 VACUUM 跳过它们。这份备忘一旦存在，就发现它还能解决另一个看似无关的问题：索引扫描时，怎么不回堆就确认一行可见。同一份元数据，两头都要用——这正是可见性图被设计出来的原因。</p>
+      </div>
+
+      <p>可见性图（Visibility Map，VM）是每张表附带的一个紧凑位图，给表的<em>每个 Page</em> 分配两个 bit：</p>
+      <ul>
+        <li><strong>all-visible 位：</strong> 置位表示「这个 Page 里的所有 tuple，对所有当前事务都可见」——即页内没有任何死元组、也没有任何正在被某事务改动的版本。</li>
+        <li><strong>all-frozen 位：</strong> 置位表示「这个 Page 里的所有 tuple 都已冻结」——这个 Page 在下一轮防回卷 VACUUM 里可以被直接跳过，无须再检查冻结。</li>
+      </ul>
+
+      <p>VACUUM 一边清理一边维护这两个位：清完一个全是存活、无人改动的 Page，就给它置上 all-visible；若页内全部冻结，再置上 all-frozen。反过来，下一次 VACUUM 扫描时，遇到 all-visible 的 Page 直接跳过——因为它保证没有死元组可清。这就是为什么「第二次 VACUUM 比第一次快得多」：大量页被 VM 短路掉了。任何对某 Page 的写入（<code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code>）会清掉该页的 all-visible 位，标记它「又脏了，下次得重新检查」。</p>
+
+      <p><strong>底层机制（比文档深一层）。</strong> VM 的精妙在于它是<strong>连接「回收」与「查询加速」两条主线的同一个枢纽</strong>。回收侧的用法上面讲过；查询侧的用法是 <strong>index-only scan（仅索引扫描）</strong>：当一个查询要的列全在某索引里，规划器本可以只读索引、不回堆——但 MVCC 的麻烦在于，索引项不携带可见性信息，光看索引无法判断这一行对当前事务是否可见，似乎不得不回堆查 <code>xmin</code>/<code>xmax</code>。VM 一举解决了它：扫到一个索引项，先查它指向的 Page 在 VM 里是否 all-visible——若是，则<em>整页都可见</em>，这一行必然可见，于是<strong>跳过回堆，直接用索引里的值返回</strong>。一份为回收而生的元数据，反手成了查询免回堆的关键。这条「VM → index-only scan」的链，是第 4 章索引性能的核心前提，留到 <a href="04-indexes.html#index-only-scan">第 4 章 §仅索引扫描</a>详述。<strong>结论</strong>：VACUUM 不只是在「打扫卫生」——它每清干净一个 Page 并置上 all-visible，就同时为查询省下了一次回堆。回收做得勤，查询也跟着快，这是同一份 VM 的两头红利。</p>
+
+      <h2 id="wal"><span class="num">§7</span><span>WAL：先写日志，再改数据</span></h2>
+
+      <p class="one-liner">改任何数据页之前，先把该变更的 redo 记录顺序写入 WAL；崩溃后重放 WAL 即可恢复——这就是持久性的来源。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前六节都在管「数据库长期健康」；WAL 管的是另一件正交的事——<strong>崩溃那一刻已提交的数据凭什么不丢</strong>。难点在于：数据页在内存（<code>shared_buffers</code>）里被改完后，刷回磁盘是异步的、会拖很久；若此时断电，内存里的改动就没了。而事务一旦 <code>COMMIT</code> 返回成功，就向用户承诺了「这笔写入永久生效」（持久性，ACID 的 D）。WAL 是兑现这个承诺的机制：它让「承诺持久」和「数据页真正落盘」解耦——只要变更的<em>日志</em>落了盘，数据页晚点落都不丢。</p>
+      </div>
+
+      <p>WAL（Write-Ahead Logging，预写日志）的规则只有一句，却是整个持久性的地基：<strong>在修改任何数据 Page 之前，必须先把描述这次修改的 redo 记录，顺序追加写入 WAL，并保证 WAL 已落盘。</strong> 数据页本身可以稍后再异步刷盘；但只要 WAL 里记下了「这个 Page 该怎么改」，就够了。崩溃后，PG 从某个已知一致点开始，把 WAL 里的 redo 记录<strong>逐条重放（redo / roll-forward）</strong>，把所有「日志记了、但数据页还没落盘」的改动重新施加一遍，数据库就恢复到崩溃前的一致状态。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="WAL 写入流程与崩溃恢复">
+          <defs>
+            <marker id="m-verm-w" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="m-ink-w" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- step 1: txn modifies page in buffer -->
+          <rect x="30" y="40" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="66" text-anchor="middle" class="node-label">① 事务改页</text>
+          <text x="105" y="86" text-anchor="middle" class="edge-label">在 shared_buffers</text>
+
+          <!-- step 2: append WAL (sequential) -->
+          <rect x="30" y="150" width="150" height="64" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="105" y="176" text-anchor="middle" class="node-label-accent">② 先写 WAL</text>
+          <text x="105" y="196" text-anchor="middle" class="edge-label">顺序 append</text>
+
+          <line x1="105" y1="104" x2="105" y2="148" class="diagram-accent" marker-end="url(#m-verm-w)"/>
+          <text x="113" y="130" text-anchor="start" class="branch-label">改页前</text>
+
+          <!-- step 3: commit fsync WAL -->
+          <rect x="245" y="150" width="160" height="64" rx="6" class="diagram-accent node-fill" stroke-width="1.6"/>
+          <text x="325" y="176" text-anchor="middle" class="node-label-accent">③ COMMIT</text>
+          <text x="325" y="196" text-anchor="middle" class="edge-label">fsync WAL 落盘</text>
+
+          <line x1="180" y1="182" x2="243" y2="182" class="diagram-accent" marker-end="url(#m-verm-w)"/>
+
+          <!-- WAL file (durable) -->
+          <rect x="245" y="40" width="160" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="325" y="62" text-anchor="middle" class="node-label">WAL 文件</text>
+          <text x="325" y="82" text-anchor="middle" class="edge-label">磁盘 · 顺序日志</text>
+          <line x1="180" y1="172" x2="244" y2="120" class="diagram-soft" marker-end="url(#m-ink-w)"/>
+
+          <!-- step 4: dirty page async flush later -->
+          <rect x="470" y="40" width="150" height="64" rx="6" class="diagram-soft node-fill"/>
+          <text x="545" y="62" text-anchor="middle" class="node-label">④ 数据页</text>
+          <text x="545" y="82" text-anchor="middle" class="edge-label">稍后异步刷盘</text>
+          <line x1="405" y1="72" x2="468" y2="72" class="diagram-soft" marker-end="url(#m-ink-w)"/>
+          <text x="437" y="58" text-anchor="middle" class="edge-label">不阻塞</text>
+          <text x="437" y="100" text-anchor="middle" class="edge-label">commit</text>
+
+          <!-- recovery flow at bottom -->
+          <line x1="40" y1="250" x2="600" y2="250" class="diagram-soft"/>
+          <text x="40" y="278" text-anchor="start" class="branch-label">崩溃后恢复</text>
+          <rect x="160" y="258" width="170" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="245" y="280" text-anchor="middle" class="edge-label">从 checkpoint 起</text>
+          <text x="245" y="296" text-anchor="middle" class="edge-label">读 WAL</text>
+          <rect x="370" y="258" width="170" height="50" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="455" y="280" text-anchor="middle" class="branch-label">重放 redo</text>
+          <text x="455" y="296" text-anchor="middle" class="edge-label">到一致状态</text>
+          <line x1="330" y1="283" x2="368" y2="283" class="diagram-accent" marker-end="url(#m-verm-w)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>WAL 写入与崩溃恢复。事务改页前先把 redo 记录顺序 append 进 WAL；<code>COMMIT</code> 时 <code>fsync</code> WAL 落盘即返回，数据页稍后异步刷。崩溃后从最近 checkpoint 起重放 WAL 到末尾。<strong>注意</strong>：<code>COMMIT</code> 只等 WAL 落盘，<em>不</em>等数据页落盘——这是「持久」与「刷盘」解耦的关键。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> WAL 的全部威力，来自一次「随机写换顺序写」的交易。数据页散布在表文件各处，刷它们是<em>随机</em> I/O——磁头乱跳、SSD 写放大，又慢又贵。WAL 则是一个<em>只追加</em>的顺序日志，写它是顺序 I/O——机械盘上是连续磁道、SSD 上也对写入友好，快上一两个数量级。WAL 协议把这两者的代价做了置换：把昂贵的随机写（刷数据页）<em>推迟、批量、异步</em>化，只要求廉价的顺序写（append WAL）在 <code>COMMIT</code> 前同步落盘。于是 <code>COMMIT</code> 的延迟只取决于一次顺序 <code>fsync</code>，而非一堆随机刷盘。换句话说，<strong>持久性的成本被从「每次提交刷一堆随机页」压缩成了「每次提交追加一段顺序日志」</strong>——这是 WAL 既保证不丢、又不拖垮吞吐的根本原因，也是几乎所有现代数据库（含 InnoDB 的 redo log）共用的设计。</p>
+
+      <h2 id="checkpoint"><span class="num">§8</span><span>检查点：把脏页刷干净、缩短恢复距离</span></h2>
+
+      <p class="one-liner">检查点把截至某 WAL 位置的脏页全部刷盘，之后该位置前的 WAL 可回收，恢复也只需从此点重放。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>WAL 让数据页可以无限推迟刷盘，但这带来两个新问题：WAL 会无限增长（每条都得留着，万一恢复要用），且崩溃恢复要从「最早一条还没落盘的改动」重放，距离会极长、恢复极慢。检查点是这两个问题的解药——它定期划一条线：「线之前的所有改动，对应的数据页都已确实落盘」。有了这条线，线之前的 WAL 就能丢弃，恢复也只需从这条线往后重放。</p>
+      </div>
+
+      <p>一次<strong>检查点（checkpoint）</strong>做两件事：把当前所有脏页（已被改、还没刷盘的 Page）刷到数据文件，并在 WAL 里记下一条检查点记录、标明「截至这个 WAL 位置（LSN）的改动均已落盘」。完成后两个收益立刻兑现：</p>
+      <ul>
+        <li><strong>WAL 可回收。</strong> 这个检查点位置之前的 WAL 段不再为「崩溃恢复」所需（仍会为复制/归档保留），可以被回收或归档，WAL 占用不再无限增长。</li>
+        <li><strong>恢复距离缩短。</strong> 下次崩溃恢复只需从<em>最近一个</em>检查点开始重放，而非从远古的某条记录——检查点越频繁，恢复越快。</li>
+      </ul>
+
+      <p>检查点由时间（<code>checkpoint_timeout</code>）或 WAL 量（<code>max_wal_size</code>）触发，二者先到先发。这里有个张力：检查点太稀，恢复慢、WAL 堆积；太频，则刷盘 I/O 尖峰频繁、且推高下面 §9 全页写的开销。<code>checkpoint_completion_target</code> 把一次检查点的刷盘摊薄到整个区间里、削平 I/O 尖峰，是这个张力的主要调节钮。</p>
+
+      <h2 id="fpw"><span class="num">§9</span><span>全页写：防住撕裂的页</span></h2>
+
+      <p class="one-liner">每个检查点后某页第一次被改时，把整页镜像写进 WAL，以防操作系统只写了半个 8KB 页（torn page）。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>WAL 的 redo 记录通常是「增量」——比如「把第 3 槽的某字段从 100 改成 80」。重放它的前提是：磁盘上那个数据页本身是<em>完整且一致</em>的，增量才能正确地叠加上去。但操作系统刷一个 8KB 的 PG 页时，底层会拆成多个更小的扇区分别写——若断电正好发生在写到一半，磁盘上就留下一个<strong>半新半旧的撕裂页（torn page）</strong>。对着这样一个本身就损坏的页重放增量，结果是错上加错。全页写就是堵这个洞的。</p>
+      </div>
+
+      <p><strong>全页写（full-page writes，FPW）</strong>的规则：在每次检查点之后，某个 Page <em>第一次</em>被修改时，PG 不只写增量 redo 记录，而是把<strong>这一整个 8KB Page 的镜像</strong>完整写进 WAL。同一个检查点周期内，这个 Page 后续再被改，就只写增量了（因为镜像已经在 WAL 里有一份）。</p>
+
+      <p>恢复时这样用：重放 WAL 遇到某个 Page 的全页镜像，就<strong>用这个完整镜像直接覆盖</strong>磁盘上那个或已撕裂的页——无论磁盘上的版本是否半写损坏，都被一个已知完整的镜像替换掉，撕裂被抹平；之后的增量记录再安全地叠加上去。<strong>代价</strong>很直接：每次检查点之后的一段时间，WAL 量会显著上升（每个被首次触碰的 Page 都要塞进一整页 8KB），这也是检查点不能太频繁的原因之一——检查点越密，「检查点后首次修改」发生得越频繁，全页写的 WAL 膨胀就越严重。</p>
+
+      <div class="callout insight">
+        <span class="label">把回收与持久串起来</span>
+        <p>到此两条主线都已落地。<strong>回收线</strong>：死元组 → 普通 VACUUM 标记可复用（§1）→ autovacuum 自动触发（§2）→ 真要还盘才用 VACUUM FULL（§3）→ 冻结防回卷是不可省的硬约束（§4–5）→ VM 让回收与查询共享一份元数据（§6）。<strong>持久线</strong>：WAL 先写日志、把随机写换顺序写（§7）→ 检查点定期刷脏页、缩短恢复并回收 WAL（§8）→ 全页写堵住撕裂页（§9）。下一节把回收线拧成一个可观察的实验。</p>
+      </div>
+
+      <h2 id="recovery"><span class="num">§10</span><span>崩溃恢复与 WAL 的其它去处</span></h2>
+
+      <p class="one-liner">崩溃恢复 = 从最近检查点重放 WAL 到末尾；同一份 WAL 还驱动流复制与逻辑解码。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>WAL 一旦把「所有数据变更」都顺序记了下来，它就不止能用于崩溃恢复——任何想「跟上这台数据库全部改动」的需求，都能复用这条日志流。理解这一点，才能把 WAL 从「崩溃保险」升级为「PG 复制与 CDC 的统一底座」这一更大的图景。</p>
+      </div>
+
+      <p><strong>崩溃恢复</strong>是 WAL 的本职：进程重启后，PG 找到最近的检查点记录，从那个 WAL 位置开始<em>顺序重放</em>每一条 redo 记录直到 WAL 末尾，途中用全页镜像修复撕裂页、用增量记录重做改动，最终把数据库带回崩溃前的一致状态。已提交的事务（WAL 已落盘）必然被恢复，未提交的事务的改动则不会出现在最终状态里。</p>
+
+      <p>同一份 WAL 流还有两个重要去处，二者由 <code>wal_level</code> 参数控制粒度：</p>
+      <ul>
+        <li><strong>物理流复制（streaming replication）。</strong> 主库把 WAL 实时发给一个或多个 standby，standby <em>持续重放</em>这份 WAL，从而在物理层面（同样的 Page、同样的字节）紧紧跟随主库。这就是 PG 高可用的主力——standby 随时能接替主库，因为它一直在重放主库的 WAL。</li>
+        <li><strong>逻辑解码（logical decoding）。</strong> 当 <code>wal_level = logical</code> 时，WAL 里被额外记入足够的信息，使其可以被<em>解码</em>成「逻辑层面的行变更」（哪张表、哪行、INSERT/UPDATE/DELETE 成什么），而非物理字节。这就是 PG 做 CDC（变更数据捕获）和逻辑复制的基础——下游可以只订阅自己关心的表、甚至跨大版本复制。</li>
+      </ul>
+
+      <p>从崩溃恢复，到物理高可用，再到逻辑 CDC，<strong>同一条 WAL 日志流服务了三层完全不同的需求</strong>——这正是「先写日志」这条朴素规则被反复复用的回报。</p>
+
+      <h2 id="worked"><span class="num">§11</span><span>动手观察：从膨胀到回收，再看回卷年龄</span></h2>
+
+      <p>把回收线拧成一个可观察的实验：制造膨胀、量它、跑普通 VACUUM 看磁盘<em>没变小</em>、再跑 VACUUM FULL 看文件缩小，最后查全库的回卷年龄。下面的输出<strong>未在本机执行</strong>（具体数值因实例与版本而异），用于演示该看哪些字段、它们如何变化。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">观察膨胀、回收与回卷年龄</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="code-walk">复制</button>
+        </div>
+<pre><code id="code-walk" class="language-sql">-- 0) 造一张表，灌 100 万行
+CREATE TABLE t (id int PRIMARY KEY, v int);
+INSERT INTO t SELECT g, g FROM generate_series(1, 1000000) g;
+
+-- 1) 大量更新：每行都被改一次 → 产生 100 万个旧版本（死元组）
+UPDATE t SET v = v + 1;
+
+-- 2) 量死元组与膨胀
+SELECT n_dead_tup, n_live_tup
+  FROM pg_stat_user_tables WHERE relname = 't';
+--  n_dead_tup | n_live_tup
+-- ------------+------------
+--    1000000  |   1000000        &lt;- 未在本机执行：死活元组各 100 万
+
+SELECT pg_size_pretty(pg_relation_size('t'));
+--  pg_size_pretty
+-- ----------------
+--  69 MB                          &lt;- 未在本机执行：约翻倍（本应 ~35MB）
+
+-- 3) 普通 VACUUM：标记死元组空间可复用，但不还盘
+VACUUM (VERBOSE) t;
+--  ... tuples: 1000000 removed, 1000000 remain ...   &lt;- 死元组被标可复用
+
+-- 4) 再看大小 —— 没变！空间被留作内部周转，未还给 OS
+SELECT pg_size_pretty(pg_relation_size('t'));
+--  pg_size_pretty
+-- ----------------
+--  69 MB                          &lt;- 未在本机执行：仍占盘，符合预期
+
+-- 5) VACUUM FULL：重写整表到新文件 → 文件真正缩小（全表锁）
+VACUUM FULL t;
+SELECT pg_size_pretty(pg_relation_size('t'));
+--  pg_size_pretty
+-- ----------------
+--  35 MB                          &lt;- 未在本机执行：还盘后回落
+
+-- 6) 全库回卷年龄：age 越大越逼近 2^31 危险线
+SELECT datname, age(datfrozenxid) AS xid_age
+  FROM pg_database ORDER BY xid_age DESC;
+--   datname  | xid_age
+-- -----------+----------
+--  appdb     | 48213004              &lt;- 未在本机执行：离 ~21 亿尚远
+--  postgres  |   312900</code></pre>
+      </div>
+
+      <p><strong>逐行解读</strong>，把每个观察值映射回概念：</p>
+      <ul>
+        <li><span class="annotations"><span class="line-ref">步骤 1 UPDATE 全表</span></span>一条 <code>UPDATE</code> 改了全部 100 万行——按第 2 章的因果，这<em>不是</em>原地改，而是写了 100 万个新版本，留下 100 万个旧版本即<a href="02-mvcc.html#dead-tuple">死元组</a>。膨胀就此产生。</li>
+        <li><span class="annotations"><span class="line-ref">步骤 2 n_dead_tup</span></span><code>pg_stat_user_tables</code> 的 <code>n_dead_tup</code> 直接量出死元组数。它正是 §2 autovacuum 阈值公式的输入——这个值越过阈值，autovacuum 就会来清。</li>
+        <li><span class="annotations"><span class="line-ref">步骤 2 表约翻倍</span></span><code>pg_relation_size</code> 显示约 69MB——本应约 35MB 的表因死元组占用而近乎翻倍。这就是膨胀在磁盘上的样子。</li>
+        <li><span class="annotations"><span class="line-ref">步骤 3–4 VACUUM 后大小不变</span></span>普通 <code>VACUUM</code> 报告「1000000 removed」——死元组确实被处理了（空间进入 FSM 可复用），但第 4 步的 <code>pg_relation_size</code> 仍是 69MB。<strong>这是 §1 的核心结论的现场：标记可复用 ≠ 还盘。</strong></li>
+        <li><span class="annotations"><span class="line-ref">步骤 5 VACUUM FULL 后缩小</span></span><code>VACUUM FULL</code> 把表重写进新文件，磁盘回落到约 35MB——磁盘<em>真正</em>下降。代价是这条命令期间全表被 <code>ACCESS EXCLUSIVE</code> 锁挡住（§3）。</li>
+        <li><span class="annotations"><span class="line-ref">步骤 6 age(datfrozenxid)</span></span><code>age(datfrozenxid)</code> 是每个数据库距「最老未冻结事务」的年龄，越大越逼近 2³¹ 的回卷红线（§5）。日常该监控全库最大的这个 age；它若持续上涨且接近 <code>autovacuum_freeze_max_age</code>，说明冻结没跟上。</li>
+      </ul>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p><code>VACUUM</code> 跑完，<code>\dt+</code> 显示表大小一点没变小，为什么？这是 bug 吗？要让它变小该怎么做？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>不是 bug，是设计。</strong> 普通 <code>VACUUM</code> 只把死元组占的空间在 free space map 里标为「内部可复用」，让后续 <code>INSERT</code>/<code>UPDATE</code> 填进这些空洞；它<em>从不</em>缩短表文件、不把磁盘还给操作系统（§1）。所以 <code>\dt+</code> 看到的文件大小（高水位线）纹丝不动——省下的空间只是被 PG 留作内部周转。</p>
+          <p><strong>为什么这样设计：</strong> 缩文件要先把尾部存活行搬到前面、再更新所有相关索引，开销近似重写；而表通常会再涨回来，归还+再申请等于做两趟无用功（§1 的底层机制）。</p>
+          <p><strong>要真缩小：</strong> 用 <code>VACUUM FULL</code>（重写整表、还盘，但全表 <code>ACCESS EXCLUSIVE</code> 锁、临时双倍磁盘，见 §3），或生产环境用 <code>pg_repack</code> 在线重建以避免长时间锁表。日常不需要缩——让 autovacuum 维持稳态即可。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>普通 <code>VACUUM</code> 和 <code>VACUUM FULL</code>，哪个会把磁盘空间还给操作系统？哪个会全表加排他锁阻塞读写？</li>
+          <li>事务 ID 是多少位？为什么 PG 必须「冻结」足够老的 tuple——不冻结会发生什么？</li>
+          <li>WAL 协议的核心规则是什么？为什么一个事务 <code>COMMIT</code> 时只需等 WAL 落盘、而不必等它改过的数据页落盘？</li>
+          <li>可见性图（VM）的 all-visible 位，分别被「回收」和「查询」两条路怎么用？</li>
+        </ol>
+        <details>
+          <summary>查看参考答案</summary>
+          <p><strong>1.</strong> 只有 <code>VACUUM FULL</code> 把空间还给 OS——它把整表重写进新文件、释放旧文件，磁盘真正下降；普通 <code>VACUUM</code> 只把死元组空间标为内部可复用，文件大小不变。加全表 <code>ACCESS EXCLUSIVE</code> 锁、阻塞所有读写的是 <code>VACUUM FULL</code>；普通 <code>VACUUM</code> 只取弱锁、与读写共存。</p>
+          <p><strong>2.</strong> 事务 ID 是 32 位，可见性用环形比较、过去/未来各约 2³¹（约 21 亿）。冻结把足够老的 tuple 标为「永久可见」、移出「按 xid 比大小」的体系。不冻结，当当前 xid 绕环超过 2³¹，老 <code>xmin</code> 会从「过去」滑进「看似在未来」，导致那些行突然对所有事务不可见——数据看似凭空消失。这是正确性问题，所以 PG 会在逼近上限时强制防回卷 VACUUM、乃至停止接受写入。</p>
+          <p><strong>3.</strong> 规则：修改任何数据 Page 之前，先把该变更的 redo 记录顺序写入 WAL 并保证其落盘。<code>COMMIT</code> 只等 WAL 落盘，是因为持久性已由 WAL 兑现——即便此刻断电、数据页还没刷，崩溃恢复也能从 WAL 重放出这次改动。本质是把昂贵的随机写（刷数据页）推迟、异步化，只为廉价的顺序写（append WAL）付同步落盘的代价。</p>
+          <p><strong>4.</strong> 回收路：VACUUM 扫描时遇到 all-visible 的 Page 直接跳过（保证无死元组可清），这是「第二次 VACUUM 快得多」的原因。查询路：index-only scan 扫到索引项后，查它指向的 Page 是否 all-visible——若是则整页可见、这一行必然可见，于是免去回堆、直接用索引值返回。同一份 VM、两头复用。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>用一个故意开着的长事务，亲手卡住 VACUUM 的回收</h3>
+        <p>开两个会话证明长事务如何阻断回收。会话 A：<code>BEGIN; SELECT 1;</code> 然后<em>挂着不提交</em>。会话 B：对前面那张 <code>t</code> 表 <code>UPDATE t SET v = v + 1;</code> 制造一批死元组，再 <code>VACUUM (VERBOSE) t;</code>。观察 VERBOSE 输出里「removed」与「dead but not yet removable」的数字——证明大量死元组<em>无法</em>被回收。然后提交会话 A，再 <code>VACUUM (VERBOSE) t;</code>，看死元组这次被清掉。把这个现象与 §5 的预测题对上。</p>
+        <details>
+          <summary>提示</summary>
+          <p>关键看 VERBOSE 里的 <code>tuples: N removed, M remain</code> 以及 <code>M dead but not yet removable</code> 这一行——会话 A 挂着时，<code>not yet removable</code> 会很大，因为这些死元组比「最老仍在运行的事务」（即会话 A）新，VACUUM 不敢回收。用 <code>SELECT backend_xmin FROM pg_stat_activity WHERE pid = ...;</code> 能看到会话 A 钉住的那把尺子。提交 A 后这把尺子前移，再跑 VACUUM，<code>not yet removable</code> 归零、死元组被真正回收。结论：<strong>卡住回收的从来不是 VACUUM 不努力，而是有一个老快照不让它清</strong>——这正是「监控并杀掉长事务比调 VACUUM 参数更治本」的现场证据。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/18/routine-vacuuming.html">PostgreSQL 18 Docs · Routine Vacuuming</a>（普通 VACUUM、autovacuum 阈值、可见性图与冻结的权威说明）</li>
+          <li><a href="https://www.postgresql.org/docs/18/routine-vacuuming.html#VACUUM-FOR-WRAPAROUND">PostgreSQL 18 Docs · Preventing Transaction ID Wraparound Failures</a>（回卷机制、<code>autovacuum_freeze_max_age</code>、防回卷 VACUUM）</li>
+          <li><a href="https://www.postgresql.org/docs/18/wal-intro.html">PostgreSQL 18 Docs · Write-Ahead Logging (WAL)</a>（WAL 的持久性与恢复原理）</li>
+          <li><a href="https://www.postgresql.org/docs/18/wal-configuration.html">PostgreSQL 18 Docs · WAL Configuration</a>（检查点、<code>max_wal_size</code>、全页写等配置）</li>
+          <li><a href="https://www.interdb.jp/pg/pgsql06.html">The Internals of PostgreSQL · Ch.6 Vacuum Processing</a>（VACUUM、FSM、可见性图、冻结的图解机制）</li>
+          <li><a href="https://www.interdb.jp/pg/pgsql09.html">The Internals of PostgreSQL · Ch.9 Write-Ahead Logging (WAL)</a>（WAL 记录、检查点、全页写、恢复流程的图解）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="02-mvcc.html">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · MVCC 与事务</span>
+        </a>
+        <a class="next" href="04-indexes.html">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 索引</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li class="toc-group">回收</li>
+        <li><a href="#vacuum" data-toc-target="vacuum">普通 VACUUM</a></li>
+        <li><a href="#autovacuum" data-toc-target="autovacuum">autovacuum 触发</a></li>
+        <li><a href="#vacuum-full" data-toc-target="vacuum-full">VACUUM FULL · 还盘</a></li>
+        <li><a href="#freeze" data-toc-target="freeze">冻结</a></li>
+        <li><a href="#wraparound" data-toc-target="wraparound">事务 ID 回卷</a></li>
+        <li><a href="#visibility-map" data-toc-target="visibility-map">可见性图</a></li>
+        <li class="toc-group">WAL</li>
+        <li><a href="#wal" data-toc-target="wal">WAL · 先写日志</a></li>
+        <li><a href="#checkpoint" data-toc-target="checkpoint">检查点</a></li>
+        <li><a href="#fpw" data-toc-target="fpw">全页写</a></li>
+        <li><a href="#recovery" data-toc-target="recovery">崩溃恢复</a></li>
+        <li><a href="#worked" data-toc-target="worked">动手观察</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

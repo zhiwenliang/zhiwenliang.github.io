@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 配置与资源 · PostgreSQL 调优教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-diagnosis.html">01 诊断</a><span class="sep">—</span>
+    <a href="02-planner.html">02 优化器</a><span class="sep">—</span>
+    <a href="03-indexing.html">03 索引</a><span class="sep">—</span>
+    <a href="04-mvcc-vacuum.html">04 MVCC</a><span class="sep">—</span>
+    <a href="05-config.html" class="current">05 配置</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 05</p>
+        <h1>配置与资源:每个参数对应一个机制</h1>
+        <p class="recap">前四章每讲一个机制都点到一个参数——work_mem 之于 hash join、random_page_cost 之于扫描选择、maintenance_work_mem 之于 VACUUM。这一章把它们收拢成一张配置图,每个旋钮都对应前面某个机制。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的心智模型</p>
+        <ul>
+          <li>配置心法:调一个参数前,先问它影响哪个机制——优化器、内存、WAL 还是 VACUUM</li>
+          <li>内存四件套(shared_buffers / work_mem / maintenance_work_mem / effective_cache_size)各喂哪个机制</li>
+          <li>WAL 与 checkpoint:先写日志再刷数据页,把脏页刷盘从尖峰摊成平缓</li>
+          <li>代价参数与 I/O:random_page_cost、effective_io_concurrency 直接改优化器的扫描选择</li>
+          <li>连接成本与连接池:每个连接是一个进程,会放大 work_mem,所以靠池子复用而非堆 max_connections</li>
+          <li>一份起点配置,加一句硬约束:改完回到第 01 章的测量循环复测</li>
+        </ul>
+      </section>
+
+      <h2 id="s51"><span class="num">5.1</span><span>配置心法:别抄神奇配置</span></h2>
+
+      <p class="one-liner">调一个参数前,先说出它影响的是优化器、内存、WAL 还是 VACUUM 哪个机制——说不出来就别调。</p>
+
+      <div class="rationale">
+        <span class="label">为什么先讲心法</span>
+        <p>网上流传的"神奇 postgresql.conf"之所以危险,是因为它把参数当成孤立的加速旋钮:抄一组数字粘进去,期待变快。但每个参数都只是前四章某个机制的开关——<code>work_mem</code> 控制 hash/sort 节点的内存,<code>random_page_cost</code> 控制优化器对随机读的估价,<code>maintenance_work_mem</code> 控制 VACUUM 的工作区。脱离机制谈数值,等于在第 01 章那个"黑暗里拧旋钮"的反面教材里加速。<strong>没有放之四海皆准的配置</strong>:同一组值在 16GB 的 OLTP 机器上合理,在 256GB 的数仓上就是浪费。本章每个参数都先连回机制,再给数值。</p>
+      </div>
+
+      <p>这张图是本章的骨架:左边是可调参数,右边是前四章讲过的机制。调任何一个参数,都先在图上找到它指向的那个机制,问一句"这是要影响这个机制的什么行为"。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="参数到机制的映射:左列参数分别指向缓存、扫描选择、VACUUM、写入四个机制">
+          <defs>
+            <marker id="map-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- left column: params -->
+          <rect x="20" y="24" width="190" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="115" y="50" text-anchor="middle" class="edge-label">shared_buffers / work_mem</text>
+
+          <rect x="20" y="96" width="190" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="115" y="122" text-anchor="middle" class="edge-label">random_page_cost</text>
+
+          <rect x="20" y="168" width="190" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="115" y="194" text-anchor="middle" class="edge-label">autovacuum_*</text>
+
+          <rect x="20" y="240" width="190" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="115" y="266" text-anchor="middle" class="edge-label">max_wal_size</text>
+
+          <!-- right column: mechanisms -->
+          <rect x="450" y="24" width="230" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="565" y="50" text-anchor="middle" class="node-label-accent">缓存与排序</text>
+
+          <rect x="450" y="96" width="230" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="565" y="115" text-anchor="middle" class="node-label-accent">02 扫描选择</text>
+          <text x="565" y="131" text-anchor="middle" class="edge-label">顺序 vs 索引</text>
+
+          <rect x="450" y="168" width="230" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="565" y="194" text-anchor="middle" class="node-label-accent">04 VACUUM</text>
+
+          <rect x="450" y="240" width="230" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="565" y="266" text-anchor="middle" class="node-label-accent">WAL 与刷盘</text>
+
+          <!-- arrows -->
+          <line x1="210" y1="46"  x2="450" y2="46"  class="diagram-soft" marker-end="url(#map-ar)"/>
+          <line x1="210" y1="118" x2="450" y2="118" class="diagram-soft" marker-end="url(#map-ar)"/>
+          <line x1="210" y1="190" x2="450" y2="190" class="diagram-soft" marker-end="url(#map-ar)"/>
+          <line x1="210" y1="262" x2="450" y2="262" class="diagram-soft" marker-end="url(#map-ar)"/>
+
+          <text x="115" y="306" text-anchor="middle" class="edge-label">参数(旋钮)</text>
+          <text x="565" y="306" text-anchor="middle" class="edge-label">机制(前四章)</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>参数到机制的映射。<strong>注意</strong>:右列每个机制在前面都有出处——<code>random_page_cost</code> 指向 <a href="02-planner.html#s23">02 章的扫描选择</a>,<code>autovacuum_*</code> 指向 <a href="04-mvcc-vacuum.html#s46">04 章的 VACUUM</a>。看不到一个参数连回哪个机制,就没有理由动它。</figcaption>
+      </figure>
+
+      <h2 id="s52"><span class="num">5.2</span><span>内存四件套</span></h2>
+
+      <p class="one-liner">四个内存参数喂四个不同的机制:页缓存、单节点排序/哈希、维护操作、优化器对缓存的认知。</p>
+
+      <p>把"内存"当成一个旋钮去调,是最常见的误区。PostgreSQL 的内存分四块,各喂一个机制,调错地方既不提速,还会把内存推向爆掉。逐个拆开:</p>
+
+      <h3>shared_buffers — PostgreSQL 自己的页缓存</h3>
+      <p><code>shared_buffers</code> 是 PostgreSQL 在共享内存里维护的页缓存,所有后端进程共用。一个数据页被读进来后留在这里,下次命中就不必再碰磁盘。这正是 <a href="01-diagnosis.html#s13">01 章 <code>Buffers: shared hit</code></a> 里 <code>hit</code> 的来源:hit 多说明页在 <code>shared_buffers</code> 命中,<code>read</code> 多说明缓存没接住、落到了磁盘。默认 <code>128MB</code> 对生产机偏小;常见起点是物理内存的 <strong>25%</strong>。再大未必更好——PostgreSQL 同时也依赖操作系统的页缓存(见 <code>effective_cache_size</code>),两层缓存不必都给满。</p>
+
+      <h3>work_mem — 每个排序 / 哈希 / 位图节点的内存</h3>
+      <p><code>work_mem</code> 是 <a href="02-planner.html#s24">02 章 hash join / sort</a> 节点能用的内存上限。一个 Hash Join 要把小表建成哈希表,如果哈希表装不进 <code>work_mem</code>,就会落盘——执行计划里出现 <code>external merge Disk</code> 或 <code>Batches: &gt; 1</code>,速度断崖式下跌。默认 <code>4MB</code>,排序稍大的结果集就溢出。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · work_mem 是 per-node per-connection</span>
+        <p><code>work_mem</code> <strong>不是</strong>每条查询一份,而是<strong>每个排序/哈希/位图节点各一份</strong>。一条带多个 JOIN + 排序的复杂查询会同时开几个节点,每个都吃一份 <code>work_mem</code>,单条查询就用上数倍。再乘以并发连接数,峰值内存 = <code>work_mem × 每条查询的节点数 × 并发连接数</code>,会被迅速放大。所以它不能盲目调大——这正是 5.5 节连接池要解决的放大问题。</p>
+      </div>
+
+      <h3>maintenance_work_mem — 维护操作的工作区</h3>
+      <p><code>maintenance_work_mem</code> 是 <a href="04-mvcc-vacuum.html#s43">04 章 VACUUM</a>、<code>CREATE INDEX</code>、<code>ALTER TABLE</code> 等维护操作的工作区。VACUUM 用它缓存待回收的 dead tuple 标识,越大则一遍扫过的死元组越多、大表 VACUUM 越快。默认 <code>64MB</code>。它只在维护时占用,且同一时刻这类操作通常不多,所以可以比 <code>work_mem</code> 大方得多。</p>
+
+      <div class="callout tip">
+        <span class="label">CURRENCY · PG 17 起取消 1GB 上限</span>
+        <p>PG 17(2024-09)之前,VACUUM 对 <code>maintenance_work_mem</code> 的有效利用封顶在 <code>1GB</code>,设更大对 VACUUM 也无效。PG 17 起这个上限被移除,VACUUM 能用满分配的值——对超大表,可放心把它调到几个 GB 来缩短 VACUUM 时间。</p>
+      </div>
+
+      <h3>effective_cache_size — 给优化器的"缓存有多大"提示</h3>
+      <p><code>effective_cache_size</code> 是四件套里唯一<strong>不分配任何内存</strong>的:它只是告诉优化器"操作系统页缓存 + <code>shared_buffers</code> 加起来大约有多少可用",作为 <a href="02-planner.html#s22">02 章代价估算</a>的输入。这个数越大,优化器越相信"重复的索引扫描多半会命中缓存",从而更愿意选索引扫描而非顺序扫描。它不影响实际内存占用,设错了只会让优化器估价偏移,不会 OOM。常设为物理内存的 <strong>50–75%</strong>。</p>
+
+      <table class="compare-table">
+        <caption>表 5.1 · 内存四件套 × 各喂哪个机制</caption>
+        <thead>
+          <tr><th>参数</th><th>作用</th><th>默认(PG18)</th><th>起点建议(16GB 机)</th><th>影响哪个机制</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>shared_buffers</code></td><td>PostgreSQL 自己的页缓存(真实分配)</td><td>128MB</td><td>物理内存 25%(~4GB)</td><td>页缓存命中(01 BUFFERS)</td></tr>
+          <tr><td><code>work_mem</code></td><td>每个排序/哈希/位图节点的内存</td><td>4MB</td><td>16–32MB,视并发</td><td>hash join / sort(02)</td></tr>
+          <tr><td><code>maintenance_work_mem</code></td><td>VACUUM / 建索引的工作区</td><td>64MB</td><td>1GB(大表可更大)</td><td>VACUUM(04)</td></tr>
+          <tr><td><code>effective_cache_size</code></td><td>给优化器的缓存量提示(不分配)</td><td>4GB</td><td>物理内存 50–75%(~12GB)</td><td>代价估算(02)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>把 <code>effective_cache_size</code> 从 4GB 调到 12GB,机器的实际内存占用会增加吗?这个改动主要影响优化器的什么行为?</p>
+        <details>
+          <summary>展开答案(先想一步再点)</summary>
+          <p>实际内存占用<strong>不变</strong>——<code>effective_cache_size</code> 不分配任何内存,只是一个告诉优化器"缓存大约有多大"的数字。</p>
+          <p>它影响的是优化器对<strong>索引扫描代价</strong>的估算:数字越大,优化器越假设重复的随机读会命中缓存、代价更低,因而更倾向选索引扫描而非顺序扫描。这是纯粹改"优化器的认知输入",对应 02 章那条"调优=改输入"的主线。</p>
+        </details>
+      </div>
+
+      <h2 id="s53"><span class="num">5.3</span><span>WAL 与 checkpoint</span></h2>
+
+      <p class="one-liner">WAL 先写日志再写数据页,保证崩溃可恢复;checkpoint 周期性把脏页刷盘——调参的目标是把这次刷盘从尖峰摊成平缓。</p>
+
+      <div class="rationale">
+        <span class="label">机制:为什么要 WAL 和 checkpoint</span>
+        <p>修改一个数据页时,PostgreSQL 不立刻把数据页写盘,而是先把"改了什么"追加写进 WAL(预写日志,write-ahead log),再在内存里改页(此时页变"脏")。这样崩溃后能用 WAL 重放恢复。但脏页不能永远只在内存——<strong>checkpoint</strong> 周期性地把累积的脏页批量刷到数据文件,并标记"这个点之前的 WAL 可以回收了"。问题就出在这次批量刷盘上。</p>
+      </div>
+
+      <p><strong>痛点:</strong>checkpoint 一触发,大量脏页要在短时间内集中写盘,造成 I/O 尖峰——磁盘被打满,期间所有查询都变慢。这对应 <a href="01-diagnosis.html#s16">01 章 wait events 里的 <code>LWLock</code></a>(等 WAL / 缓冲区相关的内部锁)。两个参数决定 checkpoint 多频繁、多集中:</p>
+
+      <ul>
+        <li><strong><code>max_wal_size</code></strong>(默认 <code>1GB</code>):WAL 累积到这个量会强制触发 checkpoint。设太小,WAL 很快写满,checkpoint 被频繁逼出,刷盘尖峰一个接一个。调大它(如 <code>4GB</code>)能让 checkpoint 主要由 <code>checkpoint_timeout</code>(默认 5 分钟)按时间从容触发,而不是被 WAL 体积逼着仓促刷。</li>
+        <li><strong><code>checkpoint_completion_target</code></strong>:把一次 checkpoint 的刷盘工作摊到整个周期的多大比例里完成。设 <code>0.9</code> 表示用 90% 的周期慢慢刷,而不是一上来全力写——尖峰被摊平成平缓的斜坡。</li>
+      </ul>
+
+      <div class="callout tip">
+        <span class="label">CURRENCY · 0.9 已是默认</span>
+        <p>很多旧文章还在教"把 <code>checkpoint_completion_target</code> 从 <code>0.5</code> 改到 <code>0.9</code>"。自 <strong>PG 14</strong> 起默认就是 <code>0.9</code>,不必再手动改。这条仍值得知道,因为它解释了 PostgreSQL 默认行为已经在帮你摊平刷盘;真正需要动的通常是 <code>max_wal_size</code>。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 700 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两条时间线对比:小 max_wal_size 造成密集 checkpoint 尖峰,大 max_wal_size 加 0.9 摊平为平缓写入">
+          <defs>
+            <marker id="wal-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- top timeline: spiky -->
+          <text x="30" y="32" class="node-label">尖峰</text>
+          <text x="92" y="32" class="edge-label">max_wal_size 小 + 集中刷</text>
+          <line x1="30" y1="100" x2="660" y2="100" class="diagram-ink" marker-end="url(#wal-ar)"/>
+          <!-- spikes -->
+          <path d="M 70 100 L 90 50 L 110 100" class="diagram-accent"/>
+          <path d="M 190 100 L 210 50 L 230 100" class="diagram-accent"/>
+          <path d="M 310 100 L 330 50 L 350 100" class="diagram-accent"/>
+          <path d="M 430 100 L 450 50 L 470 100" class="diagram-accent"/>
+          <path d="M 550 100 L 570 50 L 590 100" class="diagram-accent"/>
+          <text x="345" y="124" text-anchor="middle" class="edge-label">I/O 频繁打满 → 查询周期性变慢</text>
+
+          <!-- bottom timeline: smoothed -->
+          <text x="30" y="172" class="node-label">摊平</text>
+          <text x="92" y="172" class="edge-label">max_wal_size 大 + completion_target=0.9</text>
+          <line x1="30" y1="240" x2="660" y2="240" class="diagram-ink" marker-end="url(#wal-ar)"/>
+          <!-- gentle wide bumps -->
+          <path d="M 60 240 Q 200 196 340 240" class="diagram-ink"/>
+          <path d="M 360 240 Q 500 196 640 240" class="diagram-ink"/>
+          <text x="345" y="264" text-anchor="middle" class="edge-label">同样的脏页量,摊成平缓的写入</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>WAL 到 checkpoint 刷盘的时间线。<strong>注意</strong>:两条线刷的脏页总量相同,差别只在<em>分布</em>。调大 <code>max_wal_size</code> 减少 checkpoint 次数,<code>completion_target=0.9</code> 把每次刷盘拉长——尖峰被摊成斜坡,磁盘不再被周期性打满。</figcaption>
+      </figure>
+
+      <h2 id="s54"><span class="num">5.4</span><span>代价参数与 I/O</span></h2>
+
+      <p class="one-liner">random_page_cost 直接改优化器顺序扫描 vs 索引扫描的切换点;effective_io_concurrency 控制预取并发——两者都把硬件特性喂给优化器。</p>
+
+      <p>这一节的参数不分配内存,而是校准 <a href="02-planner.html#s22">02 章的代价模型</a>,让那套抽象单位贴近你的真实硬件。</p>
+
+      <h3>random_page_cost — 最值得改的代价参数</h3>
+      <p><code>random_page_cost</code> 默认 <code>4.0</code>,含义是"随机读一页的代价约等于顺序读一页(<code>seq_page_cost=1.0</code>)的 4 倍"。这个 4 倍是<strong>机械盘假设</strong>——磁头寻道使随机读远慢于顺序读。但 SSD 和云盘几乎没有寻道代价,随机读和顺序读相差无几,此时 <code>4.0</code> 让优化器系统性高估索引扫描(随机读)的代价,本该走索引却退回顺序扫描。SSD/云盘应把它降到约 <strong>1.1</strong>。这正是 <a href="02-planner.html#s23">02 章</a>那条"顺序扫描 vs 索引扫描切换点"背后的旋钮:降低 <code>random_page_cost</code>,切换点左移,优化器更早地愿意走索引。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">cost-params.ini</span>
+          <span class="lang">ini</span>
+          <button class="copy" data-copy-target="cb-cost">复制</button>
+        </div>
+<pre id="cb-cost"><code class="language-ini"># 机械盘默认:随机读贵 4 倍
+random_page_cost = 4.0
+seq_page_cost    = 1.0
+
+# SSD / 云盘:随机读和顺序读差别很小
+random_page_cost = 1.1
+seq_page_cost    = 1.0</code></pre>
+      </div>
+
+      <h3>effective_io_concurrency — 预取并发</h3>
+      <p><code>effective_io_concurrency</code> 控制 PostgreSQL 一次能并发发起多少个磁盘预取请求,主要作用于 <strong>Bitmap Heap Scan</strong> 这类需要按位图回表读多页的场景:并发预取多页,而不是读一页等一页。</p>
+
+      <div class="callout tip">
+        <span class="label">CURRENCY · 默认从 1 提到 16(PG 18)</span>
+        <p>PG 18(2025-09)把 <code>effective_io_concurrency</code> 默认从 <code>1</code> 提到 <strong>16</strong>,并通过新的异步 I/O(<code>io_uring</code> 或 worker 后端)让预取真正生效。旧版本里这个参数对很多平台形同虚设;PG 18 起它实际加速 bitmap heap scan 等的回表预取。SSD 上保持默认或略调高即可。</p>
+      </div>
+
+      <h3>jit — JIT 编译</h3>
+      <p><code>jit</code> 控制是否对代价超过 <code>jit_above_cost</code>(默认 <code>100000</code>)的查询做即时编译,把表达式求值编译成机器码。它对扫描海量行的分析型查询有收益,但 JIT 编译本身有固定开销。</p>
+
+      <div class="callout warning">
+        <span class="label">CURRENCY · PG 18 默认 on,PG 19 默认 off</span>
+        <p><code>jit</code> 在 PG 18 默认 <code>on</code>,但社区已确认 <strong>PG 19(2026 beta)默认改回 <code>off</code></strong>——因为对大量 OLTP 短查询,JIT 编译开销常常超过它省下的执行时间,反而变慢。OLTP 负载建议显式关掉(<code>jit = off</code>);只在确认有重分析型查询、且实测 JIT 有正收益时再开。</p>
+      </div>
+
+      <h2 id="s55"><span class="num">5.5</span><span>连接管理与连接池</span></h2>
+
+      <p class="one-liner">每个连接是一个独立后端进程,有固定内存开销且会放大 work_mem;答案是连接池复用少量连接,不是堆 max_connections。</p>
+
+      <div class="rationale">
+        <span class="label">机制:一个连接的真实成本</span>
+        <p>PostgreSQL 对每个客户端连接 fork 一个<strong>独立后端进程</strong>(不是线程)。每个进程有固定的内存与栈开销,内核还要为它们做进程调度。更关键的是 5.2 节那个放大效应:每个后端跑查询时,每个排序/哈希节点各吃一份 <code>work_mem</code>。连接越多,<code>work_mem</code> 被乘的次数越多,峰值内存越危险。</p>
+      </div>
+
+      <p><strong>痛点:</strong>遇到"连接不够用"就把 <code>max_connections</code>(默认 <code>100</code>)调到几千,不是答案。几千个后端进程带来沉重的调度开销,还把 <code>work_mem</code> 的放大系数推到内存撑不住的地步——5.6 的挑战题就是这个事故的算术。</p>
+
+      <p><strong>解法:</strong>用连接池(典型是 PgBouncer)的 <strong>transaction 模式</strong>。应用连到池子,池子只对后端维持一小撮真实连接(如几十个),在事务粒度上把它们复用给成百上千的应用连接。后端进程数被压到很小,<code>work_mem</code> 的放大系数随之可控。</p>
+
+      <table class="compare-table">
+        <caption>表 5.2 · 直接调大 max_connections vs 连接池</caption>
+        <thead>
+          <tr><th>做法</th><th>后端进程数</th><th>对 work_mem 放大的影响</th><th>适用</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>把 <code>max_connections</code> 调到几千</td><td>等于连接数,极多</td><td>放大系数巨大,峰值内存易 OOM</td><td>几乎从不推荐</td></tr>
+          <tr class="selected"><td>连接池(PgBouncer,transaction 模式)</td><td>压到几十个</td><td>放大系数小且可控</td><td>高并发 OLTP 的标准做法</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 连接数和内存是一道乘法题</span>
+        <p>把 5.2 和本节接起来:峰值内存 ≈ <code>work_mem × 每条查询的节点数 × 并发后端数</code>。<code>max_connections</code> 调大会把最后一个因子推高,连乘出危险的峰值。连接池从因子上动手——压低后端数,而不是寄望于把 <code>work_mem</code> 调到很小(那又会拖慢排序)。这就是"调一个参数前先想它牵动哪个机制"的典型:看似是连接问题,根子在内存放大。</p>
+      </div>
+
+      <h2 id="s56"><span class="num">5.6</span><span>一份起点配置(收拢全章)</span></h2>
+
+      <p class="one-liner">给一台 16GB、OLTP 负载的机器一组起点值——每个值都标出它对应前面哪个机制。</p>
+
+      <p>把全章收拢成一份可抄的起点配置。注意右列:每个数字旁边都写着它牵动哪个机制、出自哪一章。不带这一列的配置就是 5.1 警告过的"神奇配置"。</p>
+
+      <table class="compare-table">
+        <caption>表 5.3 · 16GB / OLTP 起点配置 × 对应机制</caption>
+        <thead>
+          <tr><th>参数</th><th>起点值</th><th>对应机制 / 章节</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>shared_buffers</code></td><td>4GB</td><td>页缓存,物理内存 25%(01 BUFFERS)</td></tr>
+          <tr><td><code>effective_cache_size</code></td><td>12GB</td><td>给优化器的缓存提示,~75%(02 代价估算)</td></tr>
+          <tr><td><code>work_mem</code></td><td>16–32MB</td><td>排序/哈希节点,视并发取值(02 hash/sort)</td></tr>
+          <tr><td><code>maintenance_work_mem</code></td><td>1GB</td><td>VACUUM / 建索引工作区(04 VACUUM)</td></tr>
+          <tr><td><code>random_page_cost</code></td><td>1.1</td><td>SSD/云盘的扫描切换点(02 扫描选择)</td></tr>
+          <tr><td><code>max_wal_size</code></td><td>4GB</td><td>降低 checkpoint 频率(5.3 WAL)</td></tr>
+          <tr><td><code>checkpoint_completion_target</code></td><td>0.9</td><td>摊平刷盘(PG14 起已是默认)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">postgresql.conf · 16GB OLTP 起点</span>
+          <span class="lang">ini</span>
+          <button class="copy" data-copy-target="cb-start">复制</button>
+        </div>
+<pre id="cb-start"><code class="language-ini"># 内存四件套
+shared_buffers = 4GB                  # 物理内存 25%,页缓存
+effective_cache_size = 12GB           # ~75%,只是给优化器的提示
+work_mem = 32MB                       # per-node per-connection,留意放大
+maintenance_work_mem = 1GB            # VACUUM / CREATE INDEX
+
+# 代价参数(SSD / 云盘)
+random_page_cost = 1.1                # 默认 4.0 是机械盘假设
+# effective_io_concurrency = 16       # PG18 默认已是 16
+
+# WAL / checkpoint
+max_wal_size = 4GB                    # 减少 checkpoint 尖峰
+checkpoint_completion_target = 0.9    # PG14 起默认,摊平刷盘
+
+# 连接:不堆大,前面放 PgBouncer
+max_connections = 100</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">必读 · 这是起点,不是终点</span>
+        <p>这份配置只是一个<strong>合理的出发点</strong>,不是终点。每台机器的内存、磁盘、负载形状都不同,真实最优值只能测出来。改完<strong>一定回到 <a href="01-diagnosis.html#s11">第 01 章的测量循环</a></strong>:跑代表性负载,看 <code>EXPLAIN (ANALYZE, BUFFERS)</code>、wait events、缓存命中率,再对比前后。并且<strong>一次只改一个变量</strong>——同时改 <code>shared_buffers</code> 和 <code>work_mem</code>,即使变快了也分不清是谁的功劳。配置调优和查询调优共用同一个循环。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 700 200" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="16GB 物理内存如何切分:shared_buffers、各连接 work_mem、其余留给操作系统页缓存">
+          <defs>
+            <marker id="mem-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- the 16GB bar -->
+          <rect x="40" y="40" width="620" height="56" rx="4" class="diagram-ink node-fill"/>
+          <text x="350" y="26" text-anchor="middle" class="edge-label">物理内存 16GB</text>
+
+          <!-- shared_buffers segment -->
+          <rect x="40" y="40" width="155" height="56" class="diagram-accent node-fill-accent"/>
+          <text x="117" y="64" text-anchor="middle" class="node-label-accent">shared_buffers</text>
+          <text x="117" y="82" text-anchor="middle" class="edge-label">4GB · 真实分配</text>
+
+          <!-- work_mem segment -->
+          <line x1="195" y1="40" x2="195" y2="96" class="diagram-ink"/>
+          <rect x="195" y="40" width="110" height="56" class="diagram-soft node-fill"/>
+          <text x="250" y="64" text-anchor="middle" class="edge-label">各连接</text>
+          <text x="250" y="82" text-anchor="middle" class="edge-label">work_mem 之和</text>
+
+          <!-- OS cache segment -->
+          <line x1="305" y1="40" x2="305" y2="96" class="diagram-ink"/>
+          <text x="482" y="64" text-anchor="middle" class="node-label">操作系统页缓存</text>
+          <text x="482" y="82" text-anchor="middle" class="edge-label">其余 · effective_cache_size 估它</text>
+
+          <text x="350" y="138" text-anchor="middle" class="edge-label">work_mem 段会随并发后端数膨胀 → 这一段失控就 OOM</text>
+          <line x1="250" y1="96" x2="250" y2="124" class="diagram-soft" marker-end="url(#mem-ar)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 5.3</span>16GB 内存的切分。<strong>注意</strong>:<code>shared_buffers</code> 是固定的真实分配;中间的 <code>work_mem</code> 之和会随并发后端数膨胀(5.5 的放大),这一段失控就 OOM;<code>effective_cache_size</code> 只是用来估"操作系统页缓存那一段有多大",本身不占内存。</figcaption>
+      </figure>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程,把答案写下来再对照。这一章的题考的不是数值,而是每个参数连回哪个机制。
+        </p>
+        <ol>
+          <li><code>effective_cache_size</code> 和 <code>shared_buffers</code> 都和"缓存"有关,但一个分配内存、一个不分配。各自影响哪个机制?调大 <code>effective_cache_size</code> 会增加实际内存占用吗?</li>
+          <li>一条复杂查询同时有 3 个 hash/sort 节点,<code>work_mem=32MB</code>,有 50 个并发连接都在跑类似查询。粗算这部分内存的峰值上界,并说明为什么不能靠无脑调大 <code>work_mem</code> 解决慢排序。</li>
+          <li>把 <code>random_page_cost</code> 从 4.0 降到 1.1,会让优化器更倾向顺序扫描还是索引扫描?它改的是 02 章的哪个机制?为什么 SSD 上该降?</li>
+          <li>给一台 <strong>32GB、SSD、OLTP</strong> 的机器写出 <code>shared_buffers</code>、<code>effective_cache_size</code>、<code>random_page_cost</code>、<code>jit</code> 四个值,并各用一句说出它对应前面哪个机制。</li>
+        </ol>
+        <details>
+          <summary>答案(先做完再展开)</summary>
+          <ol>
+            <li><code>shared_buffers</code> 是 PostgreSQL 真实分配的页缓存(影响 01 的缓存命中);<code>effective_cache_size</code> 不分配内存,只是给优化器的"缓存有多大"提示,影响 02 的索引扫描代价估算。调大 <code>effective_cache_size</code> <strong>不</strong>增加实际内存占用,只让优化器更倾向走索引。</li>
+            <li>上界约 <code>32MB × 3 × 50 = 4800MB ≈ 4.7GB</code>(<code>work_mem × 节点数 × 并发数</code>)。它是 per-node per-connection,无脑调大会把这个乘积推到 OOM;慢排序的正解是减少并发后端(连接池)或针对性提升单查询效率,而不是全局拉高 <code>work_mem</code>。</li>
+            <li>更倾向<strong>索引扫描</strong>:降低随机读的估价,使索引扫描(随机读)的代价更低,02 章的扫描切换点左移。SSD 几乎无寻道代价,随机读和顺序读相差无几,默认 4.0 的机械盘假设会系统性高估索引扫描代价,所以该降到约 1.1。</li>
+            <li>示例:<code>shared_buffers=8GB</code>(25%,页缓存)、<code>effective_cache_size=24GB</code>(~75%,给优化器的代价估算提示)、<code>random_page_cost=1.1</code>(SSD 的扫描切换点)、<code>jit=off</code>(OLTP 短查询,JIT 编译开销不划算)。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一台 64GB 机器报 out of memory,算出放大并给修复方向</h3>
+        <p>一台 <strong>64GB</strong> RAM、高并发 OLTP 的库频繁报 <code>out of memory</code>。已知 <code>max_connections=2000</code>、<code>work_mem=256MB</code>,典型查询带 2 个 hash/sort 节点。<code>shared_buffers</code> 设了 16GB。问:仅 <code>work_mem</code> 这部分在最坏情况下会吃掉多少内存?和 64GB 物理内存对比说明问题在哪。给出两条修复方向。</p>
+        <details>
+          <summary>提示(卡住再展开)</summary>
+          <p>关键是记住 <code>work_mem</code> 是 <strong>per-node per-connection</strong>,要乘两次。最坏估算:<code>256MB × 2 节点 × 2000 连接 = 1,024,000MB ≈ 1000GB</code>——远超 64GB 物理内存(还没算 <code>shared_buffers</code> 占的 16GB)。即使只有一部分连接同时跑这类查询,峰值也轻松击穿内存,于是 OOM。</p>
+          <p>两条修复方向:① <strong>降 <code>work_mem</code></strong>(如降到 16–32MB,把放大系数压下来);② <strong>上连接池</strong>(PgBouncer transaction 模式),把真实后端从 2000 压到几十个——这同时砍掉乘式里最大的那个因子。两者通常一起做。注意 <code>max_connections</code> 调大不是解法,它正是把最后那个因子推爆的原因。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html">Resource Consumption</a>(官方:shared_buffers / work_mem / maintenance_work_mem / effective_io_concurrency)</li>
+          <li><a href="https://www.postgresql.org/docs/current/runtime-config-wal.html">Write Ahead Log</a>(官方:max_wal_size / checkpoint_completion_target)</li>
+          <li><a href="https://www.postgresql.org/docs/current/runtime-config-query.html">Query Planning</a>(官方:random_page_cost / effective_cache_size / jit)</li>
+          <li><a href="https://www.postgresql.org/docs/release/18.0/">PostgreSQL 18 Release Notes</a>(官方:异步 I/O 与 effective_io_concurrency 默认 16)</li>
+          <li><a href="https://wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server">Tuning Your PostgreSQL Server</a>(社区 wiki:起点配置经验)</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="04-mvcc-vacuum.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">04 · MVCC、VACUUM 与表膨胀</span>
+        </a>
+        <a href="06-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">06 · 自测题库 + 判别场景</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s51" data-toc-target="s51">5.1 配置心法</a></li>
+        <li><a href="#s52" data-toc-target="s52">5.2 内存四件套</a></li>
+        <li><a href="#s53" data-toc-target="s53">5.3 WAL 与 checkpoint</a></li>
+        <li><a href="#s54" data-toc-target="s54">5.4 代价参数与 I/O</a></li>
+        <li><a href="#s55" data-toc-target="s55">5.5 连接与连接池</a></li>
+        <li><a href="#s56" data-toc-target="s56">5.6 一份起点配置</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

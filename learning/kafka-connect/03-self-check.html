@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 自测题库 · Kafka Connect 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Self-check question bank — atomic numbered questions */
+.qbank ol { padding-left: 24px; }
+.qbank ol li {
+  margin: 12px 0;
+  padding-left: 6px;
+  line-height: 1.6;
+}
+.qbank ol li::marker { font-family: var(--mono); color: var(--vermilion); font-weight: 500; font-size: 13px; }
+.qbank .hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.qbank .hint a { color: var(--ink-faint); text-decoration-color: var(--rule); }
+.qbank .hint a:hover { color: var(--vermilion); }
+/* The single final answer key */
+.answer-key { margin-top: 28px; }
+.answer-key h3 {
+  font-family: var(--sans);
+  font-size: 15px;
+  margin: 18px 0 6px;
+  color: var(--vermilion);
+}
+.answer-key ol { padding-left: 22px; }
+.answer-key ol li { margin: 10px 0; line-height: 1.6; }
+.answer-key ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-size: 13px; }
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-self-check.html" class="current">03 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>自测题库：从回忆到判别</h1>
+        <p class="recap">01 章给了词汇表（connector / worker / task / converter / SMT / offset / DLQ / EOS source），02 章给了机制与取舍（控制面在 Kafka topic、incremental cooperative 再平衡、序列化 wire format、偏移恢复、EOS 事务 + fencing）。读得顺不等于答得出。这一章把那两章的内容翻过来——不再喂结论，而是逼着读者从空白里把结论提取出来，并在真实选型场景里做判别。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">这一章怎么用</p>
+        <ul>
+          <li>三层梯度共 <strong>16 道</strong>题：概念层 6 道（对应 01）、原理层 6 道（对应 02）、应用判别层 4 道（跨 01 + 02 的选型场景）。</li>
+          <li>每道题先合上教程、把答案写在纸上或编辑器里，<strong>写完</strong>再翻文末答案对照——直接看答案等于把这两章当再读一遍，提取的训练效果归零。</li>
+          <li>所有答案集中在<strong>文末一个折叠块</strong>里，按三层分组。题目区只有题，没有夹带答案。</li>
+          <li>应用判别层是这套 concept-focused 教程的迁移训练主战场——它检验的不是"记没记住"，而是"换个真实场景还选得对吗"。</li>
+        </ul>
+      </section>
+
+      <!-- ============ FIGURE — difficulty gradient pyramid ============ -->
+      <figure>
+        <svg viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="难度梯度金字塔：底层概念层 6 道考回忆、中层原理层 6 道考理解、顶层应用判别层 4 道考迁移，认知要求自下而上递增">
+          <defs>
+            <marker id="grad-arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== Pyramid: 3 stacked trapezoids ===== -->
+          <!-- Bottom tier — concept / recall (widest) -->
+          <polygon points="150,300 610,300 540,232 220,232" class="diagram-ink node-fill"/>
+          <text x="380" y="262" text-anchor="middle" class="node-label">概念层 · 回忆</text>
+          <text x="380" y="282" text-anchor="middle" class="edge-label">原子定义 · 对应 01 章 · 6 道</text>
+
+          <!-- Middle tier — principle / understand -->
+          <polygon points="220,230 540,230 470,162 290,162" class="diagram-ink node-fill"/>
+          <text x="380" y="192" text-anchor="middle" class="node-label">原理层 · 理解</text>
+          <text x="380" y="212" text-anchor="middle" class="edge-label">机制为何如此 · 对应 02 章 · 6 道</text>
+
+          <!-- Top tier — discrimination / transfer (accent, narrowest) -->
+          <polygon points="290,160 470,160 410,92 350,92" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="124" text-anchor="middle" class="node-label-accent">判别 · 迁移</text>
+          <text x="380" y="142" text-anchor="middle" class="edge-label">真实选型 · 跨 01+02 · 4 道</text>
+
+          <!-- Apex marker -->
+          <text x="380" y="78" text-anchor="middle" class="branch-label">最难</text>
+
+          <!-- ===== Cognitive-load axis on the right ===== -->
+          <line x1="660" y1="300" x2="660" y2="96" class="diagram-accent" marker-end="url(#grad-arrow)"/>
+          <text x="690" y="300" text-anchor="middle" class="edge-label">认得出</text>
+          <text x="690" y="200" text-anchor="middle" class="edge-label">讲得清</text>
+          <text x="690" y="112" text-anchor="middle" class="edge-label">选得对</text>
+
+          <!-- ===== Foundation caption on the left ===== -->
+          <text x="80" y="300" text-anchor="middle" class="edge-label">认知要求</text>
+          <text x="80" y="96"  text-anchor="middle" class="edge-label">自下而上</text>
+          <line x1="80" y1="288" x2="80" y2="108" class="diagram-soft" marker-end="url(#grad-arrow)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.0</span>三层题库不是难度随机堆叠，而是一座金字塔：底层"认得出"概念、中层"讲得清"机制、顶层"选得对"场景，认知要求自下而上递增。
+          <strong>注意</strong>：塔尖最窄、题量最少（4 道判别），却是这套 concept-focused 教程<strong>唯一</strong>训练迁移的地方——底层答得再溜，塔尖答不出就等于没真正理解取舍。</figcaption>
+      </figure>
+
+      <!-- ════════════════════════════════════════════════════════
+           CONCEPT LAYER
+           ════════════════════════════════════════════════════════ -->
+      <section class="qbank" id="concept-layer">
+        <h2><span class="num">A</span><span>概念层 · 对应 01 章（6 道）</span></h2>
+        <p>每题只考一个原子概念——一句话就该答得出。答不上来的，顺着提示链回 01 章对应小节补。</p>
+        <ol>
+          <li>source connector 与 sink connector 的数据流方向各是什么？一句话说清。
+            <small class="hint">提示：参考 <a href="01-concepts.html#connectors">01 章 §1.1 connector</a></small></li>
+          <li>standalone 与 distributed 两种 worker 模式，关键差异是什么？各自适合什么场景？
+            <small class="hint">提示：参考 <a href="01-concepts.html#workers">01 章 §1.2 worker</a></small></li>
+          <li>task 和 connector 是什么关系？为什么说"并行单位是 task 不是 connector"？
+            <small class="hint">提示：参考 <a href="01-concepts.html#tasks">01 章 §1.3 task</a></small></li>
+          <li>converter 到底干什么？为什么序列化格式由它决定、而不是由 connector 决定？
+            <small class="hint">提示：参考 <a href="01-concepts.html#converters">01 章 §1.4 converter</a></small></li>
+          <li>SMT 能不能按 key 关联另一个 topic 做 join 或聚合？为什么？这类需求该交给谁？
+            <small class="hint">提示：参考 <a href="01-concepts.html#smt">01 章 §1.5 SMT</a></small></li>
+          <li>source connector 的偏移存在哪里、按什么索引？这与 sink connector 的偏移有什么不同？
+            <small class="hint">提示：参考 <a href="01-concepts.html#offsets">01 章 §1.6 offset</a></small></li>
+        </ol>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           PRINCIPLE LAYER
+           ════════════════════════════════════════════════════════ -->
+      <section class="qbank" id="principle-layer">
+        <h2><span class="num">B</span><span>原理层 · 对应 02 章（6 道）</span></h2>
+        <p>这一层不问"是什么"，问"为什么这么设计、代价是什么"。答案要触及机制，而不是复述定义。</p>
+        <ol start="7">
+          <li>distributed 模式的三个 internal topic（<code>connect-configs</code> / <code>connect-offsets</code> / <code>connect-status</code>）为什么都必须是 compacted？如果不压缩会怎样？
+            <small class="hint">提示：参考 <a href="02-principles.html#coordination">02 章 §2.1 控制面协调</a></small></li>
+          <li>incremental cooperative 再平衡（KIP-415）相比早期的 eager stop-the-world 再平衡，到底解决了什么问题？代价是什么？
+            <small class="hint">提示：参考 <a href="02-principles.html#rebalance">02 章 §2.2 再平衡</a></small></li>
+          <li><code>org.apache.kafka.connect.json.JsonConverter</code> 与 <code>io.confluent.connect.json.JsonSchemaConverter</code> 名字相近，为什么说它们的 wire format 完全不同、不可互换？字节层差在哪？
+            <small class="hint">提示：参考 <a href="02-principles.html#serialization">02 章 §2.3 序列化机制</a></small></li>
+          <li>给一个正在运行的 source connector 改名，为什么会导致它从头重灌整个外部源？从偏移恢复机制讲清因果。
+            <small class="hint">提示：参考 <a href="02-principles.html#offset-recovery">02 章 §2.4 偏移恢复</a></small></li>
+          <li>EOS source（KIP-618）靠哪两个 Kafka 原语做到精确一次？事务保证了什么、fencing 又拦住了什么？
+            <small class="hint">提示：参考 <a href="02-principles.html#eos">02 章 §2.5 EOS 机制</a></small></li>
+          <li>distributed worker 的 <code>group.id</code> 配错（一半 worker 用 A、一半用 B）会发生什么？为什么这是配置一致性的红线？
+            <small class="hint">提示：参考 <a href="02-principles.html#coordination">02 章 §2.1 控制面协调</a></small></li>
+        </ol>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           DISCRIMINATION LAYER (capstone surrogate — hard ≥3)
+           ════════════════════════════════════════════════════════ -->
+      <section class="qbank" id="discrimination">
+        <h2><span class="num">C</span><span>应用判别层 · 跨 01 + 02 场景（4 道，capstone 替代）</span></h2>
+        <p>这一层把概念放进真实选型里。每题给一个场景，回答<strong>选哪个、为什么</strong>——理由要落到前两章的具体机制上，而不是"感觉这个更好"。这四道题承担整套 concept-focused 教程的判别训练职责，是塔尖。</p>
+        <ol start="13">
+          <li><strong>Connect 还是自写 producer？</strong>要把一张 Postgres 表持续同步进 Kafka。一名工程师提议直接写个 producer 程序轮询表、把行发进 topic。该用 Kafka Connect 还是自写 producer/consumer？给出理由——Connect 在这件事上白送了哪些自写时必须自己实现的东西？</li>
+          <li><strong>SMT 还是 Kafka Streams？</strong>需求是：把订单 topic 按订单 key 关联用户 topic 的用户信息，再按地区聚合下单金额，结果写进一个新 topic。这该用 connector 的 SMT 链实现，还是另起一个 Kafka Streams 应用？为什么？</li>
+          <li><strong>SMT 还是 Streams（轻量版）？</strong>需求变了：只是在数据摄入 Kafka 时，把每条记录里的手机号字段脱敏、并给字段改个名，不做任何跨记录关联。这次该用 SMT 还是 Streams？和上一题的判断为什么相反？</li>
+          <li><strong>standalone 还是 distributed？</strong>两个场景：(a) 开发机上临时把一个本地日志文件搬进 Kafka 做联调；(b) 生产环境跑 20 个 connector，要求某台机器宕机后任务自动转移、且能用 REST 在线增删 connector。各该选哪种 worker 模式？分界点是什么？</li>
+        </ol>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           INTERVIEW SUPPLEMENT — strong-answer checklist
+           ════════════════════════════════════════════════════════ -->
+      <section id="interview">
+        <h2><span class="num">D</span><span>面试加餐：这几道题的"强答案"必须包含什么</span></h2>
+        <p>下面五道题最容易"答得像懂了、实则露馅"——普通答案停在表层、资深答案点到机制与边界。对照这张表检查自己上面写的答案够不够硬。这是面试官区分"用过"和"理解"的分水岭。</p>
+
+        <table class="compare-table">
+          <caption>表 3.1 · 五道最易露馅题：普通答案 vs 资深答案</caption>
+          <thead>
+            <tr>
+              <th style="width:22%">题目</th>
+              <th style="width:37%">普通答案（停在表层）</th>
+              <th style="width:41%">资深答案（必须点到的机制与边界）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>EOS source 怎么实现的？</td>
+              <td>"它能保证精确一次、不重复。"</td>
+              <td>Kafka <strong>事务</strong>把数据记录 + 偏移更新原子<strong>双写</strong>；<strong>fencing</strong> 给每代 task 递增标识、broker 拒绝僵尸旧代的写入。是 <strong>worker 级</strong>开关 <code>exactly.once.source.support</code>、<strong>仅 distributed</strong>、<strong>全集群一致</strong>开（两阶段 preparing→enabled），不能 per-connector（KIP-618, 3.3 GA）。</td>
+            </tr>
+            <tr>
+              <td>source 与 sink 的偏移有什么不同？</td>
+              <td>"都是记录搬到哪了，用来重启续传。"</td>
+              <td>source 是 connector <strong>自定义格式</strong>的偏移，存进 <code>connect-offsets</code> topic、<strong>按 connector 名索引</strong>——所以改名 = 查不到旧偏移 = 从头重灌。sink 是<strong>普通消费组</strong>位点（组名 <code>connect-&lt;name&gt;</code>），存在 <code>__consumer_offsets</code>，和任何消费者一样。两套机制，不是一回事。</td>
+            </tr>
+            <tr>
+              <td><code>tasks.max</code> 怎么映射并行度？</td>
+              <td>"设成几就有几个 task 并行。"</td>
+              <td><code>tasks.max</code> 是<strong>上限不是保证</strong>。实际 task 数由 connector 决定能切几份，再对上限取下限：sink 受<strong>订阅分区数</strong>封顶（每 task 一个消费组成员）、JDBC source 受<strong>表数</strong>限。超出的 task 不报错只<strong>空转</strong>，<code>GET /status</code> 仍显示 RUNNING——排查吞吐的常见误判点。</td>
+            </tr>
+            <tr>
+              <td>DLQ 能抓到哪些错误？</td>
+              <td>"开了 DLQ，坏记录都进死信队列，就不丢了。"</td>
+              <td>DLQ <strong>仅 sink</strong> 可用，且<strong>只抓 converter / SMT / key-value 反序列化错误</strong>——即"这条记录读不懂/变换不了"。<strong>不抓</strong> sink 写外部系统的<strong>投递失败</strong>（ES 拒写、JDBC 主键冲突），那类走 <code>errors.retry.*</code> 重试、耗尽仍让 task 失败。再加 <code>errors.tolerance</code> 默认 <code>none</code>（一条坏记录停整 task）这层。</td>
+            </tr>
+            <tr>
+              <td>三个 internal topic 为什么 compacted？</td>
+              <td>"为了持久化，不丢配置。"</td>
+              <td>它们是 <strong>key-value 状态存储</strong>，要的是<strong>每个 key 的最新值</strong>（最新配置 / 最新偏移 / 最新状态），不是完整历史——compaction 正好保留每 key 最新、回收旧值。若不压缩，topic 无限膨胀、worker 重启重放全部历史变慢。配套红线：<code>group.id</code> 不一致会把一个集群<strong>裂成两个</strong>。</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout insight">
+          <span class="label">洞察 · 面试官在听什么</span>
+          <p>面试官真正在意的不是术语背诵，而是<strong>对取舍的推理</strong>和<strong>失败模式的故事</strong>。能讲出"converter 配错导致反序列化风暴""source 改名丢偏移从头重灌""毒丸记录默认停整个 task"这类具体失败链，比复述十个定义更能证明真用过、真理解。强答案 = 机制 + 边界 + 它在什么时候会咬人。</p>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           READER-DRAWING PROMPT (mandatory landing point)
+           ════════════════════════════════════════════════════════ -->
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上教程，在纸上或 Excalidraw 里画出一条记录的完整路径：从<strong>外部源</strong> → <code>source connector</code> → <code>converter</code> 序列化 → <strong>Kafka topic</strong> → <code>converter</code> 反序列化 → <code>sink connector</code> → <strong>外部目标</strong>。然后在图上标出<strong>两处偏移分别存在哪</strong>——source 端的偏移、sink 端的偏移。画完回到 <a href="index.html">起点页的概念图（§概念图）</a>对照：这<strong>两处偏移你都标对了吗</strong>？（提示：一处在 <code>connect-offsets</code> topic 按 connector 名索引，另一处是普通消费组位点——画错任一处，说明 §1.6 那条边界还没真正内化。）</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           THE SINGLE FINAL ANSWER KEY
+           ════════════════════════════════════════════════════════ -->
+      <section class="answer-key" id="answers">
+        <h2><span class="num">§</span><span>答案（三层都做完再展开）</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          下面是全部 16 道题的答案，按三层分组。先把你自己的答案写完——直接展开对照，提取练习的效果就没了。
+        </p>
+        <details>
+          <summary>展开全部答案（16 道，按概念层 / 原理层 / 应用判别层分组）</summary>
+
+          <h3>概念层（对应 01 章）</h3>
+          <ol>
+            <li><strong>source → Kafka，sink → 外部</strong>。source connector 把外部系统（数据库、文件、消息队列）的数据写进 Kafka；sink connector 把 Kafka 的数据写进外部系统（ES、S3、JDBC）。方向相反，是同一套插件契约的两端。</li>
+            <li>standalone 是<strong>单进程、文件配置、无容错</strong>，偏移存本地文件，进程死即状态没——只适合开发期或单机日志搬运。distributed 是<strong>多 worker 共享一个 <code>group.id</code> 组成集群</strong>，靠 REST 管理、worker 加入/离开/故障自动再平衡，状态存 Kafka topic——生产环境用它。两者不是大小号关系，而是<strong>两套不同的存储与协调模型</strong>。</li>
+            <li>connector 是"一份配置 + 把工作切成 N 份的计划"，它本身<strong>不搬数据</strong>；真正读写数据的是它派生出的 task。一个 connector 最多派生 <code>tasks.max</code> 个 task，被均摊到各 worker 并行跑。所以扩容、估吞吐都按 task 算——并行单位是 task。</li>
+            <li>converter 负责记录在 Connect <strong>内部结构化对象</strong>与 <strong>Kafka 字节</strong>之间的相互转换（序列化/反序列化），key 和 value 各配一个。格式由它决定而非 connector，是因为 Connect 把序列化抽成了独立的一层、与 connector <strong>解耦</strong>——于是任意 connector × 任意格式自由组合，换格式只动配置不动 connector 代码。</li>
+            <li><strong>不能</strong>。SMT 是<strong>单条、无状态</strong>的逐条变换，一次只看一条记录、没有跨记录内存，所以做不了 join、聚合、按 key 关联另一个 topic、一条变多条。这类<strong>有状态</strong>关联是 Kafka Streams / ksqlDB 的职责。</li>
+            <li>source 偏移是 connector <strong>自定义格式</strong>，存进 <code>connect-offsets</code> topic，<strong>按 connector 名索引</strong>。sink 偏移是<strong>普通消费组</strong>位点（组名 <code>connect-&lt;connector 名&gt;</code>），存在 Kafka 的 <code>__consumer_offsets</code> 里，和任何消费者一样。两套完全不同的机制。</li>
+          </ol>
+
+          <h3>原理层（对应 02 章）</h3>
+          <ol start="7">
+            <li>这三个 topic 是<strong>key-value 状态存储</strong>，需要的是每个 key 的<strong>最新值</strong>——最新的 connector 配置、最新的 source 偏移、最新的 task 状态——而不是完整的变更历史。compaction 正好保留每个 key 的最新记录、回收旧值。若不压缩：topic 会无限膨胀，且 worker 启动时要重放全部历史才能重建当前状态，恢复越来越慢。</li>
+            <li>它解决的是<strong>"一点变动就全停"</strong>的问题。eager 再平衡在任何拓扑/配置变更时<strong>停掉所有 task</strong>重新分配（stop-the-world），变更越频繁停摆越多。incremental cooperative 只<strong>暂停被收回或被移动的那部分 task</strong>，其余继续搬。代价：分配过程分多轮收敛、逻辑更复杂；且 worker 数中途变动有已知的 skew bug（KAFKA-12495）。</li>
+            <li><code>JsonConverter</code> 产出的是<strong>纯 JSON 字节</strong>（可选每条内嵌 <code>{"schema":...,"payload":...}</code>），自描述、不依赖外部注册中心。<code>JsonSchemaConverter</code> 走 <strong>Schema Registry</strong>，字节里带 <strong>magic byte + schema id</strong>（Confluent wire format），靠 id 去注册中心取 schema。字节布局根本不同——用一个写、用另一个读，会在反序列化阶段失败（典型 <code>Unknown magic byte!</code>）。名字像，不可互换。</li>
+            <li>source 偏移<strong>按 connector 名索引</strong>存在 <code>connect-offsets</code> 里。改名后，框架拿新名字去查偏移，查到的是<strong>一组空偏移</strong>——它认为这个 connector 从未搬过任何数据，于是从外部源的起点重新全量搬一遍。机制上"改名"等价于"新建一个没有历史的 connector"。要重置应该用 REST <code>/offsets</code> 显式管理，而不是靠改名。</li>
+            <li>靠<strong>事务</strong>和 <strong>fencing</strong>。事务：task 把一批数据记录 + 对应的偏移更新（写进 <code>connect-offsets</code>）放进<strong>同一个 Kafka 事务</strong>原子提交——要么都生效要么都不生效，杜绝"记录写了、偏移没写、重启重发"的窗口。fencing（僵尸隔离）：再平衡后旧 task 实例可能还活着想写（僵尸），框架给每代 task 递增的事务标识，broker <strong>拒绝旧代</strong>的写入，保证同一份工作只有最新一代能提交。</li>
+            <li><code>group.id</code> 是 distributed worker 加入<strong>同一个 Connect 集群</strong>的身份。一半用 A、一半用 B，会形成<strong>两个互不相识的集群</strong>：各自读不同的 internal topic、各自以为自己拥有全部 connector，导致 connector 被重复调度或"凭空消失"。这是红线，因为 distributed 的整个协调与状态共享都建立在"所有 worker 同 <code>group.id</code> + 同三个 internal topic 配置"之上。</li>
+          </ol>
+
+          <h3>应用判别层（综合 01 + 02）</h3>
+          <ol start="13">
+            <li><strong>用 Connect，别自写 producer。</strong>把表同步进 Kafka 是标准化搬运，Connect 白送了自写时必须自己实现的一整套：<strong>偏移跟踪与重启续传</strong>（source 偏移自动存 <code>connect-offsets</code>）、<strong>并行</strong>（task 切分 + 跨 worker 分摊）、<strong>容错与再平衡</strong>（worker 宕机任务自动转移）、<strong>REST 在线管理</strong>（增删改查、暂停恢复）、以及现成的 JDBC/Debezium connector。自写就是重造一条 ETL 管道，还得自己维护位点、容错、监控。只有当需求超出"搬运"（要复杂有状态加工）时才另说。</li>
+            <li><strong>用 Kafka Streams，不是 SMT。</strong>这需求是<strong>有状态</strong>的：按 key join 两个 topic + 跨记录聚合。SMT 单条无状态，看不到第二条记录、做不了 join / 聚合 / 1→N，强行用会卡在"拿不到要关联的数据"上。join + 聚合 + 写出新 topic 正是 Streams / ksqlDB 的核心能力。</li>
+            <li><strong>用 SMT，不是 Streams。</strong>这次是纯<strong>逐条、无状态</strong>的编辑——脱敏一个字段（<code>MaskField</code>）、改字段名（<code>ReplaceField</code>），不跨记录。SMT 几行配置内联在搬运路径上就完成，零代码、无需独立应用和 topic。为这点事起一个 Streams 应用是杀鸡用牛刀。<strong>和上一题相反</strong>的判断点就是这一个词：<strong>有没有状态</strong>——要不要看到"别的记录"。要，则 Streams；不要，则 SMT。</li>
+            <li>(a) 开发机临时搬本地文件 → <strong>standalone</strong>：一个进程、一个 properties 文件就够，不需要集群和 REST。(b) 生产 20 个 connector + 故障自动转移 + REST 在线增删 → 必须 <strong>distributed</strong>。分界点是三个词：<strong>容错、可在线管理、生产规模</strong>——任一为真就上 distributed。standalone 没有自动再平衡、没有 REST 集群管理、进程死即状态没，扛不住生产。</li>
+          </ol>
+        </details>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           CLOSING CHALLENGE
+           ════════════════════════════════════════════════════════ -->
+      <div class="challenge">
+        <span class="label">收尾挑战 · 把整套串起来</span>
+        <h3>一句话能不能说清 Connect 的"控制面"特殊在哪？</h3>
+        <p>不看教程，用一句话回答：为什么说 Connect 的 distributed 集群"没有外部协调器、没有数据库"，它的全部状态在哪？再追一层——这个设计省掉了什么基建，又因此引入了什么新的失败模式？答得出这一句，说明 01 + 02 两章的主线（控制面全在 Kafka compacted topic 里）已经长进认知里了。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>线索：distributed worker 靠 Kafka 自己的<strong>消费组协议</strong>协调，全部状态（配置 / 偏移 / 状态）写进三个 <strong>compacted internal topic</strong>——所以不需要 ZooKeeper、不需要外部数据库。省掉的基建：一套独立的协调/存储组件。引入的新失败模式：这三个 topic 配置不一致或损坏 = 集群坏；<code>group.id</code> 配错 = 集群裂成两个。"配置即数据、控制面在 Kafka 里"既是它的优雅之处，也是它的脆弱之处。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/#connect">Kafka Connect 官方文档</a>（官方）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618:+Exactly-Once+Support+for+Source+Connectors">KIP-618 · Exactly-Once Support for Source Connectors</a>（设计文档）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415:+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">KIP-415 · Incremental Cooperative Rebalancing</a>（设计文档）</li>
+          <li><a href="https://www.confluent.io/blog/kafka-connect-deep-dive-error-handling-dead-letter-queues/">Confluent · Error Handling and Dead Letter Queues</a>（维护者博客）</li>
+          <li><a href="https://developers.redhat.com/articles/2024/06/13/how-manage-and-preserve-kafka-connect-offsets-smoothly">Red Hat · Manage and Preserve Kafka Connect Offsets</a>（维护者博客）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-principles.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 机制与取舍</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到起点 →</span>
+          <span class="title">00 · 起点（重看概念图）</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#concept-layer" data-toc-target="concept-layer">A 概念层（6）</a></li>
+        <li><a href="#principle-layer" data-toc-target="principle-layer">B 原理层（6）</a></li>
+        <li><a href="#discrimination" data-toc-target="discrimination">C 应用判别层（4）</a></li>
+        <li><a href="#interview" data-toc-target="interview">D 面试加餐</a></li>
+        <li><a href="#answers" data-toc-target="answers">答案（文末）</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 缓存 · 缓存模型与三代翻转</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 660px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref { font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500; }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-routing.html">01 路由</a><span class="sep">—</span>
+    <a href="02-components.html">02 组件</a><span class="sep">—</span>
+    <a href="03-rendering.html">03 渲染</a><span class="sep">—</span>
+    <a href="04-data-fetching.html">04 取数</a><span class="sep">—</span>
+    <a href="05-caching.html" class="current">05 缓存</a><span class="sep">—</span>
+    <a href="06-mutations.html">06 变更</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 05</p>
+        <h1>缓存模型与三代翻转</h1>
+        <p class="recap">上一章讲了在组件里取数、并行与去重。取来的数据要不要跨请求缓存、缓存多久、何时失效，是 App Router 最容易让人困惑、也是近两年变化最大的部分。这一章把缓存讲清楚，并理清 v14→v15→v16 三代默认行为的翻转——读老教程时这是最大的过时来源。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>历史上有四层缓存：Request Memoization（单次渲染内）、Data Cache（跨请求持久）、Full Route Cache（构建出的路由产物）、Router Cache（浏览器端导航 payload）</li>
+          <li>默认行为三代翻转：v14 默认缓存 <code>fetch</code> → v15 默认全部关闭 → Next 16 改为 <code>'use cache'</code> 显式开启（Cache Components）</li>
+          <li><code>'use cache'</code> + <code>cacheLife</code> + <code>cacheTag</code>：显式声明"什么被缓存、活多久、带什么 tag"</li>
+          <li>失效：按时间（<code>revalidate</code>）、按 tag（<code>revalidateTag</code>，Next 16 起需带 <code>cacheLife</code> profile 参数）、按路径（<code>revalidatePath</code>）、读己写（<code>updateTag</code>）</li>
+        </ul>
+      </section>
+
+      <h2 id="s51"><span class="num">5.1</span><span>四层缓存：各缓存什么、活多久</span></h2>
+      <p class="one-liner">Next 的缓存不是一个开关，而是四层各管一段：请求内去重、跨请求数据、整条路由产物、客户端导航。</p>
+
+      <div class="rationale">
+        <span class="label">逐层说清位置（比文档深一层）</span>
+        <p>这四层位置不同、生命周期不同，混在一起谈是困惑的根源。<strong>Request Memoization</strong> 就是 <a href="04-data-fetching.html">04 章</a>那层：在单次渲染内对相同 <code>fetch</code> 去重，把多个组件发出的同一请求合成一次，请求结束即丢，不跨请求。<strong>Data Cache</strong> 持久存数据结果（<code>fetch</code> 响应或被缓存函数的返回），跨请求、跨部署存活，按时间或 tag 失效——它是唯一真正"持久"的那层。<strong>Full Route Cache</strong> 存的是构建或重新验证时算出的路由产物（HTML + RSC payload），服务端复用，对应 <a href="03-rendering.html">03 章</a>的静态渲染结果。<strong>Router Cache</strong> 在浏览器内存里缓存已访问路由的 RSC payload，让前进/后退秒回，是唯一活在客户端的那层。</p>
+      </div>
+
+      <p>一次请求进来，会依次穿过这四层。把它画成一条自上而下的管线最清楚：前两层在数据维度去重与持久化，第三层是渲染产物，最后一层在浏览器里。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="四层缓存分层管线：一次请求自上而下穿过请求记忆化、Data Cache、渲染与 Full Route Cache，最后到达客户端 Router Cache，左侧标注服务端区与客户端区">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- side zone brackets -->
+          <line x1="40" y1="84" x2="40" y2="330" class="diagram-soft"/>
+          <text x="32" y="210" text-anchor="middle" class="edge-label" transform="rotate(-90 32 210)" font-weight="700">服务端</text>
+          <line x1="40" y1="372" x2="40" y2="430" class="diagram-soft"/>
+          <text x="32" y="401" text-anchor="middle" class="branch-label" transform="rotate(-90 32 401)">客户端</text>
+
+          <!-- entry -->
+          <rect x="270" y="20" width="220" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="45" text-anchor="middle" class="node-label">一次请求进来</text>
+          <line x1="380" y1="60" x2="380" y2="84" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- layer 1 -->
+          <rect x="180" y="84" width="400" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="200" y="106" class="node-label">① Request Memoization</text>
+          <text x="200" y="125" class="edge-label">单次渲染内去重 · 内存 · 请求结束即丢</text>
+          <line x1="380" y1="138" x2="380" y2="162" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- layer 2 -->
+          <rect x="180" y="162" width="400" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="200" y="184" class="node-label-accent">② Data Cache</text>
+          <text x="200" y="203" class="edge-label">跨请求 / 跨部署持久 · 按时间或 tag 失效</text>
+          <line x1="380" y1="216" x2="380" y2="240" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- render step -->
+          <rect x="270" y="240" width="220" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="265" text-anchor="middle" class="node-label">渲染 RSC</text>
+          <line x1="380" y1="280" x2="380" y2="304" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- layer 3 -->
+          <rect x="180" y="304" width="400" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="200" y="326" class="node-label">③ Full Route Cache</text>
+          <text x="200" y="345" class="edge-label">路由产物 HTML+RSC · 服务端 · 静态结果复用</text>
+          <line x1="380" y1="358" x2="380" y2="382" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- layer 4 client -->
+          <rect x="180" y="382" width="400" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="200" y="404" class="node-label-accent">④ Router Cache</text>
+          <text x="200" y="423" class="edge-label">已访问路由 payload · 浏览器内存 · 前进后退秒回</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>四层缓存是一条自上而下的管线，不是一个开关。<strong>注意</strong>：只有 ② Data Cache 跨请求与跨部署持久；① 随渲染结束即丢，③ 是服务端的渲染产物，④ 唯一活在浏览器。谈"缓存"前先确认谈的是哪一层。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 5.1 · 四层缓存对照</caption>
+        <thead>
+          <tr><th>层</th><th>缓存内容</th><th>生命周期</th><th>位置</th><th>如何失效</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Request Memoization</td><td>单次渲染内相同 <code>fetch</code> 的结果</td><td>一次请求内，渲染结束即清</td><td>服务端内存</td><td>无需失效，请求结束自动消失</td></tr>
+          <tr class="selected"><td>Data Cache</td><td><code>fetch</code> 响应 / 被缓存函数的返回</td><td>跨请求、跨部署持久</td><td>服务端持久层</td><td>按时间 <code>revalidate</code> / 按 tag <code>revalidateTag</code> / 按路径 <code>revalidatePath</code></td></tr>
+          <tr><td>Full Route Cache</td><td>路由的 HTML + RSC payload</td><td>构建后持久，到重新验证才更新</td><td>服务端</td><td>路由依赖的数据失效时级联失效，或 <code>revalidatePath</code></td></tr>
+          <tr><td>Router Cache</td><td>已访问路由的 RSC payload</td><td>会话内短时（按版本有时限）</td><td>浏览器内存</td><td>导航刷新 / <code>router.refresh()</code> / Server Action 后</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="s52"><span class="num">5.2</span><span>三代默认行为：为什么翻转</span></h2>
+      <p class="one-liner">同一行 <code>fetch</code> 代码，在 v14 默认被缓存、在 v15 默认不缓存、在 Next 16 要靠 <code>'use cache'</code> 才缓存——默认行为翻了两次。</p>
+
+      <div class="rationale">
+        <span class="label">为什么翻转（比文档深一层）</span>
+        <p>v14（2023 年）默认缓存 <code>fetch</code>，理由是"利好性能"：同一个 URL 取一次后跨请求复用。但快速原型和高动态应用深受其害——开发者写下一行普通 <code>fetch</code>，拿到的却是旧数据，且"哪儿被缓存了"无法一眼看出。为了关掉这层隐藏缓存，代码里被迫散布 <code>export const dynamic = 'force-dynamic'</code>、<code>export const revalidate = 0</code>、<code>fetchCache</code> 这类逃生舱，心智负担极重。</p>
+        <p>v15（2024 年末）把默认翻转为不缓存：<code>fetch</code> 默认 <code>no-store</code>，GET Route Handler 默认不缓存。这是把"快但有读到旧数据的风险"换成"慢但默认正确"——要缓存就显式声明，而不是默认偷偷缓存再到处关。Next 16（截至 2026 初）的 Cache Components 把它收敛成一个显式模型："要动态就用 <code>&lt;Suspense&gt;</code>，要缓存就 <code>'use cache'</code>"，目标是不再有任何隐藏缓存——缓存与否一律写在代码里。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 760 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三代默认行为对比：v14 默认缓存 fetch 配合 force-dynamic 逃生舱，v15 默认不缓存 no-store，Next 16 用 use cache 显式开启 Cache Components">
+          <defs>
+            <marker id="ar-flow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- timeline -->
+          <line x1="40" y1="40" x2="720" y2="40" class="diagram-soft"/>
+          <circle cx="140" cy="40" r="3.5" fill="#0A0A0A"/>
+          <circle cx="380" cy="40" r="3.5" fill="#0A0A0A"/>
+          <circle cx="620" cy="40" r="3.5" fill="#B73B2F"/>
+
+          <!-- col 1: v14 -->
+          <text x="140" y="28" text-anchor="middle" class="branch-label">v14 · 2023</text>
+          <rect x="40" y="58" width="200" height="200" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="84" text-anchor="middle" class="node-label">默认缓存 fetch</text>
+          <line x1="60" y1="98" x2="220" y2="98" class="diagram-soft"/>
+          <text x="140" y="120" text-anchor="middle" class="edge-label">同一段 fetch 的命运</text>
+          <text x="140" y="140" text-anchor="middle" class="node-label-accent">→ 被缓存</text>
+          <text x="140" y="172" text-anchor="middle" class="edge-label">代价：拿到旧数据</text>
+          <text x="140" y="192" text-anchor="middle" class="edge-label">标志性逃生舱</text>
+          <text x="140" y="214" text-anchor="middle" class="edge-label">force-dynamic</text>
+          <text x="140" y="234" text-anchor="middle" class="edge-label">revalidate = 0</text>
+
+          <line x1="240" y1="158" x2="278" y2="158" class="diagram-ink" marker-end="url(#ar-flow)"/>
+
+          <!-- col 2: v15 -->
+          <text x="380" y="28" text-anchor="middle" class="branch-label">v15 · 2024 末</text>
+          <rect x="280" y="58" width="200" height="200" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="84" text-anchor="middle" class="node-label">默认不缓存</text>
+          <line x1="300" y1="98" x2="460" y2="98" class="diagram-soft"/>
+          <text x="380" y="120" text-anchor="middle" class="edge-label">同一段 fetch 的命运</text>
+          <text x="380" y="140" text-anchor="middle" class="node-label-accent">→ 不缓存</text>
+          <text x="380" y="172" text-anchor="middle" class="edge-label">默认：no-store</text>
+          <text x="380" y="192" text-anchor="middle" class="edge-label">GET handler 不缓存</text>
+          <text x="380" y="222" text-anchor="middle" class="edge-label">慢但默认正确</text>
+
+          <line x1="480" y1="158" x2="518" y2="158" class="diagram-ink" marker-end="url(#ar-flow)"/>
+
+          <!-- col 3: Next 16 -->
+          <text x="620" y="28" text-anchor="middle" class="branch-label">Next 16 · 2026 初</text>
+          <rect x="520" y="58" width="200" height="200" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="620" y="84" text-anchor="middle" class="node-label-accent">显式开启</text>
+          <line x1="540" y1="98" x2="700" y2="98" class="diagram-soft"/>
+          <text x="620" y="120" text-anchor="middle" class="edge-label">同一段 fetch 的命运</text>
+          <text x="620" y="140" text-anchor="middle" class="node-label-accent">→ 仍不缓存</text>
+          <text x="620" y="172" text-anchor="middle" class="edge-label">新指令</text>
+          <text x="620" y="192" text-anchor="middle" class="edge-label">'use cache'</text>
+          <text x="620" y="222" text-anchor="middle" class="edge-label">Cache Components</text>
+          <text x="620" y="242" text-anchor="middle" class="edge-label">不再有隐藏缓存</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>同一段 <code>fetch</code> 的默认命运翻了两次：v14 缓存 → v15 不缓存 → Next 16 仍不缓存、要 <code>'use cache'</code> 才缓存。<strong>注意</strong>：v14 的逃生舱（<code>force-dynamic</code> 等）是为"关掉"隐藏缓存而生；Next 16 反过来要求显式"打开"缓存。读教程先看它对应哪一代。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">过时陷阱（dated）</span>
+        <p>从 v14 项目升级、或照 2023 年的老教程写代码，会以为 <code>fetch</code> 还自动缓存。v15（2024 年末）起默认不缓存：结果要么每次请求都猛打源站、要么困惑于"为什么数据不缓存了"。判断依据只有一条——看项目的 Next 版本，再决定那行 <code>fetch</code> 默认是缓存还是不缓存。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>在 Next 16 里写一个普通的 <code>await fetch(url)</code>，不加任何指令。它的结果会被跨请求缓存吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>不会。Next 16 沿用 v15 的默认——普通 <code>fetch</code> 不进 Data Cache，每次请求都会真正去取。要让它跨请求缓存，得把它放进一个标了 <code>'use cache'</code> 的函数或组件里（见 <a href="#s53">§5.3</a>）。"默认缓存"是 v14 时代的记忆，已经被翻转两次。</p>
+        </details>
+      </div>
+
+      <h2 id="s53"><span class="num">5.3</span><span><code>'use cache'</code> / cacheLife / cacheTag：现在怎么显式缓存</span></h2>
+      <p class="one-liner">在一个函数 / 文件 / 组件顶部写 <code>'use cache'</code>，它的返回结果进入 Data Cache；<code>cacheLife</code> 设定新鲜期与最长寿命，<code>cacheTag</code> 给它打可失效的标签。</p>
+
+      <div class="rationale">
+        <span class="label">机制（dated · Next 16）</span>
+        <p><code>'use cache'</code> 把被标记的工作产物缓存起来，跨请求复用——放在函数顶部缓存该函数的返回，放在文件顶部缓存该文件导出的全部，放在组件顶部缓存该组件的渲染结果。<code>cacheLife('hours')</code>（或 <code>'days'</code> / 自定义 profile）控制这条缓存的 stale（多久后算陈旧）、revalidate（多久后后台刷新）、expire（多久后彻底过期）。<code>cacheTag('product-42')</code> 给缓存条目打一个标签，供之后按 tag 精确失效。这套是 Next 16 把旧的 <code>unstable_</code> 前缀去掉后的稳定成品，<code>cacheLife</code>、<code>cacheTag</code> 现在直接从 <code>next/cache</code> 导入；它替代了旧的 <code>unstable_cache</code>。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">lib/get-product.ts</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-usecache">复制</button>
+        </div>
+<pre id="c-usecache"><code class="language-tsx">import { cacheLife, cacheTag } from 'next/cache'  // Next 16：稳定导入，无 unstable_
+
+export async function getProduct(id: string) {
+  'use cache'                       // ← 返回值进入 Data Cache，跨请求复用
+  cacheLife('hours')                // 新鲜期/重验/过期，用内置 'hours' profile
+  cacheTag('product-' + id)         // 打标签，供之后按 tag 精确失效
+
+  const res = await fetch(`https://api.shop.com/products/${id}`)
+  return res.json()
+}</code></pre>
+      </div>
+
+      <div class="annotations">
+        <p><span class="line-ref">'use cache'</span>是这段缓存的总开关。没有它，里面那行 <code>fetch</code> 在 Next 16 默认不缓存（见 <a href="#s52">§5.2</a>）；有了它，<code>getProduct</code> 的返回值被存进 Data Cache。</p>
+        <p><span class="line-ref">cacheTag</span>标签可以由数据派生（这里用 <code>id</code> 拼出 <code>product-42</code>），所以之后能针对"这一个商品"精确失效，而不波及别的缓存条目——这正是 <a href="#s54">§5.4</a> 的基础。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">现状速览（截至 2026 初）</span>
+        <p><code>'use cache'</code> 经由 <code>next.config</code> 里的 <code>cacheComponents: true</code> 启用；开启后 <a href="03-rendering.html">03 章</a>的 PPR（部分预渲染）默认随之开启——静态壳 + 流式动态成为默认形态。旧的 <code>unstable_cache</code> 与 v14 的隐式 <code>fetch</code> 缓存均已被这套显式模型取代。读 2024 年及更早的教程见到 <code>unstable_cache</code> 时，对应到现在就是 <code>'use cache'</code>。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">next.config.ts</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-config">复制</button>
+        </div>
+<pre id="c-config"><code class="language-tsx">import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
+  // 截至 2026 初：开启后才能用 'use cache'，且 PPR 默认随之开启
+  cacheComponents: true,
+}
+
+export default nextConfig</code></pre>
+      </div>
+
+      <h2 id="s54"><span class="num">5.4</span><span>失效：让缓存更新</span></h2>
+      <p class="one-liner">缓存靠三种方式更新——到时间自动重新验证、按 tag 精确失效、按路径失效；写操作后通常显式触发其一。</p>
+
+      <div class="rationale">
+        <span class="label">机制（比文档深一层）</span>
+        <p><code>revalidateTag('product-42')</code> 之所以能精确工作，是因为 <code>cacheTag()</code> 在数据加载时给缓存条目打了标签，而标签可以是数据派生的（如 <code>product-42</code>）。失效时按"tag → 条目"的索引把带这个 tag 的条目作废，并级联到依赖这些数据的路由：那些路由的 Full Route Cache 也随之失效，下次请求重新渲染。<code>revalidatePath</code> 则是另一条路径——按路由路径直接失效 Full Route Cache，不经过 tag 索引。</p>
+        <p>两个 dated 要点：Next 16 起 <code>revalidateTag</code> 需要第二个参数指定 <code>cacheLife</code> profile（如 <code>'max'</code>），单参数形式已废弃、会报 TypeScript 错误；<code>'max'</code> 给出 stale-while-revalidate 语义（先返回旧值、后台刷新）。另有 <code>updateTag</code>（单参数，仅限 Server Action）用于"写完立刻读到自己刚写的值"的 read-your-writes 场景——它立即作废而非后台重验。这些失效的实际触发点，通常在 <a href="06-mutations.html">06 章</a>的 Server Action 里。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="revalidateTag 级联：一次失效调用命中带 product-42 标签的 Data Cache 条目并作废，依赖它的路由 Full Route Cache 随之失效，下次请求重新渲染">
+          <defs>
+            <marker id="ar-cascade" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- step 1 -->
+          <rect x="30" y="120" width="180" height="60" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="120" y="146" text-anchor="middle" class="node-label-accent">revalidateTag</text>
+          <text x="120" y="165" text-anchor="middle" class="edge-label">('product-42', 'max')</text>
+
+          <line x1="210" y1="150" x2="262" y2="150" class="diagram-accent" marker-end="url(#ar-cascade)"/>
+          <text x="236" y="138" text-anchor="middle" class="edge-label">按 tag 索引</text>
+
+          <!-- step 2 -->
+          <rect x="264" y="116" width="190" height="68" rx="6" class="diagram-ink node-fill"/>
+          <text x="359" y="140" text-anchor="middle" class="node-label">Data Cache 条目</text>
+          <text x="359" y="159" text-anchor="middle" class="edge-label">带 tag: product-42</text>
+          <text x="359" y="176" text-anchor="middle" class="branch-label">作废</text>
+
+          <line x1="454" y1="150" x2="506" y2="150" class="diagram-accent" marker-end="url(#ar-cascade)"/>
+          <text x="480" y="138" text-anchor="middle" class="edge-label">级联</text>
+
+          <!-- step 3 -->
+          <rect x="508" y="116" width="222" height="68" rx="6" class="diagram-ink node-fill"/>
+          <text x="619" y="140" text-anchor="middle" class="node-label">依赖路由的</text>
+          <text x="619" y="159" text-anchor="middle" class="node-label">Full Route Cache</text>
+          <text x="619" y="176" text-anchor="middle" class="branch-label">随之失效</text>
+
+          <!-- next request loop -->
+          <line x1="619" y1="184" x2="619" y2="240" class="diagram-ink" marker-end="url(#ar-cascade)"/>
+          <rect x="500" y="240" width="238" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="619" y="267" text-anchor="middle" class="node-label">下次请求 → 重新渲染</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.3</span><code>revalidateTag('product-42')</code> 的级联：失效调用沿 tag 索引找到条目作废，依赖它的路由产物随之失效，下次请求才重新渲染。<strong>注意</strong>：精确性来自 <code>cacheTag</code> 当初打的派生标签——只波及带该 tag 的条目，别的商品页缓存照旧。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">失效三种方式（示意）</span>
+          <span class="lang">tsx</span>
+          <button class="copy" data-copy-target="c-invalidate">复制</button>
+        </div>
+<pre id="c-invalidate"><code class="language-tsx">import { revalidateTag, revalidatePath, updateTag } from 'next/cache'
+
+// 1. 按 tag 失效：Next 16 起必须带第二个 cacheLife profile 参数
+//    单参数 revalidateTag('product-42') 已废弃，会报 TS 错误
+revalidateTag('product-42', 'max')   // 'max' = stale-while-revalidate
+
+// 2. 按路径失效：直接作废该路由的 Full Route Cache
+revalidatePath('/product/42')
+
+// 3. 读己写：写完立刻读到自己刚写的值，仅限 Server Action
+updateTag('product-42')              // 单参数；立即作废，非后台重验</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个后台改了商品 42 的价格，调用了 <code>revalidateTag('product-42', 'max')</code>。此时另一个用户立刻刷新商品 42 的页面，他第一眼看到的是新价格还是旧价格？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p><code>'max'</code> 给的是 stale-while-revalidate 语义：第一眼很可能仍是旧价格（陈旧值被立即返回），同时后台触发一次重新验证；之后的请求才稳定拿到新价格。要让"写完这一刻就看到新值"，用的是 <code>updateTag</code>（read-your-writes，立即作废），而不是 <code>revalidateTag</code>。两者的取舍：<code>revalidateTag('…','max')</code> 快但短暂陈旧，<code>updateTag</code> 保证即时一致但更贵。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>列出四层缓存，每一层用一句话说清"缓存什么、在服务端还是客户端"。</li>
+          <li>Next 16 里一段普通 <code>await fetch(url)</code> 不加任何指令，结果会被跨请求缓存吗？要让它缓存该怎么写？</li>
+          <li>v14 为什么默认缓存 <code>fetch</code>，又为什么在 v15 被翻转成默认不缓存？各自的代价是什么？</li>
+          <li>（设计层）一个商品页价格变了，你只想让用到这个商品的页面更新、别的页面缓存照旧。该用哪种失效方式？为什么它能做到精确失效？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><strong>Request Memoization</strong>——单次渲染内对相同 <code>fetch</code> 去重，服务端，请求结束即丢；<strong>Data Cache</strong>——<code>fetch</code>/被缓存函数的返回，服务端，跨请求持久；<strong>Full Route Cache</strong>——路由的 HTML+RSC 产物，服务端；<strong>Router Cache</strong>——已访问路由的 RSC payload，客户端（浏览器内存）。</li>
+            <li><strong>不会缓存。</strong>Next 16 沿用 v15 默认，普通 <code>fetch</code> 不进 Data Cache。要缓存就把它放进标了 <code>'use cache'</code> 的函数/组件里，并用 <code>cacheLife</code> 设寿命、<code>cacheTag</code> 打标签。</li>
+            <li>v14 默认缓存是为了性能（跨请求复用同一 URL），代价是开发者拿到旧数据、且要到处写 <code>force-dynamic</code> / <code>revalidate=0</code> 等逃生舱去关闭隐藏缓存，心智负担重。v15 翻转为默认不缓存（<code>no-store</code>），代价是更慢/更多源站请求，换来的是"默认正确、缓存需显式声明"。</li>
+            <li>用 <strong>按 tag 失效</strong>：<code>revalidateTag('product-42', 'max')</code>。它能精确，是因为加载数据时 <code>cacheTag('product-42')</code> 给条目打了数据派生的标签；失效按"tag→条目"索引只作废带该 tag 的条目，并级联到依赖它的路由，其余商品页的缓存不受影响。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个新闻站设计三类内容的缓存策略</h3>
+        <p>一个新闻站有三类内容，更新频率差别很大：<strong>文章正文</strong>一天更新几次、<strong>首页头条</strong>几分钟更新一次、<strong>用户评论</strong>要实时。请为这三类内容分别选择缓存/失效策略（候选：<code>'use cache'</code> + <code>cacheLife</code>、按 tag 失效、不缓存 / <code>&lt;Suspense&gt;</code> 动态），并说明在 Next 16 的默认行为下，哪些内容需要你显式声明才会被缓存。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>按"能容忍多旧"分档。<strong>文章正文</strong>：<code>'use cache'</code> + <code>cacheLife('hours')</code>，并 <code>cacheTag('article-' + id)</code>——编辑发稿时 <code>revalidateTag</code> 精确刷新这一篇。<strong>首页头条</strong>：<code>'use cache'</code> + 短 profile（自定义 <code>minutes</code> 量级），靠时间自动重验即可。<strong>用户评论</strong>：不缓存，放进 <code>&lt;Suspense&gt;</code> 走 <a href="03-rendering.html">03 章</a>的动态/流式渲染，永远取最新。关键的 dated 点：Next 16 默认不缓存，所以正文和头条都<strong>必须显式</strong>写 <code>'use cache'</code> 才会缓存；评论反而是"什么都不写"就符合预期。这也正好是 PPR 的典型形态——静态壳（正文/头条）+ 流式动态（评论）。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://nextjs.org/docs/app/building-your-application/caching">Next.js · Caching</a>（四层缓存官方说明）</li>
+          <li><a href="https://nextjs.org/blog/next-16">Next.js 16</a>（Cache Components、<code>revalidateTag</code> 签名变更）</li>
+          <li><a href="https://nextjs.org/blog/our-journey-with-caching">Our Journey with Caching</a>（默认行为翻转的设计动机）</li>
+          <li><a href="https://nextjs.org/docs/app/api-reference/directives/use-cache"><code>use cache</code></a> · <a href="https://nextjs.org/docs/app/api-reference/functions/cacheLife"><code>cacheLife</code></a> · <a href="https://nextjs.org/docs/app/api-reference/functions/revalidateTag"><code>revalidateTag</code></a>（官方 API）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="04-data-fetching.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">04 · 数据获取</span>
+        </a>
+        <a href="06-mutations.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">06 · 变更</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s51" data-toc-target="s51">5.1 四层缓存</a></li>
+        <li><a href="#s52" data-toc-target="s52">5.2 三代翻转</a></li>
+        <li><a href="#s53" data-toc-target="s53">5.3 use cache</a></li>
+        <li><a href="#s54" data-toc-target="s54">5.4 失效</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

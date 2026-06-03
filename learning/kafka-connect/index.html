@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>起点 · Kafka Connect 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html" class="current">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-self-check.html">03 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">起点 · 入口页</p>
+        <h1>Kafka Connect：把"系统间搬数据"变成配置而非写码</h1>
+        <p class="recap">基于 Apache Kafka 4.3（2026-05）。阅读时间约 1.5 小时。配置示例基于 Kafka 4.x，未在本机逐一运行。本教程是主 <a href="../kafka/index.html">Kafka 教程</a>的子教程，默认读者已掌握分区、消费组、offset。</p>
+      </header>
+
+      <h2 id="who-for"><span class="num">·</span><span>适合谁</span></h2>
+      <p>这套教程为下面三类读者写——三条都对上，才会读得顺：</p>
+      <ul>
+        <li>学过主 Kafka 教程或等同，理解分区 / 消费组 / offset / 再平衡，但<strong>没用过 Connect</strong> 的 Java 后端工程师。</li>
+        <li>要把数据库、对象存储、搜索引擎与 Kafka 之间的搬运标准化，正在<strong>纠结自写 producer/consumer 还是上 Connect</strong> 的人。</li>
+        <li>准备中高级面试，需要把 Connect 的<strong>架构、offset 语义、exactly-once、再平衡</strong>讲到能扛追问的人。</li>
+      </ul>
+
+      <h2 id="who-not"><span class="num">·</span><span>不适合谁</span></h2>
+      <p>三种情况下，别的资源更划算：</p>
+      <ul>
+        <li><strong>Kafka 零基础</strong>：不清楚分区与消费组 offset 是什么，先回到主 <a href="../kafka/index.html">Kafka 教程</a>，那里建立的 schema 是本教程的地基。</li>
+        <li><strong>要写流处理逻辑</strong>（按 key join、聚合、开窗、一进多出）：那是 Kafka Streams 的领域，去 <a href="../kafka-streams/index.html">Kafka Streams 子教程</a>，Connect 只搬运不做有状态计算。</li>
+        <li><strong>找某个具体 connector 的配置手册</strong>（JDBC / S3 / Debezium 的全部参数表）：去对应厂商文档；本教程讲框架机制与取舍，不逐一罗列 connector 参数。</li>
+      </ul>
+
+      <h2 id="outcomes"><span class="num">·</span><span>读完之后你能做到什么</span></h2>
+      <p>你能把任意 Connect 故障定位到三层之一——是 connector 搬运、converter 序列化、还是控制面 topic 的问题；面试被问"Connect 怎么保证 exactly-once/不丢数据"时，能说清 source 偏移存哪、EOS 靠事务+fencing，而不是"它有容错"。具体到可验证的能力：</p>
+      <ul>
+        <li><strong>区分</strong> source 与 sink connector、standalone 与 distributed worker、task 与 connector，并说出各自把配置 / 偏移 / 状态存在哪。</li>
+        <li><strong>判断</strong>一个搬运需求该用 Connect、自写 producer/consumer、还是升级到 Streams，并讲出依据。</li>
+        <li><strong>读懂</strong>一份 connector 的 JSON 配置：认出 <code>key.converter</code>/<code>value.converter</code>、<code>tasks.max</code>、<code>errors.tolerance</code> 各自控制什么。</li>
+        <li><strong>诊断</strong> <code>Unknown magic byte!</code>、毒丸记录停 task、改名后重灌等典型失败，并定位到三层中的哪一层。</li>
+        <li><strong>复述</strong> EOS source 的成立条件：仅 distributed、全 worker 一致开启、事务原子双写记录与偏移、僵尸 task 被 fencing。</li>
+      </ul>
+
+      <section class="schema-panel">
+        <p class="label">一句话本质</p>
+        <p>Kafka Connect 把"系统间搬数据"变成配置而非写码：connector 只管搬运、序列化格式由 converter 决定（不是 connector）、单条轻量变换由 SMT 做；而整个集群的配置/偏移/状态都存在 Kafka 自己的 compacted topic 里——没有外部协调器、没有数据库。</p>
+        <p style="font-size:14px;color:var(--ink-soft);margin-top:8px;">抓住"connector 搬运 + converter 定格式 + SMT 变换 + 控制面在 Kafka topic 里"这四块，整个 Connect 就清晰了。选型与面试的分水岭：知道何时用 Connect（标准化搬运）而非自写 producer/consumer，何时该升级到 Streams（有状态 / join / 聚合）。</p>
+      </section>
+
+      <h2 id="frontier"><span class="num">·</span><span>现状速览（截至 2026-06-03，Kafka 4.3）</span></h2>
+      <div class="callout">
+        <span class="label">什么稳定 · 什么在变 · 什么已被取代</span>
+        <table class="compare-table" style="margin-top:8px;">
+          <thead>
+            <tr><th>状态</th><th>内容</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>稳定</strong></td>
+              <td>EOS source（KIP-618，3.3 GA，2022-09）、incremental cooperative 再平衡（KIP-415，2.3）、DLQ（KIP-298，2.0）、REST 偏移管理（KIP-875，3.6）。</td>
+            </tr>
+            <tr>
+              <td><strong>近期变化</strong></td>
+              <td><strong>4.0（2025-03）起 Connect 需 Java 17</strong>（KIP-1032 转 Jakarta EE）；ZooKeeper 已删（KRaft only）；<strong>4.3（2026-05）加 KIP-1273 ConnectPlugin 接口</strong>（插件可发现性）。</td>
+            </tr>
+            <tr>
+              <td><strong>生态</strong></td>
+              <td>JDBC / S3 / Debezium / Elasticsearch 等主流 connector 在核心 Kafka 之外（Confluent Hub / 厂商仓库），独立于 broker 版本演进。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">流畅感警告</span>
+        <p>这一页读着顺，不等于掌握了。三个假象，开读前先认清：</p>
+        <p><strong>"我读得很顺"</strong>——Connect 的概念名词（converter、task、offset）单看都好懂，连起来的责任边界才是难点；顺着读完，合上页面能不能说清"序列化格式到底由谁决定"？</p>
+        <p><strong>"我做题很快"</strong>——配置项眼熟不等于知道改错一个会触发哪种线上失败；自测的应用判别层才检验这个。</p>
+        <p><strong>"我没卡壳"</strong>——没卡壳常常是因为还没遇到 source 与 sink offset 存两套、EOS 只在 distributed 成立这类反直觉点；卡壳是学到了的信号，不是没学会。</p>
+      </div>
+
+      <h2 id="concept-map"><span class="num">·</span><span>概念地图</span></h2>
+      <figure>
+        <svg viewBox="0 0 940 470" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Kafka Connect 数据流横向贯穿：外部源经 source connector、SMT、converter 写入 Kafka topic，再经 converter、sink connector 写出外部目标；控制面三个 compacted topic 与 REST API 位于下方">
+          <defs>
+            <marker id="flow" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ctrl" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- gutter labels -->
+          <text x="20" y="70" class="edge-label" font-weight="700">数据面</text>
+
+          <!-- ===== Top row: horizontal data flow ===== -->
+          <!-- 外部源系统 -->
+          <rect x="20" y="90" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="80" y="114" text-anchor="middle" class="node-label">外部源系统</text>
+          <text x="80" y="133" text-anchor="middle" class="edge-label">DB / 文件</text>
+
+          <!-- source connector -->
+          <rect x="190" y="90" width="138" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="259" y="114" text-anchor="middle" class="node-label-accent">source connector</text>
+          <text x="259" y="133" text-anchor="middle" class="edge-label">+ tasks 搬运</text>
+
+          <!-- converter (in) -->
+          <rect x="378" y="90" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="438" y="114" text-anchor="middle" class="node-label">converter</text>
+          <text x="438" y="133" text-anchor="middle" class="edge-label">序列化</text>
+
+          <!-- Kafka topic -->
+          <rect x="548" y="90" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="608" y="114" text-anchor="middle" class="node-label">Kafka topic</text>
+          <text x="608" y="133" text-anchor="middle" class="edge-label">字节</text>
+
+          <!-- converter (out) -->
+          <rect x="718" y="90" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="778" y="114" text-anchor="middle" class="node-label">converter</text>
+          <text x="778" y="133" text-anchor="middle" class="edge-label">反序列化</text>
+
+          <!-- arrows top row (left to right) -->
+          <line x1="140" y1="118" x2="190" y2="118" class="diagram-ink" marker-end="url(#flow)"/>
+          <line x1="328" y1="118" x2="378" y2="118" class="diagram-ink" marker-end="url(#flow)"/>
+          <line x1="498" y1="118" x2="548" y2="118" class="diagram-ink" marker-end="url(#flow)"/>
+          <line x1="668" y1="118" x2="718" y2="118" class="diagram-ink" marker-end="url(#flow)"/>
+
+          <!-- SMT inline tag between source connector & converter -->
+          <line x1="353" y1="146" x2="353" y2="178" class="diagram-soft"/>
+          <rect x="300" y="178" width="106" height="42" rx="6" class="diagram-soft node-fill"/>
+          <text x="353" y="198" text-anchor="middle" class="node-label">SMT</text>
+          <text x="353" y="213" text-anchor="middle" class="edge-label">单条变换</text>
+
+          <!-- ===== Second row: sink connector + 外部目标 ===== -->
+          <!-- sink connector -->
+          <rect x="718" y="250" width="138" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="787" y="274" text-anchor="middle" class="node-label-accent">sink connector</text>
+          <text x="787" y="293" text-anchor="middle" class="edge-label">+ tasks 搬运</text>
+
+          <!-- converter(out) down to sink connector -->
+          <line x1="778" y1="146" x2="778" y2="250" class="diagram-ink" marker-end="url(#flow)"/>
+
+          <!-- 外部目标系统 -->
+          <rect x="548" y="250" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="608" y="274" text-anchor="middle" class="node-label">外部目标系统</text>
+          <text x="608" y="293" text-anchor="middle" class="edge-label">DB / S3 / ES</text>
+          <line x1="718" y1="278" x2="668" y2="278" class="diagram-ink" marker-end="url(#flow)"/>
+
+          <!-- DLQ side branch off sink -->
+          <rect x="548" y="338" width="120" height="44" rx="6" class="diagram-soft node-fill"/>
+          <text x="608" y="365" text-anchor="middle" class="node-label">DLQ</text>
+          <line x1="787" y1="306" x2="787" y2="360" class="diagram-soft"/>
+          <line x1="787" y1="360" x2="668" y2="360" class="diagram-soft" marker-end="url(#ctrl)"/>
+          <text x="700" y="352" text-anchor="middle" class="edge-label">坏记录</text>
+
+          <!-- ===== Control plane (dashed box, lower-left) ===== -->
+          <rect x="20" y="250" width="468" height="180" rx="8" class="diagram-accent" stroke-dasharray="5 4"/>
+          <text x="36" y="274" class="node-label-accent">控制面 · 全在 Kafka 里</text>
+
+          <!-- three compacted topics -->
+          <rect x="40" y="294" width="132" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="106" y="314" text-anchor="middle" class="node-label" font-size="12">connect-configs</text>
+          <text x="106" y="331" text-anchor="middle" class="edge-label">配置</text>
+
+          <rect x="184" y="294" width="132" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="250" y="314" text-anchor="middle" class="node-label" font-size="12">connect-offsets</text>
+          <text x="250" y="331" text-anchor="middle" class="edge-label">source 偏移</text>
+
+          <rect x="328" y="294" width="132" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="394" y="314" text-anchor="middle" class="node-label" font-size="12">connect-status</text>
+          <text x="394" y="331" text-anchor="middle" class="edge-label">状态</text>
+
+          <!-- REST API -->
+          <rect x="184" y="368" width="132" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="250" y="395" text-anchor="middle" class="node-label-accent">REST API</text>
+
+          <!-- REST reads/writes the three topics -->
+          <line x1="240" y1="368" x2="160" y2="342" class="diagram-accent" marker-end="url(#ctrl)"/>
+          <line x1="250" y1="368" x2="250" y2="342" class="diagram-accent" marker-end="url(#ctrl)"/>
+          <line x1="260" y1="368" x2="370" y2="342" class="diagram-accent" marker-end="url(#ctrl)"/>
+
+          <!-- link: Kafka topic is where control plane physically lives (compacted topics ARE kafka topics) -->
+          <line x1="538" y1="146" x2="538" y2="240" class="diagram-soft"/>
+          <line x1="538" y1="240" x2="490" y2="240" class="diagram-soft" marker-end="url(#ctrl)"/>
+          <text x="514" y="200" text-anchor="middle" class="edge-label" transform="rotate(90 514 200)">同一集群</text>
+        </svg>
+        <figcaption><span class="fig-num">图 0.1</span>数据从外部源横向流到外部目标；控制面（虚线框）独立在下方。
+          <strong>注意</strong>三点：① connector 搬运、converter 决定格式（不是 connector）；② source 偏移存 <code>connect-offsets</code> topic、sink 用消费组——两套不同机制；③ 控制面全在 Kafka compacted topic 里，无外部数据库。</figcaption>
+      </figure>
+
+      <h2 id="paths"><span class="num">·</span><span>学习路径建议</span></h2>
+      <p>按目的选一条线，不必每页等量精读：</p>
+      <ul>
+        <li><strong>理解架构应付面试</strong>：<a href="01-concepts.html">01 概念</a> → <a href="02-principles.html">02 原理</a> → <a href="03-self-check.html">03 自测</a>，全程走完，自测的应用判别层重点做。</li>
+        <li><strong>做数据集成选型</strong>：<a href="01-concepts.html">01 概念</a> → <a href="02-principles.html">02 原理</a> 的备选方案对比表，抓 Connect / 自写 / Streams 的边界即可。</li>
+        <li><strong>排查 Connect 故障</strong>：<a href="01-concepts.html#converters">01 概念的 converter / offset / DLQ</a> → <a href="02-principles.html">02 原理的序列化与 offset 恢复</a>，对照三层定位法读。</li>
+      </ul>
+
+      <h2 id="toc"><span class="num">·</span><span>目录</span></h2>
+      <nav aria-label="章节目录">
+        <ul>
+          <li><a href="01-concepts.html"><strong>01 概念</strong></a>——core 词汇表：connector / worker / task / converter / SMT / offset / DLQ / EOS source，每个配 JSON 配置走查。</li>
+          <li><a href="02-principles.html"><strong>02 原理</strong></a>——机制与取舍：控制面在 Kafka topic、incremental cooperative 再平衡、序列化机制、offset 恢复、EOS（事务+fencing），每条带备选方案对比。</li>
+          <li><a href="03-self-check.html"><strong>03 自测</strong></a>——三层梯度题库 + 应用判别层（Connect vs 自写 vs Streams 的场景判别）+ 面试强答案要点 + 读者绘图提示。</li>
+        </ul>
+      </nav>
+
+      <h2 id="next"><span class="num">·</span><span>学完之后</span></h2>
+      <p>把 Connect 这块 schema 立起来后，下面几个方向各自往上加一块：</p>
+      <ul>
+        <li><strong>Debezium 与 CDC</strong>——基于 source connector 的变更数据捕获，在你的 schema 上加"从数据库事务日志读增量"这一能力。</li>
+        <li><strong>具体 connector 深挖</strong>（JDBC source/sink、S3 sink）——把框架机制落到某个真实 connector 的参数与限制上。</li>
+        <li><strong><a href="../kafka-streams/index.html">Kafka Streams 子教程</a></strong>——补上 Connect 故意不做的部分：有状态计算、join、聚合、开窗，明确两者分工边界。</li>
+        <li><strong>ksqlDB</strong>——用 SQL 表达流处理，理解它与 Streams、Connect 在同一生态里各占什么位置。</li>
+      </ul>
+
+      <footer class="references">
+        <h3>本页参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/#connect">Kafka Connect 官方文档</a>（官方）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-618:+Exactly-Once+Support+for+Source+Connectors">KIP-618 · Exactly-Once Support for Source Connectors</a>（设计文档）</li>
+          <li><a href="https://kafka.apache.org/blog/2026/05/22/apache-kafka-4.3.0-release-announcement/">Apache Kafka 4.3.0 Release Announcement</a>（版本说明）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="../kafka/index.html" class="prev">
+          <span class="label">← 主教程</span>
+          <span class="title">Kafka 主教程</span>
+        </a>
+        <a href="01-concepts.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#who-for" data-toc-target="who-for">适合谁</a></li>
+        <li><a href="#who-not" data-toc-target="who-not">不适合谁</a></li>
+        <li><a href="#outcomes" data-toc-target="outcomes">能做到什么</a></li>
+        <li><a href="#frontier" data-toc-target="frontier">现状速览</a></li>
+        <li><a href="#concept-map" data-toc-target="concept-map">概念地图</a></li>
+        <li><a href="#paths" data-toc-target="paths">学习路径建议</a></li>
+        <li><a href="#toc" data-toc-target="toc">目录</a></li>
+        <li><a href="#next" data-toc-target="next">学完之后</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

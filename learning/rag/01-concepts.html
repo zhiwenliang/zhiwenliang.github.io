@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>概念与闭环 · RAG 检索增强生成 深潜</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; font-weight: 500; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+.path-list { list-style: none; padding: 0; margin: 16px 0; }
+.path-list li {
+  padding: 10px 0 10px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 15px;
+}
+.path-list .who {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  color: var(--vermilion); letter-spacing: 0.04em;
+  margin-right: 10px;
+}
+.toc-files { list-style: none; padding: 0; margin: 16px 0; }
+.toc-files li { margin: 0 0 10px; }
+.toc-files a {
+  display: block; padding: 12px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-files a:hover { border-color: var(--vermilion); }
+.toc-files .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-files .t { font-weight: 600; }
+.toc-files .d { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html" class="current">01 概念</a><span class="sep">—</span>
+    <a href="02-retrieval.html">02 检索</a><span class="sep">—</span>
+    <a href="03-quality.html">03 质量</a><span class="sep">—</span>
+    <a href="04-frontier.html">04 前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>概念与闭环：把知识从权重里搬出来</h1>
+        <p class="recap">起点页给了一张漏斗全景图。这一章把图上每个框拆开，建立 RAG 的词汇表，并锚定贯穿全教程的两条主线：<strong>召回→精度漏斗</strong>，以及 <strong>grounding 概率契约</strong>。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label" style="font-size:10px;font-weight:500;">本章你将建立的 schema</p>
+        <ul>
+          <li>RAG 闭环：知识从训练时的权重，搬到推理时的检索</li>
+          <li>索引侧 / 检索侧 / 生成侧 三段各自在算什么</li>
+          <li>召回→精度漏斗：为什么分两阶、各自优化什么</li>
+          <li>grounding 是概率契约：检索质量是答案上限，但完美检索仍可能幻觉</li>
+        </ul>
+      </section>
+
+      <p>贯穿全章用同一个场景：你在给公司搭一个内部问答助手。语料是几百页的员工手册 PDF。用户问：<em>"出差住宿的报销上限是多少？"</em>下面每个概念，都用这个问题走一遍。</p>
+
+      <h2 id="s11"><span class="num">1.1</span><span>为什么是 RAG：知识解耦</span></h2>
+      <p class="one-liner">RAG = 在生成时，把相关知识从一个外部索引里检索出来、放进 prompt，让模型基于这些证据回答，而不是只靠它训练时记住的东西。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>大模型的知识冻结在训练截止那一刻，且压进了权重里——它不知道你公司的报销政策，也不知道上周改的版本。两条老路都不好走：把手册<strong>塞进每次 prompt</strong>，几百页超出 context、且贵；把手册<strong>微调进模型</strong>，训练成本高、知识一变就得重训、还无法给出"答案来自手册第几页"的溯源。RAG 选第三条：知识留在外部、可随时更新，生成时只检索<strong>相关的那几段</strong>放进 prompt。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：Lewis 等人 2020 年提出 RAG 时，用的框架是<strong>参数化记忆</strong>（parametric memory）与<strong>非参数化记忆</strong>（non-parametric memory）的分工。模型权重是参数化记忆——知识以参数形式编码、容量固定、更新等于重训。RAG 接上一块非参数化记忆——一个外部索引（向量索引 + 原文），知识以"可检索条目"形式存在、容量可扩、更新只是写库。生成时，模型把检索到的条目当成临时的、可信度更高的上下文来用。RAG 真正改变的不是"模型更聪明了"，而是<strong>知识的存放位置和更新方式</strong>。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="参数化记忆与非参数化记忆两个知识来源汇入 prompt 再生成答案">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <rect x="36" y="60" width="210" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="141" y="86" text-anchor="middle" class="node-label">LLM 权重</text>
+          <text x="141" y="106" text-anchor="middle" class="edge-label">参数化记忆 · 冻结</text>
+
+          <rect x="36" y="160" width="210" height="60" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="141" y="186" text-anchor="middle" class="node-label-accent">外部索引</text>
+          <text x="141" y="206" text-anchor="middle" class="edge-label">非参数化记忆 · 可更新</text>
+
+          <rect x="362" y="100" width="150" height="80" rx="6" class="diagram-ink node-fill"/>
+          <text x="437" y="136" text-anchor="middle" class="node-label">Prompt 上下文</text>
+          <text x="437" y="156" text-anchor="middle" class="edge-label">隐性知识 + 证据</text>
+
+          <rect x="572" y="116" width="116" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="630" y="145" text-anchor="middle" class="node-label">答案</text>
+
+          <line x1="246" y1="120" x2="362" y2="124" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="246" y1="190" x2="362" y2="156" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <line x1="512" y1="140" x2="572" y2="140" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="300" y="116" text-anchor="middle" class="edge-label">隐性</text>
+          <text x="300" y="182" text-anchor="middle" class="edge-label">检索证据</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>RAG 给 LLM 接上第二个知识来源：权重里的参数化记忆冻结在训练时，外部索引是非参数化记忆、可随时更新。<strong>注意</strong>：两条线都流进 prompt，但只有红色这条（外部索引）能在不重训模型的前提下换掉知识——这正是 RAG 的全部价值所在。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>像<strong>开卷考试</strong>：闭卷（纯 LLM）只能写脑子里背下的；开卷（RAG）允许翻书，但你得先<em>翻到对的那一页</em>，而且翻到了也可能抄错、抄漏。类比失效处：考生知道自己在抄哪本书，而 LLM 并不"知道"证据从哪来——它只是把 prompt 里的 token 当成更可能出现的下文，这一点在 §1.7 会变成关键。</p>
+      </div>
+
+      <h2 id="s12"><span class="num">1.2</span><span>RAG 闭环：索引侧与查询侧</span></h2>
+      <p class="one-liner">RAG 系统由两个时间错开的阶段组成：离线的索引侧（建库）和在线的查询侧（应答），它们唯一的交汇点是索引。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>把"建库"和"应答"分开，是因为两者的频率和成本完全不同。分块、嵌入几百页手册很贵，但只需做一次（或文档变更时增量做）；而用户提问随时发生、要求毫秒级响应。把贵的、可复用的工作挪到离线，是几乎所有检索系统的基本骨架。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：索引侧是一条"写"路径——文档 → 分块 → 嵌入 → 写入索引；查询侧是一条"读"路径——查询 → 嵌入 → 检索 → （重排）→ 生成。关键在于：<strong>嵌入模型必须是同一个</strong>，否则离线 chunk 向量和在线 query 向量落在不同空间，近邻搜索失去意义。也正因为知识只活在索引里，"更新知识"等于"重跑索引侧的写路径"，模型权重一动不动——这把 §1.1 的"知识解耦"落到了工程结构上。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="RAG 两阶段闭环：离线索引侧写入索引，在线查询侧读取索引">
+          <defs>
+            <marker id="f-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="f-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <text x="30" y="70" class="edge-label" font-weight="700">离线</text>
+          <text x="30" y="250" class="edge-label" font-weight="700">在线</text>
+
+          <rect x="74" y="44" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="117" y="71" text-anchor="middle" class="node-label">文档</text>
+          <rect x="200" y="44" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="243" y="71" text-anchor="middle" class="node-label">分块</text>
+          <rect x="326" y="44" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="369" y="71" text-anchor="middle" class="node-label">嵌入</text>
+          <line x1="160" y1="66" x2="200" y2="66" class="diagram-ink" marker-end="url(#f-ink)"/>
+          <line x1="286" y1="66" x2="326" y2="66" class="diagram-ink" marker-end="url(#f-ink)"/>
+
+          <rect x="478" y="128" width="150" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="553" y="156" text-anchor="middle" class="node-label-accent">索引</text>
+          <text x="553" y="176" text-anchor="middle" class="edge-label">向量 + BM25</text>
+
+          <polyline points="412,66 553,66 553,128" class="diagram-ink" fill="none" marker-end="url(#f-ink)"/>
+          <text x="585" y="104" text-anchor="middle" class="edge-label">写入</text>
+
+          <rect x="74" y="224" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="117" y="251" text-anchor="middle" class="node-label">查询</text>
+          <rect x="200" y="224" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="243" y="251" text-anchor="middle" class="node-label">嵌入</text>
+          <rect x="510" y="224" width="86" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="553" y="251" text-anchor="middle" class="node-label">检索</text>
+          <rect x="636" y="224" width="92" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="682" y="251" text-anchor="middle" class="node-label">生成</text>
+          <line x1="160" y1="246" x2="200" y2="246" class="diagram-ink" marker-end="url(#f-ink)"/>
+          <line x1="286" y1="246" x2="510" y2="246" class="diagram-ink" marker-end="url(#f-ink)"/>
+          <text x="398" y="236" text-anchor="middle" class="edge-label">query 向量</text>
+          <line x1="596" y1="246" x2="636" y2="246" class="diagram-ink" marker-end="url(#f-ink)"/>
+          <line x1="553" y1="192" x2="553" y2="224" class="diagram-accent" marker-end="url(#f-acc)"/>
+          <text x="592" y="212" text-anchor="middle" class="edge-label">读取召回</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>RAG 闭环分两个时间：离线把文档分块、嵌入、写进索引（建一次、反复用）；在线把查询嵌入、检索、生成。<strong>注意</strong>：索引是两条线唯一的交汇点——离线写、在线读；更新知识只需重跑离线这条线，模型权重不动。</figcaption>
+      </figure>
+
+      <h2 id="s13"><span class="num">1.3</span><span>分块 chunking：检索的最小单元</span></h2>
+      <p class="one-liner">分块是把长文档切成若干段"可检索单元"，每段单独嵌入、单独被检索。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>整本手册当一个单元，既塞不进 context，也无法精确命中——用户问报销上限，你不想把整本手册都给模型。分块让检索的粒度对齐到"一个问题大致需要的那一小段"。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：chunk 大小是一组无法同时取胜的取舍。<strong>切太小</strong>（比如一句话）：单段嵌入语义锐利，但一个完整答案被切碎，检索到一句却丢了它依赖的上下文（"上限是 800 元"——但哪个城市档？）。<strong>切太大</strong>（比如整章）：上下文完整，但一段里塞了多个主题，嵌入向量是这些主题的"平均"，对任何单一问题都不够锐利，反而排不进前列。所以分块不是预处理小事，而是<strong>漏斗第一段的入口决策</strong>——它直接决定了"理想答案片段"能不能成为一个可被召回的单元。03 章会把分块策略展开。</p>
+
+      <div class="callout example">
+        <span class="label">例 · 报销场景</span>
+        <p>手册里报销规则是一张表：不同城市档对应不同上限。按固定 200 字硬切，很可能把"一线城市 800 元"和它的表头"住宿费上限"切到两个 chunk——检索到数字却丢了它修饰的对象。这就是 03 章会讲的"边界感知分块"要解决的问题。</p>
+      </div>
+
+      <h2 id="s14"><span class="num">1.4</span><span>嵌入 embedding：把语义变成坐标</span></h2>
+      <p class="one-liner">嵌入把一段文本映射成一个高维向量，使"语义相近"变成"向量空间里距离相近"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>用户说"住宿能报多少钱"，手册写"住宿费上限"——字面不同，意思相同。关键词匹配会漏掉，嵌入则让两者向量靠近，从而可被同一次近邻搜索捞到。这是 RAG 能"按意思找"而非"按字面找"的基础。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：嵌入模型（一个编码器）把变长文本压成一个定长向量——比如 1024 维。这个压缩是<strong>有损</strong>的：它保留了语义主旨，却丢掉了精确的表面形式。这带来一个 02 章会详细拆的后果——dense 向量擅长"意思像"，却对"1099-MISC""SKU-7741"这类罕见、必须精确匹配的 token 很不可靠，因为它们的精确字形在压缩中被抹平了。记住这个"有损瓶颈"，它是后面 hybrid 检索存在的理由。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>用户问 <em>"1099-MISC 表格怎么填"</em>，语料里正好有一段讲 1099-MISC。如果只用 dense embedding 检索，它一定能排在最前面吗？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>不一定。dense 向量擅长语义相似，但 <code>1099-MISC</code> 是一个罕见、靠精确字形识别的 token；嵌入的有损压缩可能让它和一堆"报税相关但不是这张表"的段落挤在一起，真正那段未必排第一。</p>
+          <p>这正是 02 章要讲的：BM25 这类基于精确词项的检索，恰好补上 dense 的这个盲区——于是有了 hybrid。</p>
+        </details>
+      </div>
+
+      <h2 id="s15"><span class="num">1.5</span><span>检索 retrieval：漏斗的第一阶（召回）</span></h2>
+      <p class="one-liner">检索 = 给定 query 向量（和/或关键词），从全语料里快速捞出一批最可能相关的候选 chunk。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>语料可能上百万段，不可能让昂贵的模型逐段细看。检索是一道<strong>廉价、快速、宁可多捞</strong>的初筛——它的首要目标是<strong>召回</strong>（recall）：别把正确答案漏在门外。漏了，后面再贵的环节也救不回来。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：检索的本质是在向量空间里做近似最近邻搜索（ANN），用相似度（余弦 / 点积）近似"语义相关"。它之所以能在毫秒级扫完百万级语料，靠的是离线建好的索引结构——代价是只给"近似"答案，且如 §1.4 所说，对精确字形不敏感。检索这一阶有 dense、sparse（BM25）、hybrid 三种主要打法，02 章逐一下探它们各自的机制和盲区。这里只需记住它在漏斗里的角色：<strong>宽口、廉价、保召回</strong>。</p>
+
+      <h2 id="s16"><span class="num">1.6</span><span>重排 reranking：漏斗的第二阶（精度）</span></h2>
+      <p class="one-liner">重排 = 对检索出的 top-k 候选，用一个更贵但更准的模型重新打分排序，只把最相关的少数几段留给生成。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>检索为了保召回，会捞回不少"沾边但不对"的候选。把这一百段全塞给 LLM，既超 context、又引入噪声（03 章会讲噪声如何拖垮生成）。重排在这批候选上做<strong>精排</strong>，首要目标是<strong>精度</strong>（precision）：把真正相关的顶上来、噪声压下去。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：检索用的是"分别编码再算距离"的方式（query 和 doc 各自变成向量，省得能预先算好），代价是 query 和 doc 之间没有逐词交互。重排换一种更贵的算法——把 query 和候选 doc <strong>拼在一起</strong>送进模型，让两者逐词互相"看"，因此能判断细粒度的相关性。代价是它必须对每个候选单独跑一次，无法预计算，只能用在 top-k 这一小撮上。"为什么检索做不到重排的精度、重排做不到检索的规模"，是 02 章的核心机制题。漏斗角色：<strong>窄口、较贵、保精度</strong>。</p>
+
+      <h2 id="s17"><span class="num">1.7</span><span>生成与 grounding 契约</span></h2>
+      <p class="one-liner">生成 = 把重排后的少数证据 chunk 拼进 prompt，让 LLM 基于这些证据作答；grounding 指答案应"扎根"于给定证据，而非凭空发挥。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>检索和重排把"对的证据"递到了门口，但模型仍需被约束去<strong>用</strong>这些证据、并标明出处。grounding 提示和引用要求就是这道约束——它把"自由发挥的聊天"收束成"基于手册第 12 页回答"。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：把证据放进 prompt，会改变模型下一个 token 的概率分布——让"可以从上下文里抄到的 token"变得更可能被生成。这降低了幻觉，<strong>但只是降低、不是消除</strong>：生成始终是概率采样，模型仍可能无视证据、用参数化记忆覆盖它、或在多段证据间错误拼接。这就是<strong>grounding 概率契约</strong>的全部含义——<strong>检索质量是答案质量的上限</strong>（证据没捞到，神仙也答不对），<strong>但拿到完美证据也不保证答对</strong>。理解这条，是后面 03 章"为什么要把'检索对不对'和'答得忠不忠实'分开评估"的根基。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>检索 + 重排把 3 段证据递给模型，每段都正确且明确包含"一线城市住宿上限 800 元"。模型还可能答错吗？（先停十秒）</p>
+        <details>
+          <summary>展开答案（先自己答）</summary>
+          <p>会。grounding 是概率性的：模型可能用它训练时见过的"常见上限 500 元"覆盖证据；可能把另一段里"二线 600 元"的数字张冠李戴；也可能答得含糊。证据正确 ≠ 答案正确——这道缝隙正是 03 章 faithfulness 指标专门去量的东西。</p>
+        </details>
+      </div>
+
+      <h2 id="s18"><span class="num">1.8</span><span>综合：召回→精度漏斗</span></h2>
+      <p>把 1.3–1.7 串起来，就是这份教程的组织主线，也是最该内化的那个核心转变：<strong>RAG 是一条逐级收窄的漏斗，每一阶优化的目标不同，每个进阶技术都只插在漏斗的某一个具体环节上。</strong></p>
+
+      <figure>
+        <svg viewBox="0 0 680 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="召回到精度漏斗：检索全语料保召回廉价，重排短名单保精度较贵，生成 grounding">
+          <defs>
+            <marker id="fn-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <rect x="120" y="40" width="440" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="340" y="68" text-anchor="middle" class="node-label-accent">检索 · 全语料 → top-100</text>
+          <text x="340" y="88" text-anchor="middle" class="edge-label">目标：召回最大化 · 廉价、快</text>
+
+          <rect x="200" y="138" width="280" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="340" y="166" text-anchor="middle" class="node-label-accent">重排 · 100 → 8</text>
+          <text x="340" y="186" text-anchor="middle" class="edge-label">目标：精度最大化 · 较贵</text>
+
+          <rect x="258" y="236" width="164" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="340" y="264" text-anchor="middle" class="node-label">生成 · 8 → 1</text>
+          <text x="340" y="284" text-anchor="middle" class="edge-label">grounding · 引用</text>
+
+          <line x1="340" y1="104" x2="340" y2="138" class="diagram-accent" marker-end="url(#fn-acc)"/>
+          <line x1="340" y1="202" x2="340" y2="236" class="diagram-accent" marker-end="url(#fn-acc)"/>
+
+          <text x="600" y="68" text-anchor="middle" class="branch-label">召回↑</text>
+          <text x="600" y="86" text-anchor="middle" class="edge-label">覆盖广</text>
+          <text x="498" y="266" text-anchor="middle" class="branch-label">精度↑</text>
+          <text x="498" y="284" text-anchor="middle" class="edge-label">只留相关</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>同一条漏斗的纵向视角：宽口检索保召回（便宜、覆盖广），窄口重排保精度（较贵、只留最相关），生成 grounding 收成 1 个答案。<strong>注意</strong>：召回和精度是两阶分别优化的——只有检索没有重排，噪声进生成；只有重排没有足够召回，正确答案根本没进候选。两阶缺一不可。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 为什么这条主线最关键</span>
+        <p>一旦把 RAG 看成漏斗，后面所有技术都不再是零散的名词，而是有了坐标：<strong>查询改写 / HyDE</strong> 改的是漏斗<em>入口</em>（让 query 向量落得更准）；<strong>hybrid + RRF</strong> 加固<em>检索这一阶</em>的召回；<strong>rerank</strong> 是<em>第二阶</em>本身；<strong>Contextual Retrieval</strong> 修的是<em>索引侧</em>的分块；<strong>评估</strong>分段量<em>每一阶</em>的产出。02–04 章就是沿这条漏斗逐段下探。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>RAG 为什么不靠"把知识微调进模型"？它换来了什么、牺牲了什么？</li>
+          <li>索引侧和查询侧各做哪些步骤？哪一步是两者唯一的交汇点？为什么这一步用的嵌入模型必须相同？</li>
+          <li>"召回→精度漏斗"里，检索阶段和重排阶段分别在最大化什么？为什么不能只保留其中一个？</li>
+          <li>grounding 把幻觉降到零了吗？用一句话说清"检索质量是答案上限"这句话的含义。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>微调把知识压进权重（参数化记忆），更新需重训、滞后、且难溯源。RAG 把知识放外部索引（非参数化记忆）：换来了可随时更新、可溯源、不重训即可换知识；牺牲了一次额外的检索开销和"检索可能捞错"的新失败面。</li>
+            <li>索引侧（离线）：文档→分块→嵌入→写入索引。查询侧（在线）：查询→嵌入→检索→（重排）→生成。交汇点是<strong>索引</strong>。嵌入模型必须相同，否则 chunk 向量和 query 向量不在同一空间，近邻搜索的距离失去意义。</li>
+            <li>检索最大化<strong>召回</strong>（别漏掉正确答案），重排最大化<strong>精度</strong>（把噪声压下、相关顶上）。只有检索没重排：噪声进生成、超 context；只有重排没足够召回：正确答案根本没进候选，重排再准也无米下锅。</li>
+            <li>没有。grounding 是概率性的，模型仍可能无视/覆盖/错拼证据。"检索质量是答案上限"= 证据没被检索到，生成无论如何答不对；但反过来，证据齐全也不保证答对。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>已删除的文档，为什么还在答案里？</h3>
+        <p>你的语料每天增删文档。某天用户拿到一段答案，出处是一份<strong>上周已删除</strong>的旧政策。结合本章"索引侧 vs 查询侧"，这个问题最可能出在哪一侧的哪一步？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>删除发生在<em>源文档</em>，但查询侧读的是<em>索引</em>。想想：删源文件时，索引侧的写路径有没有同步把对应 chunk 的向量从索引里删掉？这类"源已变、索引没跟上"的问题，03 章会作为一类失败模式（索引陈旧 / freshness）再展开。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2005.11401">Lewis et al. 2020 — Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks</a>（RAG 原始论文，参数化 / 非参数化记忆框架）</li>
+          <li><a href="https://python.langchain.com/docs/concepts/rag/">LangChain — RAG 概念文档</a>（索引侧 / 查询侧的官方拆解）</li>
+          <li><a href="https://developers.llamaindex.ai/python/framework/getting_started/concepts/">LlamaIndex — High-Level Concepts</a>（loading / indexing / querying 阶段）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev">
+          <span class="label">← 上一页</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a href="02-retrieval.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 检索机制（下探一层）</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 知识解耦</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 RAG 闭环</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 分块</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 嵌入</a></li>
+        <li><a href="#s15" data-toc-target="s15">1.5 检索（召回）</a></li>
+        <li><a href="#s16" data-toc-target="s16">1.6 重排（精度）</a></li>
+        <li><a href="#s17" data-toc-target="s17">1.7 生成与 grounding</a></li>
+        <li><a href="#s18" data-toc-target="s18">1.8 召回→精度漏斗</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent 编排循环 · 工具调用 Tool Use · Agent 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* index landing extras */
+.lede {
+  font-size: 17px; line-height: 1.6; color: var(--ink-soft);
+  margin: 18px 0 4px; max-width: 680px;
+}
+.meta-row {
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+  margin: 14px 0 4px;
+}
+.meta-row .k { color: var(--ink-soft); font-weight: 500; }
+.fit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 12px 0; }
+@media (max-width: 720px) { .fit-grid { grid-template-columns: 1fr; } }
+.fit-card { border: 1px solid var(--rule); border-radius: 3px; padding: 12px 16px; }
+.fit-card h3 { margin: 0 0 6px; font-size: 14px; }
+.fit-card.no h3 { color: var(--ink-soft); }
+.fit-card ul { margin: 0; padding-left: 18px; }
+.fit-card li { font-size: 14px; margin: 5px 0; }
+.path-list { list-style: none; padding: 0; margin: 12px 0; }
+.path-list li {
+  padding: 10px 0 10px 0; border-bottom: 1px solid var(--rule); font-size: 14.5px;
+}
+.path-list .who { font-family: var(--mono); font-size: 11px; color: var(--vermilion); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 3px; }
+.toc-cards { display: grid; gap: 10px; margin: 14px 0; }
+.toc-cards a {
+  display: block; border: 1px solid var(--rule); border-radius: 3px;
+  padding: 12px 16px; text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-cards a:hover { border-color: var(--vermilion); }
+.toc-cards .n { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-right: 10px; }
+.toc-cards .t { font-weight: 600; font-size: 15px; }
+.toc-cards .d { display: block; color: var(--ink-soft); font-size: 13.5px; margin-top: 4px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-protocol.html">02 协议</a><span class="sep">—</span>
+    <a href="03-agent-loop.html" class="current">03 循环</a><span class="sep">—</span>
+    <a href="04-design-and-frontier.html">04 设计·前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>Agent 编排循环</h1>
+        <p class="recap">上一章拆清了单次往返的报文和 stop_reason。这一章把单次往返放进一个 while 循环——这才是「agent」区别于「带工具的一次问答」的地方。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>① agent loop 就是 <code>while(stop_reason == "tool_use") { 执行 → 回填 → 再请求 }</code>；</li>
+          <li>② 终止由 harness 决定，模型不会自己说「够了」；</li>
+          <li>③ ReAct(2022) 是 prompt 出来的循环，原生工具调用把它训练进了模型；</li>
+          <li>④ 错误恢复与并行 / 串行编排的取舍。</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>循环本身：while stop_reason == tool_use</span></h2>
+
+      <p class="one-liner">agent 不是一次调用，而是一个「请求→停机→执行→回填→再请求」的循环，直到模型不再请求工具。</p>
+
+      <p>02 章里的单次往返，到模型停机、harness 回填一次 <code>tool_result</code> 就结束了。把这一步包进 while 循环，让 harness 在回填后再发起下一轮请求——单步问答就变成了多步自主行为。循环的退出条件只有一个：模型这一轮的 <code>stop_reason</code> 不再是 <code>tool_use</code>。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">agent-loop.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-loop">复制</button>
+        </div>
+        <pre id="cb-loop"><code class="language-python">messages = [{"role": "user", "content": user_input}]
+while True:
+    resp = client.messages.create(model=..., tools=tools, messages=messages)
+    messages.append({"role": "assistant", "content": resp.content})
+    if resp.stop_reason != "tool_use":
+        break                      # 模型不再请求工具 → 任务这一轮结束
+    results = []
+    for block in resp.content:
+        if block.type == "tool_use":
+            out = run_tool(block.name, block.input)   # 你的代码真正执行
+            results.append({"type": "tool_result",
+                            "tool_use_id": block.id, "content": out})
+    messages.append({"role": "user", "content": results})  # 回填</code></pre>
+      </div>
+
+      <div class="annotations">
+        <span class="line-ref">while</span> 循环在 harness 侧，不在模型里 ·
+        <span class="line-ref">stop_reason</span> 唯一的继续 / 停止信号 ·
+        <span class="line-ref">run_tool</span> 模型看不到的真实执行。
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 620 420" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="agent loop 流程图：用户输入进入循环，模型停机后由 stop_reason 判定是否再转一圈">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- start -->
+          <ellipse cx="310" cy="40" rx="70" ry="22" class="diagram-ink node-fill"/>
+          <text x="310" y="45" text-anchor="middle" class="node-label">用户输入</text>
+
+          <!-- call model -->
+          <rect x="230" y="92" width="160" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="310" y="121" text-anchor="middle" class="node-label">调用模型 (带 tools)</text>
+
+          <!-- decision diamond -->
+          <polygon points="310,166 430,236 310,306 190,236" class="diagram-ink node-fill"/>
+          <text x="310" y="232" text-anchor="middle" class="edge-label">stop_reason</text>
+          <text x="310" y="248" text-anchor="middle" class="edge-label">== tool_use ?</text>
+
+          <!-- exec box (accent) -->
+          <rect x="470" y="210" width="140" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="540" y="232" text-anchor="middle" class="node-label-accent">执行工具 +</text>
+          <text x="540" y="249" text-anchor="middle" class="node-label-accent">回填 tool_result</text>
+
+          <!-- terminal -->
+          <rect x="235" y="340" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="310" y="369" text-anchor="middle" class="node-label">输出最终答案</text>
+
+          <!-- start -> call model -->
+          <line x1="310" y1="62" x2="310" y2="92" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- call model -> diamond -->
+          <line x1="310" y1="142" x2="310" y2="166" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- diamond right -> exec (是) -->
+          <text x="450" y="228" text-anchor="middle" class="branch-label">是</text>
+          <line x1="430" y1="236" x2="470" y2="236" class="diagram-accent" marker-end="url(#ar-acc)"/>
+
+          <!-- exec loop back up to call model -->
+          <polyline points="540,210 540,117 390,117" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <text x="470" y="108" text-anchor="middle" class="edge-label">回填后再请求</text>
+
+          <!-- diamond bottom -> terminal (否) -->
+          <text x="330" y="326" text-anchor="middle" class="branch-label">否</text>
+          <line x1="310" y1="306" x2="310" y2="340" class="diagram-ink" marker-end="url(#ar-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>agent loop 的真身：一个带回边的判定循环。<strong>注意</strong>：判定框和那条朱红回边都在 harness 里——模型每轮只走「调用模型」这一格，是否再转一圈由 <code>stop_reason</code> 和你的循环条件共同决定。</figcaption>
+      </figure>
+
+      <p>底层机制深一层：模型每一步都停机；循环、执行、回填全在 harness。每多一轮，都要把<strong>不断变长的对话历史整个重新发一遍</strong>（re-prefill），所以多步 agent 的 token 成本和延迟随轮数累积——一个 20 步的 agent，第 20 步要把前 19 步的所有内容再喂一次。</p>
+
+      <h2 id="s32"><span class="num">3.2</span><span>ReAct → 原生工具调用</span></h2>
+
+      <p class="one-liner">同一个控制循环，ReAct 是 prompt 出来的，原生工具调用是训练 + 结构化出来的。</p>
+
+      <p>ReAct（Yao et al. 2022）让一个<strong>冻结的</strong>大模型靠 few-shot prompt 交替输出 <code>Thought → Action → Observation</code>，用外部 API（如 Wikipedia）给 Action 落地，以对抗纯推理链的幻觉与错误累积。这里的 Action 和 Observation 都是被解析的散文。</p>
+
+      <p>原生 function calling 把 ReAct 的这个循环用<strong>后训练内化</strong>了：Thought / Action / Observation 的模式变成模型训练进去的行为，接口从脆弱的「解析散文」换成 typed JSON。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="ReAct 与原生工具调用是同一个 Thought-Action-Observation 循环，差别只在实现层">
+          <!-- left header -->
+          <rect x="40" y="20" width="240" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="160" y="43" text-anchor="middle" class="node-label">ReAct (2022)·prompt 出来的</text>
+
+          <!-- left stack -->
+          <rect x="60" y="74" width="200" height="38" rx="4" class="diagram-soft node-fill"/>
+          <text x="160" y="98" text-anchor="middle" class="node-label">Thought（散文）</text>
+          <rect x="60" y="132" width="200" height="38" rx="4" class="diagram-soft node-fill"/>
+          <text x="160" y="156" text-anchor="middle" class="node-label">Action（散文→解析）</text>
+          <rect x="60" y="190" width="200" height="38" rx="4" class="diagram-soft node-fill"/>
+          <text x="160" y="214" text-anchor="middle" class="node-label">Observation（散文）</text>
+
+          <!-- left down arrows -->
+          <line x1="160" y1="112" x2="160" y2="132" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="160" y1="170" x2="160" y2="190" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- left dashed loop back -->
+          <polyline points="60,209 36,209 36,93 60,93" class="diagram-soft" marker-end="url(#ar-ink)"/>
+
+          <!-- right header -->
+          <rect x="400" y="20" width="240" height="36" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="520" y="43" text-anchor="middle" class="node-label-accent">原生 (今天)·训练进模型</text>
+
+          <!-- right stack -->
+          <rect x="420" y="74" width="200" height="38" rx="4" class="diagram-ink node-fill"/>
+          <text x="520" y="98" text-anchor="middle" class="node-label">(隐式) 推理</text>
+          <rect x="420" y="132" width="200" height="38" rx="4" class="diagram-ink node-fill"/>
+          <text x="520" y="156" text-anchor="middle" class="node-label">tool_use（typed JSON）</text>
+          <rect x="420" y="190" width="200" height="38" rx="4" class="diagram-ink node-fill"/>
+          <text x="520" y="214" text-anchor="middle" class="node-label">tool_result（结构化）</text>
+
+          <!-- right down arrows -->
+          <line x1="520" y1="112" x2="520" y2="132" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="520" y1="170" x2="520" y2="190" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- right loop back -->
+          <polyline points="620,209 644,209 644,93 620,93" class="diagram-accent" marker-end="url(#ar-acc)"/>
+
+          <!-- bottom caption -->
+          <text x="340" y="275" text-anchor="middle" class="edge-label">同一个循环，实现层不同</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>ReAct 和原生工具调用是同一个 Thought→Action→Observation 循环。<strong>注意</strong>：差别只在实现层——ReAct 靠 few-shot prompt 和散文解析，原生靠后训练和 typed JSON。控制流没变。</figcaption>
+      </figure>
+
+      <p>一句收束：理解这点，就知道为什么「给模型工具」本质上还是在塑造它的生成行为，而不是给它接了根函数指针。</p>
+
+      <h2 id="s33"><span class="num">3.3</span><span>谁决定「做完了」</span></h2>
+
+      <p class="one-liner">模型停机只表示「这一步要不要调工具」；整个任务何时结束，由 harness 的循环条件决定。</p>
+
+      <p>模型自己<strong>不能可靠判断「完成」</strong>。它能判断的只是「下一步要不要再调一个工具」，而不是「整件任务到此为止」。任务级的终止，必须由 harness 用确定性的 guard 兜底。常见 guard（都在 harness 侧）：</p>
+
+      <ul>
+        <li><code>max_iterations</code> 硬上限——循环转过 N 轮无条件中止。</li>
+        <li>最大执行时间——挂钟超时即中止。</li>
+        <li>重复调用检测——同样的工具、同样的参数反复调，判定为卡死。</li>
+        <li>无进展检测——若干轮内状态没有有效推进即中止。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p>没有 <code>max_iterations</code> 上限时，模型若一直请求工具，循环就一直转——真实事故里有 agent 因此烧掉上千美元。模型不会自己喊停，硬上限是必需的。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>「prompt 里写『一直重试直到成功』，再没有 <code>max_iterations</code>，会出什么事？」</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>工具持续失败时，模型会无限重试，循环永不退出。终止条件不能交给模型的善意，必须由 harness 用确定性的 guard 兜底。</p>
+        </details>
+      </div>
+
+      <h2 id="s34"><span class="num">3.4</span><span>错误恢复</span></h2>
+
+      <p class="one-liner">工具失败时，把可读的错误回填给模型，它才能据此自我纠正。</p>
+
+      <p>工具执行失败时，把错误作为 <code>tool_result</code> 且 <code>is_error: true</code> 回填，并给一句<strong>模型可读</strong>的信息（缺了什么字段、合法取值是什么），模型据此能自我纠正。</p>
+
+      <p>反面是：把原始异常 / stack trace 直接塞回去，会用无关细节把模型带偏——它读的是给人看的报错，不是给模型看的提示。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">error-result.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-err">复制</button>
+        </div>
+        <pre id="cb-err"><code class="language-python"># 让模型困惑：原始 stack trace
+{"type": "tool_result", "tool_use_id": id, "is_error": True,
+ "content": "Traceback ... KeyError: 'city'"}
+
+# 让模型自纠：可读的错误 + 怎么改
+{"type": "tool_result", "tool_use_id": id, "is_error": True,
+ "content": "缺少参数 city。需要一个城市名，例如 'Shanghai'。"}</code></pre>
+      </div>
+
+      <div class="annotations">
+        <span class="line-ref">is_error</span> 标记这一轮工具失败 ·
+        <span class="line-ref">content</span> 给模型可读的纠错线索，而非 stack trace。
+      </div>
+
+      <h2 id="s35"><span class="num">3.5</span><span>并行 vs 串行编排</span></h2>
+
+      <p class="one-liner">并行暴露的是工具之间隐藏的耦合；有顺序前提或共享可变状态，就强制串行。</p>
+
+      <p>模型可在一个回合请求多个工具（02 章的并行调用）。独立的工具可以并发执行；但有依赖、有状态、有顺序前提的工具如果并行，会出<strong>不崩溃的隐蔽 bug</strong>——比如工具 A 读了本该由工具 B 先写入的共享状态，拿到旧值，agent 在被悄悄搞坏的状态上继续往下走。</p>
+
+      <p>一句机制：判断标准是两个调用之间有没有「谁先谁后」或「共享可变状态」——有就强制串行。</p>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写在纸上或编辑器里。写完再展开对照——直接点开等于把这一节当成再读一遍。</p>
+        <ol>
+          <li>agent loop 的循环和判定条件，运行在模型内部还是 harness 里？模型每一轮实际只做了什么？</li>
+          <li>一个工具持续失败，你的 agent 却停不下来。最缺的是哪一类机制？举出两种具体 guard。</li>
+          <li>（设计层）两个工具调用，一个查库存、一个按库存下单。能并行吗？判断依据是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>循环和判定条件都在 harness 里，不在模型内部。模型每一轮只做一件事：读当前对话、生成这一轮的输出（要么一个 <code>tool_use</code> 请求并停机，要么最终答案），然后停机交还控制。执行、回填、判断是否再转一圈，全是 harness。</li>
+            <li>缺的是 harness 侧的终止 guard。两种具体 guard：<code>max_iterations</code> 硬上限（转过 N 轮无条件中止）；重复调用检测（同样的工具、同样的参数连续调用 N 次即中止）。也可用最大执行时间或无进展检测。</li>
+            <li>不能并行。判断依据：两个调用之间存在「谁先谁后」与「共享可变状态」——下单依赖查库存的结果（顺序前提），且两者读写同一份库存状态。并行会让下单读到旧库存，必须强制串行。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给两步任务写循环 + 终止 guard</h3>
+        <p>任务：「查订单状态；若已超时则发起退款」。写出 agent loop 的骨架，并加入至少两个终止 guard，使它在工具反复失败时也能安全退出。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>至少要有 <code>max_iterations</code> 硬上限；再加一个「同样的工具 + 同样的参数连续调用 N 次就中止」的重复检测。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2210.03629">Yao et al. 2022 — ReAct: Synergizing Reasoning and Acting in Language Models</a>（奠基论文）</li>
+          <li><a href="https://docs.anthropic.com/en/api/handling-stop-reasons">Anthropic — Handling stop reasons</a>（官方）</li>
+          <li><a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building effective agents</a>（设计）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a href="02-protocol.html" class="prev"><span class="label">← 上一章</span><span class="title">02 · 协议机制</span></a>
+        <a href="04-design-and-frontier.html" class="next"><span class="label">下一章 →</span><span class="title">04 · 工具设计 + 前沿生态</span></a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 循环本身</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 ReAct → 原生</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 谁决定「做完了」</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 错误恢复</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 并行 vs 串行</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

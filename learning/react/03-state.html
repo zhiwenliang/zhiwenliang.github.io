@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 状态 · React 核心心智模型</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px; width: 0;
+  background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-mental-model.html">01 心智模型</a><span class="sep">—</span>
+    <a href="02-rendering.html">02 渲染</a><span class="sep">—</span>
+    <a href="03-state.html" class="current">03 状态</a><span class="sep">—</span>
+    <a href="04-effects-hooks.html">04 副作用</a><span class="sep">—</span>
+    <a href="05-principles.html">05 原理</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>状态：快照、队列、不可变</h1>
+        <p class="recap">第 2 章说状态绑在“树中位置”上。这一章钻进 state 本身：它存在哪、为什么 <code>set</code> 之后立刻读还是旧值、为什么连写三次 <code>+1</code> 只加了 1。这是整份教程最反直觉、也最值钱的一章。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>state 是<strong>快照</strong>：每次渲染捕获那一帧的值，函数里的 const 不是活变量</li>
+          <li>真正的 state 归 React 持有（存在 fiber 上），跨渲染保留</li>
+          <li>批处理 + 更新队列：何时用函数式更新；不可变性与 <code>Object.is</code></li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>state 是快照，不是活变量</span></h2>
+      <p class="one-liner"><code>useState</code> 返回的 const 只是“这一帧的快照”。真正的 state 存在 React 内部，跨渲染保留；这一帧里它的值固定不变。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>新手把 <code>const [count] = useState(0)</code> 里的 count 当普通变量，于是困惑两件事：“明明 <code>setCount</code> 了，为什么下一行 count 还是旧的”“为什么 <code>setTimeout</code> 里读到的是点击时的值，不是最新值”。这两个困惑同一个根源——count 是快照。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">底层机制 · 比文档深一层</span>
+        <p>组件函数<strong>每次渲染都整个重新执行</strong>，里面的 <code>const count</code> 每次都是新建的局部常量。<code>useState</code> 做的事是：从 React 为这个组件保存的“记忆槽”里取出当前值，赋给这一帧的 count。<code>setCount</code> 不修改这一帧的 count（它是 const，也改不了），而是通知 React“把记忆槽更新成新值，并安排一次重渲染”。下次渲染函数重跑，<code>useState</code> 又从记忆槽取出新值。所以——<strong>count 是某一帧的快照，React 的记忆槽才是真 state</strong>。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="state存在React记忆槽里跨渲染保留，每次渲染函数从槽里取出一个快照赋给本帧的const">
+          <defs>
+            <marker id="s-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <rect x="190" y="28" width="340" height="56" rx="8" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="52" text-anchor="middle" class="node-label-accent">React 记忆槽（在 fiber 上）</text>
+          <text x="360" y="71" text-anchor="middle" class="edge-label">count: 0 → 1 → 2 · 跨渲染保留</text>
+
+          <rect x="30" y="170" width="190" height="76" rx="6" class="diagram-ink node-fill"/>
+          <text x="125" y="196" text-anchor="middle" class="node-label">渲染 #1</text>
+          <text x="125" y="216" text-anchor="middle" class="edge-label">const count = 0</text>
+          <text x="125" y="234" text-anchor="middle" class="edge-label">（本帧快照）</text>
+
+          <rect x="265" y="170" width="190" height="76" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="196" text-anchor="middle" class="node-label">渲染 #2</text>
+          <text x="360" y="216" text-anchor="middle" class="edge-label">const count = 1</text>
+          <text x="360" y="234" text-anchor="middle" class="edge-label">（本帧快照）</text>
+
+          <rect x="500" y="170" width="190" height="76" rx="6" class="diagram-ink node-fill"/>
+          <text x="595" y="196" text-anchor="middle" class="node-label">渲染 #3</text>
+          <text x="595" y="216" text-anchor="middle" class="edge-label">const count = 2</text>
+          <text x="595" y="234" text-anchor="middle" class="edge-label">（本帧快照）</text>
+
+          <line x1="300" y1="84" x2="135" y2="170" class="diagram-ink" marker-end="url(#s-ink)"/>
+          <line x1="360" y1="84" x2="360" y2="170" class="diagram-ink" marker-end="url(#s-ink)"/>
+          <text x="378" y="130" text-anchor="start" class="edge-label">useState 取出</text>
+          <line x1="420" y1="84" x2="585" y2="170" class="diagram-ink" marker-end="url(#s-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>真正的 state 在 React 的记忆槽里跨渲染保留；你函数里的 <code>const count</code> 只是这一帧从槽里取出的<strong>快照</strong>。<strong>注意</strong>：<code>setCount</code> 改的是上面那个槽、并安排下一帧——它无法、也不会改动当前这一帧里已经定下的 count。</figcaption>
+      </figure>
+
+      <p>“快照”最直接的后果：在一次渲染产生的所有闭包里——事件回调、<code>setTimeout</code>、effect——读到的 count 都是<strong>这一帧那个固定的值</strong>。这不是 React 的魔法，就是 JavaScript 闭包：函数捕获它定义时所在作用域里的变量。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">snapshot-timeout.jsx</span>
+          <span class="lang">JSX</span>
+          <button class="copy" data-copy-target="c-snap">复制</button>
+        </div>
+<pre id="c-snap"><code class="language-jsx">function handleClick() {
+  setCount(count + 1);          // 安排：下一帧 count 变 1
+  setTimeout(() =&gt; {
+    alert(count);               // 弹出 0 —— 捕获的是“点击那一刻”的快照
+  }, 3000);                     // 3 秒后即使已经渲染过很多次，这里仍是 0
+}
+</code></pre>
+      </div>
+
+      <h2 id="s32"><span class="num">3.2</span><span>批处理与更新队列</span></h2>
+      <p class="one-liner">React 把一个事件里的多次 <code>setState</code> 攒成一批、只渲染一次。要基于“上一次更新后的值”累加，必须用函数式更新 <code>setCount(c =&gt; c + 1)</code>。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>承接上一节的快照，一个经典谜题：下面连写三次 <code>+1</code>，结果只加到 1，不是 3。理解它，就同时理解了批处理和“为什么要函数式更新”。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">three-plus-one.jsx</span>
+          <span class="lang">JSX</span>
+          <button class="copy" data-copy-target="c-three">复制</button>
+        </div>
+<pre id="c-three"><code class="language-jsx">function handleClick() {
+  setCount(count + 1);   // 本帧 count = 0 → 入队“把 state 设为 1”
+  setCount(count + 1);   // 本帧 count 仍 = 0 → 入队“把 state 设为 1”
+  setCount(count + 1);   // 本帧 count 仍 = 0 → 入队“把 state 设为 1”
+}                        // 三条都是“设为 1”，最终 count = 1
+</code></pre>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">底层机制 · 比文档深一层</span>
+        <p><strong>批处理</strong>：一个事件处理函数里的多次 <code>setState</code> 不会各触发一次渲染，而是攒进一个队列，事件跑完后 React 统一处理、只渲染一次。<br>
+        <strong>队列里放什么，决定结果</strong>：放“值”——<code>setCount(count+1)</code> 入队的是“把 state 设为 1”，后一条覆盖前一条，三次只剩 1。放“函数”——<code>setCount(c =&gt; c+1)</code> 入队的是“拿上一个结果加 1”，React 依次把上一步结果喂进去：0→1→2→3，真的加了 3。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="值式更新三次只得1，函数式更新三次得3的队列对比">
+          <defs>
+            <marker id="q-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="q-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="26" y="78" class="edge-label" font-weight="700">值式</text>
+          <rect x="84" y="48" width="210" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="189" y="72" text-anchor="middle" class="node-label">setCount(count + 1) ×3</text>
+          <text x="189" y="92" text-anchor="middle" class="edge-label">count 本帧 ≡ 0</text>
+          <line x1="294" y1="77" x2="344" y2="77" class="diagram-ink" marker-end="url(#q-ink)"/>
+          <rect x="346" y="48" width="190" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="441" y="72" text-anchor="middle" class="node-label">队列：设1 · 设1 · 设1</text>
+          <text x="441" y="92" text-anchor="middle" class="edge-label">后者覆盖前者</text>
+          <line x1="536" y1="77" x2="586" y2="77" class="diagram-ink" marker-end="url(#q-ink)"/>
+          <rect x="588" y="50" width="108" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="642" y="82" text-anchor="middle" class="node-label">count = 1</text>
+
+          <line x1="40" y1="140" x2="700" y2="140" class="diagram-soft"/>
+
+          <text x="26" y="198" class="branch-label" font-weight="700">函数式</text>
+          <rect x="84" y="168" width="210" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="189" y="192" text-anchor="middle" class="node-label">setCount(c =&gt; c + 1) ×3</text>
+          <text x="189" y="212" text-anchor="middle" class="edge-label">拿上一个结果 +1</text>
+          <line x1="294" y1="197" x2="344" y2="197" class="diagram-accent" marker-end="url(#q-ver)"/>
+          <rect x="346" y="168" width="190" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="441" y="192" text-anchor="middle" class="node-label">队列：c+1 · c+1 · c+1</text>
+          <text x="441" y="212" text-anchor="middle" class="edge-label">依次折叠</text>
+          <line x1="536" y1="197" x2="586" y2="197" class="diagram-accent" marker-end="url(#q-ver)"/>
+          <rect x="588" y="170" width="108" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="642" y="197" text-anchor="middle" class="node-label-accent">0→1→2→3</text>
+          <text x="642" y="214" text-anchor="middle" class="branch-label">= 3</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>同样写三次，结果差在“队列里放值还是放函数”。<strong>注意</strong>：值式入队的是一个写死的目标值（都基于本帧的旧快照 0），互相覆盖；函数式入队的是“在上一个结果上 +1”的算法，React 依次折叠，才真正累加。需要连续累加时用函数式。</figcaption>
+      </figure>
+
+      <h2 id="s33"><span class="num">3.3</span><span>不可变性：为什么必须给一个新对象</span></h2>
+      <p class="one-liner">改 state 必须产生一个新对象/新数组，而不是原地修改旧的。React 用 <code>Object.is</code> 比较新旧引用，来决定要不要重渲染。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这正是第 1 章那个挑战的答案：子组件（或任何人）<code>push</code> 进数组再 <code>setState</code>，界面却纹丝不动。问题不在 push 改了内容，而在——React 怎么知道“变了”？</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">immutability.jsx</span>
+          <span class="lang">JSX</span>
+          <button class="copy" data-copy-target="c-immut">复制</button>
+        </div>
+<pre id="c-immut"><code class="language-jsx">// ❌ 原地修改：todos 还是同一个数组引用
+todos.push(newTodo);
+setTodos(todos);            // 新引用 === 旧引用 → React 判定“没变” → 不重渲染
+
+// ✅ 产生新数组：新引用
+setTodos([...todos, newTodo]);   // 新引用 ≠ 旧引用 → 触发重渲染
+</code></pre>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">底层机制 · 比文档深一层</span>
+        <p><code>setState</code> 决定要不要重渲染，靠的是 <code>Object.is(旧值, 新值)</code> 浅比较<strong>引用</strong>。原地 <code>push</code> 改的是数组内部，引用没变，于是 <code>setTodos(todos)</code> 传进去的新旧引用相同，React 判定“没变”而跳过渲染（这叫 bailout）。<strong>代价</strong>：你得养成不可变更新的习惯（展开运算符、<code>map</code>/<code>filter</code>，或 Immer 库）。<strong>收益</strong>：引用相等 = 一次廉价的变化检测，它也是第 5 章 <code>memo</code> 化和并发渲染能成立的基础——整套优化都建立在“引用没变就一定没变”这个约定上。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="原地修改导致引用相同被Object.is判定没变而跳过渲染，新引用则触发渲染">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m-ver" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="24" y="62" class="edge-label" font-weight="700">原地改</text>
+          <rect x="92" y="36" width="180" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="182" y="58" text-anchor="middle" class="node-label">push 后 setTodos</text>
+          <text x="182" y="76" text-anchor="middle" class="edge-label">引用没变</text>
+          <line x1="272" y1="61" x2="318" y2="61" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <rect x="320" y="36" width="170" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="405" y="58" text-anchor="middle" class="node-label">Object.is(旧,新)</text>
+          <text x="405" y="76" text-anchor="middle" class="edge-label">= true 同引用</text>
+          <line x1="490" y1="61" x2="536" y2="61" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <rect x="538" y="36" width="158" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="617" y="58" text-anchor="middle" class="node-label">跳过渲染</text>
+          <text x="617" y="76" text-anchor="middle" class="edge-label">UI 不动</text>
+
+          <line x1="40" y1="124" x2="700" y2="124" class="diagram-soft"/>
+
+          <text x="24" y="186" class="branch-label" font-weight="700">新引用</text>
+          <rect x="92" y="160" width="180" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="182" y="182" text-anchor="middle" class="node-label">[...todos, x]</text>
+          <text x="182" y="200" text-anchor="middle" class="edge-label">新数组</text>
+          <line x1="272" y1="185" x2="318" y2="185" class="diagram-accent" marker-end="url(#m-ver)"/>
+          <rect x="320" y="160" width="170" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="405" y="182" text-anchor="middle" class="node-label">Object.is(旧,新)</text>
+          <text x="405" y="200" text-anchor="middle" class="edge-label">= false 新引用</text>
+          <line x1="490" y1="185" x2="536" y2="185" class="diagram-accent" marker-end="url(#m-ver)"/>
+          <rect x="538" y="160" width="158" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="617" y="182" text-anchor="middle" class="node-label-accent">重新渲染</text>
+          <text x="617" y="200" text-anchor="middle" class="edge-label">UI 更新</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>是否触发渲染，取决于 <code>Object.is</code> 比较新旧<strong>引用</strong>。<strong>注意</strong>：原地 <code>push</code> 后引用没变，React 判定“没变”而跳过——这就是“明明改了数组，界面却没动”的真因，不是 bug，是约定。</figcaption>
+      </figure>
+
+      <h2 id="s34"><span class="num">3.4</span><span>把第 1 章的挑战补完</span></h2>
+      <p>现在可以完整回答第 1 章末尾那个“子组件能不能 push 数组 prop”的挑战了，串起前三章：子组件通过调用父传下来的回调（§1.4 事件向上）请求添加；父组件用 <code>setTodos([...todos, item])</code> 产生<strong>新数组</strong>（§3.3 不可变，新引用才触发渲染）；新引用让 React 决定重渲染，父组件这个函数 <code>f</code> 重跑（§1.2），新的 <code>todos</code> 快照（§3.1）作为 props 流给子组件（§1.4）；协调阶段按 key 精准更新真实 DOM（§2.3）。每一步都不是孤立的 API，而是同一个数据循环的环节。</p>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写下来，再展开对照。第 3 题务必自己先在纸上推一遍队列。</p>
+        <ol>
+          <li><code>const [count] = useState(0)</code> 里的 count，和“真正的 state”是同一个东西吗？分别存在哪里？</li>
+          <li>点击时执行 <code>setCount(count + 1)</code> 后紧接着 <code>console.log(count)</code>，打印的是新值还是旧值？为什么？</li>
+          <li>本帧 count = 0，依次执行 <code>setCount(count + 1)</code>、<code>setCount(c =&gt; c + 1)</code>、<code>setCount(count + 1)</code>，最终 count 是多少？逐条推队列。</li>
+          <li>（设计题）为什么 React 要求不可变更新、而不是直接监听对象内部变化？这个约定为第 5 章的哪类优化打下了基础？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>不是同一个。函数里的 count 是这一帧从记忆槽取出的快照（局部常量，渲染结束即废）；真正的 state 在 React 为该组件保存的记忆槽（fiber）上，跨渲染保留。</li>
+            <li>旧值。count 是本帧快照，在这一帧里固定不变；<code>setCount</code> 安排的是下一帧的值，不会改动当前帧的 count。</li>
+            <li>最终是 1。队列：①“设为 1”（基于本帧 0）→ ②“在上一个结果 1 上 +1 = 2” → ③“设为 1”（又基于本帧快照 0，把队列结果覆盖为 1）。最后一条值式覆盖掉了前面的累加，结果 1。</li>
+            <li>因为监听任意对象的深层变化代价高且不可靠；改用“引用变了才算变了”的约定，把变化检测降成一次 <code>Object.is</code> 引用比较——廉价且确定。正是这个约定让 <code>memo</code> 化（靠引用相等跳过重渲染）和并发渲染（可安全复用未变的子树）成为可能。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>值式与函数式混用，结果是多少？</h3>
+        <p>本帧 <code>count = 3</code>。一个事件里依次执行：<br>
+        <code>setCount(count + 5);</code><br>
+        <code>setCount(c =&gt; c + 1);</code><br>
+        <code>setCount(10);</code><br>
+        <code>setCount(c =&gt; c + 2);</code><br>
+        渲染后 count 是多少？把队列一步步折叠出来。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>队列从空开始，依次应用，函数式拿“队列当前结果”、值式直接覆盖：① <code>count+5</code> = 3+5 = 8（值，队列结果 8）；② <code>c=&gt;c+1</code> = 8+1 = 9；③ <code>10</code> 直接覆盖 = 10；④ <code>c=&gt;c+2</code> = 10+2 = 12。最终 count = 12。关键：值式只看本帧快照（count=3），函数式只看队列里上一步的结果。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://react.dev/learn/state-as-a-snapshot">react.dev · State as a Snapshot</a>（官方，快照模型）</li>
+          <li><a href="https://react.dev/learn/queueing-a-series-of-state-updates">react.dev · Queueing a Series of State Updates</a>（官方，更新队列）</li>
+          <li><a href="https://react.dev/learn/updating-objects-in-state">react.dev · Updating Objects / Arrays in State</a>（官方，不可变更新）</li>
+          <li><a href="https://overreacted.io/a-complete-guide-to-useeffect/">Dan Abramov · A Complete Guide to useEffect</a>（每次渲染都有自己的一切，快照心智的权威长文）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-rendering.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 渲染机制</span>
+        </a>
+        <a href="04-effects-hooks.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 副作用与 Hook</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 state 是快照</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 批处理与队列</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 不可变性</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 补完挑战</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 · WiredTiger 存储引擎 · MongoDB 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref { font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500; }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-document-model.html">01 模型</a><span class="sep">—</span>
+    <a href="02-query-and-aggregation.html">02 查询·聚合</a><span class="sep">—</span>
+    <a href="03-indexing-and-schema-design.html">03 索引·建模</a><span class="sep">—</span>
+    <a href="04-storage-wiredtiger.html" class="current">04 存储</a><span class="sep">—</span>
+    <a href="05-replication-and-consistency.html">05 复制·一致性</a><span class="sep">—</span>
+    <a href="06-sharding-and-when-to-use.html">06 分片·选型</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>WiredTiger 存储引擎</h1>
+        <p class="recap">前三章都停在逻辑层——文档怎么建模、怎么查、怎么建索引。这章下沉到物理层：数据和索引到底怎么落盘、并发怎么控制、崩溃后怎么不丢。对照对象是 Postgres 的 heap + shared_buffers + WAL + VACUUM，逐条还账。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>WiredTiger 是每集合 / 每索引一棵 B-tree；并发是文档级乐观 MVCC，不是行锁。</li>
+          <li>cache（默认约 50% RAM）与 eviction：cache 满时应用线程被征用去 evict——这是延迟悬崖，不是优雅降级。</li>
+          <li>checkpoint（约 60s）+ journal/WAL 共同保证持久性。</li>
+          <li>旧版本进 history store → 没有 VACUUM；逐条对照 Postgres 的 heap + shared_buffers + WAL + VACUUM。</li>
+        </ul>
+      </section>
+
+      <h2 id="s41"><span class="num">4.1</span><span>B-tree 与文档级并发</span></h2>
+      <p class="one-liner">WiredTiger 给每个集合、每个索引各维护一棵 B-tree；并发写靠文档级乐观 MVCC，冲突即重试。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>逻辑层的"集合"和"索引"在物理层各自落成一棵独立的 B-tree 文件。这一层决定了三件事——数据按什么结构排布、两个并发写如何裁决、热点页放在哪里。理解它，03 章的索引选择和本章后面的 cache 行为才有机制依据。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：WiredTiger 默认是<strong>行存 B-tree</strong>——每个集合一棵 B-tree、每个索引一棵 B-tree，各自是磁盘上一个独立文件。WiredTiger 也提供 LSM-tree 选项（<code>type=lsm</code>），但默认不开，因为 LSM 用读延迟换写吞吐，不适合 MongoDB 的通用读写画像。并发控制是<strong>文档级乐观 MVCC</strong>，不是锁：一次写入把版本化更新挂到 B-tree page 内存里的 <strong>update chain</strong>（一条 skip list）上，不就地改 page。两个并发事务改同一文档时，其中一个在提交期检测到冲突、抛出 <code>WriteConflict</code>，由 MongoDB 层自动 abort 并 retry。对照 Postgres：Postgres 是 MVCC-in-heap——新版本作为新元组追加进 heap、旧元组就地留在原页等 VACUUM 清理；写冲突走的是行级锁阻塞，后到的事务<em>等</em>锁释放，而不是被判败重来。机制点完全不同：一个是乐观重试，一个是悲观阻塞。</p>
+
+      <div class="callout insight">
+        <span class="label">对照 · Postgres</span>
+        <p>Postgres 写同一行：后到事务在行级锁上<strong>阻塞等待</strong>，前一个提交后它接着改——序列化但不丢工作。WiredTiger 写同一文档：后到事务在提交期<strong>直接判败</strong>（<code>WriteConflict</code>），整个操作 abort 后由上层重放。<strong>边界</strong>：这意味着 MongoDB 的写冲突代价是"重做一遍"，在高争用同文档场景下重试会放大；Postgres 的代价是"排队等待"，体现为延迟而非重算。选择不同，热点行为也不同。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">storage-engine-stats</span>
+          <span class="lang">mongosh</span>
+          <button class="copy" data-copy-target="c-stats">复制</button>
+        </div>
+<pre id="c-stats"><code class="language-javascript">// 确认存储引擎与每集合的 B-tree 文件
+db.serverStatus().storageEngine
+// → { name: "wiredTiger", ... }
+
+// 看某集合的 WiredTiger 细节：block-manager、btree、cache 占用
+db.orders.stats().wiredTiger["block-manager"]
+// 写冲突计数（高 = 多个写打在同一批文档上，触发乐观重试）
+db.serverStatus().metrics.operation.writeConflicts</code></pre>
+      </div>
+
+      <h2 id="s42"><span class="num">4.2</span><span>MVCC 快照与 history store</span></h2>
+      <p class="one-liner">每个操作看到一个时间戳确定的快照；旧文档版本被写进磁盘上的 history store。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>快照让读不阻塞写、写不阻塞读——一个长读不会因为别人在写就被挡住，它看到的是开始那一刻的一致视图。代价是旧版本必须留着，直到没有任何快照还需要它。这些旧版本去哪了、谁来回收，正是 MongoDB 与 Postgres 分道的地方。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：可见性由 <strong>transaction id + commit timestamp</strong> 决定——一个操作只看到 commit timestamp 不晚于自己快照点的版本。关键伏笔在这里：MongoDB 用 oplog 的 <strong>optime</strong> 驱动 WiredTiger 的 commit timestamp，让存储层的版本时间线和复制时间线对齐（05 章副本集会接上这条线）。eviction 把一个 page 写回磁盘时，若该 page 上挂着多个版本，<strong>最新值写进数据文件、旧版本写进 history store</strong>（磁盘上的一个独立表）。因此 MongoDB <strong>没有 VACUUM</strong>——旧版本的回收发生在 eviction / checkpoint 的<strong>页重整（reconciliation）</strong>里：重整时引擎判断哪些旧版本已无任何活跃快照引用，就地丢弃。对照 Postgres：死元组留在原 heap 页，必须靠后台 VACUUM 进程<em>扫描</em>表把它们标记可重用、并推进 freeze；回收是一个独立的、需要调参（autovacuum 阈值）的后台任务。WiredTiger 把回收<strong>折叠进了本来就要做的刷盘动作</strong>，不再有单独的清扫扫描。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="WiredTiger 一个 B-tree page 的结构：page 上挂版本链 v3 到 v1，最新在内存 cache，旧版本指向磁盘 history store">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="ar-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- cache 边界 -->
+          <rect x="40" y="54" width="370" height="244" rx="8" class="diagram-soft"/>
+          <text x="58" y="76" class="edge-label" font-weight="700">cache（内存）</text>
+
+          <!-- B-tree page -->
+          <rect x="68" y="98" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="128" y="120" text-anchor="middle" class="node-label">B-tree page</text>
+          <text x="128" y="136" text-anchor="middle" class="edge-label">update chain</text>
+
+          <!-- 版本链 v3 v2 v1 -->
+          <rect x="234" y="92" width="120" height="40" rx="5" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="294" y="110" text-anchor="middle" class="node-label-accent">v3 最新</text>
+          <text x="294" y="125" text-anchor="middle" class="edge-label">活跃快照可见</text>
+
+          <rect x="234" y="160" width="120" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="294" y="184" text-anchor="middle" class="node-label">v2 旧版本</text>
+
+          <rect x="234" y="222" width="120" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="294" y="246" text-anchor="middle" class="node-label">v1 旧版本</text>
+
+          <line x1="188" y1="120" x2="234" y2="114" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="294" y1="132" x2="294" y2="158" class="diagram-ink"/>
+          <line x1="294" y1="198" x2="294" y2="220" class="diagram-ink"/>
+
+          <!-- 数据文件 + history store（磁盘） -->
+          <rect x="468" y="92" width="196" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="566" y="116" text-anchor="middle" class="node-label">数据文件（磁盘）</text>
+          <text x="566" y="134" text-anchor="middle" class="edge-label">最新值落这里</text>
+
+          <rect x="468" y="200" width="196" height="62" rx="6" class="diagram-ink node-fill"/>
+          <text x="566" y="226" text-anchor="middle" class="node-label">history store</text>
+          <text x="566" y="244" text-anchor="middle" class="edge-label">磁盘 · 旧版本归宿</text>
+
+          <line x1="354" y1="110" x2="468" y2="116" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <text x="412" y="100" text-anchor="middle" class="edge-label">页重整</text>
+          <line x1="354" y1="180" x2="466" y2="218" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="354" y1="240" x2="466" y2="234" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="412" y="276" text-anchor="middle" class="edge-label">旧版本被推进 history store，无活跃引用即丢弃</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>一个 B-tree page 上的版本链与去向。<strong>注意</strong>：旧版本不是就地覆盖、也不是等 VACUUM 扫描，而是在<strong>页重整</strong>时由最新值进数据文件、旧版本被推进 history store——这就是 MongoDB"无 VACUUM"的机制来源。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个事务开了一个很久不提交的快照读，期间同一批文档被反复更新很多版本。history store 会怎样？对照 Postgres 的什么现象？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>只要那个老快照还活着，它可能仍需要某些旧版本，<strong>这些旧版本就不能被页重整丢弃</strong>，于是 history store 持续累积、占用磁盘并拖慢相关读。这对应 Postgres 的经典现象：一个长事务持有老 xmin，<strong>VACUUM 无法回收</strong>晚于它的死元组，导致表膨胀（bloat）。机制不同（history store vs 死元组堆积），但病根同源——长快照拖住旧版本回收。两边的运维结论一致：盯住长事务。</p>
+        </details>
+      </div>
+
+      <h2 id="s43"><span class="num">4.3</span><span>cache 与 eviction：延迟悬崖</span></h2>
+      <p class="one-liner">WiredTiger cache 默认约 (RAM−1GB) 的 50%，装大多未压缩页；填满到阈值后，应用线程被迫亲自参与 eviction 才能继续。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>cache 是热数据驻留内存的地方，命中率直接决定读写延迟。它的容量公式和"装的是未压缩页"这两点，决定了同一台机器能放多大的工作集；而它满了之后的行为，决定了过载时是平滑变慢还是突然抖动。这一节是本章对生产延迟最有解释力的部分。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：WiredTiger cache 默认大小是 <code>max(256MB, 50% × (RAM − 1GB))</code>，缓存的是<strong>未压缩</strong>页——压缩只发生在磁盘上，进了 cache 就是解压后的形态，所以 cache 的有效容量按未压缩体积算。eviction 由专门的 <strong>eviction server + eviction worker 线程</strong>做近似 LRU，把页分成 clean / dirty / urgent 几个队列处理：clean 页直接丢，dirty 页要先写回磁盘（顺带做上一节的页重整）。引擎维持两道水位——<code>eviction_target</code> / <code>eviction_dirty_target</code>（后台开始干活）和 <code>eviction_trigger</code> / <code>eviction_dirty_trigger</code>（上限）。一旦越过 trigger 阈值，<strong>应用线程被"征召"同步参与 eviction</strong>——它得先帮引擎 evict 出空间，才能推进自己的读写。这是一道<strong>延迟悬崖（latency cliff）</strong>：不是后台默默降速，而是前台请求线程突然被拉去打工，p99 陡升。当 working set &gt; cache，页会被反复换进换出（外加每次 miss 的磁盘读），形成持续 <strong>thrash</strong>。对照 Postgres shared_buffers：脏页由后台 <strong>bgwriter</strong> 和 <strong>checkpointer</strong> 刷，前台查询一般<em>不</em>被拉去刷盘（极端情况才会因 buffer 不足而等待）；缺页时走 OS page cache 兜底，行为更平滑。WiredTiger 把刷盘压力直接回灌到应用线程，所以过载表现更"硬"。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="左侧正常态 cache 未满后台 worker 干活应用线程畅通，右侧超阈值态 cache 满应用线程被拉去 evict">
+          <defs>
+            <marker id="ar-ink3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="ar-acc3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="180" y="34" text-anchor="middle" class="node-label">正常态：cache 未满</text>
+          <text x="540" y="34" text-anchor="middle" class="node-label-accent">超阈值态：cache 满</text>
+          <line x1="360" y1="20" x2="360" y2="284" class="diagram-soft"/>
+
+          <!-- 左：正常态 -->
+          <rect x="60" y="60" width="120" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="120" y="82" text-anchor="middle" class="node-label">应用线程</text>
+          <text x="120" y="98" text-anchor="middle" class="edge-label">畅通读写</text>
+
+          <rect x="60" y="178" width="120" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="120" y="200" text-anchor="middle" class="node-label">eviction</text>
+          <text x="120" y="216" text-anchor="middle" class="edge-label">worker 后台</text>
+
+          <rect x="240" y="118" width="80" height="92" rx="6" class="diagram-ink node-fill"/>
+          <text x="280" y="160" text-anchor="middle" class="node-label">cache</text>
+          <text x="280" y="178" text-anchor="middle" class="edge-label">有空位</text>
+
+          <line x1="180" y1="85" x2="240" y2="135" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <line x1="180" y1="203" x2="240" y2="180" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="216" y="248" text-anchor="middle" class="edge-label">后台默默腾空间</text>
+
+          <!-- 右：超阈值态 -->
+          <rect x="420" y="60" width="120" height="50" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="480" y="82" text-anchor="middle" class="node-label-accent">应用线程</text>
+          <text x="480" y="98" text-anchor="middle" class="edge-label">被征用</text>
+
+          <rect x="600" y="118" width="86" height="92" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="643" y="160" text-anchor="middle" class="node-label-accent">cache</text>
+          <text x="643" y="178" text-anchor="middle" class="edge-label">已满</text>
+
+          <path d="M 480 110 L 480 150 L 598 160" class="diagram-accent" marker-end="url(#ar-acc3)"/>
+          <text x="500" y="200" text-anchor="middle" class="branch-label">先帮引擎 evict</text>
+          <text x="540" y="232" text-anchor="middle" class="edge-label">才能推进自己的操作</text>
+          <text x="540" y="262" text-anchor="middle" class="branch-label">→ 延迟悬崖 · p99 陡升</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>cache 两态对比。<strong>注意</strong>：working set 超过 cache 不是平滑变慢，而是应用线程突然要替引擎打工——被高亮的那条征用路径就是延迟悬崖，<strong>p99 延迟会陡升</strong>，而非线性退化。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>磁盘上一个集合压缩后是 8GB，cache 还剩 10GB。能断定这个集合的工作集"装得下"吗？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>不能。</strong>cache 装的是<strong>未压缩</strong>页。snappy 在文档型数据上常有 2–4 倍压缩比，8GB 压缩数据解压后可能是 16–32GB，远超 10GB 剩余 cache。要估能否装下，得按<strong>未压缩</strong>体积（以及实际热点页占比）算，不能直接拿磁盘文件大小比 cache。这是 cache 缓存未压缩页这一机制最容易被忽略的实务后果。</p>
+        </details>
+      </div>
+
+      <h2 id="s44"><span class="num">4.4</span><span>持久性：checkpoint + journal</span></h2>
+      <p class="one-liner">checkpoint 每约 60s 落一份一致快照，journal/WAL 覆盖两次 checkpoint 之间的窗口。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>cache 里的脏页在落盘前一旦断电就会丢失。持久性靠两件东西分工兜底：一份定期的一致磁盘快照，加上两次快照之间的连续日志。理解这对组合，才能判断"断电会丢多少"以及不同写关注（write concern）改变了什么。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：<strong>checkpoint</strong>（默认约 60s 一次，或写满约 2GB journal 触发）把 cache 里的脏页刷成一份<strong>一致的磁盘快照</strong>；旧 checkpoint 在新 checkpoint 完整落盘之前一直有效——崩溃时可以回退到上一个完好的 checkpoint，不会读到写了一半的状态。<strong>journal/WAL</strong> 提供两次 checkpoint 之间的持久性：写操作先记 journal，引擎<strong>组提交（group commit）</strong>把一批 journal 攒在一起刷盘，默认约 <strong>100ms</strong> 一批（用 <code>j:true</code> 则该写同步等自己的 journal 落盘）。崩溃恢复 = 加载最后一个完好 checkpoint，再<strong>重放（replay）</strong>其后的 journal 到崩溃点。压缩方面：数据块默认 <strong>snappy</strong>（可选 <code>zstd</code> / <code>zlib</code>，更小但更慢），索引用<strong>前缀压缩</strong>（相邻 key 共享前缀）。对照 Postgres：checkpoint ≈ Postgres 的 checkpoint（也是落一致快照点），journal ≈ WAL（也是组提交、也是崩溃后从 checkpoint 重放）——这一层两者的<em>形态</em>最接近，区别更多在默认间隔和参数名。</p>
+
+      <table class="compare-table">
+        <caption>表 4.1 · WiredTiger 机制 ↔ Postgres 机制对照</caption>
+        <thead>
+          <tr><th>维度</th><th>WiredTiger（MongoDB）</th><th>Postgres</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>存储布局</td><td>每集合一棵 B-tree、每索引一棵 B-tree，各自独立文件</td><td>heap（无序）+ 独立的索引文件</td></tr>
+          <tr><td>缓存</td><td>WT cache，缓存<strong>未压缩</strong>页，默认 ~50%×(RAM−1GB)</td><td>shared_buffers，缓存页，另有 OS page cache 兜底</td></tr>
+          <tr><td>并发</td><td>文档级<strong>乐观</strong> MVCC，冲突即 abort+retry</td><td>行级 MVCC（多版本元组）+ 行锁阻塞</td></tr>
+          <tr><td>日志</td><td>journal 组提交（默认 ~100ms 一批）</td><td>WAL 组提交</td></tr>
+          <tr class="selected"><td>旧版本回收</td><td>history store + 页重整，<strong>无 VACUUM</strong></td><td>死元组堆积 + 后台 <strong>VACUUM</strong> 扫描清理</td></tr>
+          <tr><td>刷脏</td><td>后台 worker；过阈值时<strong>应用线程被征用</strong></td><td>后台 bgwriter / checkpointer，前台一般不刷</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>断电时，最后约 100ms 内、未用 <code>j:true</code> 提交的写会怎样？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>可能丢失。</strong>journal 默认约 100ms 才组提交一次落盘，这段窗口内已确认给客户端、但尚未刷进 journal 的写，在断电后无法被恢复重放——它们既不在最后的 checkpoint 里，也不在已落盘的 journal 里。要更强保证：用 <code>j:true</code>（每次写都等自己的 journal 落盘后才返回，牺牲延迟换不丢）；或在副本集层用 <code>w:majority</code>（多数节点确认，05 章展开）。两个旋钮作用在不同层：<code>j:true</code> 管单机落盘，<code>w:majority</code> 管跨副本持久。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>为什么 MongoDB 没有 VACUUM？被替换掉的旧文档版本去了哪里、什么时候被真正回收？</li>
+          <li>cache 满到阈值时具体发生了什么？为什么把这个行为叫"延迟悬崖"而不是"逐渐变慢"？</li>
+          <li>checkpoint 和 journal 各负责持久性的哪一段？崩溃恢复时两者怎么配合？</li>
+          <li>（对照题）WiredTiger 的文档级乐观 MVCC 与 Postgres 的行级 MVCC，在处理"两个写打到同一条记录"时差在哪一步？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>因为旧版本回收被<strong>折叠进了 eviction / checkpoint 的页重整</strong>，不需要单独的清扫扫描。旧版本在页重整时被推进磁盘上的 <strong>history store</strong>，一旦没有任何活跃快照引用它，就在重整中被丢弃；Postgres 则要靠后台 VACUUM 扫表清死元组。</li>
+            <li>越过 <code>eviction_trigger</code> / <code>eviction_dirty_trigger</code> 阈值后，<strong>应用线程被征召同步参与 eviction</strong>，必须先帮引擎腾出空间才能推进自己的操作。叫悬崖是因为这是阶跃式的——从"后台默默 evict"突然切到"前台线程替引擎打工"，p99 陡升，而非线性退化。</li>
+            <li>checkpoint（~60s）落一份一致磁盘快照，覆盖到快照点为止的所有已刷数据；journal/WAL 覆盖两次 checkpoint 之间的窗口。恢复 = 加载最后一个完好 checkpoint，再重放其后的 journal 到崩溃点。</li>
+            <li>WiredTiger 让后到的写<strong>直接判败</strong>（<code>WriteConflict</code>）、abort 后由上层 retry——乐观重试；Postgres 让后到的写在<strong>行级锁上阻塞等待</strong>，前一个提交后继续——悲观阻塞。一个重算，一个排队。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>估算 working set 与 cache：会不会 thrash</h3>
+        <p>场景：单机内存 64GB，数据集磁盘体积 200GB，负载以随机点查为主。先不查资料，估算 WiredTiger cache 容量、判断这个工作负载会不会 thrash，并给出至少两条缓解方向。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>cache ≈ (64 − 1) × 0.5 ≈ <strong>31.5GB</strong>。判断 thrash 看的不是 200GB 全量，而是<strong>热点工作集（未压缩）</strong>：随机点查若热点工作集 &gt; 31.5GB，页会持续换进换出 + 磁盘读，进入 thrash，p99 抖。缓解方向：(1) <strong>加内存</strong>，把 cache 抬到覆盖热点工作集；(2) <strong>分片</strong>（06 章）把热点摊到多台，各自工作集落进各自 cache；(3) 收紧 <strong>schema</strong>——短字段名 / 去掉冗余大字段 / 拆出冷字段，直接缩小文档体积从而缩小工作集。注意全程按未压缩体积算，别拿 200GB 磁盘数比 cache。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.mongodb.com/docs/manual/core/wiredtiger/">WiredTiger Storage Engine</a>（官方 · cache、checkpoint、压缩）</li>
+          <li><a href="https://source.wiredtiger.com/develop/arch-index.html">WiredTiger Architecture Guide</a>（官方架构 · B-tree、eviction、history store）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/core/journaling/">Journaling</a>（官方 · journal 组提交与恢复）</li>
+          <li><a href="https://www.mongodb.com/blog/post/quick-start-mongodb-multi-document-acid-transactions">MongoDB Transactions &amp; Timestamps</a>（工程博客 · optime 驱动 commit timestamp）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-indexing-and-schema-design.html" class="prev">
+          <span class="label">← 上一页</span>
+          <span class="title">03 · 索引与 schema 设计</span>
+        </a>
+        <a href="05-replication-and-consistency.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 副本集与一致性</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 B-tree 与并发</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 MVCC 与 history store</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.3 cache 与 eviction</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.4 持久性</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>检索、相关性与聚合 · Elasticsearch 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; line-height: 1.6; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* index-specific: route cards + capability list */
+.route-list { margin: 16px 0; }
+.route-list .route {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 12px 16px;
+  margin: 10px 0;
+}
+.route-list .route .who {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em;
+  color: var(--vermilion); font-weight: 700; text-transform: uppercase;
+  margin: 0 0 4px; display: block;
+}
+.route-list .route p { margin: 4px 0; font-size: 14.5px; }
+.toc-chapters { margin: 16px 0; }
+.toc-chapters a {
+  display: block; padding: 14px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  margin: 8px 0; text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-chapters a:hover { border-color: var(--vermilion); }
+.toc-chapters .ch-num {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+  letter-spacing: 0.08em; font-weight: 500;
+}
+.toc-chapters .ch-title { font-weight: 600; font-size: 15.5px; margin: 2px 0; }
+.toc-chapters .ch-desc { font-size: 13.5px; color: var(--ink-soft); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-write-path.html">02 写入</a><span class="sep">—</span>
+    <a href="03-search-path.html" class="current">03 检索</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>检索、相关性与聚合</h1>
+        <p class="recap">上一章顺着"段不可变"讲完了写入。这一章换到另一根支柱——"分片数量固定"，看一次检索怎么在多个分片上并行跑、相关性为什么会偏、以及聚合为什么不把堆撑爆。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>分片路由公式，以及"主分片数为什么创建后不能改"</li>
+          <li>query 与 filter 的本质分野（打分 vs 是否 + 缓存），以及缓存为什么能不失效</li>
+          <li>BM25 的三个旋钮；分布式 query_then_fetch 两阶段，以及 per-shard IDF 为什么让相同文档打分不同</li>
+          <li>doc_values 怎么用列式结构撑起聚合 / 排序，对比 fielddata 为什么爆堆</li>
+        </ul>
+      </section>
+
+      <p>检索路径上的每一个反直觉行为，根都扎在一句话里：<strong>数据被切成了固定数量的 shard，一次查询要在所有 shard 上并行跑、再归并</strong>。打分会偏、分片数改不了、聚合要走另一套存储——全是这句话的推论。本章五节顺着"一条查询从落点到结果"的链路走：先定位（路由），再筛选与打分（filter / query / BM25），再分布式归并（两阶段），最后是聚合走的那条独立数据通道（doc_values）。</p>
+
+      <h2 id="routing"><span class="num">3.1</span><span>分片路由：文档落在哪个分片，分片数为什么不能改</span></h2>
+
+      <p class="one-liner">一条文档落在哪个 shard，由一个取模公式唯一决定；而除数就是主分片数——这就是它创建后不能改的全部原因。</p>
+
+      <p>写入一条文档、或按 <code>_id</code> 读取一条文档时，Elasticsearch 不会去问每个分片"这条在不在你这"，而是用一个确定性公式直接算出它该在哪个分片：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">routing-formula</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="code-routing">复制</button>
+        </div>
+<pre id="code-routing"><code class="language-bash">shard = hash(_routing) % number_of_primary_shards
+# _routing 默认取文档的 _id
+# 写入、按 id GET、按 id 删除，都用这同一个公式定位分片</code></pre>
+      </div>
+
+      <p>公式是确定的，所以同一个 <code>_id</code> 永远算到同一个分片——写进 shard 1 的文档，之后按 id 取也只会去 shard 1 找，不必广播。代价是这个除数被钉死了：<code>number_of_primary_shards</code>（下文记作 N）一旦在建索引时定下，就不能再改。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="文档按 hash(_id) 取模 N 路由到固定的三个主分片之一">
+          <defs>
+            <marker id="rt-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- left: document -->
+          <rect x="20" y="118" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="95" y="143" text-anchor="middle" class="node-label">document</text>
+          <text x="95" y="162" text-anchor="middle" class="edge-label">_id = "u-42"</text>
+
+          <!-- middle: hash box -->
+          <rect x="248" y="118" width="204" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="350" y="143" text-anchor="middle" class="node-label-accent">hash(_id) % N</text>
+          <text x="350" y="162" text-anchor="middle" class="edge-label">N = 3（创建即固定）</text>
+
+          <!-- doc -> hash -->
+          <line x1="170" y1="148" x2="248" y2="148" class="diagram-ink" marker-end="url(#rt-ink)"/>
+
+          <!-- right: three shards -->
+          <rect x="552" y="28" width="128" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="616" y="58" text-anchor="middle" class="node-label">shard 0</text>
+
+          <rect x="552" y="123" width="128" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="616" y="153" text-anchor="middle" class="node-label">shard 1</text>
+
+          <rect x="552" y="218" width="128" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="616" y="248" text-anchor="middle" class="node-label">shard 2</text>
+
+          <!-- hash -> shards (fan) -->
+          <line x1="452" y1="138" x2="552" y2="63"  class="diagram-soft" marker-end="url(#rt-ink)"/>
+          <line x1="452" y1="148" x2="552" y2="148" class="diagram-accent" marker-end="url(#rt-ink)"/>
+          <line x1="452" y1="158" x2="552" y2="233" class="diagram-soft" marker-end="url(#rt-ink)"/>
+          <text x="500" y="200" text-anchor="middle" class="edge-label">余数 = 1</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>路由是一次纯计算，不是一次查找。<strong>注意</strong>：朱红那条实线（余数=1）是这条文档唯一的归宿；N 是公式里的除数——改掉 N，所有旧文档的余数全部错位。</figcaption>
+      </figure>
+
+      <p>为什么不能改？把 N 从 3 改成 4，对同一条文档，<code>hash(_id) % 3</code> 和 <code>hash(_id) % 4</code> 几乎必然得到不同的余数。换句话说，旧文档当初按"模 3"写进了 shard 1，新公式却按"模 4"去 shard 3 找它——找不到。<strong>主分片数不可变，不是一条人为限制，而是它在路由公式里当除数这一身份的直接后果</strong>：动了除数，等于把整张已经建好的映射表作废。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · split 怎么"绕过"不可变</span>
+        <p>ES 内部其实不是直接拿 N 当除数。建索引时它把 hash 先散布到一个更大的固定空间 <code>number_of_routing_shards</code>（路由分片数），再映射到 N 个主分片。<code>_split</code> API 因此能把分片数按<strong>整数倍</strong>扩大（如 3→6）——靠硬链接底层 Lucene 文件、再删掉不属于新分片的文档，而不是真的在原地改除数。这解释了为什么 split 只能整数倍、且 <code>number_of_routing_shards</code> 本身也得在创建时定好。</p>
+      </div>
+
+      <p>既然主分片数定死，分片数估错了怎么补救？三条现实路径，代价递增：</p>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 改主分片数的三种办法（痛点 → 设计回应 → 代价）</caption>
+        <thead>
+          <tr><th>办法</th><th>它怎么回应"除数不能改"</th><th>代价 / 适用</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>_reindex</code> 到新索引</td>
+            <td>新建一个 N' 不同的索引，把全部文档按新除数重新路由写一遍</td>
+            <td>最通用、任意改分片数；但要全量重写 + 切换别名，期间双倍存储、耗时与数据量成正比</td>
+          </tr>
+          <tr>
+            <td><code>_split</code>（扩分片）</td>
+            <td>借 <code>routing_shards</code> 空间，硬链接文件后按整数倍拆分</td>
+            <td>比 reindex 快（不重新分析文档）；但只能整数倍放大，且源索引须先转只读</td>
+          </tr>
+          <tr>
+            <td><code>_shrink</code>（缩分片）</td>
+            <td>把多个分片的 segment 硬链接进一个分片，约数收缩（如 6→3 / 6→2 / 6→1）</td>
+            <td>同样快；但要求分片先聚到同一节点、源索引只读，且目标数必须是原数的约数</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="label">提示</span>
+        <p>三条路径都要求源索引进入只读或别名切换——没有一种是"在线原地改 N"。这正是为什么分片数要在建索引前就按数据规模估好：它不是一个事后可调的旋钮。</p>
+      </div>
+
+      <h2 id="query-filter"><span class="num">3.2</span><span>query context 与 filter context</span></h2>
+
+      <p class="one-liner">query 问"有多相关"、算出 _score；filter 问"是 / 否"、跳过打分，并把结果缓存成一个永不失效的 bitset。</p>
+
+      <p>同一个查询子句，放在 query context 还是 filter context，跑的是两套完全不同的逻辑。query context 要回答"这条文档跟查询<em>有多相关</em>"，于是算出一个浮点 <code>_score</code>，结果按分数排序。filter context 只回答一个布尔问题——"这条文档<em>符不符合</em>这个条件"，不打分、不参与排序。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要这条分野</span>
+        <p>全文搜索的核心诉求是排序（最相关的排最前），所以默认要打分。但很多条件本质是过滤——"状态是 published""时间在最近 7 天""租户 id 等于 42"。这些条件没有"相关程度"可言，对它们打分纯属浪费 CPU。filter context 就是把这类"是 / 否"条件从打分流程里摘出来，单独走一条更省、且可缓存的通路。</p>
+      </div>
+
+      <h3>filter 缓存为什么能"免失效"——这是 02 章红利</h3>
+
+      <p>filter 的结果会被缓存成一个 <strong>bitset</strong>：一个 segment 内有多少文档，就有多少个 bit，命中该 filter 的文档对应位置 1，其余置 0。下次任何查询用到同一个 filter，直接复用这个位图，连判断都省了。</p>
+
+      <p>关键在于这份缓存<strong>永远不需要失效</strong>。回忆 02 章那根支柱——<a href="02-write-path.html">段不可变</a>：bitset 是<em>按 segment</em> 缓存的，而 segment 一旦写出就再不改动。既然底层数据不会变，"哪些文档命中这个 filter"这个答案在该 segment 的整个生命周期里恒定，缓存自然无需失效。新数据进来只会形成<em>新</em>的 segment，老 segment 的 bitset 原封不动继续用；老 segment 被 merge 掉时，它的 bitset 一起丢弃即可。<strong>filter 缓存的"免失效"，是直接吃了 02 章"段不可变"的红利。</strong></p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 为什么打分查询缓存不了</span>
+        <p>query context 的输出是一组<em>浮点排名</em>，而且依赖整个查询的词项组合（见 3.3 的 BM25）；它不是一个"命中 / 不命中"的固定集合，没法压成一个可复用的位图。filter 的输出恰恰是一个稳定的文档集合——这才是它能缓存、而打分不能的根本差别。ES 还有个细节：只有当一个 filter 在"足够大的 segment 上反复被用"时才值得缓存，太小的 segment 缓存了也不划算，于是它有一套启发式决定缓存哪些。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>有人把"最近 7 天"这个 range 条件从 <code>filter</code> 挪进了 <code>must</code>，功能上结果集没变。性能上会发生什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>三件事一起变差。其一，range 进了 query context，每条命中文档都要白算一遍 <code>_score</code>——而时间范围本身没有"相关程度"，这部分计算纯属浪费。其二，<code>must</code> 子句不进 filter 缓存，于是每次查询都重算这个集合，无法复用上一次的位图。其三，这个无意义的时间分量还会<em>污染</em>最终排序，把真正该决定排名的全文相关性稀释掉。</p>
+          <p>设计含义：凡是"是 / 否"型、与相关性无关的条件——精确 <code>term</code>、<code>range</code>、状态枚举——都应放进 <code>filter</code>。把它放进 <code>must</code> 是用三份代价换一个本不需要的分数。</p>
+        </details>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.2 · query context vs filter context</caption>
+        <thead>
+          <tr><th>维度</th><th>query context</th><th>filter context</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>核心问题</td><td>有多相关</td><td>是 / 否</td></tr>
+          <tr><td>是否打分</td><td>算 <code>_score</code></td><td>不打分</td></tr>
+          <tr><td>是否缓存</td><td>不缓存（输出是浮点排名）</td><td>缓存为 bitset，按 segment、免失效</td></tr>
+          <tr class="selected"><td>典型子句</td><td><code>bool.must</code> / <code>match</code></td><td><code>bool.filter</code> / <code>range</code> / <code>term</code></td></tr>
+          <tr><td>适用</td><td>全文相关性排序</td><td>精确过滤、范围、权限隔离</td></tr>
+        </tbody>
+      </table>
+
+      <p>落到一个 <code>bool</code> 查询上，正确的分工是：相关性条件进 <code>must</code>（要打分），过滤条件进 <code>filter</code>（不打分、走缓存）。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">bool-query.json</span>
+          <span class="lang">JSON</span>
+          <button class="copy" data-copy-target="code-bool">复制</button>
+        </div>
+<pre id="code-bool"><code class="language-json">{
+  "query": {
+    "bool": {
+      "must": [
+        { "match": { "title": "elasticsearch 路由" } }
+      ],
+      "filter": [
+        { "range": { "created_at": { "gte": "now-7d/d" } } },
+        { "term":  { "status": "published" } }
+      ]
+    }
+  }
+}</code></pre>
+      </div>
+
+      <div class="annotations">
+        <p><span class="line-ref">must</span> 全文相关性条件，参与 BM25 打分、决定排序。</p>
+        <p><span class="line-ref">filter</span> range + term 是纯"是 / 否"判断：不打分，结果缓存成 bitset，跨查询复用且不失效。</p>
+      </div>
+
+      <h2 id="bm25"><span class="num">3.3</span><span>BM25：相关性怎么算出来</span></h2>
+
+      <p class="one-liner">BM25 用三个旋钮——词频饱和、字段长度归一、逆文档频率——把"一条文档对一个查询有多相关"压成一个分数。</p>
+
+      <p>query context 要打分，打的就是 BM25 分。一个查询有多个词项 <code>qᵢ</code>，每个词项贡献一份分，加起来就是文档的 <code>_score</code>：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">bm25-score</span>
+          <span class="lang">text</span>
+          <button class="copy" data-copy-target="code-bm25">复制</button>
+        </div>
+<pre id="code-bm25"><code class="language-text">score = Σᵢ  IDF(qᵢ) · ( tf · (k1 + 1) )
+                      ─────────────────────────────────────
+                      tf + k1 · ( 1 − b + b · (fieldLen / avgLen) )
+
+IDF(qᵢ) = log( (N − n + 0.5) / (n + 0.5) )     # N=文档总数, n=含该词的文档数
+k1 = 1.2   # 词频饱和速度
+b  = 0.75  # 字段长度归一强度</code></pre>
+      </div>
+
+      <p>三个旋钮各管一件事：</p>
+
+      <ul>
+        <li><strong>词频饱和（k1=1.2）</strong>：词频 <code>tf</code> 以 <code>tf / (tf + k1·…)</code> 的形式进入——这是一条<em>渐近线</em>。一个词出现第 1 次贡献很大，第 2 次还不错，到第 10 次几乎不再加分。<code>k1</code> 控制这条曲线压平的快慢。</li>
+        <li><strong>字段长度归一（b=0.75）</strong>：分母里的 <code>fieldLen / avgLen</code> 让长于平均的字段被惩罚——同样出现 3 次某词，出现在一篇万字长文里，远不如出现在一句标题里有分量。<code>b</code> 控制惩罚强度。</li>
+        <li><strong>逆文档频率 IDF</strong>：含某词的文档数 <code>n</code> 越大，<code>IDF</code> 越小。"的""是"这种到处都有的词权重被压到接近 0，区分度高的稀有词权重高。</li>
+      </ul>
+
+      <div class="rationale">
+        <span class="label">为什么取代了 TF-IDF</span>
+        <p>BM25 自 Lucene 6 / ES 5（2016）起是默认打分。它替换的经典 TF-IDF 有两处粗糙：词频近似<em>线性、无上界</em>——一个词刷 100 次，分就涨 100 倍，容易被关键词堆砌骗到；而且对字段长度的归一也更原始。BM25 的词频饱和 + 长度归一让多词匹配的排序更贴近"人觉得哪条更相关"。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 560 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="BM25 词频贡献是先升后平的饱和曲线，TF-IDF 近似一条不封顶的直线">
+          <!-- axes -->
+          <line x1="70" y1="270" x2="510" y2="270" class="diagram-ink"/>
+          <line x1="70" y1="270" x2="70" y2="40" class="diagram-ink"/>
+          <!-- axis labels -->
+          <text x="500" y="292" text-anchor="end" class="edge-label">词频 tf →</text>
+          <text x="60" y="52" text-anchor="end" class="edge-label">贡献分</text>
+
+          <!-- TF-IDF: near-linear, unbounded -->
+          <path d="M 70 268 L 470 70" class="diagram-soft" fill="none"/>
+          <text x="430" y="78" text-anchor="middle" class="edge-label">TF-IDF（近似直线·不封顶）</text>
+
+          <!-- BM25: saturating curve, rises then flattens toward an asymptote ~y=110 -->
+          <path d="M 70 268 C 160 110, 280 118, 500 112" class="diagram-accent" fill="none"/>
+          <text x="404" y="135" text-anchor="middle" class="node-label-accent">BM25（饱和·趋近上限）</text>
+
+          <!-- asymptote hint -->
+          <line x1="70" y1="108" x2="500" y2="108" class="diagram-soft"/>
+          <text x="150" y="100" text-anchor="middle" class="edge-label">渐近线（非硬上限）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>同一个词反复出现时两种打分的走势。<strong>注意</strong>：朱红的 BM25 曲线是<em>趋近</em>一条渐近线、而非撞上一道硬上限——第 10 次出现仍在加分，只是加得极少；灰色 TF-IDF 则一路不封顶。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">反直觉</span>
+        <p>词频饱和让"把关键词塞进一个<em>短</em>字段"成为操纵排序的手段。一篇真正相关的长文，关键词密度被字段长度归一稀释；而一条把同样关键词硬塞进短标题的低质文档，<code>fieldLen</code> 小、惩罚轻，反而能压过长文排在前面。这不是 bug，是 b 旋钮的设计后果——3.5 节末的进阶挑战会让你拿这一点去排查"短文档总排前面"。</p>
+      </div>
+
+      <h2 id="two-phase"><span class="num">3.4</span><span>分布式检索两阶段，与相关性偏差</span></h2>
+
+      <p class="one-liner">一次检索分两阶段在所有分片上跑——先各自返回 top-K 的 id+score 归并，再只对胜出的 K 条去取原文。</p>
+
+      <p>3.1 说过数据被切成固定数量的分片。于是一次 <code>search</code> 不可能只问一个分片——它要在<em>每个</em>分片上跑，再把结果归并。默认策略叫 <code>query_then_fetch</code>，顾名思义两个阶段：</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="query_then_fetch 两阶段：阶段一各分片回传 id 和 score 给协调节点归并，阶段二只对选中文档取原文">
+          <defs>
+            <marker id="tp-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="tp-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- coordinator -->
+          <rect x="270" y="24" width="180" height="56" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="48" text-anchor="middle" class="node-label-accent">coordinator</text>
+          <text x="360" y="67" text-anchor="middle" class="edge-label">归并全局 top-K</text>
+
+          <!-- three shards -->
+          <rect x="40"  y="250" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="275" text-anchor="middle" class="node-label">shard 0</text>
+          <text x="115" y="294" text-anchor="middle" class="edge-label">本地 top-K</text>
+
+          <rect x="285" y="250" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="275" text-anchor="middle" class="node-label">shard 1</text>
+          <text x="360" y="294" text-anchor="middle" class="edge-label">本地 top-K</text>
+
+          <rect x="530" y="250" width="150" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="605" y="275" text-anchor="middle" class="node-label">shard 2</text>
+          <text x="605" y="294" text-anchor="middle" class="edge-label">本地 top-K</text>
+
+          <!-- phase 1: shards -> coordinator (id+score up). left of each link -->
+          <line x1="120" y1="250" x2="305" y2="80" class="diagram-ink" marker-end="url(#tp-ink)"/>
+          <line x1="355" y1="250" x2="352" y2="80" class="diagram-ink" marker-end="url(#tp-ink)"/>
+          <line x1="600" y1="250" x2="415" y2="80" class="diagram-ink" marker-end="url(#tp-ink)"/>
+          <text x="150" y="150" text-anchor="middle" class="edge-label">① id + score</text>
+
+          <!-- phase 2: coordinator -> shards (fetch chosen docs) -->
+          <line x1="318" y1="80" x2="158" y2="250" class="diagram-accent" marker-end="url(#tp-acc)"/>
+          <text x="232" y="195" text-anchor="middle" class="branch-label">② fetch _source</text>
+          <text x="560" y="150" text-anchor="middle" class="edge-label">仅取选中的 K 条</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.4</span>两阶段把"在哪打分"和"取多少原文"分开。<strong>注意</strong>：阶段①（黑线，上行）每个分片只回传轻量的 id+score；只有归并出全局 top-K 后，阶段②（朱红线，下行）才去对应分片取这 K 条的原文——避免把所有候选文档的 <code>_source</code> 都搬回来。</figcaption>
+      </figure>
+
+      <p><strong>阶段一（query）</strong>：协调节点把查询发到每个分片，每个分片在自己的数据上算分、只返回本地 top-K 的 <code>doc id + score</code>（不含原文）。协调节点收齐所有分片的候选，归并出全局 top-K。<strong>阶段二（fetch）</strong>：只对这 K 条，去它们各自所在的分片取完整 <code>_source</code>。这样网络上搬运的，第一阶段是轻量的 id+score、第二阶段只有最终 K 条原文，而不是每个分片的全部候选文档。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>两个内容<em>一模一样</em>的文档，恰好被路由到了不同分片。同一个查询打过来，它们的 <code>_score</code> 会相等吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不一定相等，而且小集群上经常不等。原因在 BM25 的 IDF：<code>IDF = log((N−n+0.5)/(n+0.5))</code> 里的 <code>N</code>（文档总数）和 <code>n</code>（含该词的文档数）是<strong>每个分片用自己本地的统计</strong>算的——阶段一各分片独立打分，谁也不知道全局词频。两个分片若文档数不同、或某词在两边的分布不同，同一个词的 IDF 就不同，于是两条内容相同的文档拿到不同的分。</p>
+          <p>这正是 <code>dfs_query_then_fetch</code> 要补的：它在阶段一之前多加一个 <strong>DFS 预阶段</strong>，先从所有分片收集全局词频，再让每个分片用这套<em>统一</em>的统计打分。代价是多一轮网络往返；收益是相同文档得到一致、更准确的分。</p>
+        </details>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · per-shard IDF</span>
+        <p>这是检索路径上最反直觉的一点：<strong>IDF 是每个分片各算各的</strong>。文档总量小、或路由不均（某些分片文档明显偏多偏少）时，同一个 term 在不同分片的 IDF 能差出可见的幅度，导致"两条相同文档分数不同""同一文档换个分片分布就排名跳动"。<code>dfs_query_then_fetch</code> 用一轮额外往返收集全局词频来消除它。好消息是：当每个分片都装满、词频统计趋于收敛，per-shard 的差异会自然变小——所以这个问题在小索引、测试数据集上最刺眼，在生产规模的大索引上往往可以忽略。</p>
+      </div>
+
+      <h2 id="doc-values"><span class="num">3.5</span><span>doc_values 与聚合：为什么 text 不能直接聚合</span></h2>
+
+      <p class="one-liner">聚合和排序要"按文档读字段值"，方向和倒排索引正相反——doc_values 是写入时就建好的列式磁盘结构，专门提供这个反方向。</p>
+
+      <p>倒排索引解决的是"给一个 term，找出哪些文档含它"——方向是 <code>term → docs</code>。但聚合和排序问的是反方向的问题："给一个文档，它这个字段的值是多少"——<code>doc → value</code>。要对 <code>price</code> 求平均、按 <code>created_at</code> 排序，都需要快速地按文档拿到字段值，而倒排索引天生不擅长这个方向。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="倒排索引提供 term 到文档的方向，doc_values 提供文档到值的反方向，分别服务搜索与聚合">
+          <defs>
+            <marker id="dv-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="dv-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- left: inverted index -->
+          <rect x="30" y="95" width="170" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="120" text-anchor="middle" class="node-label">倒排索引</text>
+          <text x="115" y="139" text-anchor="middle" class="edge-label">term → docs</text>
+
+          <!-- right: doc_values -->
+          <rect x="500" y="95" width="170" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="585" y="120" text-anchor="middle" class="node-label-accent">doc_values</text>
+          <text x="585" y="139" text-anchor="middle" class="edge-label">doc → value（列式）</text>
+
+          <!-- top arrow: search uses inverted (left to right meaning search) -->
+          <line x1="200" y1="118" x2="500" y2="118" class="diagram-soft" marker-end="url(#dv-acc)"/>
+          <text x="350" y="58" text-anchor="middle" class="edge-label">搜索走左边 · 聚合 / 排序走右边</text>
+          <text x="350" y="110" text-anchor="middle" class="edge-label">方向相反</text>
+
+          <!-- usage labels under boxes -->
+          <text x="115" y="185" text-anchor="middle" class="edge-label">服务：match / term 检索</text>
+          <text x="585" y="185" text-anchor="middle" class="edge-label">服务：聚合 · 排序 · 脚本字段</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.5</span>同一份字段数据被组织成两种相反的访问方向。<strong>注意</strong>：检索需要 <code>term→docs</code>（左），聚合 / 排序需要 <code>doc→value</code>（右）；ES 为后者单独建了一份列式结构 doc_values，而不是在查询时硬把倒排索引反转。</figcaption>
+      </figure>
+
+      <p>历史上这个反方向是用 <strong>fielddata</strong> 解决的：查询时把倒排索引<em>临时反转</em>成"按字段排列的数组"，整个加载进 JVM 堆。字段一大，这个数组几十 GB，触发长时间 GC，严重时直接 OOM 把节点打挂。</p>
+
+      <p><strong>doc_values 把这件事提前到写入时做。</strong>它在文档落盘、生成 segment 时就把每个字段写成一份<em>列式</em>磁盘结构（同一字段的所有值连续存放）。查询时通过操作系统的<strong>文件缓存（堆外、mmap 映射）</strong>读取，不占 JVM 堆。这就是为什么聚合 / 排序密集的负载能在一个不大的堆上跑——数据的重量压在堆外的文件缓存里，由操作系统按需换页，而不是全堆驻留。</p>
+
+      <h3>这正是 01 章 text / keyword 分水岭的底层原因</h3>
+
+      <p>回到 01 章那条最高频的<a href="01-concepts.html">分水岭——<code>text</code> 与 <code>keyword</code></a>。现在能看清它在检索路径上的后果了：</p>
+
+      <ul>
+        <li><strong><code>text</code> 默认<em>没有</em> doc_values</strong>（它被分词、为全文检索而生，列式存原文意义不大）。所以直接对一个 <code>text</code> 字段做聚合或排序，会退回到老的 fielddata 路径——在堆上临时反转倒排索引，正是 01 章提到的那个易 OOM 的陷阱。ES 默认还把 text 的 fielddata 关掉，逼你显式开启或改用 keyword。</li>
+        <li><strong><code>keyword</code> 默认<em>有</em> doc_values</strong>（它整体存原值、不分词）。于是它天生能聚合、能排序，走的是堆外列式读取，安全又高效。</li>
+      </ul>
+
+      <p>"一个字段该用 text 还是 keyword"这道 01 章的选择题，底层就是"它要参与全文检索（走倒排）还是聚合 / 排序（走 doc_values）"。需要两者兼顾时，常见做法是一个字段配两个映射：<code>text</code> 主体 + 一个 <code>.keyword</code> 子字段。</p>
+
+      <table class="compare-table">
+        <caption>表 3.3 · doc_values vs fielddata</caption>
+        <thead>
+          <tr><th>维度</th><th>doc_values</th><th>fielddata（旧）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>存储位置</td><td>堆外 · 磁盘 + OS 文件缓存（mmap）</td><td>JVM 堆内</td></tr>
+          <tr><td>何时构建</td><td>写入时（落盘进 segment）</td><td>查询时临时反转倒排索引</td></tr>
+          <tr><td>主要风险</td><td>占磁盘 + 文件缓存，堆压力小</td><td>大字段几十 GB，长 GC / OOM</td></tr>
+          <tr class="selected"><td>默认开启的字段</td><td><code>keyword</code> / 数值 / 日期等</td><td><code>text</code>（且默认关闭，需显式开）</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 三根支柱在这一节合流</span>
+        <p>doc_values 同时踩在两根支柱上：它是<em>写入时</em>建好的（02 章"段不可变"——既然 segment 不变，索引期建好的列式结构就一直有效），又是聚合在<em>分片</em>本地完成的基础（3.4 的两阶段里，每个分片用自己的 doc_values 算局部聚合，coordinator 再归并）。检索路径上看似无关的几处行为，回收到的是同两条公理。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>用一句话说清"主分片数为什么创建后不能改"，要点到它在路由公式里的角色。</li>
+          <li>filter 缓存能"免失效"，靠的是哪一章的哪条公理？为什么打分查询的结果缓存不了？</li>
+          <li>BM25 的词频饱和，是一道"硬上限"还是一条"渐近线"？这个区别在排序上意味着什么？</li>
+          <li>（设计层）什么场景下你愿意为 <code>dfs_query_then_fetch</code> 多付一轮网络往返？什么场景下不值得？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>主分片数 N 是路由公式 <code>hash(_id) % N</code> 里的除数；改了 N，所有已存在文档的余数都会变，旧数据再也定位不到——所以它创建后不可变。要改只能 reindex / split / shrink。</li>
+            <li>靠 02 章的"段不可变"：bitset 按 segment 缓存，segment 永不改动，故"哪些文档命中此 filter"的答案恒定、无需失效。打分查询的输出是依赖词项组合的浮点排名、不是固定文档集合，压不成可复用的位图，所以缓存不了。</li>
+            <li>是渐近线，不是硬上限。词频越高，每多一次出现加的分越少，但永远不会"封顶为零增量"。意味着关键词堆砌的边际收益急剧递减，多词命中、稀有词命中比单词刷量更能拉高排名。</li>
+            <li>当索引文档量小、或分片间路由明显不均、且相关性精度要紧（如要给用户展示"最相关"少量结果、或做相关性回归测试）时，值得用 dfs 消除 per-shard IDF 偏差。当索引已是生产规模、每个分片都装满、词频统计趋于收敛时，偏差本就很小，多一轮往返不划算——直接用默认 <code>query_then_fetch</code>。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>短文档总排在前面，给出两个排查方向</h3>
+        <p>一个搜索结果里，几条明显不相关的<em>短</em>文档（标题里硬塞了查询关键词）总是压过真正相关的长文排在最前。只用本章讲过的 BM25 三个旋钮 + 分片 IDF，给出<strong>两个</strong>独立的排查 / 调整方向。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>方向一落在 <code>b</code>（字段长度归一）上：短文档之所以占便宜，正是因为 <code>fieldLen</code> 小、惩罚轻。想一想调高还是调低 <code>b</code> 会加重 / 减轻这种偏向，以及它的副作用。</p>
+          <p>方向二落在分片 IDF 上：如果数据量不大或分片不均，某些词在个别分片的 IDF 被局部抬高，会让本地的短文档分数虚高。想一想 3.4 哪个检索策略能把打分统一到全局词频，从而排除"分片偏差在作祟"这一项。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.elastic.co/blog/practical-bm25-part-2-the-bm25-algorithm-and-its-variables">Practical BM25 (part 2 – the algorithm)</a>（官方 · BM25 公式与三个变量）</li>
+          <li><a href="https://www.elastic.co/blog/understanding-query-then-fetch-vs-dfs-query-then-fetch">Query-then-fetch vs DFS-query-then-fetch</a>（官方 · 两阶段与 IDF 偏差）</li>
+          <li><a href="https://www.elastic.co/blog/all-about-elasticsearch-filter-bitsets">All about Elasticsearch filter bitsets</a>（官方 · filter 缓存与位图）</li>
+          <li><a href="https://www.elastic.co/blog/disk-based-field-data-a-k-a-doc-values">Disk-based field data a.k.a. doc values</a>（官方 · doc_values 设计）</li>
+          <li><a href="https://www.elastic.co/docs/reference/query-languages/query-dsl/query-filter-context">Query and filter context</a>（官方文档）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-write-path.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 写入路径</span>
+        </a>
+        <a href="04-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 自测与辨析</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#routing" data-toc-target="routing">3.1 分片路由</a></li>
+        <li><a href="#query-filter" data-toc-target="query-filter">3.2 query vs filter</a></li>
+        <li><a href="#bm25" data-toc-target="bm25">3.3 BM25 打分</a></li>
+        <li><a href="#two-phase" data-toc-target="two-phase">3.4 两阶段检索</a></li>
+        <li><a href="#doc-values" data-toc-target="doc-values">3.5 doc_values 与聚合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

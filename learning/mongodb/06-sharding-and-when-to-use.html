@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 · 分片与选型 · MongoDB 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref { font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500; }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-document-model.html">01 模型</a><span class="sep">—</span>
+    <a href="02-query-and-aggregation.html">02 查询·聚合</a><span class="sep">—</span>
+    <a href="03-indexing-and-schema-design.html">03 索引·建模</a><span class="sep">—</span>
+    <a href="04-storage-wiredtiger.html">04 存储</a><span class="sep">—</span>
+    <a href="05-replication-and-consistency.html">05 复制·一致性</a><span class="sep">—</span>
+    <a href="06-sharding-and-when-to-use.html" class="current">06 分片·选型</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 06</p>
+        <h1>分片与选型</h1>
+        <p class="recap">05 章把数据复制到多节点保证高可用；这章把数据水平切分到多组副本集——分片——并最终回答那个选型问题：什么时候该用 MongoDB，什么时候不该。每个分片本身就是 05 章那样的一个副本集。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>分片机制：chunk / shard key / balancer / mongos / config server；targeted vs scatter-gather 查询。</li>
+          <li>shard key 选择：单调递增 = 热点；低基数 = jumbo chunk；hashed / compound 的取舍。</li>
+          <li>何时用 / 何时不用 MongoDB；对比 Postgres（JSONB） / MySQL / DynamoDB / Cassandra。</li>
+          <li>"MongoDB 丢数据"声誉的事实时间线——真相是哪个默认值、什么时候改的。</li>
+        </ul>
+      </section>
+
+      <h2 id="s61"><span class="num">6.1</span><span>分片机制</span></h2>
+      <p class="one-liner">mongos 按 shard key 把数据切成 chunk 分布到多个分片，每个分片是一个副本集，config server 存元数据。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>副本集解决高可用，不解决容量：每个节点都存全量数据，写入也都先过同一个 primary。当数据量或写吞吐超过单台机器，唯一的横向出路是把数据切开、分到多组机器各管一段。分片就是这一步——把"一个副本集装不下"变成"N 个副本集分着装"。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：客户端不直接连分片，而是连 <strong>mongos</strong> 路由器。mongos 读 config server 上的元数据，把一个集合按 shard key 的取值范围切成一段段 <strong>chunk</strong>（块），每个 chunk 落在某个分片上。一条查询走哪条路，由它带不带 shard key 决定：带 shard key 的查询是 <strong>targeted</strong>，mongos 算出该值落在哪个 chunk、只把请求发给持有它的那个分片；不带 shard key 的查询是 <strong>scatter-gather</strong>，mongos 把请求广播到所有分片、各自执行后再合并，整体延迟等于最慢那个分片的延迟——这和 02 章 <code>$lookup</code> 是同一种形态：代价随规模放大。<strong>balancer</strong> 跑在 config server 的 primary 上，监控各分片的 chunk 数量、在分片间迁移 chunk 以均衡分布。这里有一个硬约束：一个 chunk 大到超过约 2 倍平均大小、且其 shard key 取值已无法再细分时，成为 <strong>jumbo chunk</strong>，balancer 无法迁移它——它是坏 shard key 的直接后果，后面 §6.2 会还这笔账。</p>
+
+      <figure>
+        <svg viewBox="0 0 740 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="分片架构：顶部 mongos 路由器，下方三个分片各为一个副本集，旁边 config server，并画出 targeted 与 scatter-gather 两类查询路径">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="ar-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- mongos -->
+          <rect x="285" y="26" width="170" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="370" y="48" text-anchor="middle" class="node-label">mongos 路由器</text>
+          <text x="370" y="65" text-anchor="middle" class="edge-label">读元数据 · 转发查询</text>
+
+          <!-- config server -->
+          <rect x="556" y="26" width="158" height="50" rx="6" class="diagram-soft node-fill"/>
+          <text x="635" y="48" text-anchor="middle" class="node-label">config server</text>
+          <text x="635" y="65" text-anchor="middle" class="edge-label">元数据 + balancer</text>
+          <line x1="556" y1="51" x2="455" y2="51" class="diagram-soft" marker-end="url(#ar-ink)"/>
+
+          <!-- shard 1 (targeted target) -->
+          <rect x="40" y="200" width="180" height="150" rx="8" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="130" y="222" text-anchor="middle" class="node-label-accent">Shard A 副本集</text>
+          <rect x="62" y="238" width="136" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="130" y="263" text-anchor="middle" class="node-label">Primary</text>
+          <rect x="62" y="288" width="136" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="130" y="313" text-anchor="middle" class="node-label">Secondary</text>
+
+          <!-- shard 2 -->
+          <rect x="280" y="200" width="180" height="150" rx="8" class="diagram-ink node-fill"/>
+          <text x="370" y="222" text-anchor="middle" class="node-label">Shard B 副本集</text>
+          <rect x="302" y="238" width="136" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="370" y="263" text-anchor="middle" class="node-label">Primary</text>
+          <rect x="302" y="288" width="136" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="370" y="313" text-anchor="middle" class="node-label">Secondary</text>
+
+          <!-- shard 3 -->
+          <rect x="520" y="200" width="180" height="150" rx="8" class="diagram-ink node-fill"/>
+          <text x="610" y="222" text-anchor="middle" class="node-label">Shard C 副本集</text>
+          <rect x="542" y="238" width="136" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="610" y="263" text-anchor="middle" class="node-label">Primary</text>
+          <rect x="542" y="288" width="136" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="610" y="313" text-anchor="middle" class="node-label">Secondary</text>
+
+          <!-- targeted path: mongos -> shard A only (accent solid) -->
+          <line x1="320" y1="76" x2="150" y2="200" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <text x="190" y="150" text-anchor="middle" class="branch-label">targeted</text>
+          <text x="206" y="166" text-anchor="middle" class="edge-label">带 shard key → 单分片</text>
+
+          <!-- scatter-gather path: mongos -> all shards (soft dashed) -->
+          <line x1="400" y1="76" x2="370" y2="200" class="diagram-soft" marker-end="url(#ar-ink)"/>
+          <line x1="430" y1="76" x2="600" y2="200" class="diagram-soft" marker-end="url(#ar-ink)"/>
+          <text x="540" y="150" text-anchor="middle" class="edge-label">scatter-gather</text>
+          <text x="556" y="166" text-anchor="middle" class="edge-label">不带 shard key → 全广播</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>分片架构与两类查询路径。<strong>注意</strong>：带 shard key 的查询只打一个分片，不带的广播全部——选 shard key 的本质是让你最高频的查询落在 targeted 这一侧。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个分片集群有 6 个分片，某条高频查询不带 shard key。它的尾延迟（p99）大致由什么决定？加分片能改善吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>它是 scatter-gather：mongos 广播到全部 6 个分片，必须等<strong>最慢</strong>那个返回才能合并。所以尾延迟由 6 个分片里最慢的一个决定，分片越多、撞上一个慢分片的概率越高——加分片不仅不改善，反而会推高这条查询的尾延迟。改善的方向是让这条查询<strong>带上 shard key</strong>（变 targeted），或为它单独建合适索引。</p>
+        </details>
+      </div>
+
+      <h2 id="s62"><span class="num">6.2</span><span>shard key 选择</span></h2>
+      <p class="one-liner">好的 shard key = 高基数 + 写入分散 + 高频查询常带上它；坏的 shard key 制造热点或 jumbo chunk。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>shard key 决定每条文档落在哪个 chunk、每条查询走 targeted 还是 scatter-gather。选错了，水平扩展的钱白花——加再多分片，写入仍挤在一台机器上。它是分片集群里最难改、影响最深的一个决策。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：三类坏选择各有机制根源。<strong>单调递增键</strong>（ObjectId、时间戳——接 01 章 §1.2 埋的伏笔）：因为新值总是当前最大，所有新写入落到持有"最大范围"那个 chunk、那个分片，形成<strong>写入热点</strong>，其余分片闲置，横向扩展失效。<strong>低基数键</strong>（布尔、国家这类取值很少的字段）：取值少意味着 chunk 切到某个粒度后无法再按 shard key 细分，单个 chunk 持续膨胀成 <strong>jumbo chunk</strong>、无法迁移、堆在一个分片上。<strong>hashed 键</strong>：对 shard key 取哈希再分布，写入摊得很均匀，代价是牺牲范围查询的局部性——一个范围查询的连续值被哈希打散到各分片，退化成 scatter-gather。<strong>compound 键</strong>（多字段组合）：用前缀字段保证分散、后续字段保留查询局部性，兼顾基数与 targeted。5.0（2021）起支持在线 <code>reshardCollection</code> 改 shard key，但它要重写并重新分布整个集合，代价高——最好一次选对，把它当不可逆决策来设计。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="同一份写入流在三种 shard key 下的落点对比：单调递增压向一个过载分片，hashed 均匀分到三个分片，compound 均匀且范围局部">
+          <!-- common source label -->
+          <text x="360" y="28" text-anchor="middle" class="node-label">同一份写入流，三种 shard key 的负载形状</text>
+
+          <!-- panel 1: monotonic -->
+          <text x="130" y="62" text-anchor="middle" class="node-label-accent">单调递增</text>
+          <rect x="58" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <text x="78" y="258" text-anchor="middle" class="edge-label">S1</text>
+          <rect x="110" y="78" width="40" height="160" rx="3" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <rect x="110" y="86" width="40" height="144" rx="2" fill="#B73B2F" opacity="0.85"/>
+          <text x="130" y="258" text-anchor="middle" class="branch-label">S2 过载</text>
+          <rect x="162" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <text x="182" y="258" text-anchor="middle" class="edge-label">S3</text>
+          <text x="130" y="284" text-anchor="middle" class="edge-label">全压一根柱</text>
+
+          <!-- panel 2: hashed -->
+          <text x="360" y="62" text-anchor="middle" class="node-label">hashed</text>
+          <rect x="288" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <rect x="288" y="150" width="40" height="80" rx="2" fill="#525252" opacity="0.5"/>
+          <text x="308" y="258" text-anchor="middle" class="edge-label">S1</text>
+          <rect x="340" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <rect x="340" y="150" width="40" height="80" rx="2" fill="#525252" opacity="0.5"/>
+          <text x="360" y="258" text-anchor="middle" class="edge-label">S2</text>
+          <rect x="392" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <rect x="392" y="150" width="40" height="80" rx="2" fill="#525252" opacity="0.5"/>
+          <text x="412" y="258" text-anchor="middle" class="edge-label">S3</text>
+          <text x="360" y="284" text-anchor="middle" class="edge-label">摊成三根 · 范围打散</text>
+
+          <!-- panel 3: compound -->
+          <text x="590" y="62" text-anchor="middle" class="node-label">compound</text>
+          <rect x="518" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <rect x="518" y="150" width="40" height="80" rx="2" fill="#525252" opacity="0.5"/>
+          <text x="538" y="258" text-anchor="middle" class="edge-label">S1</text>
+          <rect x="570" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <rect x="570" y="150" width="40" height="80" rx="2" fill="#525252" opacity="0.5"/>
+          <text x="590" y="258" text-anchor="middle" class="edge-label">S2</text>
+          <rect x="622" y="78" width="40" height="160" rx="3" class="diagram-ink node-fill"/>
+          <rect x="622" y="150" width="40" height="80" rx="2" fill="#525252" opacity="0.5"/>
+          <text x="642" y="258" text-anchor="middle" class="edge-label">S3</text>
+          <text x="590" y="284" text-anchor="middle" class="edge-label">均匀 + 范围局部</text>
+
+          <line x1="232" y1="78" x2="232" y2="290" class="diagram-soft"/>
+          <line x1="462" y1="78" x2="462" y2="290" class="diagram-soft"/>
+        </svg>
+        <figcaption><span class="fig-num">图 6.2</span>同一份写入流，三种 shard key 的落点。<strong>注意</strong>：单调递增键把它压成一根柱子、hashed 摊成三根——shard key 决定的是负载形状，不是存储位置。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 6.1 · shard key 候选 → 问题 → 修复</caption>
+        <thead>
+          <tr><th>候选 shard key</th><th>问题</th><th>修复</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td><code>_id</code>（默认 ObjectId）</td><td>单调递增 → 写入热点，全压最新分片</td><td>改 <code>hashed _id</code>，或换业务键做 compound</td></tr>
+          <tr><td><code>createdAt</code> 时间戳</td><td>单调递增 → 同上，新数据全落一处</td><td><code>{tenantId, createdAt}</code> compound 或 hashed</td></tr>
+          <tr><td><code>country</code> / 布尔标志</td><td>低基数 → chunk 无法细分，jumbo chunk 堆积</td><td>叠高基数字段成 compound，提升可分性</td></tr>
+          <tr><td><code>hashed userId</code></td><td>写入均匀，但按 user 的范围查询变 scatter-gather</td><td>查询若总带等值 userId 则无碍；要范围则用 compound</td></tr>
+          <tr><td><code>{region, userId}</code></td><td>若某 region 数据极度倾斜，该前缀仍会热点</td><td>评估各前缀值的数据量，必要时把高基数字段前置</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>用创建时间戳做 shard key，写入压力会怎样分布？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>几乎全压到持有最新时间范围的那个分片，其余分片闲置——这是典型的单调递增热点。加分片也不会提升写吞吐，因为新写入永远指向"当前最大值"那一段。改用 <code>hashed</code> 把写入打散，或用 <code>{tenantId, timestamp}</code> 这样的 compound 键：前缀把写入按租户分散，后缀仍保留按时间的范围局部性。</p>
+        </details>
+      </div>
+
+      <h2 id="s63"><span class="num">6.3</span><span>何时用 / 何时不用 MongoDB</span></h2>
+      <p class="one-liner">默认用你已有的关系型库，除非下面某一条判据明确翻转这个默认。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>对一个 PostgreSQL/MySQL 熟练的工程师，选型的起点不该是"MongoDB 能不能做这个"——几乎都能做。起点应是"现有的关系型库在这个场景上输在哪个具体机制点"。没有这样一个明确的失分点，换库只是增加运维面、损失事务与 JOIN 能力。</p>
+      </div>
+
+      <p><strong>对比 Postgres（含 JSONB）</strong>：Postgres 的 JSONB 在 JSON 只是数据里少数字段、其余实体需要 join typed 表、且 schema 会随时间硬化时是够用的——GIN 索引能对 JSONB 做 containment 查询。MongoDB 真正赢的场景是<strong>整个领域模型就是文档</strong>、读和更新以文档为单位、并且需要原生的水平写分片。Postgres 赢在多实体事务的完整性、即席 join 与报表、外键约束。</p>
+
+      <p><strong>对比 MySQL</strong>：判据的轴线类似。MySQL/InnoDB 在给钱、库存、订单这类需要强原子性与约束的负载上更稳；它的成熟事务与外键不是 MongoDB 文档模型的强项。</p>
+
+      <p><strong>对比 DynamoDB / Cassandra</strong>：当访问模式<strong>固定且已知</strong>、并且是极端规模的写入时，宽列 / KV 系统更合适——Cassandra 擅长写多、append 为主、多数据中心 active-active；DynamoDB 是 serverless、延迟可预测的 KV。MongoDB 在这条轴上的优势<strong>不是裸写规模</strong>，而是灵活的即席查询 + 二级索引 + 聚合管道；如果访问模式已经固化到不需要这些灵活性，宽列 / KV 往往更省。</p>
+
+      <p><strong>MongoDB 的甜区</strong>：商品目录 / CMS / 内容系统；每个实体 schema 多变的文档；高写吞吐且要水平扩展；用聚合管道做实时分析；事件 / IoT 数据摄取。<strong>MongoDB 的错用</strong>：重多实体事务完整性的核心交易；复杂即席 join 与 BI 报表；强关系约束；以及 schema 其实稳定且本质关系型的负载（多数业务线应用属于此类）。</p>
+
+      <table class="compare-table">
+        <caption>表 6.2 · 选型决策矩阵</caption>
+        <thead>
+          <tr><th>场景</th><th>MongoDB?</th><th>更好的替代</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>商品目录 / CMS，每类商品字段差异大</td><td>合适</td><td>—（文档模型甜区）</td></tr>
+          <tr><td>支付 / 订单 / 库存，多实体强事务</td><td>不合适</td><td>Postgres / MySQL（InnoDB）</td></tr>
+          <tr><td>跨多实体的即席 join 与 BI 报表</td><td>不合适</td><td>Postgres + 列存 / 数仓</td></tr>
+          <tr><td>事件 / IoT 高写入摄取 + 实时聚合</td><td>合适</td><td>—（或写极端规模时 Cassandra）</td></tr>
+          <tr><td>访问模式固定的超大规模 KV</td><td>可用但非最优</td><td>DynamoDB / Cassandra</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 700 524" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="选型决策树：从 schema 是否多变且以文档为读写单位出发，依次判断是否需要复杂即席 join 或多实体强事务、访问模式是否固定且极端规模写，最终指向关系型、Dynamo/Cassandra 或 MongoDB">
+          <defs>
+            <marker id="ar-ink3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- start -->
+          <rect x="175" y="18" width="160" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="255" y="42" text-anchor="middle" class="node-label">开始选型</text>
+          <line x1="255" y1="58" x2="255" y2="74" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+
+          <!-- D1 diamond (center 255,128) -->
+          <polygon points="255,74 425,128 255,182 85,128" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="255" y="122" text-anchor="middle" class="node-label-accent">schema 多变 &amp;</text>
+          <text x="255" y="140" text-anchor="middle" class="node-label-accent">以文档为读写单位?</text>
+
+          <!-- D1 否 -> 关系型 (right terminal) -->
+          <rect x="500" y="108" width="150" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="575" y="132" text-anchor="middle" class="node-label">关系型</text>
+          <line x1="425" y1="128" x2="500" y2="128" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="462" y="120" text-anchor="middle" class="branch-label">否</text>
+
+          <!-- D1 是 -> D2 -->
+          <line x1="255" y1="182" x2="255" y2="206" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="271" y="198" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- D2 diamond (center 255,260) -->
+          <polygon points="255,206 425,260 255,314 85,260" class="diagram-ink node-fill"/>
+          <text x="255" y="254" text-anchor="middle" class="node-label">复杂即席 join</text>
+          <text x="255" y="272" text-anchor="middle" class="node-label">或多实体强事务?</text>
+
+          <!-- D2 是 -> 关系型/谨慎 (right terminal) -->
+          <rect x="500" y="240" width="150" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="575" y="258" text-anchor="middle" class="node-label">关系型</text>
+          <text x="575" y="274" text-anchor="middle" class="edge-label">或谨慎评估</text>
+          <line x1="425" y1="260" x2="500" y2="260" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="462" y="252" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- D2 否 -> D3 -->
+          <line x1="255" y1="314" x2="255" y2="338" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="271" y="330" text-anchor="middle" class="branch-label">否</text>
+
+          <!-- D3 diamond (center 255,392) -->
+          <polygon points="255,338 425,392 255,446 85,392" class="diagram-ink node-fill"/>
+          <text x="255" y="386" text-anchor="middle" class="node-label">访问模式固定</text>
+          <text x="255" y="404" text-anchor="middle" class="node-label">且极端规模写?</text>
+
+          <!-- D3 是 -> Dynamo/Cassandra (right terminal) -->
+          <rect x="478" y="372" width="190" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="573" y="396" text-anchor="middle" class="node-label">Dynamo / Cassandra</text>
+          <line x1="425" y1="392" x2="478" y2="392" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="450" y="384" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- D3 否 -> MongoDB (bottom terminal, accent) -->
+          <rect x="180" y="466" width="150" height="40" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="255" y="490" text-anchor="middle" class="node-label-accent">MongoDB</text>
+          <line x1="255" y1="446" x2="255" y2="466" class="diagram-ink" marker-end="url(#ar-ink3)"/>
+          <text x="271" y="460" text-anchor="middle" class="branch-label">否</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.3</span>选型决策树。<strong>注意</strong>：第一个分叉问的是访问模式与读写单位，不是"数据像不像表"——这正是 01 章那条主线（为访问模式建模）在选型层的复现。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个团队给出的理由是"数据有嵌套结构，所以选 MongoDB"。按图 6.3，这条理由本身够不够支撑选型？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>不够。"数据有嵌套结构"在 Postgres 里用 JSONB + GIN 索引也能存能查。决策树的第一个分叉不是问"数据长不长得像嵌套文档"，而是问<strong>读写是否以整个文档为单位 + schema 是否每实体多变</strong>。如果嵌套数据其实 schema 稳定、还需要和其他表 join 出报表，那它落在"否"或第二个分叉的"是"，应留在关系型。嵌套结构是表象，访问模式与读写单位才是判据。</p>
+        </details>
+      </div>
+
+      <h2 id="s64"><span class="num">6.4</span><span>"丢数据"声誉的事实时间线</span></h2>
+      <p class="one-liner">"MongoDB 丢数据"的印象来自十多年前的驱动默认值，不是存储引擎缺陷；多个默认在 2012 至 2021 间已逐一改硬。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这条声誉在技术选型讨论里反复出现，常被当成"别用 MongoDB"的终结性理由。对资深工程师，把它当事实时间线核对一遍，比接受或反驳一个标签更有用——结论应建立在"哪个默认值、什么时候改的"之上。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 6.3 · 持久性相关默认值的事实时间线</caption>
+        <thead>
+          <tr><th>时间</th><th>事件</th><th>对持久性的意义</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>2012 之前</td><td>驱动默认 fire-and-forget（<code>w:0</code>，不确认）</td><td>"丢数据"的真正根源——是驱动默认值，不是存储 bug</td></tr>
+          <tr><td>2012-11</td><td>新 MongoClient 驱动默认改为 <code>w:1</code>（确认写入）</td><td>写入默认开始等单节点确认</td></tr>
+          <tr><td>3.0（2015）</td><td>引入 WiredTiger（文档级锁 + 压缩）；MMAPv1（集合级锁）弃用</td><td>并发与崩溃恢复显著改善；MMAPv1 于 4.2（2019）移除</td></tr>
+          <tr><td>4.0（2018）/ 4.2（2019）</td><td>多文档 ACID 事务：副本集 → 分片集群</td><td>跨文档原子性从无到有，覆盖到分片层</td></tr>
+          <tr><td>5.0（2021）</td><td>默认 writeConcern 改为 <code>w:majority</code></td><td>默认即多数派持久，掉一个节点不丢已确认写</td></tr>
+        </tbody>
+      </table>
+
+      <p>把这条时间线读完，现状是一句话：<strong>现代 MongoDB 默认 <code>w:majority</code> + WiredTiger</strong>，"丢数据"印象停留在十多年前那个 <code>w:0</code> 的驱动默认值上，与今天的默认行为不符。诚实地补一句与持久性无关、但影响选型的事实：MongoDB 自 2018 年起改用 <strong>SSPL</strong> 许可证（Server Side Public License，OSI 未认可其为开源许可证），它影响自托管再分发与 Linux 发行版打包决策——若计划把 MongoDB 作为服务再分发、或依赖发行版仓库直接提供，需要单独评估这一项。</p>
+
+      <div class="callout insight">
+        <span class="label">校准 · 带边界</span>
+        <p>"默认 <code>w:majority</code>"指的是<strong>已确认</strong>的写入在多数派持久。它不保证<strong>未确认</strong>或被显式降级到 <code>w:1</code> / <code>w:0</code> 的写入——持久性始终是 writeConcern 的函数，由调用方设定。结论不是"MongoDB 现在绝不丢数据"，而是"它的默认值已不再是丢数据的原因"，剩下的责任回到每次写入选用的 writeConcern 上（05 章的 <code>w</code> / <code>j</code> 语义）。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>targeted 查询和 scatter-gather 查询的差别是什么？是什么决定一条查询属于哪一种？</li>
+          <li>为什么用单调递增字段（如时间戳或 ObjectId）做 shard key 是反模式？它具体破坏了哪个目标？</li>
+          <li>（设计题）一个内容聚合站点：每篇内容字段差异大、读多写中、几乎不做跨实体 join。该用 MongoDB 还是 Postgres？说出判据。</li>
+          <li>"MongoDB 丢数据"的事实根源是什么？它在何时、由哪个默认值的改变被修复？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>targeted 只把请求发给持有相关 chunk 的<strong>那一个分片</strong>；scatter-gather <strong>广播到所有分片</strong>再合并、延迟等于最慢分片。决定因素是查询<strong>带不带 shard key</strong>：带则 mongos 能算出目标分片（targeted），不带则只能全广播（scatter-gather）。</li>
+            <li>单调递增键的新值总是当前最大，所有新写入落到持有"最大范围"的同一个 chunk / 分片，形成<strong>写入热点</strong>，其余分片闲置。它破坏的是<strong>写入分散</strong>这个目标——分片本是为横向扩展写吞吐，热点让加分片失效。</li>
+            <li>倾向 <strong>MongoDB</strong>。判据：每实体 schema 多变（文档模型甜区）、以文档为读写单位、几乎不做跨实体 join（避开了关系型的强项区）、读多写中也契合。若该站点其实需要复杂即席报表或多实体强事务，则判据翻转、应留在 Postgres。</li>
+            <li>根源是 2012 之前驱动的 <strong>fire-and-forget 默认值（<code>w:0</code>，不确认写入）</strong>——是驱动默认值不是存储引擎 bug。2012-11 新 MongoClient 默认改 <code>w:1</code>，5.0（2021）默认进一步改为 <code>w:majority</code>，至此默认即多数派持久。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个多租户 SaaS 做选型判断</h3>
+        <p>需求：多租户 SaaS，每个租户的数据结构可自定义字段（不同租户字段集不同）；读多写中；偶尔要跨租户出 BI 报表。先不查资料，判断：MongoDB 是否合适？哪部分合适、哪部分不合适？shard key 选什么？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>分两种负载看。<strong>OLTP 主体（合适）</strong>：自定义字段 + 每租户独立文档，正好是文档模型甜区；读多写中也契合。shard key 用 <code>{tenantId, ...}</code> 这样的 compound：前缀 <code>tenantId</code> 把租户数据分散到各分片（兼顾隔离与负载均衡），后缀按需保留查询局部性——避免单调递增热点，也避免单 <code>tenantId</code> 低基数导致 jumbo chunk（大租户可再叠一个高基数字段）。<strong>跨租户 BI 报表（不合适）</strong>：这是即席 join / 大范围聚合的弱区，在 OLTP 库上硬跑会拖累线上、且多为 scatter-gather。把分析数据 ETL 到列存 / 数仓单独跑——一个系统里把 OLTP 和分析两种负载分开放，而不是让一个库同时承担两种相反的访问模式。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.mongodb.com/docs/manual/sharding/">Sharding</a>（官方 · chunk / mongos / config server / balancer）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/core/sharding-choose-a-shard-key/">Choose a Shard Key</a>（官方 · 基数 / 分散 / targeting）</li>
+          <li><a href="https://www.mongodb.com/compare/mongodb-postgresql">MongoDB vs PostgreSQL</a>（官方对比 · 结合独立基准客观看待）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/reference/write-concern/">Write Concern</a>（官方 · <code>w</code> / <code>j</code> 与默认值）</li>
+          <li><a href="https://www.mongodb.com/legal/licensing/server-side-public-license/faq">SSPL FAQ</a>（官方 · 许可证与再分发影响）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-replication-and-consistency.html" class="prev">
+          <span class="label">← 上一页</span>
+          <span class="title">05 · 副本集与一致性</span>
+        </a>
+        <a href="07-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">07 · 自测题库</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s61" data-toc-target="s61">6.1 分片机制</a></li>
+        <li><a href="#s62" data-toc-target="s62">6.2 shard key 选择</a></li>
+        <li><a href="#s63" data-toc-target="s63">6.3 何时用 / 不用</a></li>
+        <li><a href="#s64" data-toc-target="s64">6.4 "丢数据"时间线</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

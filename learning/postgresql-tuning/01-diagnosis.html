@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 诊断与测量 · PostgreSQL 调优教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-diagnosis.html" class="current">01 诊断</a><span class="sep">—</span>
+    <a href="02-planner.html">02 优化器</a><span class="sep">—</span>
+    <a href="03-indexing.html">03 索引</a><span class="sep">—</span>
+    <a href="04-mvcc-vacuum.html">04 MVCC</a><span class="sep">—</span>
+    <a href="05-config.html">05 配置</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>诊断与测量:先知道哪里慢</h1>
+        <p class="recap">概念地图把调优分成四类根因。在动其中任何一类之前,这一章解决更靠前的问题:慢在哪、慢多少、谁最该先优化——用数据回答,不用直觉。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的心智模型</p>
+        <ul>
+          <li>调优的工作循环:测量 → 定位 → 改一个变量 → 复测,缺一步都会回到"凭感觉"</li>
+          <li>三层测量视角:实例级(wait events)、查询级(pg_stat_statements)、单条级(EXPLAIN ANALYZE)各回答什么问题</li>
+          <li>读懂 EXPLAIN 计划树:cost / rows / actual time / loops / BUFFERS 各自的含义和最常见的三处误读</li>
+          <li>一个贯穿全书的信号:估算行数与真实行数的偏差——它是后面每一章的起点</li>
+        </ul>
+      </section>
+
+      <h2 id="s11"><span class="num">1.1</span><span>调优的起点是测量,不是改参数</span></h2>
+
+      <p class="one-liner">调优的第一步永远是定位瓶颈,不是打开 postgresql.conf。</p>
+
+      <div class="rationale">
+        <span class="label">为什么从这里开始</span>
+        <p>"数据库慢"是一个症状,不是一个问题。同样是慢,根因有缺索引、统计信息过期、表膨胀、内存不足、锁等待五类,对应五种完全不同的修法。不先测量就改参数,等于在黑暗里拧旋钮:偶尔蒙对,但你不知道为什么对,下次换个症状又得重来。</p>
+      </div>
+
+      <p>有经验的调优都遵循同一个闭环。任何一次"我把 <code>shared_buffers</code> 调大了,好像快了点"如果跳过了测量和复测,都不算调优,只算碰运气。</p>
+
+      <figure>
+        <svg viewBox="0 0 660 210" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="调优工作循环:测量、定位、改一个变量、复测,形成闭环">
+          <defs>
+            <marker id="loop-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="loop-ar-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <rect x="24" y="74" width="120" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="84" y="104" text-anchor="middle" class="node-label">① 测量</text>
+
+          <line x1="144" y1="99" x2="190" y2="99" class="diagram-ink" marker-end="url(#loop-ar)"/>
+
+          <rect x="190" y="74" width="120" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="250" y="104" text-anchor="middle" class="node-label">② 定位根因</text>
+
+          <line x1="310" y1="99" x2="356" y2="99" class="diagram-ink" marker-end="url(#loop-ar)"/>
+
+          <rect x="356" y="74" width="130" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="421" y="98" text-anchor="middle" class="node-label-accent">③ 改一个变量</text>
+          <text x="421" y="115" text-anchor="middle" class="edge-label">只改一个</text>
+
+          <line x1="486" y1="99" x2="532" y2="99" class="diagram-ink" marker-end="url(#loop-ar)"/>
+
+          <rect x="532" y="74" width="104" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="584" y="104" text-anchor="middle" class="node-label">④ 复测</text>
+
+          <!-- 复测 → 测量 回路 (orthogonal route below the row) -->
+          <polyline points="584,124 584,170 84,170 84,124" class="diagram-soft" marker-end="url(#loop-ar-acc)"/>
+          <text x="334" y="186" text-anchor="middle" class="edge-label">没达标?带着新数据再来一轮</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>调优工作循环。<strong>注意</strong>:第 ③ 步"只改一个变量"是红色的——一次改多个参数,即使变快了,你也无法知道是哪个起的作用,等于没学到东西。</figcaption>
+      </figure>
+
+      <p>这一章覆盖循环的第 ① 和 ② 步(测量与定位)。后面四章是第 ③ 步的弹药库:每一类根因对应哪些可调的变量。第 ④ 步复测,就是把同一个 <code>EXPLAIN ANALYZE</code> 再跑一遍,对比前后。</p>
+
+      <h2 id="s12"><span class="num">1.2</span><span>三层测量视角:从实例到单条查询</span></h2>
+
+      <p class="one-liner">测量有三个粒度,自顶向下收窄:实例在等什么 → 哪条查询最贵 → 这条查询慢在哪一步。</p>
+
+      <p>新手常常一上来就盯着某条查询的 <code>EXPLAIN</code>,但那条查询未必是真正的瓶颈。正确的顺序是从粗到细,像漏斗一样逐层收窄,避免在无关紧要的查询上花时间。</p>
+
+      <figure>
+        <svg viewBox="0 0 620 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="自顶向下三层诊断漏斗:实例级、查询级、单条查询级">
+          <defs>
+            <marker id="fn-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- Layer 1 widest -->
+          <rect x="60" y="24" width="500" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="310" y="47" text-anchor="middle" class="node-label">① 实例级 · 整个库在等什么?</text>
+          <text x="310" y="67" text-anchor="middle" class="edge-label">pg_stat_activity 的 wait_event · 是 IO / 锁 / CPU?</text>
+
+          <line x1="310" y1="82" x2="310" y2="106" class="diagram-ink" marker-end="url(#fn-ar)"/>
+
+          <!-- Layer 2 -->
+          <rect x="130" y="106" width="360" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="310" y="129" text-anchor="middle" class="node-label">② 查询级 · 哪条 SQL 最贵?</text>
+          <text x="310" y="149" text-anchor="middle" class="edge-label">pg_stat_statements 按累计耗时排名</text>
+
+          <line x1="310" y1="164" x2="310" y2="188" class="diagram-ink" marker-end="url(#fn-ar)"/>
+
+          <!-- Layer 3 narrowest, accent -->
+          <rect x="200" y="188" width="220" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="310" y="211" text-anchor="middle" class="node-label-accent">③ 单条查询 · 慢在哪一步?</text>
+          <text x="310" y="231" text-anchor="middle" class="edge-label">EXPLAIN (ANALYZE, BUFFERS)</text>
+
+          <text x="310" y="272" text-anchor="middle" class="edge-label">越往下,范围越窄,信息越具体</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>三层诊断漏斗。<strong>注意</strong>:多数人直接从第 ③ 层开始,容易优化了一条根本不重要的查询。先在第 ① ② 层确认"值得优化谁",再下钻到第 ③ 层。</figcaption>
+      </figure>
+
+      <p>本章按漏斗的反方向讲解:先讲读者最常用、也最该先掌握的第 ③ 层(EXPLAIN,§1.3),再回到第 ② 层定位最贵的查询(pg_stat_statements,§1.4),最后是第 ① 层的全局视角(wait events,§1.5)。掌握了单条 <code>EXPLAIN</code> 的读法,上面两层的输出才有意义。</p>
+
+      <h2 id="s13"><span class="num">1.3</span><span>EXPLAIN:优化器摊开给你看的执行计划</span></h2>
+
+      <p class="one-liner">EXPLAIN 显示优化器为一条查询选定的执行计划和它对代价的估算;加 ANALYZE 则真正执行一遍,给出真实耗时和真实行数。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>同一条 SQL,优化器可以用顺序扫描、索引扫描、不同的 JOIN 算法等多种方式执行,代价差几个数量级。<code>EXPLAIN</code> 是唯一能看到"它到底打算怎么执行"的窗口。没有它,你只能盲猜为什么慢——而第 02 章会告诉你,优化器的这个选择,完全由它对代价的估算驱动。</p>
+      </div>
+
+      <h3>EXPLAIN 的两种模式</h3>
+      <table class="compare-table">
+        <caption>表 1.1 · EXPLAIN 的两种用法</caption>
+        <thead>
+          <tr><th>写法</th><th>是否真正执行查询</th><th>给出什么</th><th>什么时候用</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>EXPLAIN sql</code></td><td>否,只规划</td><td>计划结构 + <strong>估算</strong>的 cost / rows</td><td>查询太慢或会改数据时,先看计划长什么样</td></tr>
+          <tr class="selected"><td><code>EXPLAIN (ANALYZE, BUFFERS) sql</code></td><td>是,真跑一遍</td><td>估算值 + <strong>真实</strong>耗时 / 真实行数 / 缓冲区命中</td><td>定位瓶颈的主力工具</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱</span>
+        <p><code>EXPLAIN ANALYZE</code> 会<strong>真正执行</strong>查询。对 <code>SELECT</code> 安全,但对 <code>UPDATE</code> / <code>DELETE</code> / <code>INSERT</code> 会真正改数据。要看写操作的计划又不想改数据,把它包在事务里回滚:<code>BEGIN; EXPLAIN ANALYZE UPDATE ...; ROLLBACK;</code>。</p>
+      </div>
+
+      <h3>场景走查:一条查询,有索引和没索引</h3>
+      <p>用一张一百万行的订单表 <code>orders</code>,查某个客户某天之后的订单。先看<strong>没有合适索引</strong>时优化器给出的计划:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">seq-scan.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-seqscan">复制</button>
+        </div>
+<pre id="cb-seqscan"><code class="language-sql">EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM orders
+WHERE customer_id = 42 AND created_at &gt;= '2026-01-01';</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">plan-seqscan.txt</span>
+          <span class="lang">output</span>
+          <button class="copy" data-copy-target="cb-seqout">复制</button>
+        </div>
+<pre id="cb-seqout"><code class="language-bash">Seq Scan on orders  (cost=0.00..18334.00 rows=12 width=84)
+                    (actual time=0.412..82.318 rows=9 loops=1)
+  Filter: ((customer_id = 42) AND (created_at &gt;= '2026-01-01'::date))
+  Rows Removed by Filter: 999991
+  Buffers: shared hit=64 read=8270
+Planning Time: 0.123 ms
+Execution Time: 82.401 ms</code></pre>
+      </div>
+
+      <h3>逐行解读(读的是含义,不是语法)</h3>
+      <ul>
+        <li><strong><code>Seq Scan on orders</code></strong>:执行方式是顺序扫描——把整张表从头到尾读一遍。这就是"全表扫描"。</li>
+        <li><strong><code>cost=0.00..18334.00</code></strong>:优化器的<em>估算</em>代价,两个数是"启动代价..总代价"。单位不是毫秒(见下面的关键澄清),是一个以"顺序读一个页 = 1.0"为基准的抽象单位。</li>
+        <li><strong><code>rows=12</code></strong>:优化器<em>估算</em>这一步会输出 12 行。</li>
+        <li><strong><code>actual ... rows=9</code></strong>:真实只输出了 9 行。估算 12、真实 9,很接近——这里统计信息是准的。</li>
+        <li><strong><code>Rows Removed by Filter: 999991</code></strong>:破案了。为了找出 9 行,它读了一百万行、扔掉 999991 行。这是顺序扫描的代价,也是"该建索引了"的信号。</li>
+        <li><strong><code>Buffers: shared hit=64 read=8270</code></strong>:64 个页在内存里命中,8270 个页从磁盘读。大量 <code>read</code> 印证了它在啃整张表。</li>
+        <li><strong><code>Execution Time: 82.401 ms</code></strong>:真实总耗时。</li>
+      </ul>
+
+      <p>现在为 <code>customer_id</code> 建一个索引,再跑同一条查询:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">plan-indexscan.txt</span>
+          <span class="lang">output</span>
+          <button class="copy" data-copy-target="cb-idxout">复制</button>
+        </div>
+<pre id="cb-idxout"><code class="language-bash">Index Scan using idx_orders_customer on orders
+      (cost=0.42..8.91 rows=12 width=84)
+      (actual time=0.028..0.041 rows=9 loops=1)
+  Index Cond: (customer_id = 42)
+  Filter: (created_at &gt;= '2026-01-01'::date)
+  Buffers: shared hit=5
+Planning Time: 0.205 ms
+Execution Time: 0.062 ms</code></pre>
+      </div>
+
+      <p>同一条查询,<code>82.401 ms → 0.062 ms</code>,快了一千多倍。变化的不是查询,是优化器的<strong>执行方式</strong>:它现在用索引直接定位到 <code>customer_id = 42</code> 的行(<code>Index Cond</code>),只读了 5 个页(<code>Buffers: shared hit=5</code>),不再啃整张表。<code>created_at</code> 这个条件没进索引,所以仍作为 <code>Filter</code> 在取出的行上二次过滤。第 02、03 章会展开:优化器是<em>怎么</em>算出"用索引更便宜"的,以及索引为什么有时反而不被选。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 计划树怎么读</span>
+        <p>EXPLAIN 输出是一棵<strong>树</strong>,靠缩进表示父子关系。执行顺序是"最深的叶子先执行,结果向上交给父节点"。读复杂计划时,先找最里层缩进的节点,从那里往外读——而不是从上往下按行读。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="EXPLAIN 计划树解剖:一个节点上各字段的含义">
+          <defs>
+            <marker id="anat-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- the node box -->
+          <rect x="190" y="30" width="300" height="60" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="340" y="55" text-anchor="middle" class="node-label-accent">Index Scan using idx_...</text>
+          <text x="340" y="76" text-anchor="middle" class="edge-label">一个计划节点 = 一种操作</text>
+
+          <!-- cost annotation (left) -->
+          <rect x="24" y="140" width="180" height="48" rx="5" class="diagram-ink node-fill"/>
+          <text x="114" y="160" text-anchor="middle" class="edge-label">cost=0.42..8.91</text>
+          <text x="114" y="178" text-anchor="middle" class="edge-label">估算:启动..总(抽象单位)</text>
+          <line x1="160" y1="140" x2="250" y2="90" class="diagram-soft" marker-end="url(#anat-ar)"/>
+
+          <!-- rows annotation (mid-left) -->
+          <rect x="224" y="200" width="200" height="48" rx="5" class="diagram-ink node-fill"/>
+          <text x="324" y="220" text-anchor="middle" class="edge-label">rows=12 vs actual rows=9</text>
+          <text x="324" y="238" text-anchor="middle" class="branch-label">这个偏差是头号信号</text>
+          <line x1="324" y1="200" x2="330" y2="90" class="diagram-soft" marker-end="url(#anat-ar)"/>
+
+          <!-- actual time + loops (right) -->
+          <rect x="452" y="140" width="204" height="48" rx="5" class="diagram-ink node-fill"/>
+          <text x="554" y="160" text-anchor="middle" class="edge-label">actual time=0.028..0.041</text>
+          <text x="554" y="178" text-anchor="middle" class="edge-label">是"每次循环"的耗时 × loops</text>
+          <line x1="520" y1="140" x2="430" y2="90" class="diagram-soft" marker-end="url(#anat-ar)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>一个 EXPLAIN 节点上的字段解剖。<strong>注意</strong>:中间那条——<code>rows</code>(估算)与 <code>actual rows</code>(真实)的偏差,是贯穿全书的头号信号;偏差大,几乎总是指向第 02 章的统计信息问题。</figcaption>
+      </figure>
+
+      <h2 id="s14"><span class="num">1.4</span><span>读懂关键数字:三处最常见的误读</span></h2>
+
+      <p class="one-liner">cost 不是时间,actual time 是单次循环的耗时要乘 loops,rows 偏差指向统计信息。</p>
+
+      <p>图 1.3 标出了节点上的字段。真正容易出错的是它们的<em>含义</em>。三处误读几乎人人踩过:</p>
+
+      <h3>误读一:把 cost 当成毫秒</h3>
+      <p><code>cost</code> 是一个<strong>抽象单位</strong>,基准是"顺序读取一个 8KB 数据页 = 1.0"(由参数 <code>seq_page_cost</code> 定义)。它用来让优化器<em>比较</em>不同计划的相对贵贱,不对应任何真实时间。一个 <code>cost=18334</code> 的计划不是"18334 毫秒",而是"按优化器的模型,比 <code>cost=8.91</code> 的计划贵约两千倍"。要看真实时间,只看 <code>actual time</code> 和 <code>Execution Time</code>。第 05 章会讲,调 <code>random_page_cost</code> 等代价参数,本质就是在校准这套抽象单位,让它更贴近你的硬件。</p>
+
+      <h3>误读二:把 actual time 当成该节点的总耗时</h3>
+      <p><code>actual time=0.028..0.041</code> 的两个数是"返回第一行的时间..返回最后一行的时间",而且是<strong>单次循环(per loop)</strong>的值。当节点的 <code>loops &gt; 1</code> 时,该节点的真实总耗时约等于 <code>(第二个数) × loops</code>。这是嵌套循环里最坑人的地方:</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>下面这个内层节点:<code>Index Scan ... (actual time=0.004..0.011 rows=5 loops=1000)</code>。它看起来每次只花 0.011 毫秒,但它对整条查询贡献的真实耗时大约是多少?</p>
+        <details>
+          <summary>展开答案(先估一个数再点)</summary>
+          <p>约 <code>0.011 × 1000 = 11 毫秒</code>。单看 <code>actual time=...0.011</code> 会以为这个节点微不足道,但它被外层循环驱动执行了 1000 次。</p>
+          <p>这指向一个真实的优化方向:如果外层能少产出几行(减少 loops),或内层每次更快,整体才会快。嵌套循环的性能 = 外层行数 × 内层单次代价——第 02 章会正式展开。</p>
+        </details>
+      </div>
+
+      <h3>误读三:忽略 rows 估算与真实的偏差</h3>
+      <p>这是最该养成的习惯:每看一个计划,先扫一眼哪个节点的 <code>rows</code>(估算)和 <code>actual rows</code>(真实)差得最远。优化器是<strong>根据估算行数</strong>选计划的;如果它以为某步出 10 行、实际出 100 万行,它就会基于错误前提选错算法(比如该用 hash join 却选了 nested loop)。偏差大的那个节点,几乎总是问题的源头,且修法通常在第 02 章:更新统计信息、提高统计精度、或重写让优化器能估准。</p>
+
+      <table class="compare-table">
+        <caption>表 1.2 · 三个数字,各回答什么、别误读成什么</caption>
+        <thead>
+          <tr><th>字段</th><th>它真正的含义</th><th>常见误读</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>cost</code></td><td>相对贵贱的抽象单位(seq 读一页=1.0)</td><td>当成毫秒</td></tr>
+          <tr><td><code>actual time=a..b</code></td><td>单次循环:首行时间 a、末行时间 b</td><td>当成该节点总耗时(漏乘 loops)</td></tr>
+          <tr><td><code>rows</code> vs <code>actual rows</code></td><td>估算 vs 真实,偏差=统计信息信号</td><td>只看真实行数,不看偏差</td></tr>
+          <tr><td><code>Buffers: hit / read</code></td><td>内存命中页数 / 磁盘读页数</td><td>忽略它(其实是判断"是否在啃磁盘"的关键)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="label">提示</span>
+        <p>计划一长就难读。把 <code>EXPLAIN (ANALYZE, BUFFERS)</code> 的输出贴到 <a href="https://explain.depesz.com/">explain.depesz.com</a> 或 <a href="https://explain.dalibo.com/">explain.dalibo.com</a>,它会自动标出耗时占比最高、行数估算偏差最大的节点。线上排查时这一步能省很多时间。</p>
+      </div>
+
+      <h2 id="s15"><span class="num">1.5</span><span>第 ② 层:用 pg_stat_statements 找最贵的查询</span></h2>
+
+      <p class="one-liner">pg_stat_statements 把每类查询的执行次数和累计耗时记下来,让你按"总耗时"而不是"单次耗时"排优先级。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>线上慢的往往不是某一条"看起来就慢"的大查询,而是一条单次只要 5 毫秒、却每秒被调用几百次的小查询。单看一次 <code>EXPLAIN</code> 永远发现不了它。<code>pg_stat_statements</code> 把同一形状的查询归并统计,让"总账"浮出水面。</p>
+      </div>
+
+      <p>它是官方扩展,需要先在 <code>postgresql.conf</code> 里加载并创建:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">enable-pgss.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-pgss">复制</button>
+        </div>
+<pre id="cb-pgss"><code class="language-sql">-- postgresql.conf: shared_preload_libraries = 'pg_stat_statements'  (需重启)
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- 按累计耗时排名,这是定位瓶颈的主力查询
+SELECT
+  substring(query, 1, 50) AS query,
+  calls,
+  round(total_exec_time::numeric, 1) AS total_ms,
+  round(mean_exec_time::numeric, 2)  AS mean_ms
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 5;</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">pgss-output.txt</span>
+          <span class="lang">output</span>
+          <button class="copy" data-copy-target="cb-pgssout">复制</button>
+        </div>
+<pre id="cb-pgssout"><code class="language-bash">             query              | calls |  total_ms  |  mean_ms
+--------------------------------+-------+------------+-----------
+ SELECT * FROM orders WHERE ... | 48210 |  241050.5  |    5.00
+ SELECT count(*) FROM events    |     3 |   45200.1  | 15066.70
+ UPDATE inventory SET qty ...   |  9820 |   38110.2  |    3.88</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>上面三条,哪一条最该先优化?第二条单次要 15 秒,看起来最吓人;第一条单次只要 5 毫秒。</p>
+        <details>
+          <summary>展开答案(先选一条再点)</summary>
+          <p><strong>第一条</strong>。它单次只要 5 毫秒,但被调用了 48210 次,累计 <code>241 秒</code>——是第二条 <code>45 秒</code>的五倍多。把它从 5 毫秒优化到 1 毫秒,省下的总时间(约 193 秒)远超把第二条彻底干掉(45 秒)。</p>
+          <p>这就是为什么排序键是 <code>total_exec_time</code> 而不是 <code>mean_exec_time</code>:优化要花在累计影响最大的地方。第二条那种"单次 15 秒、一天跑 3 次"的报表查询,可以稍后再管。</p>
+        </details>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">提示</span>
+        <p>定位流程:先用 <code>pg_stat_statements</code> 排名找到 total_ms 最高的查询,复制它的 <code>query</code> 文本,补上真实参数,再对它跑 <code>EXPLAIN (ANALYZE, BUFFERS)</code>。第 ② 层告诉你"优化谁",第 ③ 层告诉你"它慢在哪一步"。</p>
+        <p>更轻量的补充:把 <code>log_min_duration_statement = 500ms</code> 写进配置,所有超过半秒的查询会自动进日志,适合抓偶发的慢查询。</p>
+      </div>
+
+      <h2 id="s16"><span class="num">1.6</span><span>第 ① 层:实例在等什么(wait events)</span></h2>
+
+      <p class="one-liner">pg_stat_activity 的 wait_event 字段,告诉你此刻活跃后端正卡在哪一类等待上——是磁盘 IO、锁,还是别的。</p>
+
+      <p>当问题不是"某条查询慢",而是"整个库都变慢了",就要上升到实例视角。<code>pg_stat_activity</code> 记录每个连接此刻在做什么、在等什么:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">wait-events.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-wait">复制</button>
+        </div>
+<pre id="cb-wait"><code class="language-sql">SELECT wait_event_type, wait_event, count(*)
+FROM pg_stat_activity
+WHERE state = 'active'
+GROUP BY wait_event_type, wait_event
+ORDER BY count(*) DESC;</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">wait-output.txt</span>
+          <span class="lang">output</span>
+          <button class="copy" data-copy-target="cb-waitout">复制</button>
+        </div>
+<pre id="cb-waitout"><code class="language-bash"> wait_event_type |   wait_event   | count
+-----------------+----------------+-------
+ IO              | DataFileRead   |    18
+ Lock            | transactionid  |     3
+                 |                |     5   -- NULL = 正在跑,没在等</code></pre>
+      </div>
+
+      <p>把等待按类型归因,直接指向后面对应的章节:</p>
+
+      <table class="compare-table">
+        <caption>表 1.3 · wait_event_type → 该读哪一章</caption>
+        <thead>
+          <tr><th>等待类型(高占比时)</th><th>含义</th><th>常见根因 / 去哪章</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>IO</code>(如 DataFileRead)</td><td>大量从磁盘读数据页</td><td>缺索引(03)/ 内存不足致缓存命中低(05)</td></tr>
+          <tr><td><code>Lock</code></td><td>等行锁/表锁,常因长事务</td><td>长事务与并发(04 的 MVCC 部分)</td></tr>
+          <tr><td><code>LWLock</code></td><td>等内部轻量锁(如 WAL、缓冲区)</td><td>写入/checkpoint 压力(05)</td></tr>
+          <tr><td><code>NULL</code>(占比高)</td><td>没在等,就是 CPU 在算</td><td>计划低效、缺索引致大量计算(02 / 03)</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 三层串起来就是一次完整诊断</span>
+        <p>一次真实的排查通常是:① 看 wait events 发现大量 <code>IO / DataFileRead</code> → ② 用 pg_stat_statements 找出贡献最多磁盘读的那条查询 → ③ 对它 <code>EXPLAIN (ANALYZE, BUFFERS)</code>,看到 <code>Seq Scan</code> + 巨大的 <code>Rows Removed by Filter</code> 和 <code>Buffers read</code> → 结论:缺索引。三层各回答一个问题,合起来才是"测量 → 定位",也就是图 1.1 循环的前两步。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程,把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>一个计划节点显示 <code>actual time=0.01..0.05 rows=20 loops=500</code>。这个节点对查询贡献的真实总耗时大约是多少?为什么不是 0.05 毫秒?</li>
+          <li><code>cost=0.00..18334.00</code> 里的 18334 是 18334 毫秒吗?如果不是,它是什么?</li>
+          <li>在一个 <code>Seq Scan</code> 节点里看到 <code>Rows Removed by Filter: 999991</code>,而最终 <code>rows=9</code>。这说明了什么?下一步该怎么做?</li>
+          <li>为什么 pg_stat_statements 排名要用 <code>total_exec_time</code> 而不是 <code>mean_exec_time</code>?举一个 mean 低但最该优化的例子。</li>
+        </ol>
+        <details>
+          <summary>答案(先做完再展开)</summary>
+          <ol>
+            <li>约 <code>0.05 × 500 = 25 毫秒</code>。<code>actual time</code> 是<strong>单次循环</strong>的耗时,该节点被外层驱动执行了 500 次,要乘 loops 才是总贡献。</li>
+            <li>不是毫秒。它是优化器的<strong>抽象代价单位</strong>,以"顺序读一个数据页 = 1.0"为基准,只用于比较不同计划的相对贵贱。真实时间看 <code>actual time</code> / <code>Execution Time</code>。</li>
+            <li>说明为了拿到 9 行,优化器顺序扫描了约一百万行、过滤掉 999991 行——典型的"缺合适索引"信号。下一步:为过滤条件涉及的列(如 <code>customer_id</code>)建索引,再用同一条 <code>EXPLAIN ANALYZE</code> 复测。</li>
+            <li>因为要优化"累计影响"最大的查询。例子:一条单次 5 毫秒、但每天被调用 48 万次的查询,累计 240 秒,远超一条单次 15 秒、每天只跑 3 次(累计 45 秒)的报表查询——前者才是真瓶颈。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>读一个两层计划,指出真正的瓶颈节点</h3>
+        <p>下面是一条 JOIN 查询的(简化)计划。不借助工具,指出:哪个节点贡献的真实耗时最多?哪个节点的行数估算偏差最大、误导了优化器?</p>
+        <div class="code-block">
+          <div class="header"><span class="filename">challenge-plan.txt</span><span class="lang">output</span><button class="copy" data-copy-target="cb-chal">复制</button></div>
+<pre id="cb-chal"><code class="language-bash">Nested Loop  (cost=0.42..91234 rows=5 width=120)
+             (actual time=0.05..1850.2 rows=4900 loops=1)
+  -&gt;  Seq Scan on customers c  (cost=0..1894 rows=10 width=40)
+                 (actual time=0.02..6.1 rows=980 loops=1)
+        Filter: (region = 'APAC')
+  -&gt;  Index Scan using idx_orders_cust on orders o
+                 (cost=0.42..89 rows=1 width=80)
+                 (actual time=0.3..1.86 rows=5 loops=980)</code></pre>
+        </div>
+        <details>
+          <summary>提示(卡住再展开)</summary>
+          <p>先看顶层 Nested Loop 的估算 <code>rows=5</code> vs 真实 <code>rows=4900</code>——偏差近千倍。再想:内层 Index Scan 的真实耗时该怎么算(别忘了 <code>loops=980</code>)?这个偏差会让优化器误以为外层只产出极少行,从而<em>选择</em>了 Nested Loop 而不是 Hash Join。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/current/using-explain.html">Using EXPLAIN</a>(官方:计划树与各字段)</li>
+          <li><a href="https://www.postgresql.org/docs/current/pgstatstatements.html">pg_stat_statements</a>(官方扩展文档)</li>
+          <li><a href="https://www.postgresql.org/docs/current/monitoring-stats.html">The Statistics Collector / pg_stat_activity</a>(官方:wait events)</li>
+          <li><a href="https://www.depesz.com/2013/04/16/explaining-the-unexplainable/">Explaining the unexplainable</a>(depesz 系列,EXPLAIN 读法经典文章)</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a href="02-planner.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 查询优化器与执行计划</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 测量,不是改参数</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 三层测量视角</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 EXPLAIN 计划</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 三处常见误读</a></li>
+        <li><a href="#s15" data-toc-target="s15">1.5 pg_stat_statements</a></li>
+        <li><a href="#s16" data-toc-target="s16">1.6 wait events</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

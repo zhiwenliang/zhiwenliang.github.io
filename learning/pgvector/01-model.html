@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 数据模型与排序契约 · pgvector</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" integrity="sha384-rCCjoCPCsizaAAYVoz1Q0CmCTvnctK0JkfCSjx7IIxexTBg+uCKtFYycedUjMyA2" crossorigin="anonymous">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-model.html" class="current">01 数据模型</a><span class="sep">—</span>
+    <a href="02-index-build.html">02 索引构建</a><span class="sep">—</span>
+    <a href="03-mvcc-lifecycle.html">03 生命周期</a><span class="sep">—</span>
+    <a href="04-filtering.html">04 过滤检索</a><span class="sep">—</span>
+    <a href="05-landscape.html">05 选型前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>数据模型与排序契约</h1>
+        <p class="recap">起点页给了一句话本质和概念地图。这一章把地图最上面两格——「向量列」和「排序索引契约」——填实：向量怎么存成一列，距离怎么变成运算符，运算符怎么绑到索引，以及那条决定后面一切的契约：向量索引只服务 <code>ORDER BY 距离 LIMIT k</code>。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>向量是关系表里的一列，类型有 4 种，能不能建索引取决于维度撞不撞 8KB page 上限。</li>
+          <li>4 个距离运算符各对应一种度量；<code>&lt;#&gt;</code> 返回的是<em>负</em>内积，这是索引"只能升序"逼出来的。</li>
+          <li>opclass 是建索引时写进 DDL 的"用哪种距离"声明，query 的运算符必须和它匹配。</li>
+          <li>向量索引是 <code>amcanorderbyop</code> 排序索引——它只认 <code>ORDER BY 距离 ... LIMIT k</code>，不认 <code>WHERE</code>。</li>
+        </ul>
+      </section>
+
+      <p>贯穿全教程的例子是一个多租户 RAG 系统的文档块表。每段被切碎的文档（chunk）存一行，连同它的 embedding 和几个元数据字段：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">schema.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-schema">复制</button>
+        </div>
+<pre id="c-schema"><code class="language-sql">CREATE EXTENSION IF NOT EXISTS vector;   -- 0.5.0+ 自带 HNSW
+
+CREATE TABLE doc_chunks (
+    id          bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    doc_id      bigint      NOT NULL,
+    tenant_id   int         NOT NULL,          -- 多租户：每个客户只能搜自己的
+    lang        text        NOT NULL,          -- 'zh' / 'en' ...
+    content     text        NOT NULL,
+    embedding   vector(1536) NOT NULL,         -- text-embedding-3-small
+    created_at  timestamptz NOT NULL DEFAULT now()
+);</code></pre>
+      </div>
+
+      <p>整本教程的查询都长这一个样子——它把"向量检索"和"关系过滤"焊在同一条 SQL 里，而这恰恰是 pgvector 全部难点的来源：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">query.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-query">复制</button>
+        </div>
+<pre id="c-query"><code class="language-sql">SELECT id, content
+FROM   doc_chunks
+WHERE  tenant_id = 42 AND lang = 'zh'      -- 关系过滤
+ORDER  BY embedding &lt;=&gt; $1                  -- 向量排序（$1 是查询向量）
+LIMIT  10;                                 -- 取最近 10 段</code></pre>
+      </div>
+
+      <p>记住这条 SQL 的形状。这一章解释它的每一个零件；后面四章解释当数据量、并发写入和过滤选择性变化时，这条 SQL 的行为如何随之改变。</p>
+
+      <!-- ============ §1.1 ============ -->
+      <h2 id="s11"><span class="num">1.1</span><span>向量列：把 embedding 存成一列</span></h2>
+
+      <p class="one-liner">向量是一个定长 <code>float</code> 数组，作为关系表里的一个原子列存储，PG 把它当成一个有距离运算的类型。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>没有 <code>vector</code> 类型，你只能把 1536 个浮点拆成 1536 列（荒谬），或塞进 <code>float8[]</code> / JSON。数组和 JSON 都能"存"，但 PG 不知道两个数组之间有"距离"，更不能在上面建 ANN 索引。<code>vector</code> 类型做的事，是让 Postgres 把这一列<strong>当成几何对象</strong>，而不是一堆数字。</p>
+      </div>
+
+      <p>pgvector 提供 4 种向量类型，差别在于"一个分量用几个字节"，这直接决定了能存多少维、能不能建索引：</p>
+
+      <table class="compare-table">
+        <caption>表 1.1 · 四种向量类型（pgvector 0.7.0+）</caption>
+        <thead>
+          <tr><th>类型</th><th>每分量</th><th>最大维度</th><th>可建索引维度</th><th>典型用途</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td><code>vector</code></td><td>4B (float32)</td><td>16,000</td><td><strong>≤ 2,000</strong></td><td>默认。1536 维 embedding 的主力</td></tr>
+          <tr><td><code>halfvec</code></td><td>2B (float16)</td><td>16,000</td><td><strong>≤ 4,000</strong></td><td>3072 维、或想把索引体积砍半</td></tr>
+          <tr><td><code>bit</code></td><td>1 bit</td><td>64,000</td><td>≤ 64,000</td><td>二值量化后的指纹，Hamming 距离</td></tr>
+          <tr><td><code>sparsevec</code></td><td>仅存非零</td><td>16,000 非零</td><td>≤ 1,000 非零</td><td>稀疏向量（SPLADE 等）</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 2000 维上限不是拍脑袋</span>
+        <p><code>vector</code> 的可建索引维度卡在 <strong>2,000</strong>，是 8KB page 的推论：一个 HNSW 索引项要把向量原值连同图指针塞进单页，<code>4 × 2000 + 开销</code> 已逼近 8KB。<code>halfvec</code> 每分量只占 2 字节，同样的页能塞下 4,000 维——所以给 3072 维的 <code>text-embedding-3-large</code> 建索引时，标准做法是把列声明成 <code>vector(3072)</code>，建索引时<strong>转成 halfvec</strong>：<code>USING hnsw ((embedding::halfvec(3072)) halfvec_cosine_ops)</code>。这不是 hack，是 page 物理限制下的标准动作。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p><code>vector</code> 像 <code>numeric</code>：都是 PG 的一种标量类型，能参与运算、能进表达式。<strong>类比失效处</strong>：<code>numeric</code> 有全序，你能 <code>ORDER BY price</code>；<code>vector</code> <em>没有</em>全序，你不能 <code>ORDER BY embedding</code>——只能 <code>ORDER BY 距离表达式</code>。这个区别是 §1.4 整节的伏笔。</p>
+      </div>
+
+      <!-- ============ §1.2 ============ -->
+      <h2 id="s12"><span class="num">1.2</span><span>距离运算符：相似度变成一个标量表达式</span></h2>
+
+      <p class="one-liner">pgvector 用 4 个中缀运算符表达"两个向量有多远"，每个对应一种度量。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>SQL 的 <code>ORDER BY</code> 需要一个能比大小的<strong>标量</strong>。"相似度"本身是个概念，运算符把它落成 <code>embedding &lt;=&gt; $1</code> 这样一个能算出数字、能排序的表达式。没有运算符，相似度排序就无从写起。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 1.2 · 4 个距离运算符</caption>
+        <thead>
+          <tr><th>运算符</th><th>度量</th><th>值的含义</th><th>opclass（cosine 举例）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>&lt;-&gt;</code></td><td>L2（欧氏）</td><td>越小越近</td><td><code>vector_l2_ops</code></td></tr>
+          <tr class="selected"><td><code>&lt;=&gt;</code></td><td>cosine 距离</td><td>越小越近（0=同向）</td><td><code>vector_cosine_ops</code></td></tr>
+          <tr><td><code>&lt;#&gt;</code></td><td><strong>负</strong>内积</td><td>越小越近（值是负的）</td><td><code>vector_ip_ops</code></td></tr>
+          <tr><td><code>&lt;+&gt;</code></td><td>L1（曼哈顿，0.7.0+）</td><td>越小越近</td><td><code>vector_l1_ops</code></td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>底层机制（比文档深一层）</strong>：为什么 <code>&lt;#&gt;</code> 返回的是<em>负</em>内积，而不是内积本身？因为内积是"越大越相似"，要把最相似的排前面就得<strong>降序</strong>；可是 Postgres 的索引扫描只能<strong>升序</strong>吐结果（最小值先出）。pgvector 的解法很直接：把内积取负。于是"内积最大 / 最相似"变成"负内积最小"，升序扫描自然把最相似的放最前面。代价是你查出来的"相似度"是 <code>-0.83</code> 这种负数——要展示给人看就乘 <code>-1</code>，但<strong>排名本身已经是对的</strong>。这个"为了迁就升序索引而取负"的小动作，是 §1.4 那条排序契约的第一个具体痕迹。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>如果你的 embedding 已经全部归一化到单位长度（<code>‖v‖ = 1</code>，OpenAI 的 embedding 就是），那么用 <code>&lt;=&gt;</code>（cosine）和用 <code>&lt;#&gt;</code>（负内积）排序，结果<strong>排名</strong>会一样吗？性能上谁更划算？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>排名<strong>完全一样</strong>。单位向量下 <code>cosine_similarity = dot</code>，而 <code>cosine 距离 = 1 − dot</code>，<code>负内积 = −dot</code>——两者都是 <code>dot</code> 的单调变换，排序结果一致。</p>
+          <p>性能上 <code>&lt;#&gt;</code> 更划算：cosine 距离要在内积之外再算两个向量的模并做除法；单位向量下这步是浪费。所以"向量已归一化"时，业界惯例是建 <code>vector_ip_ops</code> 索引、查询用 <code>&lt;#&gt;</code>。这也是后面选型时一个常见的小优化。</p>
+        </details>
+      </div>
+
+      <!-- ============ §1.3 ============ -->
+      <h2 id="s13"><span class="num">1.3</span><span>opclass：把运算符绑到索引上</span></h2>
+
+      <p class="one-liner">opclass（operator class）是建索引时写进 DDL 的一句声明，告诉索引"该用哪种距离"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>同一个向量列，A 项目想用 cosine、B 项目想用 L2。索引内部的图必须按某一种距离来建。opclass 就是那个"按哪种距离建图"的开关。它还有第二个作用：让 planner 能把 query 里的运算符和索引<strong>对上号</strong>。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：opclass 在运算符（<code>&lt;=&gt;</code>）和索引内部的距离函数之间建立绑定。建索引时把 opclass 写进 DDL，索引就按这种距离建图；查询时，<code>ORDER BY</code> 用的运算符<strong>必须和索引的 opclass 同属一类</strong>，planner 才会考虑用这个索引。对不上号——比如索引建的是 <code>vector_cosine_ops</code>，查询却写 <code>&lt;-&gt;</code>（L2）——planner 直接放弃索引，退化成全表暴力计算。在百万行上这是 <strong>30 秒 vs 5 毫秒</strong> 的差距，而且<strong>不报任何错</strong>，只是慢。这是 §1.2 表里"运算符那一列必须和 opclass 那一列配套"的实际后果。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 210" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="绑定链：距离运算符经 opclass 写进 CREATE INDEX，索引才能服务对应的 ORDER BY 查询">
+          <defs>
+            <marker id="bf" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <text x="14" y="48" class="edge-label" font-weight="700">查询写</text>
+          <text x="14" y="150" class="edge-label" font-weight="700">建索引写</text>
+
+          <!-- top row: operator -->
+          <rect x="86" y="24" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="161" y="46" text-anchor="middle" class="node-label">查询运算符</text>
+          <text x="161" y="64" text-anchor="middle" class="edge-label">ORDER BY emb &lt;=&gt; $1</text>
+
+          <!-- must-match double arrow down to opclass -->
+          <line x1="161" y1="74" x2="161" y2="120" class="diagram-accent" marker-end="url(#bf)"/>
+          <line x1="161" y1="120" x2="161" y2="76" class="diagram-accent" marker-end="url(#bf)"/>
+          <text x="172" y="100" class="branch-label">必须匹配</text>
+
+          <!-- bottom row chain: opclass -> index -> serves -->
+          <rect x="86" y="120" width="150" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="161" y="142" text-anchor="middle" class="node-label-accent">opclass</text>
+          <text x="161" y="162" text-anchor="middle" class="edge-label">vector_cosine_ops</text>
+
+          <line x1="236" y1="148" x2="290" y2="148" class="diagram-ink" marker-end="url(#bf)"/>
+          <text x="263" y="140" text-anchor="middle" class="edge-label">写进</text>
+
+          <rect x="290" y="120" width="180" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="142" text-anchor="middle" class="node-label">CREATE INDEX</text>
+          <text x="380" y="162" text-anchor="middle" class="edge-label">USING hnsw (...)</text>
+
+          <line x1="470" y1="148" x2="524" y2="148" class="diagram-ink" marker-end="url(#bf)"/>
+          <text x="497" y="140" text-anchor="middle" class="edge-label">得到</text>
+
+          <rect x="524" y="120" width="180" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="614" y="142" text-anchor="middle" class="node-label">能走索引的查询</text>
+          <text x="614" y="162" text-anchor="middle" class="edge-label">否则退化 seq scan</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>运算符 → opclass → 索引的绑定链。<strong>注意</strong>：朱红的双向箭头是关键——查询运算符和建索引的 opclass <strong>必须同类</strong>。对不上，索引就像不存在，查询静默退化成全表暴力计算，不报错、只慢。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">index.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-index">复制</button>
+        </div>
+<pre id="c-index"><code class="language-sql">-- 建 cosine 索引：opclass 决定按余弦建图
+CREATE INDEX ON doc_chunks
+    USING hnsw (embedding vector_cosine_ops);
+
+-- 查询用 &lt;=&gt;（cosine）—— 和 opclass 同类，planner 认它
+SELECT id FROM doc_chunks ORDER BY embedding &lt;=&gt; $1 LIMIT 10;
+
+-- 查询误用 &lt;-&gt;（L2）—— 和 opclass 不同类，索引用不上，全表扫描
+SELECT id FROM doc_chunks ORDER BY embedding &lt;-&gt; $1 LIMIT 10;  -- 慢，但不报错</code></pre>
+      </div>
+
+      <!-- ============ §1.4 ============ -->
+      <h2 id="s14"><span class="num">1.4</span><span>排序契约：amcanorderbyop——这一章的钥匙</span></h2>
+
+      <p class="one-liner">HNSW / IVFFlat 是"按距离排序并取前 k"的索引（<code>amcanorderbyop</code>），不是过滤索引——它只认 <code>ORDER BY 距离 ... LIMIT k</code>。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这一节是理解 pgvector 一切"奇怪行为"的总开关。把它吃透，后面三章的事故你都能从这里反推：为什么过滤后只剩 4 条、为什么加了 <code>DESC</code> 索引就不走、为什么删了一批行召回会崩。它们都是这一条契约的推论。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：Postgres 的索引访问方法（access method）有一个标志位 <code>amcanorderbyop</code>。普通 B-tree 索引用它回答"等值和范围"（<code>WHERE x = 5</code>、<code>WHERE x &lt; 10</code>）。HNSW 和 IVFFlat 不一样——它们把 <code>amcanorderbyop</code> 设成 <code>true</code>，意思是"它能按一个<strong>运算符</strong>返回<strong>有序</strong>的结果流"。于是 planner 只在看到 <code>ORDER BY &lt;距离运算符&gt; ... LIMIT k</code> 时才考虑用它：索引的工作就是"流式吐出离查询向量最近的那几个，吐够 k 个就停"。</p>
+
+      <p>这句话的每个部分都是硬约束：</p>
+      <ul>
+        <li><strong>必须有 <code>ORDER BY 距离</code></strong>：没有排序表达式，索引无事可做。<code>WHERE embedding &lt;=&gt; $1 &lt; 0.3</code>（按距离阈值过滤、不排序）——用不上索引。</li>
+        <li><strong>必须有 <code>LIMIT</code></strong>：没有 LIMIT，等于要求全部有序输出，planner 算下来还不如全表排序划算，于是放弃索引。</li>
+        <li><strong>不能加 <code>DESC</code></strong>：索引只能升序吐。<code>ORDER BY ... DESC</code> 要降序，索引服务不了。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 740 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一条查询里，向量索引只服务 ORDER BY 距离 + LIMIT 这一段，WHERE 过滤它服务不了">
+          <defs>
+            <marker id="sf" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="sf-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- clause boxes -->
+          <rect x="34" y="34" width="200" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="134" y="56" text-anchor="middle" class="node-label">WHERE</text>
+          <text x="134" y="74" text-anchor="middle" class="edge-label">tenant_id = 42</text>
+
+          <rect x="254" y="34" width="280" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="394" y="56" text-anchor="middle" class="node-label-accent">ORDER BY</text>
+          <text x="394" y="74" text-anchor="middle" class="edge-label">embedding &lt;=&gt; $1</text>
+
+          <rect x="554" y="34" width="150" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="629" y="56" text-anchor="middle" class="node-label-accent">LIMIT 10</text>
+
+          <!-- WHERE down to ink node -->
+          <line x1="134" y1="84" x2="134" y2="196" class="diagram-ink" marker-end="url(#sf)"/>
+          <text x="144" y="140" class="edge-label">过滤</text>
+          <rect x="24" y="196" width="240" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="144" y="222" text-anchor="middle" class="node-label">向量索引服务不了</text>
+          <text x="144" y="242" text-anchor="middle" class="edge-label">→ B-tree 索引 / 扫描后过滤</text>
+
+          <!-- bracket under ORDER BY + LIMIT -->
+          <line x1="394" y1="84" x2="394" y2="120" class="diagram-accent"/>
+          <line x1="629" y1="84" x2="629" y2="120" class="diagram-accent"/>
+          <line x1="394" y1="120" x2="629" y2="120" class="diagram-accent"/>
+          <line x1="511" y1="120" x2="511" y2="196" class="diagram-accent" marker-end="url(#sf-v)"/>
+          <text x="521" y="160" class="branch-label">排序 + 截断</text>
+          <rect x="386" y="196" width="250" height="64" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="511" y="222" text-anchor="middle" class="node-label-accent">HNSW 排序索引</text>
+          <text x="511" y="242" text-anchor="middle" class="edge-label">amcanorderbyop：只认这一块</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>同一条 SQL 被拆成三段：向量索引<strong>只认右边</strong>（<code>ORDER BY 距离</code> + <code>LIMIT</code>），左边的 <code>WHERE</code> 它碰都不碰。<strong>注意</strong>：这张图是第 4 章"过滤欠返"的总根源——既然索引只按距离排序吐固定条数，那 <code>WHERE</code> 只能在它之后再筛，筛完自然未必还够 10 条。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">类比 · 带边界声明</span>
+        <p>把 HNSW 索引想成一条<strong>已经按"离你多近"排好队的传送带</strong>：你只能从最近的一端，一个一个取，取够 k 个就喊停。<strong>类比失效处</strong>：你不能对传送带喊"只挑 <code>tenant=42</code> 的"——过滤不是传送带的职责。要么取下来一个个看 tenant（post-filter，未必取够），要么提前为 <code>tenant=42</code> 单独搭一条传送带（partial index）。这两条路正是第 4 章的主线。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>下面这条查询，建了 <code>vector_ip_ops</code> 的 HNSW 索引后，能走索引吗？<br>
+          <code>SELECT id FROM doc_chunks ORDER BY embedding &lt;#&gt; $1 DESC LIMIT 10;</code></p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p><strong>不能。</strong>两个原因叠在一起，都来自这一节的契约：</p>
+          <p>① 索引只能<strong>升序</strong>吐结果，<code>DESC</code> 要降序，直接出局。② 更深一层：<code>&lt;#&gt;</code> 已经是<em>负</em>内积（§1.2），它本身就把"最相似"变成了"最小值"。所以正确写法是<strong>去掉 DESC</strong>、用 <code>&lt;#&gt;</code> 升序——负内积最小 = 内积最大 = 最相似在最前。很多人凭"内积越大越相似"的直觉加了 <code>DESC</code>，反而把索引废了。这是 §1.2 的负号和 §1.4 的升序约束<strong>合起来</strong>挖的一个坑。</p>
+        </details>
+      </div>
+
+      <!-- ============ self-check ============ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里，再点开对照。直接展开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>为 3072 维的 <code>text-embedding-3-large</code> 建 HNSW 索引，直接 <code>vector(3072)</code> 会失败。说出失败的根因，并写出能成功的那行 DDL。</li>
+          <li><code>&lt;#&gt;</code> 查出来的相似度是 <code>-0.91</code>。这个负号是怎么来的？为什么排名仍然是对的？</li>
+          <li>索引建的是 <code>vector_l2_ops</code>，查询写 <code>ORDER BY embedding &lt;=&gt; $1 LIMIT 10</code>。会发生什么？会报错吗？</li>
+          <li>一句话说清：为什么向量索引帮不上 <code>WHERE tenant_id = 42</code> 这个条件？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>根因：<code>vector</code> 可建索引维度上限 2,000，受 8KB page 限制；3072 &gt; 2000。解法：建索引时转 halfvec——<code>CREATE INDEX ON doc_chunks USING hnsw ((embedding::halfvec(3072)) halfvec_cosine_ops);</code>（halfvec 每分量 2 字节，上限 4,000）。</li>
+            <li>内积越大越相似，要降序排；但 PG 索引只能升序吐结果。pgvector 把内积取负，让"最相似"变成"最小的负数"，升序扫描就把最相似的排最前。排名是 <code>dot</code> 的单调变换，所以正确——只是数值带了负号，展示时乘 -1 即可。</li>
+            <li>不报错，但索引用不上：查询运算符 <code>&lt;=&gt;</code> 和索引 opclass <code>vector_l2_ops</code> 不同类，planner 放弃索引，退化成全表暴力计算。表现为"有索引却很慢"。</li>
+            <li>因为向量索引是 <code>amcanorderbyop</code> 排序索引，只服务 <code>ORDER BY 距离 ... LIMIT k</code>，它的职责是"按距离排序取前 k"，不包含按字段值过滤。<code>tenant_id = 42</code> 是等值过滤，得靠 B-tree 或排序后再筛。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>同一个向量列，能不能既支持 cosine 检索又支持 L2 检索，且两者都走索引？</h3>
+        <p>你的 RAG 系统大部分查询用 cosine，但有个新功能需要按 L2 距离去重。一个 <code>vector_cosine_ops</code> 索引服务不了 L2 查询（§1.3）。在不改列、不重存向量的前提下，怎么让两种查询都能走索引？各自的代价是什么？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>opclass 是<strong>索引</strong>的属性，不是列的属性——一个列上可以建<strong>多个</strong>索引。想想在同一个 <code>embedding</code> 列上建两个 HNSW 索引、用不同 opclass 会怎样：存储翻倍、写入要维护两张图（回到第 3 章的 churn 成本），但两种查询各有索引可走。再想：如果向量已归一化，L2 和 cosine 的排名其实等价（§1.2 的想一想），那第二个索引是不是根本不必建？把"逻辑上需不需要"和"物理上建几个索引"分开回答。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://github.com/pgvector/pgvector#vector-type">pgvector README — 向量类型与维度上限</a>（官方）</li>
+          <li><a href="https://github.com/pgvector/pgvector#querying">pgvector README — 距离运算符 <code>&lt;-&gt;</code> / <code>&lt;=&gt;</code> / <code>&lt;#&gt;</code> / <code>&lt;+&gt;</code></a>（官方）</li>
+          <li><a href="https://www.postgresql.org/docs/current/xindex.html#XINDEX-OPCLASS">PostgreSQL 文档 — Operator Classes 与索引绑定</a>（机制源头）</li>
+          <li><a href="https://www.crunchydata.com/blog/an-overview-of-distance-metrics-for-vector-search">Crunchy Data — 向量距离度量综述</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="index.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a href="02-index-build.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 索引构建与存储</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 向量列与类型</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 距离运算符</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 opclass 绑定</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 排序契约</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 推理模型时代：CoT 从 prompt 到权重 · Agent 推理模式教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+.toc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+@media (max-width: 640px) { .toc-grid { grid-template-columns: 1fr; } }
+.toc-card { display: block; padding: 14px 16px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.toc-card:hover { border-color: var(--vermilion); }
+.toc-card .n { font-family: var(--mono); font-size: 11px; color: var(--vermilion); font-weight: 700; letter-spacing: 0.06em; }
+.toc-card .t { display: block; font-weight: 600; font-size: 15px; margin: 4px 0 2px; }
+.toc-card .d { display: block; font-size: 13px; color: var(--ink-soft); line-height: 1.45; }
+.meta-row { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin: 8px 0 0; letter-spacing: 0.03em; }
+.meta-row strong { color: var(--ink-soft); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-cot-family.html">01 CoT 家族</a><span class="sep">—</span>
+    <a href="02-grounding.html">02 接地</a><span class="sep">—</span>
+    <a href="03-search-frontier.html">03 搜索·前沿</a><span class="sep">—</span>
+    <a href="04-reasoning-models.html" class="current">04 推理模型</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Agent 推理模式 · 第 04 章 · 前沿（截至 2026-06-03）</p>
+        <h1>推理模型时代：CoT 从 prompt 到权重</h1>
+        <p class="recap">前三章的模式都是你手写的 prompt 或外挂脚手架。这一章讲一件改了游戏规则的事：2024 年起，CoT 被直接训进了模型权重。从此「在推理时多想」不再靠你写 exemplar 去诱发，而是模型出厂自带的行为；推理期算力换可靠性，从一句洞察变成一条被发表、被训练进去的 scaling 定律。</p>
+        <p class="meta-row"><strong>本章定位</strong>：前沿 · 把「推理期算力」从「手写 prompt」推进到「训练进权重的行为」　|　<strong>时间锚</strong>：2024-09 → 2026-06　|　<strong>代码状态</strong>：示例为讲解用伪代码，标注"未本地验证"</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章四个判断 · 读完要能脱稿讲</p>
+        <ul>
+          <li>CoT 从「你写的 prompt」变成「用 RL 训练出来的行为」——同一段串行推理，过去靠 exemplar 诱发，现在被优化进权重。</li>
+          <li>test-time / inference-time scaling 是一条新 scaling 轴：正确率随「思考 token」上升，与预训练规模正交。</li>
+          <li>在推理模型上手写 few-shot CoT 反而掉分——已训练的内部链和你塞进去的显式例子相撞。</li>
+          <li>哪些模式留下、哪些退场：CoT 进权重、ReAct 留作编排、ToT 类外部搜索价值收缩；模式如今活在框架的显式图里，不在 prompt 里。</li>
+        </ul>
+      </section>
+
+      <!-- ============================ §4.1 ============================ -->
+      <h2 id="s41"><span class="num">§4.1</span><span>CoT 从 prompt 到权重</span></h2>
+      <p class="one-liner">用 RL 训练出一条长的内部 CoT：模型在给出答案前，先自行生成一大段内部推理——这段链没人手写，是权重里长出来的。</p>
+
+      <div class="rationale">
+        <span class="label">为什么这是分水岭</span>
+        <p>第 1 章把 CoT 解释成「给固定深度的模型补串行计算步」：一次前向传播的深度是定死的，多写出来的中间 token 等于多借了几层串行算力。但在前三章里，这段中间 token 始终由<strong>你</strong>负责诱发——写 "let's think step by step"，或塞几个 few-shot exemplar 当样板。推理模型（reasoning model，指出厂就会先想一长段再答的模型）把这件事接管了：同一套串行推理，改由 RL 直接优化进权重，触发它不再需要你写任何样板。</p>
+      </div>
+
+      <h3>一年内的时间线：手写技巧 → 训练目标</h3>
+      <p>把节点按月份排开，变化的速度本身就是论点。每一个都带具体日期：</p>
+
+      <figure>
+        <svg viewBox="0 0 880 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="推理模型时间线，从 2024 年 9 月 o1-preview 到 2025 年的 o3 与 Gemini Deep Think">
+          <defs>
+            <marker id="tl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- title -->
+          <text x="40" y="34" class="node-label" font-weight="700" fill="#0A0A0A">CoT 进权重 · 一年时间线</text>
+          <text x="40" y="52" class="edge-label">手写技巧（2024-09 前） → 训练目标（2024-09 起）</text>
+
+          <!-- main axis -->
+          <line x1="40" y1="150" x2="844" y2="150" stroke="#525252" stroke-width="1.4" marker-end="url(#tl-arrow)"/>
+          <text x="842" y="172" text-anchor="end" class="edge-label">时间 →</text>
+
+          <!-- ticks + nodes. Nodes alternate above / below to avoid label collision. -->
+          <!-- o1-preview 2024-09-12 (above) -->
+          <line x1="86" y1="150" x2="86" y2="110" class="diagram-ink"/>
+          <circle cx="86" cy="150" r="4" fill="#B73B2F"/>
+          <rect x="48" y="80" width="118" height="30" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="107" y="93" text-anchor="middle" class="node-label-accent" font-size="11.5">o1-preview</text>
+          <text x="107" y="105" text-anchor="middle" class="edge-label">2024-09-12</text>
+
+          <!-- o1 full 2024-12-05 (below) -->
+          <line x1="206" y1="150" x2="206" y2="190" class="diagram-ink"/>
+          <circle cx="206" cy="150" r="4" fill="#B73B2F"/>
+          <rect x="168" y="190" width="120" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="228" y="203" text-anchor="middle" class="node-label" font-size="11.5">o1 完整版</text>
+          <text x="228" y="215" text-anchor="middle" class="edge-label">2024-12-05</text>
+
+          <!-- DeepSeek-R1 2025-01 (above) -->
+          <line x1="320" y1="150" x2="320" y2="110" class="diagram-ink"/>
+          <circle cx="320" cy="150" r="4" fill="#B73B2F"/>
+          <rect x="282" y="80" width="124" height="30" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="344" y="93" text-anchor="middle" class="node-label-accent" font-size="11.5">DeepSeek-R1</text>
+          <text x="344" y="105" text-anchor="middle" class="edge-label">2025-01 · GRPO</text>
+
+          <!-- o3-mini 2025-01-31 (below) -->
+          <line x1="436" y1="150" x2="436" y2="190" class="diagram-ink"/>
+          <circle cx="436" cy="150" r="4" fill="#B73B2F"/>
+          <rect x="402" y="190" width="98" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="451" y="203" text-anchor="middle" class="node-label" font-size="11.5">o3-mini</text>
+          <text x="451" y="215" text-anchor="middle" class="edge-label">2025-01-31</text>
+
+          <!-- Claude 3.7 ext thinking 2025-02-25 (above) -->
+          <line x1="556" y1="150" x2="556" y2="110" class="diagram-ink"/>
+          <circle cx="556" cy="150" r="4" fill="#B73B2F"/>
+          <rect x="510" y="80" width="150" height="30" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="585" y="93" text-anchor="middle" class="node-label-accent" font-size="11">Claude 3.7 扩展思考</text>
+          <text x="585" y="105" text-anchor="middle" class="edge-label">2025-02-25 · 预算 128K</text>
+
+          <!-- Gemini 2.5 thinking 2025-03 (below) -->
+          <line x1="676" y1="150" x2="676" y2="190" class="diagram-ink"/>
+          <circle cx="676" cy="150" r="4" fill="#B73B2F"/>
+          <rect x="630" y="190" width="150" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="705" y="203" text-anchor="middle" class="node-label" font-size="11">Gemini 2.5 thinking</text>
+          <text x="705" y="215" text-anchor="middle" class="edge-label">2025-03 · Deep Think</text>
+
+          <!-- o3 / o4-mini 2025-04-16 (above) -->
+          <line x1="800" y1="150" x2="800" y2="110" class="diagram-ink"/>
+          <circle cx="800" cy="150" r="4" fill="#B73B2F"/>
+          <rect x="754" y="80" width="120" height="30" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="814" y="93" text-anchor="middle" class="node-label-accent" font-size="11.5">o3 / o4-mini</text>
+          <text x="814" y="105" text-anchor="middle" class="edge-label">2025-04-16</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>从 OpenAI o1-preview 到 o3、Gemini Deep Think，跨度不足一年。
+          <strong>注意</strong>：一件事——CoT 在这条轴上从「你手写的技巧」变成了「厂商训练的目标」，朱红节点都是把推理直接写进权重的型号。</figcaption>
+      </figure>
+
+      <p>逐个钉死日期与机制：</p>
+      <ul>
+        <li><strong>OpenAI o1-preview（2024-09-12）</strong>，完整版 <strong>o1（2024-12-05）</strong>：第一个公开把「长内部 CoT」作为卖点的模型——答题前先想一长段，思考过程对用户隐藏，只放出摘要。</li>
+        <li><strong>DeepSeek-R1（2025-01，arXiv 2501.12948）</strong>：用 <strong>GRPO</strong>（Group Relative Policy Optimization，一种<em>不带 critic 网络</em>的强化学习，靠一组采样答案彼此比较算优势，省掉了单独训一个价值模型）做 RL。配套的 <strong>R1-Zero</strong> 给出更硬的结论：推理能力可以从<strong>纯 RL、不做 SFT</strong>（监督微调）中<em>涌现</em>——不喂任何人工写的推理范例，模型也能自己长出 CoT。这是把「CoT 是训练出来的行为」从直觉变成可复现实验的一篇。</li>
+        <li><strong>o3-mini（2025-01-31）</strong>、<strong>o3 / o4-mini（2025-04-16）</strong>：推理模型从旗舰下沉到更便宜、更快的档位，并带可调的「推理强度」档（low / medium / high）。</li>
+        <li><strong>Claude 3.7 Sonnet 扩展思考（extended thinking，2025-02-25）</strong>：把「想多久」做成一个<em>可设的预算</em>——thinking token 预算可拉到 128K，且思考内容对开发者可见。这一步把 test-time compute 直接变成一个 API 旋钮。</li>
+        <li><strong>Gemini 2.5 thinking（2025-03）</strong>，<strong>Deep Think 正式 GA（2025-08）</strong>：第三家主流厂商把「先想再答」做成默认形态。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">机制深一层 · 回指第 1 章</span>
+        <p>第 1 章的命题是：CoT 给固定深度的模型补上了串行计算步——中间 token 是「借来的算力层」。本章只改了一件事：<strong>这段串行推理现在被 RL 直接优化进权重</strong>。模型在 RL 里反复试不同长度、不同走法的思考链，最终把「遇到难题就先展开一长段推理」固化成一种条件反射。所以推理模型不需要你写 exemplar 去诱发链条——诱发器已经在权重里了。第 1 章解释的是<em>为什么</em>多写 token 有用，本章解释的是这套机制<em>怎么从 prompt 搬进了训练目标</em>。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预判一下</span>
+        <p>R1-Zero 证明「纯 RL、无 SFT 也能涌现推理」。如果推理链能从纯 RL 里自己长出来，那训练时给模型的<strong>奖励信号</strong>最低限度需要是什么？（提示：RL 要能区分「这次想对了」和「想错了」。）</p>
+        <details>
+          <summary>展开（先停 10 秒）</summary>
+          <p>最低限度只需要一个<strong>可自动判定对错的最终答案</strong>——数学题对不对、代码过不过测试、答案是否命中标准解。有了这种可验证的 reward，RL 就能把「导向正确答案的思考走法」加权、把「导向错误的」压低，链条本身无须人工标注。这也解释了为什么早期推理模型在<em>数学、代码</em>这类有客观对错的领域最先突飞猛进：那里的 reward 信号最干净。开放式写作这类没有唯一正解的任务，reward 难定，推理训练的收益也更含糊。</p>
+        </details>
+      </div>
+
+      <!-- ============================ §4.2 ============================ -->
+      <h2 id="s42"><span class="num">§4.2</span><span>test-time / inference-time scaling：新 scaling 轴</span></h2>
+      <p class="one-liner">正确率随「思考 token」增加而上升，是一条与预训练规模正交的新 scaling 轴——多想，可以买。</p>
+
+      <div class="rationale">
+        <span class="label">这一节把一句洞察变成一条定律</span>
+        <p>第 1 章把「推理期算力换可靠性」当作贯穿全教程的视角抛出来。2024–2025 这条视角被正式做成了可测量的 scaling 关系：固定模型权重不动，只增加推理时允许花的算力（让它想更久、采更多样、搜更宽），正确率单调爬升。这条曲线和「把模型练得更大」那条<strong>正交</strong>——它是另一根可以独立往上推的轴。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="test-time scaling 曲线：横轴思考 token 与推理算力，纵轴正确率，一条上升并趋于平缓的曲线">
+          <defs>
+            <marker id="sc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- axes -->
+          <line x1="90" y1="320" x2="660" y2="320" stroke="#525252" stroke-width="1.4" marker-end="url(#sc-arrow)"/>
+          <line x1="90" y1="320" x2="90" y2="50" stroke="#525252" stroke-width="1.4" marker-end="url(#sc-arrow)"/>
+
+          <!-- axis labels -->
+          <text x="375" y="356" text-anchor="middle" class="edge-label" fill="#0A0A0A">横轴 · 思考 token / 推理算力（对数尺度，越右越多）</text>
+          <text x="38" y="185" text-anchor="middle" class="edge-label" fill="#0A0A0A" transform="rotate(-90 38 185)">纵轴 · 正确率</text>
+
+          <!-- baseline: single forward pass -->
+          <line x1="90" y1="270" x2="660" y2="270" class="diagram-soft"/>
+          <text x="650" y="262" text-anchor="end" class="edge-label">单次前向传播（不额外花算力）</text>
+
+          <!-- rising curve: log-like, climbs then flattens -->
+          <path d="M 96 270 C 200 250, 250 175, 330 150 S 480 95, 560 86 S 640 80, 654 79"
+                class="diagram-accent" stroke-width="2"/>
+
+          <!-- annotation of the gain region -->
+          <line x1="330" y1="150" x2="330" y2="320" class="diagram-soft"/>
+          <text x="338" y="128" class="node-label-accent" font-size="12">多想 = 更准</text>
+          <text x="338" y="144" class="edge-label">这段增益是可买的</text>
+
+          <!-- diminishing-returns note at the flat tail -->
+          <text x="560" y="68" text-anchor="middle" class="edge-label">趋平：边际收益递减</text>
+
+          <!-- orthogonal-axis callout -->
+          <rect x="120" y="62" width="208" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="224" y="80" text-anchor="middle" class="node-label" font-size="12">与预训练规模正交的新轴</text>
+          <text x="224" y="96" text-anchor="middle" class="edge-label">练更大 ⟂ 想更久，可分别上推</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>权重不动，只加推理时的思考算力，正确率沿这条曲线往上爬，到后段趋平。
+          <strong>注意</strong>：一件事——「多想 = 更准」不再是经验之谈，而是一条可测量、可购买、且独立于「把模型练大」的 scaling 轴。</figcaption>
+      </figure>
+
+      <p>这条轴有三层值得讲清的含义：</p>
+      <ul>
+        <li><strong>它是可买的</strong>：同一个模型，给它更高的思考预算，就能解之前解不动的题。Claude 3.7 的 128K thinking 预算、o3 的 low/medium/high 档，都是把这根轴做成了开发者能拨的旋钮——为难题多付 token，为简单题省 token。</li>
+        <li><strong>它会趋平</strong>：曲线尾部边际收益递减，且 token 是真金白银的成本与延迟。无脑拉满预算不是免费的；§4.3 会讲到，对足够简单的任务，多想甚至有害。</li>
+        <li><strong>它正交于预训练</strong>：把模型练得更大、和让模型想得更久，是两件可以分别投入的事。这就是为什么 2024 年后业界把「test-time scaling」与「pre-training scaling」并列成两根轴——这正是第 1 章那句「推理期算力换可靠性」被发表、被训练进去的版本。</li>
+      </ul>
+
+      <div class="predict">
+        <span class="question-label">预判一下</span>
+        <p>图 4.2 的曲线尾部趋平。如果一个客服 agent 的任务有 80% 是「查订单状态」这类一步就能答的简单问句，把推理预算从 medium 拉到 high，整体正确率与成本会怎么变？</p>
+        <details>
+          <summary>展开</summary>
+          <p>整体正确率几乎不动、成本和延迟显著上涨。简单问句本就落在曲线<strong>已经趋平</strong>的那一段——它们一步就对，多给的思考 token 买不到额外正确率，只是白烧。更糟的是 §4.3 要讲的 overthinking：拉高预算后，模型对「查订单」这种琐事也展开冗长推理，反而更慢、偶尔还把简单答案想拐了。正确做法是按问句难度<em>分流</em>预算，而不是一刀切拉满。</p>
+        </details>
+      </div>
+
+      <!-- ============================ §4.3 ============================ -->
+      <h2 id="s43"><span class="num">§4.3</span><span>还要不要手写 CoT / ReAct？（面试高频）</span></h2>
+      <p class="one-liner">对推理模型，手写 few-shot CoT 多余、甚至反噬；但工具编排、成本控制、可审计输出这些场景里，手写模式仍是应用架构。</p>
+
+      <div class="rationale">
+        <span class="label">为什么这题面试常考</span>
+        <p>2022 式直觉是「加了 CoT / ReAct 一定更好」。这个直觉在推理模型上<strong>翻车</strong>了，而很多人没更新。2025 中到 2026 的共识是：对已经把推理训进权重的模型，你再手写 few-shot CoT，等于在它训练好的内部链外面又硬塞一套显式样板，两者相撞。下面分「该退场」和「仍要手写」两面，各给证据。</p>
+      </div>
+
+      <h3>证据：在推理模型上，手写 few-shot CoT 会掉分</h3>
+      <ul>
+        <li><strong>5-shot 反而更差</strong>：给 o1-preview 套 5 个 few-shot CoT exemplar，正确率<em>低于</em>极简（zero-shot / 直给）prompt。OpenAI 与 PromptHub 等指南据此明确建议：推理模型上别堆 few-shot，最少的指令往往最好。</li>
+        <li><strong>显式样板与内部链冲突</strong>：模型已有一套训练好的推理走法，你塞进去的 exemplar 把它往另一条（人写的）路上拽，两套链打架，结果不如让它自己走。</li>
+        <li><strong>简单任务上 overthink</strong>：在 &lt;3 步就能答的简单任务上，推理模型容易把问题想复杂（overthinking），反而<em>不如</em>普通（非推理）模型又快又对。</li>
+        <li><strong>感知 / 隐式规律任务上 CoT 拉低正确率</strong>：在某些靠直觉模式识别、而非显式推导的任务上，强行展开 CoT 会损害前沿模型——有研究测到 o1-preview 在某个语法分类任务上因显式推理掉了约 <strong>−36%</strong>。把本该一眼看出的规律硬拆成步骤，反而把对的直觉推翻了。</li>
+      </ul>
+
+      <h3>但这些场景里，手写模式仍然重要</h3>
+      <p>「手写 CoT 退场」不等于「前三章白学」。模式没死，只是搬了家。四类场景仍需要你手写：</p>
+      <ol>
+        <li><strong>非推理模型</strong>：GPT-4o 级、以及更小/本地的模型，没把推理训进权重，仍<em>明显</em>受益于显式 CoT 和 few-shot。第 1 章的技巧对它们照样管用。</li>
+        <li><strong>工具编排</strong>：ReAct / ReWOO 这类「推理↔行动↔观察」的循环，是<strong>应用架构</strong>，哪怕每一步的内核换成推理模型，外层的工具往返循环还是你来搭。这正是第 2 章 ReAct 接地的去向——它从「prompt 模板」升格成了「编排骨架」。</li>
+        <li><strong>成本 / 延迟控制</strong>：ReWOO 式「先一次性规划好全部步骤、再批量执行」能减少模型往返、压低 token 与延迟，在预算敏感的系统里仍有价值。</li>
+        <li><strong>结构化 / 可审计输出</strong>：当你需要每一步都留下可检查、可回放的痕迹（合规、调试、人工复核），显式的步骤化编排比一段藏在权重里的内部链更可控。</li>
+      </ol>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="决策图：你的模型自己会推理吗，是则 zero-shot 直给加外挂工具编排，否则仍要手写 CoT 与 few-shot">
+          <defs>
+            <marker id="dec-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- decision diamond -->
+          <polygon points="360,40 510,100 360,160 210,100" class="diagram-ink node-fill"/>
+          <text x="360" y="96" text-anchor="middle" class="node-label" font-size="13">你的模型自己</text>
+          <text x="360" y="114" text-anchor="middle" class="node-label" font-size="13">会推理吗？</text>
+
+          <!-- YES branch (left-down) -->
+          <line x1="270" y1="130" x2="180" y2="206" class="diagram-accent" marker-end="url(#dec-arrow)"/>
+          <text x="206" y="178" text-anchor="middle" class="branch-label">是（o1/o3/R1）</text>
+          <rect x="40" y="210" width="280" height="110" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="180" y="234" text-anchor="middle" class="node-label-accent" font-size="13">zero-shot 直给</text>
+          <text x="180" y="256" text-anchor="middle" class="edge-label">最少指令、别堆 few-shot CoT</text>
+          <text x="180" y="276" text-anchor="middle" class="edge-label">＋ 外挂工具编排（ReAct/ReWOO）</text>
+          <text x="180" y="296" text-anchor="middle" class="edge-label">＋ 按难度分配思考预算</text>
+          <text x="180" y="312" text-anchor="middle" class="edge-label">简单任务调低、防 overthink</text>
+
+          <!-- NO branch (right-down) -->
+          <line x1="450" y1="130" x2="540" y2="206" class="diagram-ink" marker-end="url(#dec-arrow)"/>
+          <text x="516" y="178" text-anchor="middle" class="edge-label">否（4o 级 / 小 / 本地）</text>
+          <rect x="400" y="210" width="280" height="110" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="234" text-anchor="middle" class="node-label" font-size="13">仍要手写 CoT / few-shot</text>
+          <text x="540" y="256" text-anchor="middle" class="edge-label">显式 step-by-step 样板</text>
+          <text x="540" y="276" text-anchor="middle" class="edge-label">＋ Self-Consistency 投票补稳</text>
+          <text x="540" y="296" text-anchor="middle" class="edge-label">＋ 第 1 章那套技巧照旧管用</text>
+          <text x="540" y="312" text-anchor="middle" class="edge-label">工具编排两侧都要手搭</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.3</span>一刀切问到底：模型自己会不会推理，决定你该<em>撤掉</em>还是<em>保留</em>手写 CoT。
+          <strong>注意</strong>：一件事——「会推理」那侧只撤掉<em>诱发推理的样板</em>（few-shot CoT），工具编排循环在<strong>两侧都保留</strong>，它属于应用架构、不属于 prompt。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">一句话记牢</span>
+        <p>CoT 作为手写 prompt 在退场，作为模型架构在称王。退场的是「用 exemplar 诱发推理」这件事；称王的是「推理本身」，它进了权重。</p>
+      </div>
+
+      <p>把这一节放进规划视角会更立体：推理模型如何<em>吸收</em>规划、test-time compute 如何<em>替代</em>一部分外部规划结构，是同一现象在「控制流」轴上的版本，详见 <a href="../agent-planning/04-frontier.html">agent-planning · 前沿</a>。工具往返那一步具体怎么落成真实的 <code>tool_use</code> 调用，见 <a href="../tool-use/index.html">tool-use</a>。</p>
+
+      <div class="predict">
+        <span class="question-label">预判一下</span>
+        <p>同事把一个跑在 GPT-4o 上、带 5-shot CoT exemplar 的 prompt，原样换成 o3 调用，发现某些题正确率不升反降。在不改任务的前提下，第一个该动的是什么？</p>
+        <details>
+          <summary>展开</summary>
+          <p>先<strong>删掉那 5 个 few-shot CoT exemplar</strong>，改成 zero-shot 直给、最少指令。掉分的典型原因正是 §4.3 的头条证据：显式样板和 o3 训练好的内部链相撞。4o 需要样板来诱发推理，o3 不需要——把为 4o 写的诱发器留在 o3 上，是在帮倒忙。删完若仍不稳，再考虑按难度调推理档、或对简单题分流到更轻的模型防 overthink，而不是把样板加回去。</p>
+        </details>
+      </div>
+
+      <!-- ============================ §4.4 ============================ -->
+      <h2 id="s44"><span class="num">§4.4</span><span>框架把模式表达成显式图</span></h2>
+      <p class="one-liner">模式如今活在编排层、不在 prompt 里：LangGraph 把模式建成状态机，ReAct / Reflexion / plan-execute 变成「图的形状」。</p>
+
+      <div class="rationale">
+        <span class="label">模式搬家的最后一站</span>
+        <p>§4.3 说工具编排循环留了下来。它留在哪？留在<strong>框架</strong>里。当推理本身进了权重，前三章那些模式不再以 prompt 模板的形态存在，而是以<em>控制流图</em>的形态存在：节点是一步、边是步与步之间的跳转、共享 state 在节点间流动。LangGraph 是这一形态的代表。</p>
+      </div>
+
+      <p>具体到 LangGraph 怎么把模式建成显式图：</p>
+      <ul>
+        <li><strong>节点 = 步骤</strong>：每个节点是一段可执行单元（调一次模型、调一次工具、做一次评估）。</li>
+        <li><strong>条件边在带类型的共享 state 上跳转</strong>：边不是写死的顺序，而是读当前 state 决定下一步去哪——这就是 ReAct 的「想完看 observation 再决定下一步」落成代码的样子。</li>
+        <li><strong>checkpoint 保住中途失败</strong>：state 可在每一步落盘，中途崩了能从断点续跑，不必从头再来。</li>
+        <li><strong>模式 = 图的形状</strong>：ReAct 是一个带条件回边的<em>循环</em>；plan-execute 是先 fork 出多步、再 join 汇总；Reflexion 是「失败→反思写入记忆→带记忆重试」的跨回合回路；复杂流程拆成<em>子图</em>。同一张图就把第 2 章的 ReAct、Reflexion 和 plan-execute 都表达了。</li>
+      </ul>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">react_as_graph.py</span>
+          <span class="lang">python</span>
+          <button class="copy" data-copy-target="code-react-graph">复制</button>
+        </div>
+        <pre id="code-react-graph"><code class="language-python"># 讲解用伪代码，未本地验证。
+# 把 ReAct「推理→行动→观察」循环表达成一张显式状态图（LangGraph 风格）。
+# 内核可以是推理模型；外层这张图——节点、条件边、state——是你手搭的编排，
+# 不在 prompt 里。这正是 §4.3「ReAct 留作编排」的代码形态。
+
+from typing import TypedDict, Literal
+
+class State(TypedDict):          # 带类型的共享 state，在节点间流动
+    question: str
+    scratch: list[str]           # 累积的 thought / observation
+    answer: str | None
+
+def reason(state: State) -&gt; State:
+    # 调用（内核可换成推理模型）：产出下一步是调工具还是直接收尾
+    step = llm_decide_next(state["question"], state["scratch"])
+    state["scratch"].append(step.thought)
+    state["_route"] = step.kind   # "act" 或 "finish"
+    state["_pending_tool"] = step.tool_call
+    return state
+
+def act(state: State) -&gt; State:
+    obs = run_tool(state["_pending_tool"])      # 接地：真实工具的真实返回
+    state["scratch"].append(f"observation: {obs}")
+    return state
+
+def route(state: State) -&gt; Literal["act", "finish"]:
+    return state["_route"]        # 条件边：读 state 决定下一步去哪
+
+# graph：reason → (条件边) → act → 回到 reason，直到 finish
+graph = StateGraph(State)
+graph.add_node("reason", reason)
+graph.add_node("act", act)
+graph.set_entry_point("reason")
+graph.add_conditional_edges("reason", route, {"act": "act", "finish": "__end__"})
+graph.add_edge("act", "reason")          # 这条回边 = ReAct 的循环
+app = graph.compile(checkpointer=...)    # checkpoint：中途失败可从断点续跑
+</code></pre>
+      </div>
+
+      <div class="callout">
+        <span class="label">框架变迁 · 带日期</span>
+        <p><strong>LangChain 1.0（2025-10）</strong> 弃用了旧的 <code>create_react_agent</code>，改为 <code>create_agent</code> ＋ middleware：把 ReAct 这类循环做成可插拔的中间件层，进一步坐实「模式活在编排层、不在 prompt 里」。这与 <a href="../agent-planning/04-frontier.html">agent-planning · 前沿</a> 记的框架弃用是同一桩事。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预判一下</span>
+        <p>同样把模式表达成图，为什么 ReAct 的图里一定有一条「act → reason」的<strong>回边</strong>，而 plan-execute 的图里主干却更接近一条「先 fork 多步、再 join」的<em>无回边</em>结构？</p>
+        <details>
+          <summary>展开</summary>
+          <p>因为两者的接地时机不同。ReAct 是<strong>交错式</strong>接地——每行动一步、拿到一个真实 observation，就得回去重新推理「下一步基于这个新事实该怎么走」，所以必须有回边把 observation 喂回 reason。plan-execute 是<strong>前置式</strong>规划——先一次性把步骤排好，再批量执行，执行阶段不依赖「看一步改一步」，主干自然是 fork/join 而非循环。回边的有无，正是第 2 章「交错 vs 前置」之分落在图结构上的痕迹。</p>
+        </details>
+      </div>
+
+      <!-- ============================ 前几章命运 ============================ -->
+      <h2 id="fates"><span class="num">§</span><span>回看前三章：每个模式的命运</span></h2>
+      <p>本章不推翻前三章，而是给它们各自的去向盖章。把三章的核心模式放进推理模型时代，命运各不相同：</p>
+
+      <table class="compare-table">
+        <caption>前三章模式在推理模型时代的去向</caption>
+        <thead>
+          <tr><th>来自</th><th>模式 / 论点</th><th>在推理模型时代的命运</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>第 1 章</td>
+            <td>CoT＝给固定深度模型补「串行计算深度」</td>
+            <td><strong>进权重</strong>。同一段串行推理被 RL 训进权重；机制不变，触发方式从「你写 exemplar」变成「模型自带」。手写 few-shot CoT 在推理模型上退场。</td>
+          </tr>
+          <tr>
+            <td>第 2 章</td>
+            <td>ReAct＝把每步推理钉在外部 observation 上（接地）</td>
+            <td><strong>留作编排</strong>。接地这件事权重补不了——内部链再长也不接触外部世界。ReAct 从 prompt 模板升格成框架里的编排骨架（图的循环）。</td>
+          </tr>
+          <tr>
+            <td>第 3 章</td>
+            <td>ToT / 外部树搜索＝在外面显式生成-评估-回溯</td>
+            <td><strong>价值收缩</strong>。模型内部自己就在搜（长链里隐式地试不同走法、回溯），外挂一层显式树搜索的边际收益变小；通用规划器场景已降级，留给少数需要可控、可审计搜索的场合。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>一句话收口这张表：<strong>能被一段内部链替代的，进了权重（CoT、ToT 式内部搜索）；不能被替代的，留在了外面（接地、工具往返、真正的并行）。</strong>这条分界线，就是判断「某个手写模式在推理模型上还活不活」的通用判据。</p>
+
+      <!-- ============================ self-check ============================ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color:var(--ink-soft); font-style:italic; font-size:15px;">先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节再读一遍。</p>
+        <ol>
+          <li>用一句话说清：从 o1（2024-09）到 DeepSeek-R1（2025-01），CoT 在「谁来负责诱发那段中间推理」这件事上发生了什么变化？R1-Zero 又额外证明了什么？</li>
+          <li>test-time scaling 为什么被称作「与预训练规模<strong>正交</strong>的新轴」？这根轴尾部「趋平」对一个 80% 是简单问句的客服 agent 意味着什么实操结论？</li>
+          <li>给出一条证据说明「在推理模型上手写 few-shot CoT 会掉分」，并说清其机制（为什么样板和内部链会相撞）。</li>
+          <li><strong>（设计层）</strong>你要做一个用 o3 的客服 agent：需要查订单系统、发起退款、并对每一步留可审计痕迹。前三章你学过 CoT few-shot、Self-Consistency、ReAct、Plan-and-Execute、ToT。哪些<em>保留为手写模式</em>、哪些<em>去掉交给权重</em>？逐个说明理由。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>诱发者从<strong>你</strong>变成了<strong>模型自己</strong>：o1 起，那段中间推理由 RL 训进权重、出厂自带，不再靠你写 "step by step" 或 few-shot exemplar 去诱发。R1-Zero 额外证明：推理链能从<strong>纯 RL、无 SFT</strong>中涌现——不喂任何人工推理范例，模型也能自己长出 CoT。</li>
+            <li>因为「把模型练更大（预训练）」和「让模型想更久（推理时）」是两件可<strong>分别独立投入</strong>的事，固定权重只加推理算力，正确率也单调上升，所以是两根正交的轴。尾部趋平的实操结论：简单问句落在曲线已平的那段，拉高思考预算买不到正确率、只增成本与延迟，还会触发 overthink——应<strong>按难度分流预算</strong>，而非一刀切拉满。</li>
+            <li>证据：给 o1-preview 套 5-shot CoT，正确率<em>低于</em>极简 prompt（另：o1-preview 在某语法分类任务上因显式 CoT 掉约 −36%）。机制：模型已有一套训练好的内部推理走法，你塞进去的显式 exemplar 把它往人写的另一条路上拽，两套链相撞，结果不如让它自己走。</li>
+            <li>保留：<strong>ReAct（工具编排）</strong>——查订单 / 发退款是真实工具往返，必须外层手搭循环来接地，权重补不了；<strong>Plan-and-Execute / 显式步骤化</strong>——「每步留可审计痕迹」要的就是结构化、可回放的步骤，比藏在权重里的内部链可控。去掉：<strong>手写 few-shot CoT</strong>——o3 自带推理，样板只会相撞掉分，改 zero-shot 直给；<strong>Self-Consistency</strong>——成本高、且 o3 内部已在做隐式搜索，一般不必再外挂多采样投票（除非个别高价值难题）；<strong>ToT 外部树搜索</strong>——模型内部已隐式搜，外挂通用树搜索边际收益小，去掉。一句话判据：接地 / 可审计 / 真并行的留外面，纯推理的交权重。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>设计一个实验，验证 few-shot CoT 在某推理模型上是否真的掉分</h3>
+        <p>别只引用「o1-preview 5-shot 更差」这个结论，自己设计一个能<strong>复现或证伪</strong>它的实验。至少写清：(1) 选哪个推理模型、对照哪个非推理模型；(2) 任务集怎么选——要覆盖「简单（&lt;3 步）」「多步推理」「感知 / 隐式规律」三类，为什么这三类缺一不可；(3) 三个对照臂（zero-shot 直给 / 3-shot CoT / 5-shot CoT）怎么控制变量；(4) 用什么指标、怎么判定「掉分」在统计上成立而非噪声；(5) 你预期在哪一类任务上掉分最狠，为什么。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键设计点：任务集必须按难度<em>分层</em>报告，否则简单任务的 overthrink 掉分会和感知任务的 CoT 掉分混在一起、互相掩盖——这正是为什么三类缺一不可。控制变量上，三臂之间只动「few-shot 例子的数量与是否含显式推理」，task、温度、推理预算档全部锁死。判定「掉分」要跑足样本量并配显著性检验（如配对比较 + 置信区间），避免把采样噪声当效应。预期掉分最狠处：感知 / 隐式规律类——因为这类任务本该靠一眼识别的直觉，强行展开 CoT 会把对的直觉推翻（对应正文 −36% 那类现象），比单纯 overthinking 更伤。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考（近期来源 · 已标注日期）</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2501.12948">DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning</a>（arXiv 2501.12948，2025-01，GRPO + R1-Zero 纯 RL 涌现推理）</li>
+          <li><a href="https://openai.com/index/learning-to-reason-with-llms/">OpenAI · Learning to Reason with LLMs（o1 介绍）</a>（2024-09-12）</li>
+          <li><a href="https://www.anthropic.com/news/claude-3-7-sonnet">Anthropic · Claude 3.7 Sonnet（扩展思考 / extended thinking，预算可达 128K）</a>（2025-02-25）</li>
+          <li><a href="https://arxiv.org/abs/2408.03314">Snell et al. · Scaling LLM Test-Time Compute Optimally Can Be More Effective than Scaling Parameters</a>（arXiv 2408.03314，2024-08；另见 Brown et al.《Large Language Monkeys》2407.21787，2024-07）</li>
+          <li><a href="https://www.prompthub.us/blog/prompt-engineering-with-reasoning-models">PromptHub · Prompt Engineering with Reasoning Models（推理模型上别堆 few-shot CoT 的指南）</a>（2025）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-search-frontier.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 搜索·前沿</span>
+        </a>
+        <a href="05-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 自测</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 CoT 进权重</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 test-time scaling</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.3 还要手写吗</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.4 模式表达成图</a></li>
+        <li><a href="#fates" data-toc-target="fates">前三章的命运</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+</body>
+</html>

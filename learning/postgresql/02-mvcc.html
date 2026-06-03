@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 MVCC 与事务 · PostgreSQL 核心机制教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; line-height: 1.6; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav a.full { grid-column: 1 / -1; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-storage.html">01 存储</a><span class="sep">—</span>
+    <a href="02-mvcc.html" class="current">02 MVCC</a><span class="sep">—</span>
+    <a href="03-vacuum-wal.html">03 回收·WAL</a><span class="sep">—</span>
+    <a href="04-indexes.html">04 索引</a><span class="sep">—</span>
+    <a href="05-planner.html">05 规划器</a><span class="sep">—</span>
+    <a href="06-vs-mysql.html">06 对比MySQL</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">第 02 章</p>
+        <h1>MVCC 与事务</h1>
+        <p class="recap">上一章看到一行可以有多个版本、每个 tuple 带 <code>xmin</code>/<code>xmax</code>——这一章讲这些版本如何被看见或隐藏，以及由此产生的死元组与膨胀。主线在这里收口：<strong>PG 写从不原地修改，<code>UPDATE</code>/<code>DELETE</code> 写新行版本、旧版本盖 <code>xmax</code> 成死元组；事务读快照。</strong>第 1 章的物理载体（tuple、隐藏列、ctid 链）在本章全部被「快照 + 可见性」这套规则激活。</p>
+      </header>
+
+      <p>第 1 章把物理地基铺到了 <a href="01-storage.html#hidden-columns"><code>xmin</code>/<code>xmax</code> 这两个隐藏列</a>就停手了：它只说「这一版谁造、谁废」是<em>记录</em>在那里的，没说这条记录怎么<em>被读</em>。本章补上的就是「读」这一侧——一个事务执行查询时，靠一把叫<strong>快照（snapshot）</strong>的尺子，把堆里同一行的多个版本筛成「此刻该被这个事务看见的那一个」。整个 MVCC（多版本并发控制）就是这把尺子加一条判定规则，别无其他。理解了它，死元组为什么产生、膨胀为什么失控、HOT 为什么省事，全是直接推论。</p>
+
+      <section class="schema-panel" id="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li><strong>快照（snapshot）= 判断哪些事务已提交的依据</strong>——一张「拍照那刻谁已定论、谁还在飞」的清单，可见性判定的全部输入之一。</li>
+          <li><strong>可见性（visibility）= 拿 tuple 的 <code>xmin</code>/<code>xmax</code> 跟快照比</strong>——一个版本对某事务可见与否，是一道纯比对题，不加锁、不等待。</li>
+          <li><strong>隔离级别（isolation level）= 快照取的时机不同</strong>——Read Committed 每条语句取新快照，Repeatable Read 整事务用同一张，差别只在「何时拍照」。</li>
+          <li><strong>死元组（dead tuple）= 没有任何快照能看到的旧版本</strong>——<code>UPDATE</code>/<code>DELETE</code> 留下的失效版本，占着空间和索引项，等 VACUUM 回收。</li>
+          <li><strong>HOT = 不动索引的更新</strong>——新版本落在同页、且没改索引列时，更新不产生任何新索引项。</li>
+        </ul>
+      </section>
+
+      <h2 id="snapshot"><span class="num">§1</span><span>快照：判断「谁已定论」的依据</span></h2>
+
+      <p class="one-liner">快照是拍照那一刻的一张事务清单：哪些 xid 已经定论、哪些还在进行、哪些尚未开始。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>堆里同一行躺着多个版本，每个版本带着「造它的 xid」和「废它的 xid」。要判断某一版此刻该不该被看见，光看这两个 xid 不够——还得知道这两个事务<em>到当前查询发起的那一刻为止</em>是否已经提交。可这个「是否已提交」的状态是随时间变化的：同一个 <code>xmin=205</code>，在事务 205 提交前看是「未定论」，提交后看是「已生效」。快照就是把「某一刻的提交状态」<strong>冻结成一张可比对的清单</strong>，让可见性判定有一个稳定、确定的参照系，而不必每比一个版本就去全局事务表里现查一次。</p>
+      </div>
+
+      <p>PG 给每个事务分配一个单调递增的事务 ID——<strong>xid</strong>（也写作 txid）。先有的事务 xid 小，后开的 xid 大。一个快照本质上由三部分构成，记作 <code>(xmin, xmax, xip[])</code>，注意这里的 <code>xmin</code>/<code>xmax</code> 是<strong>快照的字段</strong>，与 tuple 上同名的隐藏列不是一回事：</p>
+
+      <ul>
+        <li><strong><code>xmin</code>（快照下界）</strong>：所有<em>小于</em>它的 xid 都已经定论——要么早已提交、要么早已中止，不再有悬念。它是「已盖棺论定」的水位线。</li>
+        <li><strong><code>xmax</code>（快照上界）</strong>：拍快照那一刻，xid 计数器分配到的下一个值。所有<em>大于等于</em>它的 xid 在拍照时<strong>还没开始</strong>，对本快照一律不可见。</li>
+        <li><strong><code>xip[]</code>（in-progress 列表）</strong>：落在 <code>[xmin, xmax)</code> 区间内、但拍照那一刻<em>仍在进行</em>（既未提交也未中止）的事务 xid 列表。这是快照里唯一需要逐个列举的部分。</li>
+      </ul>
+
+      <p>把三者合起来读一个 xid 的状态就一目了然：<strong>小于 <code>xmin</code> → 已定论；大于等于 <code>xmax</code> → 尚未开始；落在区间内且在 <code>xip[]</code> 里 → 拍照时还在飞；落在区间内但不在 <code>xip[]</code> 里 → 拍照前已提交。</strong>这四种状态覆盖了所有 xid，没有第五种。</p>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 快照的 <code>xip[]</code> 解释了一个常被忽略的事实：<em>一个事务提交得早不等于它对你可见得早</em>。设想事务 198 在事务 200 之后才提交，而你的快照在 199 时刻拍下。即便 198 的 xid 比 200 小，只要拍照那一刻 198 还在进行，它就被收进 <code>xip[]</code>，于是它写的版本对你不可见——可见性看的不是 xid 的大小，而是「拍照时是否已提交」。这也是为什么快照必须显式带一个 <code>xip[]</code> 列表，而不能简单地用一个「提交水位线」一刀切：事务的提交顺序与开始顺序可以不一致，区间内的「空洞」必须逐个记下来。这一点在 §2 的可见性判定里会被直接用到。</p>
+
+      <h2 id="visibility"><span class="num">§2</span><span>可见性：一道纯比对题</span></h2>
+
+      <p class="one-liner">一个版本对快照是否可见，由它的 <code>xmin</code>/<code>xmax</code> 跟快照比对决定——不加锁、不等待。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>有了快照这把尺子，还需要一条规则把「尺子」量到「版本」上：给定一个 tuple 的 <code>xmin</code>/<code>xmax</code> 和一张快照，判定这一版此刻可见与否。这条规则是 MVCC 的心脏——它一旦确定，「读写互不阻塞」「同一行不同事务看到不同版本」全都是它的副产品。把它写清楚，后面所有现象都能用它推。</p>
+      </div>
+
+      <p>判定规则可以浓缩成一句话。一个 tuple 对某快照<strong>可见</strong>，当且仅当下面两个条件<em>同时</em>成立：</p>
+
+      <ul>
+        <li><strong>它的创建者已提交、且在快照看来已完成</strong>——即 tuple 的 <code>xmin</code> 对应的事务已提交，且该 xid 小于快照上界、不在快照的 <code>xip[]</code> 里。换言之，造出这一版的事务，在拍照那一刻已经盖棺论定为「提交」。</li>
+        <li><strong>它的废止者尚未生效</strong>——即 tuple 的 <code>xmax</code> 要么为 0（没人删它），要么对应一个<em>未提交、已中止或拍照时仍在进行</em>的事务（在快照看来还没真正废掉它）。</li>
+      </ul>
+
+      <p>反过来，只要创建者在快照看来还没提交，这一版就<strong>不可见</strong>（还没生效）；只要废止者在快照看来已经提交，这一版也<strong>不可见</strong>（已被废）。两个条件，四种组合，结论唯一。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="同一行的两个版本对两个不同快照呈现不同可见性">
+          <defs>
+            <marker id="m-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- timeline axis -->
+          <line x1="40" y1="70" x2="600" y2="70" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="600" y="60" text-anchor="end" class="edge-label">txid 递增 →</text>
+
+          <!-- tick: 100 -->
+          <line x1="120" y1="64" x2="120" y2="76" class="diagram-ink"/>
+          <text x="120" y="92" text-anchor="middle" class="edge-label">100</text>
+          <!-- tick: 205 -->
+          <line x1="400" y1="64" x2="400" y2="76" class="diagram-accent"/>
+          <text x="400" y="92" text-anchor="middle" class="branch-label">205</text>
+
+          <!-- v1 lifespan bar -->
+          <rect x="120" y="108" width="280" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="150" y="127" text-anchor="start" class="node-label">v1</text>
+          <text x="350" y="127" text-anchor="end" class="edge-label">xmin=100 xmax=205</text>
+          <!-- v2 lifespan bar -->
+          <rect x="400" y="108" width="200" height="30" rx="4" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="430" y="127" text-anchor="start" class="node-label-accent">v2</text>
+          <text x="560" y="127" text-anchor="end" class="edge-label">xmin=205</text>
+
+          <!-- reader A snapshot @150 -->
+          <line x1="230" y1="100" x2="230" y2="190" class="diagram-soft"/>
+          <rect x="150" y="190" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="230" y="212" text-anchor="middle" class="node-label">快照 A · txid 150</text>
+          <text x="230" y="232" text-anchor="middle" class="edge-label">205 尚未提交</text>
+          <line x1="230" y1="138" x2="230" y2="188" class="diagram-ink" marker-end="url(#m-ink)"/>
+          <text x="230" y="272" text-anchor="middle" class="branch-label">看到 v1</text>
+
+          <!-- reader B snapshot @300 -->
+          <line x1="500" y1="100" x2="500" y2="190" class="diagram-soft"/>
+          <rect x="420" y="190" width="160" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="500" y="212" text-anchor="middle" class="node-label-accent">快照 B · txid 300</text>
+          <text x="500" y="232" text-anchor="middle" class="edge-label">205 已提交</text>
+          <line x1="500" y1="138" x2="500" y2="188" class="diagram-accent" marker-end="url(#m-verm)"/>
+          <text x="500" y="272" text-anchor="middle" class="branch-label">看到 v2</text>
+
+          <!-- bottom note -->
+          <text x="320" y="320" text-anchor="middle" class="edge-label">同一物理行 · 两张快照 · 谁都没被阻塞</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>同一行两个版本对两张快照的可见性。<strong>注意</strong>：v1 与 v2 是堆里<em>并存</em>的两份；快照 A（事务 205 提交前拍）量出「v1 可见、v2 的创建者未提交」，快照 B（205 提交后拍）量出「v1 已被 205 废、v2 可见」。同一物理行，不同快照看到不同版本，谁都没被阻塞。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 这道纯比对题正是「读不阻塞写、写不阻塞读」的全部原因，值得拆开看清两个方向。</p>
+
+      <p><strong>读为什么不阻塞写。</strong>一次 <code>SELECT</code> 要做的，只是拿快照去逐个比对候选 tuple 的 <code>xmin</code>/<code>xmax</code>，挑出可见的那一版返回。整个过程不申请任何行锁、不关心此刻有没有别的事务正在改这一行——因为它要的版本<em>已经物理存在于堆里</em>，比对完即可读走。与此同时另一个事务尽可以去写新版本，那只是往堆里<em>追加</em>一份 v3，丝毫不影响正在比对 v1/v2 的读者。读者从不等锁，于是读不阻塞写。</p>
+
+      <p><strong>写为什么不阻塞读。</strong>一次 <code>UPDATE</code> 不去触碰旧版本的数据字节（只给旧版本盖一个 <code>xmax</code> 失效戳、并在别处追加新版本），旧版本因此完整保留。任何持有「能看到旧版本」的快照的读者，照样能读到那份未被销毁的旧数据，无须等写者结束。两个方向合起来，就是 MVCC 用「多版本物理共存 + 快照比对」换掉了「读写互斥锁」——代价是堆里堆积的旧版本（§4 的死元组）。这条因果链是第 1 章「为省并发开销、把清理后移给 VACUUM」那句话的正面兑现。</p>
+
+      <div class="callout tip">
+        <span class="label">类比 · 文件的版本历史</span>
+        <p>把一行想成一份带版本历史的文件：每次「保存」不是覆盖，而是存一个新版本号，旧版本仍在历史里。你打开文件时记下「手里这份是截至某时刻的版本」（快照），之后别人怎么存新版本都不影响你手里这份。<strong>类比边界</strong>：版本历史工具通常永久保留所有版本；而 PG 的旧版本一旦「对所有人都不可见」，就成了纯粹的垃圾（死元组），必须被 VACUUM 物理回收，否则表会无限胖下去——这正是 §4 与第 3 章的主题，是「版本历史」类比覆盖不到的。</p>
+      </div>
+
+      <h2 id="isolation"><span class="num">§3</span><span>隔离级别：差别只在「何时拍快照」</span></h2>
+
+      <p class="one-liner">四个隔离级别在 PG 里的真正差异，归结为快照在什么时机被拍下、被沿用多久。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§2 把「一张快照怎么用」讲透了，但没说快照<em>什么时候拍</em>。这个时机正是隔离级别的全部内容：拍得越频繁，事务越能看到外界的最新提交（但同一事务内两次查询会不一致）；拍一次用到底，事务内部绝对一致（但看不到外界中途的提交）。SQL 标准用「能否发生某些异常」来定义隔离级别，PG 用「快照取的时机」来<em>实现</em>它们——理解了实现，标准里那几个异常名词就不必死记。</p>
+      </div>
+
+      <p>PG 支持 SQL 标准的四个隔离级别，但实现上有自己的取舍：</p>
+
+      <ul>
+        <li><strong>Read Uncommitted</strong>：标准里允许脏读（读到未提交数据）。PG <em>没有</em>脏读的实现路径——它把这一级直接<strong>等同于 Read Committed</strong>。声明 Read Uncommitted 不会让你读到任何未提交的版本。</li>
+        <li><strong>Read Committed（默认）</strong>：<strong>每一条语句开始时取一张新快照</strong>。于是每条语句都能看到「该语句开始那一刻」已提交的所有数据。这是 PG 的默认级别。</li>
+        <li><strong>Repeatable Read</strong>：<strong>事务的第一条语句取一张快照，整个事务自始至终沿用它</strong>。事务内任何查询都基于同一张快照，看到的是「事务开始那一刻」的数据视图——这就是<em>快照隔离</em>。</li>
+        <li><strong>Serializable</strong>：在 Repeatable Read 的快照隔离之上，叠加 <strong>SSI（Serializable Snapshot Isolation，可序列化快照隔离）+ 谓词锁</strong>，监控事务之间的读写依赖，一旦发现会破坏可序列化的危险模式就让其中一个事务失败。</li>
+      </ul>
+
+      <table class="compare-table">
+        <caption>四个隔离级别 × 四类异常（PG 实现，✗=该级别杜绝 / ✓=该级别允许）</caption>
+        <thead>
+          <tr><th>隔离级别</th><th>脏读</th><th>不可重复读</th><th>幻读</th><th>序列化异常</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Read Uncommitted<br><span style="font-size:12px;color:var(--ink-faint)">（PG 等同 RC）</span></td><td>✗</td><td>✓</td><td>✓</td><td>✓</td></tr>
+          <tr class="selected"><td>Read Committed<br><span style="font-size:12px">默认 · 每语句新快照</span></td><td>✗</td><td>✓</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Repeatable Read<br><span style="font-size:12px;color:var(--ink-faint)">事务级单一快照</span></td><td>✗</td><td>✗</td><td>✗</td><td>✓</td></tr>
+          <tr><td>Serializable<br><span style="font-size:12px;color:var(--ink-faint)">SSI + 谓词锁</span></td><td>✗</td><td>✗</td><td>✗</td><td>✗</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 表里两个值得停下来想的格子。</p>
+
+      <p>其一，<strong>Read Committed 为什么会「不可重复读」。</strong>因为它<em>每条语句</em>重新拍快照。同一个事务里连续两条相同的 <code>SELECT</code>，第一条用快照甲、第二条用快照乙；若两条之间别的事务提交了改动，乙就量得到、甲量不到，两次结果于是不同。这不是 bug，而是「每语句新快照」的直接后果——要消除它，把隔离级别提到 Repeatable Read，让整事务共用一张快照即可。</p>
+
+      <p>其二，也是与 MySQL 分道扬镳的一刀：<strong>PG 的 Repeatable Read 遇到写冲突会抛错，而不是阻塞。</strong>当两个 Repeatable Read 事务试图更新同一行，后提交的那个不会默默覆盖、也不会卡住等锁，而是直接报 <code>40001</code>（<code>serialization_failure</code>，序列化失败），把事务回滚——应用必须捕获它并<em>重试整个事务</em>。这与 InnoDB 的 Repeatable Read「后者阻塞等锁、拿到后基于旧读继续」是根本不同的并发哲学：PG 让快照保持纯粹（事务视图绝不被中途的写污染），代价是把冲突显式抛给应用处理。这条对比是第 6 章的主线之一，详见 <a href="06-vs-mysql.html#isolation-default">第 6 章 · 默认隔离级别与冲突处理</a>。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>Read Committed 下，同一个事务里执行两次完全相同的 <code>SELECT count(*) FROM t</code>，两次之间另一个事务 <code>INSERT</code> 了一行并 <code>COMMIT</code>。两次的结果一样吗？换成 Repeatable Read 呢？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>Read Committed：不一样。</strong>第二条 <code>SELECT</code> 开始时重新拍了快照，那一刻新行已提交，于是被量到，<code>count</code> 比第一次多 1。这正是「不可重复读 / 幻读」在 RC 下成立的体现。</p>
+          <p><strong>Repeatable Read：一样。</strong>整个事务沿用第一条语句拍下的那张快照。无论中途别人提交了什么，那张快照里 <code>xmax</code> 上界以后开始的事务一律不可见，新行不在视图内，两次 <code>count</code> 完全相同。把隔离级别从 RC 提到 RR，本质就是把「每语句拍照」改成「整事务一张照」。</p>
+        </details>
+      </div>
+
+      <h2 id="dead-tuple"><span class="num">§4</span><span>死元组：没有任何快照能看到的旧版本</span></h2>
+
+      <p class="one-liner">当一个旧版本的 <code>xmax</code> 已提交、且对所有现存快照都不可见，它就成了死元组——纯垃圾，等回收。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§2 说写不阻塞读的代价是旧版本被保留；§3 说不同隔离级别下不同事务持有不同快照。把两者叠起来就有了一个关键问题：一个旧版本到底什么时候<em>彻底没用</em>、可以物理删掉？答案不是「它被 <code>UPDATE</code> 取代时」——那一刻往往还有老快照需要它。答案是「再没有任何现存或未来快照能看到它时」。能精确回答这个问题，才能既安全（不删还有人要看的版本）又及时（不留永远没人看的垃圾）地回收空间。死元组就是这个问题的「是」那一侧。</p>
+      </div>
+
+      <p>一个 tuple 版本成为<strong>死元组（dead tuple）</strong>的条件是两点合一：它的 <code>xmax</code> 对应的事务<strong>已经提交</strong>（即它确实被某个已生效的事务删除或更新取代了），<em>并且</em>当前数据库里<strong>没有任何活动快照的视图能再看到它</strong>（所有比它的 <code>xmax</code> 更老的、本来还会需要它的事务都已经结束）。满足这两点，这一版对全世界都不可见，永远不会再被任何查询返回——它就是确定的垃圾。</p>
+
+      <p>但死元组<strong>不会自动消失</strong>。它仍然物理地占着所在 Page 的一个槽位和数据空间；如果它对应的行在被索引的列上有值，<strong>每个相关索引里也还留着一条指向它的索引项</strong>。这些空间和索引项要等 <strong>VACUUM</strong> 来回收——这是第 3 章的主题（详见 <a href="03-vacuum-wal.html#vacuum">第 3 章 · VACUUM</a>）。在 VACUUM 跑到之前，死元组就是表和索引里实打实的「虚胖」。</p>
+
+      <div class="callout insight">
+        <span class="label">把概念钉死</span>
+        <p>「失效」和「死」是两个时刻，别混。<code>UPDATE</code> 一发生，旧版本立刻被盖上 <code>xmax</code>——这叫<strong>失效</strong>，但只要还有某个老快照需要它，它就<em>还不是</em>死元组。只有当 <code>xmax</code> 已提交、且<em>再没有快照能看到它</em>，它才升级为<strong>死元组</strong>。这个「失效 → 死」之间的时间差，恰恰是被最老的活动事务撑开的——§6 的膨胀失败模式整个就建立在这个时间差被一个长事务无限拉长之上。</p>
+      </div>
+
+      <h2 id="hot"><span class="num">§5</span><span>HOT：不动索引的更新</span></h2>
+
+      <p class="one-liner">新版本落在同一个 Page、且没改任何被索引的列时，更新不产生任何新索引项。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>「写从不原地改」带来一个尖锐的次生成本：默认情况下，每一次 <code>UPDATE</code> 既要在堆里写新版本，又要在<em>每一个</em>索引里为新版本插一条新索引项（因为新版本的 <code>ctid</code> 和旧版本不同，索引必须指向新位置）。一张表上若有五个索引，一次更新就要动五处索引——这就是「写放大」。HOT（Heap-Only Tuple，仅堆元组）是 PG 针对这个成本的核心优化：在条件满足时，让更新<em>完全跳过所有索引</em>。理解 HOT 的触发条件，是把更新成本从「按索引个数线性放大」压回「只写堆」的关键，也是后面解释「给频繁更新的列加索引为何拖慢写入」的钥匙。</p>
+      </div>
+
+      <p>HOT 更新触发需要<strong>两个条件同时满足</strong>：</p>
+
+      <ul>
+        <li><strong>被改的列上没有索引</strong>——这次 <code>UPDATE</code> 修改的所有列，都不是任何索引的组成列。若改了哪怕一个被索引的列，索引就必须指向新值，HOT 失效。</li>
+        <li><strong>新版本能放进同一个 Page</strong>——旧版本所在的那个 8KB Page 还有足够空闲（这正是第 1 章 <code>fillfactor</code> 预留空间的用途）装下新版本。若同页放不下、新版本只能落到别的 Page，HOT 也失效。</li>
+      </ul>
+
+      <p>两个条件都满足时，HOT 这样工作：新版本写进<em>同一个 Page</em>；旧版本的 tuple 头被标记上 <code>HEAP_HOT_UPDATED</code>，其 <code>ctid</code> 指向同页内新版本的槽位，于是同一行的版本在页内串成一条 <strong>HOT 链</strong>；最关键的是——<strong>不为新版本插入任何索引项</strong>，所有索引仍然指向旧版本的那个 line pointer 槽。查询走索引命中旧 line pointer 后，顺着 HOT 链往下走，找到当前可见的新版本返回。索引「以为」自己还指着原来那行，实际由堆内的链接把它接到了最新版本。</p>
+
+      <figure>
+        <svg viewBox="0 0 660 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="非 HOT 更新与 HOT 更新对索引的不同影响">
+          <defs>
+            <marker id="m-ink2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m-verm2" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- divider -->
+          <line x1="330" y1="20" x2="330" y2="310" class="diagram-soft"/>
+
+          <!-- LEFT: non-HOT -->
+          <text x="160" y="34" text-anchor="middle" class="node-label">非 HOT（改了带索引的列）</text>
+          <!-- index node -->
+          <rect x="40" y="56" width="100" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="90" y="73" text-anchor="middle" class="node-label">索引</text>
+          <text x="90" y="89" text-anchor="middle" class="edge-label">两条项</text>
+          <!-- old tuple -->
+          <rect x="190" y="56" width="110" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="245" y="79" text-anchor="middle" class="edge-label">旧版本 (0,1)</text>
+          <!-- new tuple + new index entry -->
+          <rect x="190" y="150" width="110" height="44" rx="4" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="245" y="168" text-anchor="middle" class="node-label-accent">新版本 (0,2)</text>
+          <text x="245" y="184" text-anchor="middle" class="edge-label">+ 新索引项</text>
+          <!-- arrows: index -> old, index -> new -->
+          <line x1="140" y1="72" x2="188" y2="74" class="diagram-ink" marker-end="url(#m-ink2)"/>
+          <line x1="90" y1="96" x2="90" y2="172" class="diagram-accent"/>
+          <line x1="90" y1="172" x2="188" y2="172" class="diagram-accent" marker-end="url(#m-verm2)"/>
+          <text x="120" y="232" text-anchor="middle" class="branch-label">索引被迫长大</text>
+
+          <!-- RIGHT: HOT -->
+          <text x="500" y="34" text-anchor="middle" class="node-label">HOT（只改无索引的列）</text>
+          <!-- index node -->
+          <rect x="372" y="56" width="100" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="422" y="73" text-anchor="middle" class="node-label">索引</text>
+          <text x="422" y="89" text-anchor="middle" class="edge-label">一条项 · 不变</text>
+          <!-- old line pointer -->
+          <rect x="513" y="56" width="124" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="575" y="74" text-anchor="middle" class="edge-label">旧 line ptr (0,1)</text>
+          <text x="575" y="90" text-anchor="middle" class="edge-label">HOT_UPDATED</text>
+          <!-- new tuple same page -->
+          <rect x="513" y="150" width="124" height="44" rx="4" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="575" y="168" text-anchor="middle" class="node-label-accent">新版本 (0,2)</text>
+          <text x="575" y="184" text-anchor="middle" class="edge-label">同页 · 无新索引项</text>
+          <!-- arrow: index -> old line ptr -->
+          <line x1="472" y1="74" x2="513" y2="74" class="diagram-ink" marker-end="url(#m-ink2)"/>
+          <!-- HOT chain: old line ptr -> new tuple -->
+          <line x1="575" y1="100" x2="575" y2="148" class="diagram-accent" marker-end="url(#m-verm2)"/>
+          <text x="575" y="128" text-anchor="middle" class="branch-label">HOT 链</text>
+          <text x="500" y="232" text-anchor="middle" class="branch-label">索引一动不动</text>
+
+          <!-- bottom note both sides -->
+          <text x="330" y="290" text-anchor="middle" class="edge-label">一个索引就能让 HOT 失效 → 退回左侧路径</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>非 HOT 与 HOT 更新的对照。左：改了被索引的列，必须为新版本插新索引项；右：只改无索引列且同页放得下，索引指向旧 line pointer 不变，由页内 HOT 链接到新版本。<strong>注意</strong>：只要被改的列上存在<em>一个</em>索引，HOT 就失效，退回左侧的「写堆 + 写每个索引」路径。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> HOT 的红利和它的脆弱性是同一枚硬币的两面，必须一起记。</p>
+
+      <p>红利一侧：HOT 把「更新即更新所有索引」这条默认开销，在常见的「只改非索引字段」场景里<em>归零</em>。同时它还顺手缓解膨胀——HOT 链上被淘汰的中间版本，可以由一种轻量的页内清理（heap-only 的剪枝）在普通访问路径上就地回收槽位，不必等完整 VACUUM。对一张「主键 + 几个索引列基本不动、只频繁更新某个非索引计数/状态字段」的表，HOT 是决定其写入吞吐的关键机制。</p>
+
+      <p>脆弱性一侧，也是最实用的陷阱：<strong>给一个频繁更新的列加上索引，会让该列的更新从此无法走 HOT。</strong>因为「被改的列上没有索引」这条触发条件被破坏了——每次更新都退回「写新堆版本 + 给这个新索引插新项」的路径，写入开销陡增，且这个新索引本身也会因不断追加的索引项而快速膨胀。一个看似无害的「为了查询加个索引」，在高频更新列上会同时招来<em>写放大</em>与<em>索引膨胀</em>两笔账。这条权衡是第 4 章索引设计的核心之一，详见 <a href="04-indexes.html#index-hot">第 4 章 · 索引与 HOT 的相互作用</a>。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一张表有个每秒被更新一次的计数器列 <code>hit_count</code>，原本它上面没有索引、更新一直走 HOT。现在有人为了「按热度排序」给 <code>hit_count</code> 建了个索引。这张表的写入为什么会慢一个数量级？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>因为 HOT 被这个新索引一刀打掉了。</strong>建索引前，更新 <code>hit_count</code> 不碰任何被索引的列，满足 HOT 条件：每次更新只在同页写一个新版本、索引一概不动，且页内剪枝还能顺手回收旧版本——写入极轻。建索引后，<code>hit_count</code> 成了被索引的列，每次更新都破坏「被改列无索引」这一条，HOT 失效：每次更新变成「堆里写新版本 + 在 <code>hit_count</code> 索引里插一条新项」，并且旧版本不再能被轻量页内剪枝及时清掉、要积压等 VACUUM。写放大叠加索引膨胀，加上这个高频写的索引页本身的争用，整体写入开销轻松差出一个数量级。<strong>结论</strong>：高频更新的列，加索引前要先算清它会废掉 HOT 这笔账。</p>
+        </details>
+      </div>
+
+      <h2 id="bloat"><span class="num">§6</span><span>膨胀：死元组积累快于回收</span></h2>
+
+      <p class="one-liner">死元组和失效索引项的积累速度超过 VACUUM 的回收速度，表与索引就持续虚胖。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前五节把因果链铺齐了：写产生新版本（§2）、旧版本失效后在条件满足时成死元组（§4）、HOT 能省一部分但不是总能省（§5）。膨胀（bloat）是这条链失衡时的系统性后果——它不是某个操作的瞬时开销，而是「产生垃圾的速度」持续压过「回收垃圾的速度」时，表和索引体积只涨不落的慢性病。它最危险的一种成因，恰恰把本章的快照、可见性、死元组三个概念串成一个能拖垮整库的失败模式，必须讲清。</p>
+      </div>
+
+      <p><strong>膨胀</strong>指表（以及其索引）里死元组与失效索引项不断积累、占用的空间远超实际存活数据，且回收跟不上产生。适度的死元组是 MVCC 的正常代谢，VACUUM 会把空间标记为可复用；但当产生持续快于回收，体积就单向上涨——缓存里能装的有效行变少、顺序扫描要读更多无用 Page、查询变慢。</p>
+
+      <p>最致命的失败模式，是<strong>长事务 / idle-in-transaction（事务里执行完语句却迟迟不提交、一直挂着）持有一张老快照</strong>。回顾 §4：一个旧版本要升级成可回收的死元组，前提是「再没有任何活动快照能看到它」。只要有一个老事务的快照还活着，那个老快照能看到的所有旧版本就<em>都不能</em>被判定为死元组——VACUUM 即便跑，也不敢回收它们。PG 用一条<strong>回收水平线（xmin horizon）</strong>来记录「当前最老的、仍被某个活动事务需要的 xid」；一个长事务把这条水平线死死<em>钉</em>在它开始的那个 xid 上，使其无法前进。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="长事务持有老快照导致回收水平线卡住、多表系统性膨胀的因果链">
+          <defs>
+            <marker id="m-ink3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="m-verm3" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- step 1 -->
+          <rect x="180" y="20" width="280" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="320" y="40" text-anchor="middle" class="node-label-accent">idle-in-transaction 长事务</text>
+          <text x="320" y="58" text-anchor="middle" class="edge-label">持一张老快照不放</text>
+
+          <line x1="320" y1="68" x2="320" y2="92" class="diagram-ink" marker-end="url(#m-ink3)"/>
+
+          <!-- step 2 -->
+          <rect x="180" y="92" width="280" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="320" y="112" text-anchor="middle" class="node-label">回收水平线 (xmin horizon)</text>
+          <text x="320" y="130" text-anchor="middle" class="edge-label">被钉住 · 不前进</text>
+
+          <line x1="320" y1="140" x2="320" y2="164" class="diagram-ink" marker-end="url(#m-ink3)"/>
+
+          <!-- step 3 -->
+          <rect x="160" y="164" width="320" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="320" y="184" text-anchor="middle" class="node-label">死元组无法判定为「对谁都不可见」</text>
+          <text x="320" y="202" text-anchor="middle" class="edge-label">VACUUM 跑了也不敢回收</text>
+
+          <line x1="320" y1="216" x2="320" y2="240" class="diagram-accent" marker-end="url(#m-verm3)"/>
+
+          <!-- step 4: multiple tables -->
+          <text x="320" y="258" text-anchor="middle" class="branch-label">多张表一起膨胀</text>
+          <rect x="120" y="270" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="294" text-anchor="middle" class="edge-label">表 A ↑</text>
+          <text x="180" y="312" text-anchor="middle" class="edge-label">长事务读过</text>
+          <rect x="260" y="270" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="320" y="294" text-anchor="middle" class="edge-label">表 B ↑</text>
+          <text x="320" y="312" text-anchor="middle" class="edge-label">没读过 · 照胖</text>
+          <rect x="400" y="270" width="120" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="460" y="294" text-anchor="middle" class="edge-label">表 C ↑</text>
+          <text x="460" y="312" text-anchor="middle" class="edge-label">没读过 · 照胖</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>长事务阻塞回收的因果链：idle 事务持老快照 → 回收水平线被钉住 → 任何「在该事务开始后变死」的元组都无法被判定为对谁都不可见 → VACUUM 回收不了，多张表一起膨胀。<strong>注意</strong>：膨胀是<em>系统性</em>的——回收水平线是全局的，长事务从没读过的表 B、表 C 一样回收受阻、跟着胖，不限于它实际读过的行。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（比文档深一层）。</strong> 这个失败模式最反直觉、也最致命的一点：<strong>膨胀的范围远超那个长事务实际碰过的数据。</strong>回收水平线是<em>数据库全局</em>的单一水位，不是「这个事务读了哪些表」的精细记录。VACUUM 在回收<em>任何</em>一张表时，都要拿这条全局水平线做安全判定：凡 <code>xmax</code> 比水平线新的死元组，一律不敢回收（因为理论上那个老事务<em>还会</em>去读这张表）。于是一个挂在那里、只查过一张小表的 <code>idle-in-transaction</code> 事务，会让全库<em>所有</em>表上、在它开始之后产生的死元组统统无法回收——哪怕那些表它从未访问。一张高频更新的核心表，会在几小时内因为另一个连接上一个被遗忘的未提交事务而膨胀到原来的数倍。这就是为什么生产库要监控并杀掉长时间 <code>idle-in-transaction</code> 的连接，也是为什么「拿到连接就开事务、慢慢干活、忘了提交」是最危险的反模式之一。VACUUM 与回收水平线的完整机制，是第 3 章的正题（详见 <a href="03-vacuum-wal.html#visibility-map">第 3 章 · 可见性图与回收</a>）。</p>
+
+      <h2 id="worked"><span class="num">§7</span><span>动手观察：两个会话看快照如何隔离</span></h2>
+
+      <p>把 §1–§3 拧成一个可观察的双会话实验。两栏分别是会话 A 和会话 B；先用默认的 Read Committed 看「B 看不到 A 的未提交、A 一提交 B 就看见」，再切到 Repeatable Read 看「B 钉住快照后，A 提交了 B 仍看不见」。下面的输出<strong>未在本机执行</strong>，用于演示该看哪些时刻、结果如何随快照时机变化。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">双会话：Read Committed 下的可见性</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="code-rc">复制</button>
+        </div>
+<pre><code id="code-rc" class="language-sql">-- 会话A                                  -- 会话B
+BEGIN;
+INSERT INTO accounts (id, balance)
+  VALUES (2, 50.00);
+-- 尚未 COMMIT
+                                          -- 会话B（默认 Read Committed）
+                                          SELECT * FROM accounts WHERE id = 2;
+                                          --  id | balance
+                                          -- ----+---------
+                                          -- (0 rows)        &lt;- 看不见 A 的未提交版本
+COMMIT;
+                                          -- A 提交后，B 再查（新语句 = 新快照）
+                                          SELECT * FROM accounts WHERE id = 2;
+                                          --  id | balance
+                                          -- ----+---------
+                                          --   2 |   50.00   &lt;- 现在看见了（未在本机执行）</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">双会话：Repeatable Read 钉住快照</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="code-rr">复制</button>
+        </div>
+<pre><code id="code-rr" class="language-sql">-- 会话A                                  -- 会话B
+                                          BEGIN ISOLATION LEVEL REPEATABLE READ;
+                                          -- 第一条 SELECT 拍下整事务沿用的快照
+                                          SELECT count(*) FROM accounts;
+                                          --  count
+                                          -- -------
+                                          --      2          &lt;- 此刻的视图被钉住
+BEGIN;
+INSERT INTO accounts (id, balance)
+  VALUES (3, 70.00);
+COMMIT;
+                                          -- A 已提交，但 B 仍用最初那张快照
+                                          SELECT count(*) FROM accounts;
+                                          --  count
+                                          -- -------
+                                          --      2          &lt;- 仍看不见 id=3（未在本机执行）
+                                          COMMIT;  -- 事务结束，下次新事务才会看到</code></pre>
+      </div>
+
+      <p><strong>逐行解读</strong>，把每个时刻映射回概念：</p>
+      <ul>
+        <li><span class="annotations"><span class="line-ref">B 第一次查 = 空</span></span>A 的 <code>INSERT</code> 还没 <code>COMMIT</code>，那个新 tuple 的 <code>xmin</code> 对应的事务在 B 的快照里属于「仍在进行」（落在 <code>xip[]</code>）。按 <a href="#visibility">§2</a> 的规则，创建者未提交 → 不可见。对上 <a href="#snapshot">§1</a> 的 <code>xip[]</code>。</li>
+        <li><span class="annotations"><span class="line-ref">A COMMIT → B 看见</span></span>B 是 Read Committed，第二条 <code>SELECT</code> <em>重新拍了一张快照</em>（<a href="#isolation">§3</a> 的「每语句新快照」）。这一刻 A 已提交，新 tuple 的创建者不再在 <code>xip[]</code> 里 → 可见。两次结果不同，正是「不可重复读」。</li>
+        <li><span class="annotations"><span class="line-ref">RR 下 B 第一条 SELECT</span></span><code>BEGIN ISOLATION LEVEL REPEATABLE READ</code> 后的第一条语句拍下快照，整事务沿用（<a href="#isolation">§3</a> 的快照隔离）。这张快照的 <code>xmax</code> 上界，定格在那一刻。</li>
+        <li><span class="annotations"><span class="line-ref">RR 下 A 提交后 B 仍 = 2</span></span>A 的事务 xid 大于等于 B 快照的 <code>xmax</code> 上界，无论它是否提交，对 B 这张<em>钉住的</em>快照一律不可见（<a href="#visibility">§2</a>）。所以 <code>count</code> 不变——这就是 RR 消除不可重复读的机制：不是「锁住了行」，而是「快照根本没把后来的事务纳入视野」。</li>
+      </ul>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>上面 RR 的例子里，把 B 改成「先 <code>UPDATE accounts SET balance = balance + 1 WHERE id = 3</code>」，而 A 在 B 拍下快照之后才 <code>INSERT id=3 并 COMMIT</code>。B 的 <code>UPDATE</code> 会改到这一行吗？若 A 改的是一行 B 快照里<em>已存在</em>、A 也在更新的行呢？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p><strong>改不到 id=3。</strong>B 的 RR 快照在 A 插入 id=3 之前就拍定了，id=3 这一版的创建者落在 B 快照的 <code>xmax</code> 上界之外，对 B 不可见；B 的 <code>UPDATE ... WHERE id=3</code> 在自己的快照里根本找不到这行，影响 0 行。</p>
+          <p><strong>若是双方都更新同一行已存在的数据</strong>（写写冲突），结局不同：B 在 RR 下不会默默覆盖、也不会一直阻塞，而是检测到该行已被另一个事务的更新改动，抛出 <code>40001</code> <code>serialization_failure</code>，B 的事务回滚——应用需捕获并<em>重试整个事务</em>。这正是 <a href="#isolation">§3</a> 里「PG 的 RR 遇写冲突抛错而非阻塞」那条，与 InnoDB 的阻塞式 RR 形成对照（<a href="06-vs-mysql.html#isolation-default">第 6 章</a>）。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>快照的三部分 <code>(xmin, xmax, xip[])</code> 各表示什么？一个 xid「比快照 <code>xmin</code> 小」和「在 <code>xip[]</code> 里」分别意味着它处于什么状态？</li>
+          <li>一个 tuple 对某快照「可见」的两个条件是什么？为什么「读不阻塞写」可以直接从这两个条件推出来？</li>
+          <li>Read Committed 与 Repeatable Read 的唯一本质差别是什么（用「快照时机」回答）？由此，哪个会发生不可重复读？</li>
+          <li>一个 <code>idle-in-transaction</code> 的长事务，为什么会让一张它<em>从未访问过</em>的表也膨胀？</li>
+        </ol>
+        <details>
+          <summary>查看参考答案</summary>
+          <p><strong>1.</strong> <code>xmin</code>=快照下界，小于它的 xid 全部已定论；<code>xmax</code>=快照上界，大于等于它的 xid 拍照时尚未开始；<code>xip[]</code>=落在区间内、拍照那刻仍在进行的事务列表。「比 <code>xmin</code> 小」= 已定论（提交或中止，无悬念）；「在 <code>xip[]</code> 里」= 拍照时还在飞、既未提交也未中止，因此它写的版本对本快照不可见。</p>
+          <p><strong>2.</strong> 两个条件：(a) tuple 的 <code>xmin</code> 已提交且在快照看来已完成（小于上界、不在 <code>xip[]</code>）；(b) tuple 的 <code>xmax</code> 为 0，或对应一个未提交/中止/进行中的事务。「读不阻塞写」由此直推：判定一个版本是否可见只是拿 <code>xmin</code>/<code>xmax</code> 跟快照<em>比对</em>，要读的版本已物理存在于堆中，全程不申请行锁、不等待，所以另一个事务并行地写新版本（只是往堆里追加）丝毫不挡读者。</p>
+          <p><strong>3.</strong> 唯一本质差别是<strong>快照取的时机</strong>：RC 每条语句开始时取<em>新</em>快照；RR 在事务第一条语句取<em>一张</em>快照、整事务沿用。因为 RC 每语句换快照，同一事务里两条相同查询中间若有别的事务提交，结果会变——所以<strong>RC 会发生不可重复读</strong>，RR 不会。</p>
+          <p><strong>4.</strong> 因为回收水平线（xmin horizon）是<em>全局</em>的单一水位，不区分长事务读过哪些表。VACUUM 回收任何一张表时，都要保证不删「<code>xmax</code> 比水平线新」的死元组（理论上那个老事务还会去读）。长事务把全局水平线钉住，于是全库所有表上、在它开始之后产生的死元组都无法回收——和它是否访问过那张表无关。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>制造一个长事务，亲眼看回收水平线被钉住</h3>
+        <p>开两个会话。会话 1 执行 <code>BEGIN; SELECT 1;</code> 然后<em>挂着不提交</em>（模拟 idle-in-transaction）。会话 2 对某张表反复 <code>UPDATE</code> 同一批行制造大量死元组，然后跑 <code>VACUUM (VERBOSE)</code>。观察 VACUUM 报告里「死元组无法被回收」的计数——证明它们因会话 1 的老快照而被卡住。再回会话 1 执行 <code>COMMIT</code>，重跑 <code>VACUUM (VERBOSE)</code>，看那些死元组这次能否被回收。</p>
+        <details>
+          <summary>提示</summary>
+          <p>关键观察点有三处。其一，<code>SELECT backend_xmin, state, query FROM pg_stat_activity WHERE state = 'idle in transaction';</code> 能看到会话 1 持有的 <code>backend_xmin</code>——这就是被它钉住的回收水平线。其二，会话 2 的 <code>VACUUM (VERBOSE) your_table;</code> 输出里会有一行形如「<code>X dead row versions cannot be removed yet, oldest xmin: N</code>」，那个 <code>oldest xmin</code> 正好等于会话 1 的 <code>backend_xmin</code>——回收被这条水平线挡住了。其三，会话 1 <code>COMMIT</code> 后水平线前移，重跑 VACUUM，同一批死元组的「cannot be removed」计数应大幅下降乃至归零。把「<code>backend_xmin</code> = 老快照」「oldest xmin 卡住 = 回收水平线不前进」与本章 §4/§6 对上，这条因果链就闭合了。完整的 VACUUM 机制见 <a href="03-vacuum-wal.html#vacuum">第 3 章</a>。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/18/mvcc-intro.html">PostgreSQL 18 Docs · Introduction to MVCC</a>（多版本并发控制的总览与设计动机）</li>
+          <li><a href="https://www.postgresql.org/docs/18/transaction-iso.html">PostgreSQL 18 Docs · Transaction Isolation</a>（四个隔离级别的精确定义、序列化失败与重试）</li>
+          <li><a href="https://github.com/postgres/postgres/blob/master/src/backend/access/heap/README.HOT">PostgreSQL Source · Heap-Only Tuples (README.HOT)</a>（HOT 触发条件、HOT 链与页内剪枝的权威说明，亦见文档 storage-hot）</li>
+          <li><a href="https://momjian.us/main/writings/pgsql/mvcc.pdf">Bruce Momjian · MVCC Unmasked</a>（用 xmin/xmax 逐步拆解可见性的经典讲义）</li>
+          <li><a href="https://www.interdb.jp/pg/pgsql05.html">The Internals of PostgreSQL · Ch.5–6 Concurrency Control & VACUUM</a>（快照结构、可见性判定、回收水平线的图解）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="01-storage.html">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 存储与数据模型</span>
+        </a>
+        <a class="next" href="03-vacuum-wal.html">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 回收与持久化</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#snapshot" data-toc-target="snapshot">快照 · 提交依据</a></li>
+        <li><a href="#visibility" data-toc-target="visibility">可见性 · 比对题</a></li>
+        <li><a href="#isolation" data-toc-target="isolation">隔离级别 · 快照时机</a></li>
+        <li><a href="#dead-tuple" data-toc-target="dead-tuple">死元组</a></li>
+        <li><a href="#hot" data-toc-target="hot">HOT · 不动索引</a></li>
+        <li><a href="#bloat" data-toc-target="bloat">膨胀 · 长事务</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

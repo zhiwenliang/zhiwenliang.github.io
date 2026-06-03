@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 综合 · Kafka 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html" class="current">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 05</p>
+        <h1>综合实战：订单事件系统的选型与判别</h1>
+        <p class="recap">01 章把 Kafka 框成<a href="01-concepts.html#log-model">一条可重放的分区日志</a>，02 章拆开了<a href="02-principles.html#replication">副本</a>/<a href="02-principles.html#rebalance">再平衡</a>/<a href="02-principles.html#delivery">投递语义</a>的设计取舍，03 章把它写成可跑的代码，04 章列出<a href="04-pitfalls.html#data-loss">机制被违反时的失败模式</a>。本章不再逐节讲机制，而是把前四章塞进一个真实系统：一个电商订单事件平台。它逼出的不是"怎么实现某步"，而是<strong>判别</strong>——同一个决策点，这里该用 01 的概念还是 02 的机制，该选 Kafka 还是别的工具。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>把"一份数据、多消费组、各自 offset"从概念落到一张订单系统架构图上</li>
+          <li>分区 key、acks 组合、消费语义、顺序范围四类决策——每类都是一次跨章判别，没有放之四海的默认答案</li>
+          <li>选型判别：同一个系统里，为什么主干用 Kafka、某个下游反而该用 RabbitMQ、什么时候考虑 share group</li>
+          <li>用可观测行为（重启不重复扣、kill broker 不丢、同单严格有序）来验收设计，而不是"看起来对"</li>
+        </ul>
+      </section>
+
+      <!-- ============================== 架构图 (Figure 5.1) ============================== -->
+      <figure>
+        <svg viewBox="0 0 880 470" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="订单服务写 orders topic 的 3 个分区，三个消费组各自维护 offset 独立消费">
+          <defs>
+            <marker id="cap-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="cap-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Producer (left) -->
+          <rect x="24" y="190" width="150" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="99" y="216" text-anchor="middle" class="node-label-accent">订单服务</text>
+          <text x="99" y="236" text-anchor="middle" class="edge-label">key = orderId</text>
+
+          <!-- orders topic boundary (center) -->
+          <rect x="250" y="120" width="250" height="218" rx="8" class="diagram-soft"/>
+          <text x="268" y="142" class="edge-label" font-weight="700">TOPIC orders（3 分区）</text>
+
+          <rect x="276" y="156" width="198" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="375" y="183" text-anchor="middle" class="node-label">partition 0 · 日志</text>
+
+          <rect x="276" y="212" width="198" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="375" y="239" text-anchor="middle" class="node-label">partition 1 · 日志</text>
+
+          <rect x="276" y="268" width="198" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="375" y="295" text-anchor="middle" class="node-label">partition 2 · 日志</text>
+
+          <!-- producer -> topic -->
+          <line x1="174" y1="222" x2="250" y2="222" class="diagram-accent" marker-end="url(#cap-verm)"/>
+          <text x="212" y="212" text-anchor="middle" class="branch-label">写</text>
+
+          <!-- 3 consumer groups (right), each reads ALL partitions, own offset -->
+          <!-- group 库存 -->
+          <rect x="600" y="58" width="250" height="80" rx="8" class="diagram-ink node-fill"/>
+          <text x="618" y="80" class="node-label">消费组 · 库存扣减</text>
+          <text x="618" y="100" class="edge-label">offset 库存 · 独立游标</text>
+          <text x="618" y="122" class="edge-label" fill="#B73B2F">不丢且不重复扣</text>
+
+          <!-- group 通知 -->
+          <rect x="600" y="170" width="250" height="80" rx="8" class="diagram-ink node-fill"/>
+          <text x="618" y="192" class="node-label">消费组 · 用户通知</text>
+          <text x="618" y="212" class="edge-label">offset 通知 · 独立游标</text>
+          <text x="618" y="234" class="edge-label">可容忍少量重复</text>
+
+          <!-- group 对账 (accent) -->
+          <rect x="600" y="282" width="250" height="80" rx="8" class="diagram-accent node-fill-accent"/>
+          <text x="618" y="304" class="node-label-accent">消费组 · 财务对账</text>
+          <text x="618" y="324" class="edge-label">offset 对账 · 独立游标</text>
+          <text x="618" y="346" class="edge-label" fill="#B73B2F">不丢 + 按订单有序</text>
+
+          <!-- topic -> each group (from topic right edge x=500) -->
+          <line x1="500" y1="200" x2="600" y2="98"  class="diagram-ink" marker-end="url(#cap-ink)"/>
+          <line x1="500" y1="229" x2="600" y2="210" class="diagram-ink" marker-end="url(#cap-ink)"/>
+          <line x1="500" y1="268" x2="600" y2="322" class="diagram-accent" marker-end="url(#cap-verm)"/>
+
+          <text x="556" y="138" text-anchor="middle" class="edge-label">各读全量</text>
+
+          <!-- bottom note about replay -->
+          <text x="375" y="332" text-anchor="middle" class="edge-label">读不删数据 → 可重放</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>一份订单日志，三个消费组各读各的、各存各的 offset。
+          <strong>注意</strong>：三条出边都从同一个 <code>orders</code> topic 出发——数据<strong>不被复制三份</strong>，三组各自持有独立游标（这正是 01 章"<a href="01-concepts.html#log-model">offset 在消费者侧</a>"）。三组对"丢失/顺序/重复"的要求不同（朱红标注），所以下面每个决策都要分组回答，而不是一刀切。</figcaption>
+      </figure>
+
+      <!-- ============================================================
+           §5.1 项目背景
+           ============================================================ -->
+      <h2 id="background"><span class="num">5.1</span><span>项目背景：订单事件平台</span></h2>
+
+      <p>一个电商平台的订单服务，每当一笔订单发生状态变化就产生一个事件：<strong>订单创建</strong>、<strong>订单支付</strong>、<strong>订单发货</strong>。这些事件统一写进一个 <code>orders</code> topic。三个互不相关的团队各自起一个消费组来读这条流：</p>
+
+      <ul>
+        <li><strong>库存扣减（inventory）</strong>：订单支付后扣减对应 SKU 库存。要求<strong>不丢</strong>（少扣会超卖）<strong>且不重复扣</strong>（重复扣会少卖、库存账错）。扣减动作落在一个外部库存数据库上。</li>
+        <li><strong>用户通知（notification）</strong>：给用户发短信/推送"订单已支付""已发货"。要求不丢（用户该收到），但<strong>可容忍少量重复</strong>——偶尔多收一条推送是体验问题，不是数据正确性问题。</li>
+        <li><strong>财务对账（reconciliation）</strong>：把订单事件写进对账系统、生成财务流水。要求<strong>严格不丢</strong>（少一笔对不平）<strong>且按订单顺序处理</strong>——同一笔订单的"创建→支付→发货"必须按发生顺序入账，否则状态机错乱。</li>
+      </ul>
+
+      <div class="rationale">
+        <span class="label">量级与需求画像</span>
+        <p><strong>吞吐</strong>：大促峰值约每秒数万条订单事件，平时每秒数千条——属于<a href="04-pitfalls.html#anti-patterns">高吞吐事件流</a>，远超"低吞吐小消息"的反场景。</p>
+        <p><strong>顺序</strong>：只在<strong>单笔订单内部</strong>需要先后顺序（创建先于支付先于发货）。两笔不同订单之间没有顺序约束。没有任何下游需要"全平台所有订单的全局总序"。</p>
+        <p><strong>可靠性</strong>：库存与对账是<em>不能丢</em>的强一致诉求；通知是<em>尽量别丢、但重复无害</em>的弱诉求。一份数据上，三组的可靠性等级不同。</p>
+        <p><strong>重放</strong>：对账系统改了计算口径要重算上月流水、库存对错了要从某天重新推演——都需要把消费组 offset 重置后重放历史。这是选 Kafka（而非删除式队列）的硬需求之一。</p>
+      </div>
+
+      <p>这套画像把"选 Kafka"几乎写死了：高吞吐 + 一份数据多组独立消费 + 需要重放，正是 <a href="04-pitfalls.html#anti-patterns">04 章表 4.1 的"选中"行</a>。但"选了 Kafka"只是起点——真正的工程判断在下面四个决策点上，每一个都没有"标准答案"，只有"对这一组、在这个量级下"的答案。</p>
+
+      <!-- ============================================================
+           §5.2 设计任务（判别决策）
+           ============================================================ -->
+      <h2 id="decisions"><span class="num">5.2</span><span>设计任务：五个判别决策</span></h2>
+
+      <p>下面每一行都是一次<strong>判别</strong>：给出备选、给出这个场景下的选择、给出"为什么不选另一条"。每个决策点回链到前面定义过它的章节——判别题考的从来不是记住配置名，是<a href="04-pitfalls.html#anti-patterns">对取舍的推理</a>。</p>
+
+      <table class="compare-table">
+        <caption>表 5.1 · 订单系统的五个跨章判别决策</caption>
+        <thead>
+          <tr><th style="width:22%">决策点</th><th style="width:30%">备选</th><th>这个场景选哪个 / 为什么</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>① 分区 key<br><small><a href="01-concepts.html#topic-partition-offset">01 §1.3</a> · <a href="02-principles.html#partition-order">02 §2.2</a> · <a href="04-pitfalls.html#performance">04 §4.3</a></small></td>
+            <td><code>userId</code> 做 key / <code>orderId</code> 做 key / 不带 key</td>
+            <td>选 <strong><code>orderId</code></strong>。同单事件靠相同 key 落同一分区从而有序（满足对账的按订单有序）；<code>orderId</code> <strong>高基数</strong>，分布均匀。<code>userId</code> 会让大客户的所有订单挤进一个分区造成<a href="04-pitfalls.html#performance">热分区倾斜</a>；不带 key 则同单事件会按 sticky partitioner 散到不同分区、丢掉顺序保证。</td>
+          </tr>
+          <tr class="selected">
+            <td>② 持久性组合<br><small><a href="02-principles.html#replication">02 §2.3</a> · <a href="04-pitfalls.html#data-loss">04 §4.1</a></small></td>
+            <td><code>acks=1</code> / <code>acks=all</code> 单独 / <code>acks=all</code>+<code>min.insync=2</code>+RF=3+<code>unclean=false</code></td>
+            <td>对账与库存选<strong>四件套组合</strong>。只设 <code>acks=all</code> 会在 ISR 缩到 1 时<a href="04-pitfalls.html#data-loss">静默退化成 <code>acks=1</code></a>；持久性的真实来源是 <code>min.insync.replicas</code>。设 <code>min.insync=RF-1=2</code>：挂一台仍可写、挂两台拒写。<code>unclean.leader.election=false</code> 堵住落后副本上位截断已提交记录。</td>
+          </tr>
+          <tr class="selected">
+            <td>③ 库存的消费语义<br><small><a href="02-principles.html#delivery">02 §2.5</a> · <a href="04-pitfalls.html#correctness">04 §4.2</a></small></td>
+            <td>at-least-once + 消费侧幂等 / 事务 EOS（<code>read_committed</code>）</td>
+            <td>选 <strong>at-least-once + 消费侧幂等</strong>。库存扣减的副作用落在<strong>外部数据库</strong>，而 <a href="02-principles.html#delivery">Kafka 事务的精确一次只在 Kafka 闭环内成立</a>、覆盖不到 DB 写。用幂等键（<code>orderId</code>+事件类型）做 upsert/唯一约束去重，比上事务更简单、且真正挡住重复。事务 EOS 在这里既增延迟又解决不了外部副作用。</td>
+          </tr>
+          <tr class="selected">
+            <td>④ 对账的顺序范围<br><small><a href="01-concepts.html#topic-partition-offset">01 §1.3</a> · <a href="02-principles.html#partition-order">02 §2.2</a></small></td>
+            <td>全局严格顺序（单分区）/ 按订单顺序（分区内有序）</td>
+            <td>选<strong>按订单顺序</strong>。业务只要求"同一笔订单的事件有序"，不需要跨订单全局序。靠 ② 的 <code>orderId</code> key 已经做到分区内有序。强上全局顺序要把 topic 压成<strong>单分区</strong>，<a href="02-principles.html#partition-order">并行度归 1、吞吐被杀死</a>——为一个业务不需要的保证付全部吞吐的代价。</td>
+          </tr>
+          <tr class="selected">
+            <td>⑤ 选型 / 消费模型<br><small><a href="04-pitfalls.html#anti-patterns">04 §4.4</a></small></td>
+            <td>整体 Kafka / 某下游换 RabbitMQ / 普通 consumer group vs share group</td>
+            <td>主干<strong>选 Kafka</strong>（高吞吐+多组+重放）。但若<strong>通知组</strong>后续要按通知渠道做复杂逐条路由、要原生重试/死信队列，<a href="04-pitfalls.html#anti-patterns">那一段反而更适合 RabbitMQ</a>。若通知组要消费者数超过分区数、且每条独立 ack，可考虑 <strong>share group</strong>（KIP-932，4.2 GA）。详见 §5.3。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>表里五行有一个共同点值得停下来看：<strong>同一个系统、同一份数据，三个消费组的最优答案不一样</strong>。对账要四件套 + 严格按序，通知可以松到能丢一点点配置、甚至换个 broker。把"全系统一套配置"当默认，是这道题最常见的错——判别的核心就是<em>认出哪一组该用哪条机制</em>。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>决策 ① 选了 <code>orderId</code> 做 key。如果某天发现 <code>orders</code> 分区不够、想从 3 个加到 6 个，对"同一订单事件有序"这个保证会发生什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>会被<strong>破坏</strong>。分区路由是 <code>murmur2(orderId) % 分区数</code>，把分区数从 3 改成 6，<code>% 3</code> 变 <code>% 6</code>，<strong>已有订单的 key→分区映射全部改变</strong>。一笔正在进行中的订单，它"创建/支付"时算出分区 1、加分区后"发货"算出分区 4——同一订单的事件<strong>分散到两个分区</strong>，分区内有序的前提没了，对账会出现先读到发货、后读到支付的乱序。</p>
+          <p>这正是 04 章"<a href="04-pitfalls.html#performance">加分区静默破坏 key 顺序、且分区不可减</a>"。正确做法：保守预估分区数，真要扩容就<strong>新建一个目标分区数的 topic 迁移</strong>，而不是原地加分区。这道题指向"分区数是早期就要算准的不可逆决策"。</p>
+        </details>
+      </div>
+
+      <!-- ============================================================
+           §5.3 选型判别 + 决策树
+           ============================================================ -->
+      <h2 id="discrimination"><span class="num">5.3</span><span>选型判别：Kafka / share group / RabbitMQ</span></h2>
+
+      <p>决策 ⑤ 值得单独展开，因为它最考"是不是真懂 Kafka 的边界"。一个常见的红旗是把 Kafka 当"更快的队列"，于是什么场景都往上套。<a href="04-pitfalls.html#anti-patterns">04 章那张"什么时候不要用 Kafka"的表</a>反过来定义了它的主场。下面这棵决策树把判别路径画出来——从负载特征一路走到具体选项。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 540" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="消息系统选型决策树：从可重放高吞吐、逐条路由优先级DLQ、独立ack分支到 Kafka consumer group、share group、RabbitMQ">
+          <defs>
+            <marker id="dt" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- Start -->
+          <ellipse cx="360" cy="34" rx="92" ry="22" class="diagram-ink node-fill"/>
+          <text x="360" y="40" text-anchor="middle" class="node-label">选消息系统</text>
+
+          <!-- Q1 -->
+          <polygon points="360,72 510,140 360,208 210,140" class="diagram-ink node-fill"/>
+          <text x="360" y="132" text-anchor="middle" class="node-label">需要可重放</text>
+          <text x="360" y="152" text-anchor="middle" class="node-label">+ 高吞吐？</text>
+          <line x1="360" y1="56" x2="360" y2="72" class="diagram-ink" marker-end="url(#dt)"/>
+
+          <!-- Q1 No -> RabbitMQ (terminal, right) -->
+          <line x1="510" y1="140" x2="588" y2="140" class="diagram-ink" marker-end="url(#dt)"/>
+          <text x="548" y="131" text-anchor="middle" class="branch-label">否</text>
+          <rect x="588" y="112" width="124" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="650" y="136" text-anchor="middle" class="node-label">RabbitMQ</text>
+          <text x="650" y="155" text-anchor="middle" class="edge-label">低量 / 路由</text>
+
+          <!-- Q1 Yes -> Q2 -->
+          <line x1="360" y1="208" x2="360" y2="240" class="diagram-ink" marker-end="url(#dt)"/>
+          <text x="375" y="228" text-anchor="middle" class="branch-label">是</text>
+
+          <!-- Q2 -->
+          <polygon points="360,240 520,312 360,384 200,312" class="diagram-ink node-fill"/>
+          <text x="360" y="300" text-anchor="middle" class="node-label">需要逐条路由 /</text>
+          <text x="360" y="320" text-anchor="middle" class="node-label">优先级 / 原生 DLQ？</text>
+
+          <!-- Q2 Yes -> RabbitMQ (this downstream) -->
+          <line x1="200" y1="312" x2="120" y2="312" class="diagram-ink" marker-end="url(#dt)"/>
+          <text x="160" y="303" text-anchor="middle" class="branch-label">是</text>
+          <rect x="8" y="284" width="112" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="64" y="308" text-anchor="middle" class="node-label">RabbitMQ</text>
+          <text x="64" y="327" text-anchor="middle" class="edge-label">该下游单拆</text>
+
+          <!-- Q2 No -> Q3 -->
+          <line x1="360" y1="384" x2="360" y2="416" class="diagram-ink" marker-end="url(#dt)"/>
+          <text x="375" y="404" text-anchor="middle" class="branch-label">否</text>
+
+          <!-- Q3 -->
+          <polygon points="360,416 520,484 360,552 200,484" class="diagram-ink node-fill"/>
+          <text x="360" y="472" text-anchor="middle" class="node-label">每条独立 ack /</text>
+          <text x="360" y="492" text-anchor="middle" class="node-label">消费者数 &gt; 分区数？</text>
+
+          <!-- Q3 Yes -> share group (left) -->
+          <line x1="200" y1="484" x2="120" y2="484" class="diagram-ink" marker-end="url(#dt)"/>
+          <text x="160" y="475" text-anchor="middle" class="branch-label">是</text>
+          <rect x="0" y="456" width="120" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="60" y="480" text-anchor="middle" class="node-label-accent">share group</text>
+          <text x="60" y="499" text-anchor="middle" class="edge-label">KIP-932 · 4.2</text>
+
+          <!-- Q3 No -> consumer group (right, accent — the order system's main choice) -->
+          <line x1="520" y1="484" x2="598" y2="484" class="diagram-ink" marker-end="url(#dt)"/>
+          <text x="558" y="475" text-anchor="middle" class="branch-label">否</text>
+          <rect x="598" y="452" width="120" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="658" y="478" text-anchor="middle" class="node-label-accent">consumer</text>
+          <text x="658" y="496" text-anchor="middle" class="node-label-accent">group</text>
+          <text x="658" y="510" text-anchor="middle" class="edge-label">本系统主干</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>消息系统选型决策树：三道菱形把负载特征筛到四个终点。
+          <strong>注意</strong>：终点不是"二选一"，而是<strong>可以在一个系统里共存</strong>——订单主干走右下的 consumer group（朱红），通知这种带复杂路由的下游可以单独切到 RabbitMQ。"全用 Kafka"或"全不用"都是把判别题做成了站队题。</figcaption>
+      </figure>
+
+      <h3>三道判别问各自在问什么</h3>
+      <ul>
+        <li><strong>Q1 可重放 + 高吞吐？</strong> 这是 Kafka 的存在理由。订单系统要重放历史对账、峰值数万条/秒——是。低吞吐、不需要重放的小系统，分区/副本/再平衡的<a href="04-pitfalls.html#anti-patterns">运维与认知成本换不回收益</a>，传统队列更省。</li>
+        <li><strong>Q2 逐条路由 / 优先级 / 原生 DLQ？</strong> Kafka 是<strong>分区日志</strong>，没有 exchange 式按内容路由、没有消息优先级、没有原生 per-message 重试与死信队列。通知组若要"按渠道路由 + 失败自动进 DLQ 重试"，在 Kafka 上要自建重试 topic + 计数，<a href="04-pitfalls.html#anti-patterns">RabbitMQ 原生就有</a>——这一个下游单独用 RabbitMQ 是合理的混合架构，不是失败。</li>
+        <li><strong>Q3 每条独立 ack / 消费者数 &gt; 分区数？</strong> 普通 consumer group 的并行上限<a href="01-concepts.html#producer-consumer">死等于分区数</a>、且按分区批量推进 offset。share group（KIP-932，4.2 GA）提供队列语义：按记录 ack、消费者数不再受分区数限制。通知这种<em>无序、想用很多消费者摊平瞬时积压</em>的场景适合它；但它仍架在日志之上，不改变 Q1/Q2 的边界。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 判别不是站队</span>
+        <p>资深信号不是"全用 Kafka"也不是"知道 Kafka 不好就不用"，而是<strong>认得出同一系统里哪条流与日志模型对齐、哪条不对齐</strong>。订单主干（高吞吐、多组、要重放、按 key 有序）是 Kafka 的主场；通知里的复杂路由那一小块是 RabbitMQ 的主场。把它们硬塞进一个工具，就会持续撞上<a href="04-pitfalls.html#anti-patterns">04 章那张表</a>里的失败模式。</p>
+      </div>
+
+      <!-- ============================================================
+           §5.4 自己实现
+           ============================================================ -->
+      <h2 id="implement"><span class="num">5.4</span><span>自己实现（先别看参考实现）</span></h2>
+
+      <p>把 §5.2 的五个决策落成代码。<strong>先合上参考实现，自己写一版</strong>——判别题的价值在于你做了选择、并能说出为什么；直接看答案等于把这章读成了配置清单。</p>
+
+      <h3>任务</h3>
+      <p>为订单系统写出两段东西：</p>
+      <ul>
+        <li><strong>可靠 producer 配置</strong>：订单服务发 <code>orders</code> 事件，对账与库存不能丢、同单有序。写出 producer 端 + topic/broker 端的关键配置，并标注 key 怎么选。</li>
+        <li><strong>幂等库存消费者</strong>：消费 <code>orders</code>、对支付事件扣减外部库存 DB，做到重启不重复扣。写出 poll 循环 + offset 提交时机 + 去重逻辑的位置（去重落在哪一侧）。</li>
+      </ul>
+
+      <h3>验收 checklist（用可观测行为验，不靠"看起来对"）</h3>
+      <ul>
+        <li><strong>重启不重复扣</strong>：消费者处理到一半 <code>kill -9</code>，重启后那批被重投，但库存 DB 的最终扣减量<strong>与只处理一次相同</strong>（幂等键挡住重复）。</li>
+        <li><strong>kill 一个 broker 不丢已确认订单</strong>：producer 回调已拿到 offset 的订单，在 kill 掉一个 broker（含 leader 切换）后，下游仍能读到——没有"已 ack 却消失"的记录。</li>
+        <li><strong>同一订单严格有序</strong>：对 <code>order-X</code> 连发 创建→支付→发货，对账消费组读到的顺序<strong>必然</strong>是创建在前、发货在后，永不倒置。</li>
+        <li><strong>三组互不影响</strong>：把通知组 offset 重置到 24 小时前重放，库存组和对账组的进度<strong>不受任何影响</strong>。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">验收陷阱</span>
+        <p>"重启不重复扣"不能靠"消费者没崩过"来证明——要<strong>主动 <code>kill -9</code></strong> 制造重投再看 DB 结果。一个只在happy path 跑通的实现，会在第一次再平衡或崩溃时暴露重复扣减。验收的是<a href="04-pitfalls.html#correctness">失败路径的可观测行为</a>，不是正常路径。</p>
+      </div>
+
+      <details>
+        <summary>参考实现（写完自己版本再展开）</summary>
+
+        <p><strong>① 可靠 producer + topic 配置</strong>。四件套（图 4.1 的四道防线）+ 启用幂等 producer + <code>orderId</code> 做 key：</p>
+        <div class="code-block">
+          <div class="header">
+            <span class="filename">OrderProducer.java</span>
+            <span class="lang">Java</span>
+            <button class="copy" data-copy-target="cb-prod">复制</button>
+          </div>
+<pre id="cb-prod"><code class="language-java">Properties p = new Properties();
+p.put("bootstrap.servers", "broker1:9092,broker2:9092,broker3:9092");
+p.put("key.serializer",   "org.apache.kafka.common.serialization.StringSerializer");
+p.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+
+// —— 持久性四件套里的 producer 端两项（其余两项在 topic/broker 端，见下）——
+p.put("acks", "all");              // 等所有 ISR 成员确认，而非 leader 单方面（堵陷阱 1）
+p.put("enable.idempotence", "true"); // PID+序列号去重并强制保序；in-flight<=5 仍有序（堵正确性类乱序）
+// enable.idempotence=true 会隐式要求 acks=all、retries>0，4.0 起默认即开
+
+KafkaProducer&lt;String, String&gt; producer = new KafkaProducer&lt;&gt;(p);
+
+void publish(OrderEvent e) {
+    // 关键：key = orderId（高基数、避免热分区；同单事件同分区 → 分区内有序）
+    var record = new ProducerRecord&lt;&gt;("orders", e.getOrderId(), e.toJson());
+    producer.send(record, (md, ex) -&gt; {
+        if (ex != null) handleSendFailure(e, ex);   // 失败要可观测，别吞异常
+    });
+}</code></pre>
+        </div>
+        <div class="code-block">
+          <div class="header">
+            <span class="filename">orders-topic.properties（topic / broker 端）</span>
+            <span class="lang">Properties</span>
+            <button class="copy" data-copy-target="cb-topic">复制</button>
+          </div>
+<pre id="cb-topic"><code class="language-properties"># 持久性四件套的另外两项 + 不可逆截断的闸门
+replication.factor=3                  # 三副本，单 broker 挂不丢分区（堵陷阱 4）
+min.insync.replicas=2                 # = RF-1：挂一台仍可写、挂两台拒写（堵陷阱 3 的静默退化）
+unclean.leader.election.enable=false  # 禁止落后副本上位截断已提交记录（堵陷阱 2）
+
+# 分区数：按峰值吞吐与消费并行预估，且预留余量——加分区会破坏 key 顺序、且不可减
+num.partitions=3</code></pre>
+        </div>
+        <p><strong>为什么不选事务/EOS 做 producer 端</strong>：对账与库存"不丢 + 不重复"的需求，由"四件套保证不丢" + "消费侧幂等保证不重复"组合即可满足。订单服务是<em>纯生产者</em>，不在"消费-转换-生产"闭环里，<a href="02-principles.html#delivery">事务的原子 offset 提交</a>用不上；强上事务只增延迟。</p>
+
+        <p><strong>② 幂等库存消费者</strong>。关掉 auto-commit、处理后再提交、去重落在<strong>外部 DB 侧</strong>（因为副作用在 DB，Kafka 事务管不到）：</p>
+        <div class="code-block">
+          <div class="header">
+            <span class="filename">InventoryConsumer.java</span>
+            <span class="lang">Java</span>
+            <button class="copy" data-copy-target="cb-cons">复制</button>
+          </div>
+<pre id="cb-cons"><code class="language-java">Properties c = new Properties();
+c.put("bootstrap.servers", "broker1:9092,broker2:9092,broker3:9092");
+c.put("group.id", "inventory");        // 独立消费组：与通知/对账各自维护 offset
+c.put("key.deserializer",   "org.apache.kafka.common.serialization.StringDeserializer");
+c.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+c.put("enable.auto.commit", "false");  // 关掉定时提交：否则提交的是 poll 返回的、不是处理完的（堵陷阱 5）
+
+KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(c);
+consumer.subscribe(List.of("orders"));
+
+while (running) {
+    var records = consumer.poll(Duration.ofMillis(500));
+    for (var r : records) {
+        OrderEvent e = OrderEvent.parse(r.value());
+        if (e.getType() == PAID) {
+            // 去重落在 DB 侧：幂等键 = orderId + 事件类型，唯一约束/upsert 挡住重投
+            // 即使这批被重投（at-least-once），DB 的扣减结果与处理一次相同
+            inventoryDb.deductIdempotent(e.getOrderId(), e.getSku(), e.getQty());
+        }
+    }
+    consumer.commitSync();   // 整批处理完再提交：崩溃只会重投（可被幂等吸收），不会丢
+}</code></pre>
+        </div>
+        <p><strong>每个决策"为什么选 X 不选 Y"小结</strong>：</p>
+        <ul>
+          <li><strong>key 选 <code>orderId</code> 不选 <code>userId</code></strong>：两者都能让同单有序，但 <code>userId</code> 基数低、大客户订单全挤一个分区 → 热分区。<code>orderId</code> 高基数、分布均匀。</li>
+          <li><strong>持久性选四件套不选 <code>acks=all</code> 单独</strong>：单独 <code>acks=all</code> 在 ISR 缩到 1 时退化成 <code>acks=1</code>；持久性真正来自 <code>min.insync.replicas</code>，缺它即有丢失窗口。</li>
+          <li><strong>库存选 at-least-once+幂等不选事务 EOS</strong>：副作用在外部 DB，<a href="02-principles.html#delivery">Kafka 事务覆盖不到外部写</a>；DB 侧幂等键更简单且真正挡住重复。</li>
+          <li><strong>顺序选分区内有序不选全局单分区</strong>：业务只需同单有序，<code>orderId</code> key 已满足；单分区会把吞吐砍到 1 个分区的能力，为不需要的保证付全部代价。</li>
+          <li><strong>offset 处理后提交不在处理前</strong>：先提交后处理会把失败模式从"重复"翻成"丢失"；库存能容忍重复（幂等兜底）、不能容忍丢失。</li>
+        </ul>
+      </details>
+
+      <!-- mandatory reader-drawing prompt -->
+      <div class="callout example">
+        <span class="label">亲手画一张图</span>
+        <p>合上教程，在纸上或 Excalidraw 里画出订单系统的 Kafka 架构——只画 <code>orders</code> topic、它的 3 个分区、以及库存/通知/对账三个消费组就行。画完回到 §5.1 的图 5.1 对照——<strong>你画的图里，给每个消费组都标了它各自的 offset 游标吗？</strong>还是把三个组画成"共享一个进度"？后者正是"把 Kafka 当队列"的典型误画：日志模型里 offset 在每个消费组各自手上，三组互不影响。</p>
+      </div>
+
+      <!-- ============================================================
+           §5.5 反思问题
+           ============================================================ -->
+      <h2 id="reflect"><span class="num">5.5</span><span>反思问题</span></h2>
+
+      <div class="self-check" id="reflect-questions" style="border-top:none; padding-top:0; margin-top:8px;">
+        <ol>
+          <li>这五个决策里，哪个你做得最不确定？回看是哪一章帮你定下来的——是 01 的概念、02 的机制、还是 04 的失败模式？把"卡住→回看哪章→怎么定的"这条路径写下来。</li>
+          <li>对账组要求"不丢 + 按订单有序"，通知组只要求"尽量别丢、重复无害"。如果用<strong>同一套</strong>最严格配置喂所有组，会付出什么不必要的代价？反过来，用最松的配置喂所有组，哪一组会先出事？</li>
+          <li>(场景变形) 如果产品要求订单事件支持<strong>优先级</strong>——VIP 订单要插队优先处理——你上面哪些决策要改？Kafka 能优雅支持优先级吗？</li>
+        </ol>
+        <details>
+          <summary>反思参考（先自己想完再展开）</summary>
+          <ol>
+            <li>没有标准答案——重点是<strong>能定位到具体章节</strong>。常见的"最难"是决策 ③（消费语义）：它要同时调动 <a href="02-principles.html#delivery">02 §2.5 的 EOS 边界</a>和 <a href="04-pitfalls.html#correctness">04 §4.2 的重复/乱序</a>，并认清"副作用在外部 DB → 事务管不到"。能讲清这条回看路径，就说明判别是推理出来的、不是背的。</li>
+            <li>用最严格配置喂所有组：通知组也被迫 <code>acks=all</code>+RF=3+处理后提交+严格幂等，<strong>付出延迟和复杂度</strong>去保护一份"重复无害"的数据——浪费。用最松配置（<code>acks=1</code>、auto-commit）喂所有组：<strong>对账组先出事</strong>——它最不能丢，而 <code>acks=1</code> 有丢失窗口、auto-commit 会丢未处理段。结论：可靠性配置应<strong>按组的诉求分级</strong>，不是全系统一刀切。</li>
+            <li>要改决策 ④甚至整个选型。<strong>Kafka 不擅长优先级</strong>：分区日志严格<a href="02-principles.html#partition-order">按追加顺序</a>，没有消息优先级概念，VIP 事件无法"插队"到已写入记录之前。变通办法（拆 <code>orders-vip</code> / <code>orders-normal</code> 两个 topic、消费端优先轮询 VIP）很笨重且破坏统一顺序。这正呼应 <a href="04-pitfalls.html#anti-patterns">04 章表 4.1"优先级队列 → 用支持 priority 的队列系统"</a>——优先级是把订单某条流推向 RabbitMQ 的典型信号。</li>
+          </ol>
+        </details>
+      </div>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给"通知组要 per-message 重试 + DLQ"设计落地方案</h3>
+        <p>通知组发短信会偶发失败，要求：失败的单条消息自动重试 3 次、仍失败进死信队列人工处理，且<strong>不能阻塞同分区后面的消息</strong>。在纯 Kafka 上怎么做？这个需求是不是在提示通知组该换工具？写出两种方案并比较。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>纯 Kafka 方案：建 <code>notify-retry</code>（带延迟重试）+ <code>notify-dlq</code> 两个 topic，消费失败的消息发到 retry topic、计数满进 dlq——但 Kafka <a href="04-pitfalls.html#anti-patterns">没有原生 per-message 重试/DLQ</a>，且单分区内"阻塞后面消息"很难绕（一条卡住整批）。这正是 §5.3 决策树 Q2 命中"是"的场景：通知这一段换 <strong>RabbitMQ</strong>（原生 DLQ + 单条 ack/nack + 不阻塞队列其余消息）往往比在 Kafka 上自建重试基建更省。比较维度：实现复杂度、对其余消息的阻塞、运维成本。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.hellointerview.com/learn/system-design/deep-dives/kafka">Hello Interview — Kafka Deep Dive / Kafka vs RabbitMQ</a>（选型判别、何时不用 Kafka）</li>
+          <li><a href="https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster/">Confluent — 如何选择 topic 与分区数</a>（分区数与吞吐/并行/顺序的权衡）</li>
+          <li><a href="https://www.confluent.io/blog/transactions-apache-kafka/">Confluent — Transactions &amp; EOS</a>（事务边界：为什么覆盖不到外部 DB 副作用）</li>
+          <li><a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-932%3A+Queues+for+Kafka">KIP-932 — Queues for Kafka（share group）</a>（4.2 GA：按记录 ack、消费者数不受分区数限制）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="04-pitfalls.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">04 · 陷阱</span>
+        </a>
+        <a href="06-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">06 · 自测题库</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#background" data-toc-target="background">5.1 项目背景</a></li>
+        <li><a href="#decisions" data-toc-target="decisions">5.2 五个判别决策</a></li>
+        <li><a href="#discrimination" data-toc-target="discrimination">5.3 选型判别 + 决策树</a></li>
+        <li><a href="#implement" data-toc-target="implement">5.4 自己实现</a></li>
+        <li><a href="#reflect" data-toc-target="reflect">5.5 反思问题</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

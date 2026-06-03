@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<!--
+  tech-tutorial · Redis 深度教程 · 02 单线程与 IO 模型
+  Aesthetic: minimalist monochrome + single vermillion accent
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单线程与 IO 模型 · Redis 深度教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700;
+  font-size: 30px; line-height: 1.2; margin: 0 0 12px;
+  letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { font-size: 15.5px; line-height: 1.65; margin: 0; }
+
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em;
+  background: var(--bg-soft); padding: 1px 5px; border-radius: 2px;
+  color: var(--vermilion); border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms;
+  user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px;
+  color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* index landing: chapter directory cards */
+.toc-cards { display: grid; grid-template-columns: 1fr; gap: 0; margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.toc-cards a { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 14px 18px; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--rule); transition: background 150ms; }
+.toc-cards a:last-child { border-bottom: none; }
+.toc-cards a:hover { background: var(--bg-soft); }
+.toc-cards .n { font-family: var(--mono); font-size: 13px; color: var(--vermilion); font-weight: 700; padding-top: 2px; }
+.toc-cards .t { font-weight: 600; font-size: 15px; }
+.toc-cards .d { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; line-height: 1.5; }
+
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-data-structures.html">01 数据结构</a><span class="sep">—</span>
+    <a href="02-single-thread-and-io.html" class="current">02 内核模型</a><span class="sep">—</span>
+    <a href="03-persistence-and-memory.html">03 持久化</a><span class="sep">—</span>
+    <a href="04-caching-patterns.html">04 缓存工程</a><span class="sep">—</span>
+    <a href="05-distributed.html">05 分布式</a><span class="sep">—</span>
+    <a href="06-redis-for-agents.html">06 Agent</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Redis 深度教程 · 02</p>
+        <h1>单线程与 IO 模型</h1>
+        <p class="recap">上一章拆了第一块基石——内存编码。这一章是第二块，也是全书最核心的一章：单线程串行执行。Redis 一半的「为什么」都从这里推出来。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>「单线程」精确指的是命令执行单线程，不是进程只有一个线程</li>
+          <li>一个线程靠 IO 多路复用（一个线程同时盯住大量连接的就绪事件）hold 住上万连接</li>
+          <li>单线程如何同时带来「快」和「每条命令天然原子」这两件事</li>
+          <li>大 key 为什么会拖垮整个实例，而不只是拖慢自己那一条命令</li>
+        </ul>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">本章 = 基石二（全书的拱顶石）</span>
+        <p>起点提出 Redis 的两块基石：<strong>为每种数据形态精选内存编码</strong>、<strong>单线程串行执行</strong>。本章是第二块，也是整份教程的拱顶石（keystone）。读完它，目标不是「记住 Redis 是单线程的」这句结论，而是<strong>能自己从「单线程串行」这一个事实，推出「为什么快」「为什么命令天然原子」「为什么大 key 阻塞整个实例」三条结论</strong>。后面 03 的 <code>fork</code> 持久化、05 的分布式锁、06 的 LLM 限流，全都挂在这块基石上。</p>
+      </div>
+
+      <h2 id="what"><span class="num">2.1</span><span>单线程到底指什么</span></h2>
+      <p class="one-liner">「单线程」精确指的是：命令的执行在单一线程里串行完成；但 Redis 进程并非只有这一个线程，后台另有子进程与多个辅助线程在干活。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>「Redis 是单线程的」是一句被反复传抄、又最容易理解错的话。把这个边界划错——以为整个进程从头到尾只有一根线程——后面所有推论都会跟着错：会以为 <code>BGSAVE</code> 必然卡住主流程、会以为 Redis 用不上多核的任何一点能力。先把精确边界立住，本章后面的链条才立得稳。</p>
+      </div>
+
+      <p>这句话的准确含义是：<strong>对客户端命令的「执行」这一段，由单一线程串行完成</strong>——同一时刻只有一条命令在改数据，下一条必须等当前这条返回。这根线程通常称为<strong>主线程（main thread）</strong>，它跑的是事件循环（2.2 详述）。</p>
+
+      <p>但「命令执行单线程」不等于「进程只有一个线程」。一个真实的 Redis 进程里，至少还有下面这些不在主线程上的活：</p>
+
+      <ul>
+        <li><strong>bgsave 子进程</strong>：<code>BGSAVE</code> / AOF 重写时 <code>fork</code>（创建一个内存几乎一致的子进程）出独立进程做磁盘 dump，主线程继续服务请求。详见 03。</li>
+        <li><strong>AOF 刷盘线程</strong>：<code>appendfsync everysec</code> 模式下，<code>fsync</code>（把内核缓冲真正落盘）交给一个后台线程（<code>bio</code>，background I/O），避免磁盘卡顿堵住主线程。</li>
+        <li><strong>lazyfree 线程</strong>：<code>lazyfree</code>（惰性释放，把大对象的内存回收挪到后台）专门的线程异步释放大对象占的内存，避免一次 <code>free</code> 巨型结构卡住主线程。<code>UNLINK</code> 就靠它（2.5 详述）。</li>
+        <li><strong>io-threads</strong>：Redis 6.0 起可选的 IO 线程，并行做 socket 读写与协议解析（2.6 详述）。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">边界划清楚</span>
+        <p>串行的是<strong>命令执行</strong>这一段，不是整个进程。「单线程」是对执行模型的描述，不是对线程数的统计——一个开了 io-threads、正在 <code>BGSAVE</code> 的 Redis 进程，<code>top</code> 里能看到好几个线程和一个子进程。本章后面说「单线程」时，一律指命令执行这一段。</p>
+      </div>
+
+      <h2 id="reactor"><span class="num">2.2</span><span>IO 多路复用 + 事件循环</span></h2>
+      <p class="one-liner">一根线程靠 IO 多路复用同时监听上万个 socket 的就绪事件，谁就绪就处理谁——这是「单线程还能扛高并发」的机制。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>直觉上「单线程」和「高并发」是矛盾的：一根线程一次只能干一件事，怎么同时服务上万个客户端？答案在于 IO 多路复用——它让一根线程不必为每个连接死等，而是一次性问内核「这上万个 socket 里，现在哪些可读可写」，只处理就绪的那些。理解了这一点，「单线程扛高并发」就不再是悖论。</p>
+      </div>
+
+      <p>Redis 自己实现了一个极薄的事件循环库，源码里叫 <strong>ae（A simple event-driven library）</strong>，对应文件 <code>ae.c</code>。它在底层封装了操作系统提供的 IO 多路复用机制：<strong>Linux 上是 epoll</strong>、<strong>BSD / macOS 上是 kqueue</strong>，都没有时退回 <code>select</code>。这种「一个事件循环线程 + 多路复用 + 事件回调」的结构，就是经典的 <strong>reactor 模式（反应堆模式：事件到达后分发给对应处理器）</strong>。</p>
+
+      <p>关键在于 <code>epoll</code> 这类机制让一根线程<strong>同时盯住上万个 socket</strong>：线程把所有客户端连接注册进 epoll，然后阻塞在 <code>epoll_wait</code> 上；一旦其中任意若干个 socket 变为「可读」（客户端发来了命令）或「可写」（可以回数据了），内核就把这批就绪的 socket 一次性返回。线程于是只对就绪的连接做事，从不为某一个连接空等。一轮处理流程是：</p>
+
+      <ol>
+        <li><strong>读就绪</strong>：epoll 报告某 socket 可读，主线程从内核读出字节。</li>
+        <li><strong>解析命令</strong>：按 RESP（Redis 序列化协议）把字节解析成一条命令。</li>
+        <li><strong>执行</strong>：在主线程上串行执行这条命令，读写内存数据结构。</li>
+        <li><strong>写回</strong>：把结果写进输出缓冲，socket 可写时发回客户端。</li>
+      </ol>
+
+      <figure>
+        <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="多个客户端 socket 经 epoll 汇聚到单个事件循环线程，命令逐条执行">
+          <defs>
+            <marker id="ar2a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar2a-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- clients -->
+          <rect x="30" y="34" width="140" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="100" y="58" text-anchor="middle" class="node-label">client A socket</text>
+          <rect x="30" y="92" width="140" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="100" y="116" text-anchor="middle" class="node-label">client B socket</text>
+          <rect x="30" y="150" width="140" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="100" y="174" text-anchor="middle" class="node-label">client C socket</text>
+          <text x="100" y="222" text-anchor="middle" class="edge-label">… 上万连接</text>
+
+          <!-- epoll -->
+          <rect x="248" y="84" width="150" height="70" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="323" y="112" text-anchor="middle" class="node-label-accent">epoll / kqueue</text>
+          <text x="323" y="132" text-anchor="middle" class="edge-label">报告就绪集合</text>
+
+          <!-- event loop thread -->
+          <rect x="470" y="78" width="216" height="82" rx="6" class="diagram-ink node-fill"/>
+          <text x="578" y="104" text-anchor="middle" class="node-label">单个事件循环线程</text>
+          <text x="578" y="124" text-anchor="middle" class="edge-label">ae · reactor</text>
+          <text x="578" y="144" text-anchor="middle" class="edge-label">读 → 解析 → 执行 → 写回</text>
+
+          <!-- serial command queue under the loop -->
+          <rect x="470" y="210" width="216" height="86" rx="6" class="diagram-soft node-fill"/>
+          <text x="578" y="234" text-anchor="middle" class="node-label">命令逐条串行执行</text>
+          <rect x="492" y="250" width="40" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="512" y="270" text-anchor="middle" class="edge-label">c1</text>
+          <rect x="540" y="250" width="40" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="560" y="270" text-anchor="middle" class="edge-label">c2</text>
+          <rect x="588" y="250" width="40" height="30" rx="3" class="diagram-ink node-fill"/>
+          <text x="608" y="270" text-anchor="middle" class="edge-label">c3</text>
+          <text x="652" y="270" text-anchor="middle" class="edge-label">…</text>
+
+          <!-- sockets -> epoll -->
+          <line x1="170" y1="53" x2="248" y2="100" class="diagram-ink" marker-end="url(#ar2a-ink)"/>
+          <line x1="170" y1="111" x2="248" y2="115" class="diagram-ink" marker-end="url(#ar2a-ink)"/>
+          <line x1="170" y1="169" x2="248" y2="130" class="diagram-ink" marker-end="url(#ar2a-ink)"/>
+          <!-- epoll -> loop -->
+          <line x1="398" y1="119" x2="470" y2="119" class="diagram-accent" marker-end="url(#ar2a-accent)"/>
+          <!-- loop -> serial queue -->
+          <line x1="578" y1="160" x2="578" y2="210" class="diagram-ink" marker-end="url(#ar2a-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>上万连接经 epoll 汇成一个就绪集合，交给唯一的事件循环线程逐条执行。<strong>注意</strong>：并发发生在「同时监听」这一层，不在「执行」这一层——执行始终是一条接一条，没有第二条命令在并行改数据。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">两个「并发」别混为一谈</span>
+        <p>「同时监听上万连接」和「同时执行多条命令」是两回事。前者靠 epoll 实现，是 IO 层面的并发；后者从不发生——命令执行永远串行。Redis 高并发的来源是「一根线程不为任何连接空等」，而非「多条命令并行跑」。把这两层分开，2.4 的「天然原子」就顺理成章。</p>
+      </div>
+
+      <h2 id="why-fast"><span class="num">2.3</span><span>为什么单线程反而快</span></h2>
+      <p class="one-liner">Redis 的瓶颈是内存与网络，不是 CPU；单线程省掉了多线程的全部协调成本——锁、上下文切换、缓存行竞争——反而比多线程更快。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>「单线程怎么会比多线程快」是面试常被追问、又最容易答歪的一题。答「因为内存快」只说对了一半——内存快是数据结构层的事，和单不单线程无关。真正的因果是：在一个 CPU 不是瓶颈的系统里，多线程带来的收益（并行算力）几乎用不上，而它的代价（同步开销）却全要付。把账算到这一层，才答到了点上。</p>
+      </div>
+
+      <p>把「快」归因到一句「内存快」是不够的。准确的因果链分三步：</p>
+
+      <ul>
+        <li><strong>瓶颈不在 CPU</strong>：Redis 的绝大多数命令是内存里的 <code>O(1)</code> / <code>O(logN)</code> 操作，单条命令耗时常在微秒级。真正的限制是内存带宽和网络往返，而不是 CPU 算力。CPU 既然不是瓶颈，多线程能榨出的并行算力就基本用不上。</li>
+        <li><strong>多线程的代价却全要付</strong>：一旦多线程并发改同一份内存数据，就必须加锁保护，于是带来锁争用、线程上下文切换、以及 CPU 缓存行在核间来回失效（false sharing，伪共享）。这些协调成本在高频小操作下占比极高。</li>
+        <li><strong>单线程把这些成本全省了</strong>：没有锁、没有上下文切换、没有缓存行竞争。一根线程闷头跑，CPU 缓存命中率高、指令流水线不被打断。省下的协调成本，超过了「用不上的那点并行算力」。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">一句话归因</span>
+        <p>Redis 快，不是因为「内存快」这一句（那是数据结构层的事），而是因为<strong>在一个 CPU 不是瓶颈的系统里，单线程省掉的多线程协调成本，大于它放弃的并行收益</strong>。这是一个工程权衡的结果，不是物理定律——换一个 CPU 密集的负载（比如大量 Lua 计算），单线程就会成为瓶颈，这也正是 2.6 多线程演进的动因之一。</p>
+      </div>
+
+      <h2 id="atomic"><span class="num">2.4</span><span>命令天然原子（核心推论）</span></h2>
+      <p class="one-liner">单线程串行 → 每条命令执行时不可能被另一条命令打断 → 这正是 INCR、SETNX、分布式锁、限流令牌桶能成立的根基。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这是本章要让读者「会自己推」的那一步，也是全书引用最多的一条结论。05 的分布式锁、06 的限流，本质上都在借用「一条 Redis 命令执行时不会被打断」这件事。如果这一步只是背下来而没真正想透，后面看锁和限流就只能记结论；想透了，它们就都成了这一条的直接推论。</p>
+      </div>
+
+      <p>推导只有一步，但要看清每个环节：<strong>命令执行是单线程串行的 → 同一时刻只有一条命令在改数据 → 一条命令一旦开始执行，在它返回之前，没有任何别的命令能插进来改同一份数据 → 因此每条 Redis 命令的执行天然是原子的</strong>，不需要任何锁。注意这里的原子性来自「串行执行」这个结构本身，是免费的——不是 Redis 额外加了锁机制实现的。</p>
+
+      <p>这条「天然原子」直接撑起了一批关键能力：</p>
+
+      <ul>
+        <li><strong><code>INCR</code> / <code>DECR</code> / <code>INCRBY</code></strong>：「读—加—写」三步在一条命令内完成，不可被打断，所以并发计数器永不丢更新。</li>
+        <li><strong><code>SETNX</code> 与 <code>SET k v NX PX 30000</code></strong>：「不存在才设置」+「设过期」在一条命令里原子完成——这是分布式锁的根基（详见 05）。注意要用单条 <code>SET ... NX PX</code>，而非 <code>SETNX</code> 后再 <code>EXPIRE</code> 两条命令，否则中间会留下没有过期时间的窗口。</li>
+        <li><strong>Lua 脚本 / <code>EVAL</code></strong>：整段脚本作为一个整体在主线程上执行，期间不穿插其他命令。限流令牌桶、库存扣减这类「多步骤要么全做要么全不做」的逻辑，靠它一次原子完成（详见 06）。</li>
+      </ul>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 会不会丢更新</span>
+        <p>两个客户端 A 和 B 在同一瞬间，都对同一个 key <code>counter</code>（当前值 100）执行 <code>INCR</code>。最终 <code>counter</code> 是 101 还是 102？为什么？多线程程序里同样的「读—加—写」会有什么风险？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p>最终是 <strong>102</strong>，绝不会丢更新。命令执行是单线程串行的：A 的 <code>INCR</code> 和 B 的 <code>INCR</code> 会被排成一前一后两条，谁先执行谁把 100 改成 101，另一条再把 101 改成 102，中间不存在交叉。</p>
+          <p>对照多线程：若两个线程各自做「读 100 → 算 101 → 写回 101」，两个读会同时读到旧值 100，结果都写回 101，丢掉一次自增——这正是经典的竞态（race condition）。多线程必须加锁才能避免，而 Redis 靠串行执行把这个问题从根上消除了，无需锁。</p>
+        </details>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两个客户端的 INCR 在单线程下排成一队无交叉，对比多线程需要加锁">
+          <defs>
+            <marker id="ar2b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar2b-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- left: redis single-thread -->
+          <text x="40" y="30" class="node-label-accent">Redis · 单线程串行</text>
+          <rect x="40" y="48" width="120" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="100" y="72" text-anchor="middle" class="node-label">A: INCR</text>
+          <rect x="40" y="104" width="120" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="100" y="128" text-anchor="middle" class="node-label">B: INCR</text>
+          <!-- serial queue -->
+          <rect x="206" y="76" width="120" height="38" rx="5" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="266" y="100" text-anchor="middle" class="node-label-accent">单一执行线程</text>
+          <text x="266" y="148" text-anchor="middle" class="edge-label">100 → 101 → 102</text>
+          <text x="266" y="166" text-anchor="middle" class="edge-label">无交叉 · 无锁</text>
+          <line x1="160" y1="67" x2="206" y2="88" class="diagram-ink" marker-end="url(#ar2b-ink)"/>
+          <line x1="160" y1="123" x2="206" y2="103" class="diagram-ink" marker-end="url(#ar2b-ink)"/>
+
+          <!-- divider -->
+          <line x1="372" y1="20" x2="372" y2="270" class="diagram-soft"/>
+
+          <!-- right: multithread needs lock -->
+          <text x="410" y="30" class="node-label">多线程 · 需要锁</text>
+          <rect x="410" y="48" width="120" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="470" y="72" text-anchor="middle" class="node-label">线程 1 读 100</text>
+          <rect x="410" y="104" width="120" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="470" y="128" text-anchor="middle" class="node-label">线程 2 读 100</text>
+          <!-- lock gate -->
+          <rect x="576" y="76" width="116" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="634" y="100" text-anchor="middle" class="node-label">锁 / mutex</text>
+          <text x="634" y="166" text-anchor="middle" class="branch-label">不加锁→丢更新</text>
+          <text x="634" y="184" text-anchor="middle" class="edge-label">都写回 101</text>
+          <line x1="530" y1="67" x2="576" y2="88" class="diagram-ink" marker-end="url(#ar2b-ink)"/>
+          <line x1="530" y1="123" x2="576" y2="103" class="diagram-accent" marker-end="url(#ar2b-accent)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>左侧两条 INCR 被排成一队、逐个把值推进，结果必为 102；右侧多线程不加锁则两次读都看到 100、各写回 101 丢掉一次自增。<strong>注意</strong>：Redis 的原子性是「串行结构」白送的，省掉了右侧那道锁。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">原子的边界：单命令，不是多命令</span>
+        <p>天然原子的单位是<strong>一条命令</strong>（或一段 Lua 脚本、一个 <code>MULTI/EXEC</code> 事务块）。两条独立命令之间没有这层保证——<code>GET</code> 之后再 <code>SET</code>，中间完全可以插进别的客户端的写。所以「读旧值、判断、再写新值」这种跨命令逻辑，必须收进一条命令、一段 Lua、或一个事务里，才能继续享受原子性。这是 05 分布式锁要用 <code>SET ... NX</code> 单命令、而不是两条命令的根本原因。</p>
+      </div>
+
+      <h2 id="bigkey"><span class="num">2.5</span><span>大 key 为什么阻塞整个实例</span></h2>
+      <p class="one-liner">一条 O(N) 命令占住唯一的执行线程期间，其余所有客户端的请求只能在队列里干等——慢的不只是这一条命令，是整个实例。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>「大 key 危险」几乎人人会说，但多数人停在「它慢」这个层面。真正要建立的认知是：它的危害不是「自己慢」，而是「拖慢所有人」。这个差别，恰恰是从「单线程串行」推出来的——只有一根执行线程，它被一条命令占住，别的请求就全被挡在门外。理解了这条因果，才会真正敬畏大 key，也才看得懂 Redis 4.0 为什么要专门为「删除」造一个新命令。</p>
+      </div>
+
+      <p>把 2.3 的「快」反过来看就是这一节。单线程串行意味着<strong>只有一根线程在执行命令</strong>——这在命令都是微秒级时是优点，但一旦某条命令是 <code>O(N)</code> 且 N 很大，它就会长时间霸占这根唯一的线程，<strong>排在它后面的所有请求（哪怕只是一个 <code>GET</code>）都得等它执行完</strong>。典型的「大 key 操作」包括：</p>
+
+      <ul>
+        <li><code>HGETALL</code> 一个百万字段的大 hash——一次性遍历并序列化全部字段。</li>
+        <li>一次性 <code>DEL</code> 一个百万元素的大 key——释放上百万个内存对象，全在主线程上同步完成。</li>
+        <li>对大集合做 <code>SMEMBERS</code>、对大 ZSet 做无界 <code>ZRANGE 0 -1</code>、用 <code>KEYS *</code> 扫全库。</li>
+      </ul>
+
+      <p>这里有个反直觉的点：<strong><code>DEL</code> 一个大 key 也是 <code>O(N)</code> 的</strong>。删除不是「把指针一抹」那么简单——一个百万元素的集合，要逐个释放这百万个元素对象的内存，这个 <code>free</code> 的总量正比于元素个数，全程占着主线程。</p>
+
+      <p>Redis 4.0 为此引入了 <strong><code>UNLINK</code></strong>，把删除拆成两段：</p>
+
+      <ul>
+        <li><strong>主线程只做 O(1) 解链</strong>：把这个 key 从键空间里摘掉，立刻返回。对客户端来说，key 瞬间就不可见了。</li>
+        <li><strong>后台 lazyfree 线程释放内存</strong>：真正耗时的「逐个 <code>free</code> 百万对象」挪到后台线程异步做，不占主线程。</li>
+      </ul>
+
+      <p>同样的惰性释放也能让 <code>DEL</code> 自动享受到：把 <code>lazyfree-lazy-user-del</code> 配成 <code>yes</code>，普通 <code>DEL</code> 在内部就按 <code>UNLINK</code> 的方式走后台释放。相关的还有 <code>lazyfree-lazy-expire</code>（过期删除走惰性）、<code>lazyfree-lazy-eviction</code>（淘汰走惰性）、<code>lazyfree-lazy-server-del</code>（被覆盖的旧值走惰性），默认多为关闭，生产环境常建议打开。</p>
+
+      <div class="callout insight">
+        <span class="label">重新认识 Redis 4.0 的「杀手特性」</span>
+        <p>面试里被问「Redis 4.0 带来了什么」，标准答案常是 <code>UNLINK</code> 和 lazyfree。把它讲透：这个所谓的杀手特性，<strong>本质上只是一次更聪明的删除操作</strong>——它没改变命令执行单线程这个事实，而是把「删除」里最耗时的内存释放从主线程搬到后台，让主线程只付 <code>O(1)</code> 的解链成本。它解决的正是本节开头那个问题：别让一次大 key 删除占住唯一的执行线程。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 删 10MB 的 key 时别人在经历什么</span>
+        <p>一个 10MB、含上百万元素的大 key，此刻执行 <code>DEL</code>（且没开 lazyfree）。在它执行的这段时间里，另一个客户端发来的 <code>GET some_small_key</code> 会经历什么？如果把 <code>DEL</code> 换成 <code>UNLINK</code>，又会怎样？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p><strong>用 <code>DEL</code>：</strong>那个 <code>GET</code> 会被<strong>阻塞排队</strong>，直到 <code>DEL</code> 把上百万个元素对象全部 <code>free</code> 完、主线程腾出来，才轮到它执行。即便 <code>GET</code> 本身是 <code>O(1)</code>、要读的 key 也很小，它的延迟也会被这次大删除整个拖高——这就是「一个大 key 拖垮整个实例」的实况，受害的是所有排在后面的无辜请求。</p>
+          <p><strong>换 <code>UNLINK</code>：</strong>主线程只做 <code>O(1)</code> 解链就立刻返回，把百万对象的内存释放交给后台 lazyfree 线程。那个 <code>GET</code> 几乎不受影响，延迟正常。代价是内存不是「命令返回的那一刻」就全部回收，而是后台线程慢慢释放——用「内存延迟回收」换「主线程不被阻塞」。</p>
+        </details>
+      </div>
+
+      <h2 id="multithread"><span class="num">2.6</span><span>多线程的演进</span></h2>
+      <p class="one-liner">io-threads（6.0）只并行 socket 读写与协议解析，命令执行仍单线程；Redis 8 / Valkey 8 让主线程与 IO 线程并发——「单线程」如今特指命令执行这一段。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>「Redis 不是早就多线程了吗，还说它单线程？」——这是 6.0 之后最常见的困惑。化解它，要把一次请求拆成两段看：socket 读写 / 协议解析是一段，命令执行是另一段。多线程化动的一直是前一段，后一段至今守住单线程。看清这条分界线，才能准确回答「Redis 到底是不是单线程的」，也才能理解后续版本在并发上各自动了哪一块。</p>
+      </div>
+
+      <p>当连接数和吞吐很高时，瓶颈会从「执行」转移到「在内核和用户态之间搬运网络字节、把字节解析成命令」——这部分是 CPU 密集且可以并行的。于是 Redis 把这一段逐步多线程化，但<strong>守住一条红线：命令执行始终单线程</strong>。三个阶段：</p>
+
+      <ul>
+        <li><strong>Redis 6.0 · io-threads</strong>：引入可配置的 IO 线程（<code>io-threads</code> 参数），把<strong>socket 读写和 RESP 协议解析</strong>分给多个 IO 线程并行做；但命令<strong>执行</strong>仍由主线程一条条串行完成。模型是「IO 多线程，执行单线程」。</li>
+        <li><strong>Redis 8 / Valkey 8 · 并发 IO</strong>：进一步让主线程与 IO 线程<strong>并发</strong>工作（而非旧版那种「主线程派活后干等 IO 线程收工」的同步切换），把多核利用率再推高一截。Valkey 8 官方实测，单实例吞吐从约 <strong>360K RPS</strong> 提升到约 <strong>1.19M RPS</strong>（依硬件与负载而定）。</li>
+        <li><strong>不变的内核</strong>：无论哪个阶段，<strong>改内存数据结构的那一步永远在单一线程上串行</strong>。所以 2.4 的「命令天然原子」在所有版本上都成立——这也是它能被当作分布式锁、限流根基的前提。</li>
+      </ul>
+
+      <table class="compare-table">
+        <caption>哪部分多线程了，哪部分仍单线程</caption>
+        <thead><tr><th>请求阶段</th><th>Redis 5 及以前</th><th>Redis 6 io-threads</th><th>Redis 8 / Valkey 8</th></tr></thead>
+        <tbody>
+          <tr><td>socket 读写</td><td>主线程</td><td>IO 线程并行</td><td>IO 线程并发</td></tr>
+          <tr><td>协议解析（RESP）</td><td>主线程</td><td>IO 线程并行</td><td>IO 线程并发</td></tr>
+          <tr class="selected"><td>命令执行（改数据）</td><td>单线程</td><td>单线程</td><td>单线程</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="io-threads 多线程做 socket 读写与协议解析，命令执行仍由单一主线程完成">
+          <defs>
+            <marker id="ar2c-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar2c-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- IO threads zone (multithread) -->
+          <rect x="28" y="40" width="300" height="240" rx="8" class="diagram-soft node-fill"/>
+          <text x="178" y="64" text-anchor="middle" class="node-label">IO 线程区 · 可多线程</text>
+          <rect x="52" y="84" width="120" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="112" y="104" text-anchor="middle" class="edge-label">IO 线程 1</text>
+          <text x="112" y="120" text-anchor="middle" class="edge-label">读 + 解析</text>
+          <rect x="186" y="84" width="120" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="246" y="104" text-anchor="middle" class="edge-label">IO 线程 2</text>
+          <text x="246" y="120" text-anchor="middle" class="edge-label">读 + 解析</text>
+          <rect x="52" y="146" width="120" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="112" y="166" text-anchor="middle" class="edge-label">IO 线程 3</text>
+          <text x="112" y="182" text-anchor="middle" class="edge-label">读 + 解析</text>
+          <rect x="186" y="146" width="120" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="246" y="166" text-anchor="middle" class="edge-label">IO 线程 4</text>
+          <text x="246" y="182" text-anchor="middle" class="edge-label">读 + 解析</text>
+          <text x="178" y="234" text-anchor="middle" class="edge-label">socket 读写 · RESP 协议解析</text>
+          <text x="178" y="258" text-anchor="middle" class="edge-label">CPU 密集 · 可并行</text>
+
+          <!-- boundary -->
+          <line x1="372" y1="36" x2="372" y2="284" class="diagram-accent" stroke-dasharray="5 4"/>
+          <text x="372" y="302" text-anchor="middle" class="branch-label">执行边界</text>
+
+          <!-- single execution thread (the red line) -->
+          <rect x="430" y="96" width="256" height="92" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="558" y="126" text-anchor="middle" class="node-label-accent">单一主线程</text>
+          <text x="558" y="148" text-anchor="middle" class="node-label">命令执行 · 改数据</text>
+          <text x="558" y="170" text-anchor="middle" class="edge-label">三代不变 · 始终串行</text>
+
+          <!-- arrows: IO threads -> execution boundary -> single thread -->
+          <line x1="306" y1="106" x2="372" y2="125" class="diagram-ink" marker-end="url(#ar2c-ink)"/>
+          <line x1="306" y1="168" x2="372" y2="155" class="diagram-ink" marker-end="url(#ar2c-ink)"/>
+          <line x1="372" y1="140" x2="430" y2="140" class="diagram-accent" marker-end="url(#ar2c-accent)"/>
+          <text x="400" y="132" text-anchor="middle" class="edge-label">汇入</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>多线程化只发生在执行边界左侧（socket 读写 + 协议解析）；越过边界，命令执行收敛回单一主线程。<strong>注意</strong>：Redis 6 → Redis 8 / Valkey 8 提升的是左侧的并行度与主线程-IO 线程并发度，右侧那根红线从未被打破。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">「单线程」这句话的精确版本</span>
+        <p>今天再说「Redis 是单线程的」，准确的意思是<strong>「命令执行是单线程的」</strong>——表中那一行朱红高亮，三代都没变。socket 读写和协议解析早已多线程化。这正好呼应 2.1 立的边界：串行的从来只是命令执行这一段，而它恰恰是「天然原子」与「大 key 阻塞」两条推论共同的源头。</p>
+      </div>
+
+      <section class="self-check">
+        <h2 id="self-check"><span class="num">·</span><span>自测</span></h2>
+        <ol>
+          <li>「Redis 是单线程的」这句话，精确说指的是哪一段单线程？一个正在 <code>BGSAVE</code>、且开了 io-threads 的进程，违背这句话吗？</li>
+          <li>单线程为什么反而比多线程快？把原因归结到「内存快」一句，错在哪？</li>
+          <li>从「单线程串行执行」出发，一步步推出「<code>INCR</code> 并发自增不会丢更新」。这条原子性是 Redis 额外加锁实现的吗？</li>
+          <li>设计判别：Redis 命令执行是单线程的，那么在一台 <strong>32 核</strong>的机器上，怎样才能把 CPU 大致压满、而不是只用到一个核？</li>
+        </ol>
+        <details>
+          <summary>展开全部答案</summary>
+          <p><strong>1.</strong> 指的是<strong>命令执行</strong>这一段单线程串行：同一时刻只有一条命令在改数据。它不违背——<code>BGSAVE</code> 是 <code>fork</code> 出的子进程在干活，io-threads 是 IO 线程在做 socket 读写与协议解析，两者都不在「执行命令」这一段。「单线程」描述的是执行模型，不是进程的线程总数。</p>
+          <p><strong>2.</strong> 因为 Redis 的瓶颈是内存带宽与网络、不是 CPU；CPU 既然不是瓶颈，多线程能榨出的并行算力基本用不上，而它的代价——锁争用、上下文切换、缓存行竞争——却全要付。单线程把这些协调成本全省了。归结到「内存快」是错的：内存快是数据结构层的事，和单不单线程无关；真正的因果是「省掉的协调成本 > 放弃的并行收益」。</p>
+          <p><strong>3.</strong> 推导：命令执行单线程串行 → 同一时刻只有一条命令在改数据 → 一条 <code>INCR</code> 开始执行后，在它返回前没有别的命令能插进来改同一个 key → 两个并发 <code>INCR</code> 被排成一前一后，100→101→102，不丢更新。这条原子性<strong>不是额外加锁实现的</strong>，而是「串行执行」这个结构本身白送的——没有锁参与。</p>
+          <p><strong>4.</strong> 既然单实例的命令执行用不满多核，就<strong>横向铺开</strong>：① 在一台机器上跑<strong>多个 Redis 实例</strong>（多进程），靠操作系统把它们调度到不同核；② 上 <strong>Redis Cluster</strong> 做分片，把数据和请求分散到多个实例分别执行（详见 05）；③ 打开 <strong>io-threads</strong> 让 socket 读写 / 协议解析吃到多核；④ 选用 <strong>Valkey 8 / Redis 8</strong> 的并发 IO 进一步提升多核利用率。核心思路：命令执行这一段压不满多核，就用「多实例 / 分片 + IO 多线程」从外面把核占满。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>p99 延迟突然飙高，从「单线程被占住」入手排查</h3>
+        <p>线上一个 Redis 实例，监控显示 <strong>p99 延迟突然从 1ms 飙到几百 ms</strong>，QPS 没有明显上涨，CPU 也没打满。从本章「单线程被某条 <code>O(N)</code> 命令占住」这个角度，给出一条排查路径：用哪些工具、看哪些信号、最终怎样定位并避免那条慢命令？</p>
+        <details>
+          <summary>提示（不给全解）</summary>
+          <p>主线索是「某条慢命令占住了唯一的执行线程，把后面所有请求一起拖慢」。排查顺序可以是：① <code>SLOWLOG GET</code> 看慢日志——哪条命令执行超时、作用在哪个 key 上，这是最直接的证据；② <code>redis-cli --bigkeys</code> 扫出大 key，看慢命令作用的 key 是不是百万元素级；③ 复盘业务侧是否有 <code>KEYS *</code>、无界 <code>ZRANGE 0 -1</code>、对大 hash 的 <code>HGETALL</code> 这类 <code>O(N)</code> 全量操作；④ 对策：把 <code>KEYS</code> 换成 <code>SCAN</code> 游标遍历、范围查询加上界、大 key 删除改 <code>UNLINK</code> 或打开 lazyfree、必要时把大 key 拆分。想一想：为什么「CPU 没打满」反而和「单线程被占住」并不矛盾？（提示：占住的是一根线程的时间，不是全部核的算力。）</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li><a href="https://redis.io/docs/latest/operate/oss_and_stack/management/optimization/latency/">redis.io · Redis latency / 单线程与延迟来源</a>（官方）</li>
+          <li><a href="https://redis.io/docs/latest/develop/reference/eviction/">redis.io · 线程模型与 lazyfree / UNLINK</a>（官方）</li>
+          <li><a href="http://oldblog.antirez.com/post/redis-as-LRU-cache.html">antirez · 关于 Redis 单线程设计的随笔</a>（作者视角）</li>
+          <li><a href="https://redis.io/blog/diving-into-redis-6/">Redis 6 · Threaded I/O（io-threads 说明）</a>（厂商博客）</li>
+          <li><a href="https://valkey.io/blog/unlock-one-million-rps/">Valkey · 多线程并发 IO 与百万 RPS</a>（Valkey 官方）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="01-data-structures.html">
+          <span class="label">← 上一章</span>
+          <span class="title">01 五大类型与底层编码</span>
+        </a>
+        <a class="next" href="03-persistence-and-memory.html">
+          <span class="label">下一章 →</span>
+          <span class="title">03 持久化与内存生命周期</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#what" data-toc-target="what">2.1 单线程指什么</a></li>
+        <li><a href="#reactor" data-toc-target="reactor">2.2 多路复用 + 事件循环</a></li>
+        <li><a href="#why-fast" data-toc-target="why-fast">2.3 为什么反而快</a></li>
+        <li><a href="#atomic" data-toc-target="atomic">2.4 命令天然原子</a></li>
+        <li><a href="#bigkey" data-toc-target="bigkey">2.5 大 key 阻塞实例</a></li>
+        <li><a href="#multithread" data-toc-target="multithread">2.6 多线程的演进</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 索引 · PostgreSQL 调优教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-diagnosis.html">01 诊断</a><span class="sep">—</span>
+    <a href="02-planner.html">02 优化器</a><span class="sep">—</span>
+    <a href="03-indexing.html" class="current">03 索引</a><span class="sep">—</span>
+    <a href="04-mvcc-vacuum.html">04 MVCC</a><span class="sep">—</span>
+    <a href="05-config.html">05 配置</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>索引:给优化器一条更便宜的路径</h1>
+        <p class="recap">上一章确立了优化器按代价从候选计划集里选最便宜的计划,索引就是"往候选集里塞一个更便宜的取数选项"。这一章讲清有哪些索引、各让什么查询变便宜,以及为什么你建的索引有时不被选。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的心智模型</p>
+        <ul>
+          <li>B-tree 擅长什么、不擅长什么——它为什么天然支持范围扫描和有序输出</li>
+          <li>多列索引的列序原则(等值在前、范围在后),以及 PG 18 的 skip scan 怎么松动了"最左前缀"铁律</li>
+          <li>覆盖索引与 Index Only Scan:免回表的前提是可见性映射 all-visible,这条机制连到第 04 章</li>
+          <li>部分索引(只索引一部分行)与表达式索引(让函数包裹的列也能走索引)</li>
+          <li>索引类型全景:B-tree / GIN / GiST / BRIN / Hash 各自服务什么数据与查询</li>
+          <li>索引为什么不被用 + 索引的写入代价——索引是"读变快 vs 写变慢"的权衡</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>B-tree:默认索引,擅长什么</span></h2>
+
+      <p class="one-liner">B-tree 是 PostgreSQL 的默认索引,服务一切"可比较"的查询:等值、范围、排序、前缀匹配。</p>
+
+      <div class="rationale">
+        <span class="label">机制比文档深一层</span>
+        <p>文档会说 B-tree 支持 <code>=</code> 和范围。再深一层看它的物理结构:B-tree 是一棵<strong>平衡的多层树</strong>,从根节点逐层下探到叶子,任意一个键的查找路径长度相同(都是树高,通常 3~4 层)。关键在叶子层——所有键<strong>按值有序</strong>排列,且相邻叶子节点用<strong>双向链表</strong>相连。这一个结构同时解释了它的两项核心能力:有序叶子让范围扫描(找到起点后沿链表顺序读)和 <code>ORDER BY</code> 免排序(直接按叶子顺序输出)得以成立。"B-tree 天然有序"不是一句口号,是它的叶子层物理布局决定的。</p>
+      </div>
+
+      <p>B-tree 能服务的查询条件:</p>
+      <ul>
+        <li><strong>等值与范围</strong>:<code>=</code>、<code>&lt;</code>、<code>&gt;</code>、<code>&lt;=</code>、<code>&gt;=</code>、<code>BETWEEN</code>、<code>IN (...)</code>——这些都是"在有序键里定位一个点或一段区间"。</li>
+        <li><strong>前缀匹配</strong>:<code>LIKE 'abc%'</code>(以及 <code>~ '^abc'</code>)能走 B-tree,因为前缀确定了叶子层里一段连续区间的起点。</li>
+        <li><strong><code>ORDER BY</code> 免排序</strong>:查询的排序列与索引列(及方向)一致时,优化器直接读有序叶子,跳过显式 Sort 节点。</li>
+      </ul>
+
+      <p>B-tree 用不上的场景:</p>
+      <ul>
+        <li><strong>后缀/中缀匹配</strong>:<code>LIKE '%abc'</code>、<code>LIKE '%abc%'</code>——通配符在前,无法确定有序键里的起点,只能逐行扫。这类查询要靠 §3.5 的 GIN(配 <code>pg_trgm</code>)。</li>
+        <li><strong>被函数包裹的列</strong>:<code>WHERE lower(email) = ?</code> 对裸 <code>email</code> 的 B-tree 无效——索引存的是原值,不是 <code>lower()</code> 后的值。解法是 §3.4 的表达式索引。</li>
+      </ul>
+
+      <p>一个走 B-tree 的计划,标志是 <code>Index Cond</code> 这一行——它表示条件被下推进了索引扫描,而不是取出行后再 <code>Filter</code>:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">btree-plan.txt</span>
+          <span class="lang">output</span>
+          <button class="copy" data-copy-target="cb-btree">复制</button>
+        </div>
+<pre id="cb-btree"><code class="language-bash">Index Scan using idx_orders_created on orders
+      (cost=0.42..28.6 rows=120 width=84)
+      (actual time=0.02..0.31 rows=118 loops=1)
+  Index Cond: ((created_at &gt;= '2026-05-01') AND (created_at &lt; '2026-06-01'))</code></pre>
+      </div>
+
+      <p>这是一个范围查询走 B-tree 的典型:<code>Index Cond</code> 里两个边界把扫描限定在叶子层的一段连续区间内,只读了这段区间对应的索引项,再回表取 118 行。对比第 01 章那个 <code>Rows Removed by Filter: 999991</code> 的顺序扫描,差别一目了然——条件进了 <code>Index Cond</code>,就没有海量行被扫出来再扔掉。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="B-tree 结构:根节点到内部节点再到有序的叶子层,叶子之间双向链表相连">
+          <defs>
+            <marker id="bt-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="bt-ar-s" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="bt-ar-acc-a" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="bt-ar-acc-b" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- root -->
+          <rect x="280" y="24" width="120" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="340" y="49" text-anchor="middle" class="node-label">root 根</text>
+
+          <line x1="310" y1="64" x2="180" y2="116" class="diagram-ink" marker-end="url(#bt-ar)"/>
+          <line x1="370" y1="64" x2="500" y2="116" class="diagram-ink" marker-end="url(#bt-ar)"/>
+
+          <!-- internal -->
+          <rect x="110" y="116" width="140" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="180" y="141" text-anchor="middle" class="node-label">internal 内部</text>
+          <rect x="430" y="116" width="140" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="500" y="141" text-anchor="middle" class="node-label">internal 内部</text>
+
+          <line x1="150" y1="156" x2="95" y2="212" class="diagram-ink" marker-end="url(#bt-ar-s)"/>
+          <line x1="200" y1="156" x2="245" y2="212" class="diagram-ink" marker-end="url(#bt-ar-s)"/>
+          <line x1="470" y1="156" x2="415" y2="212" class="diagram-ink" marker-end="url(#bt-ar-s)"/>
+          <line x1="525" y1="156" x2="585" y2="212" class="diagram-ink" marker-end="url(#bt-ar-s)"/>
+
+          <!-- leaf row, ordered + doubly linked -->
+          <rect x="40"  y="212" width="100" height="44" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="90"  y="232" text-anchor="middle" class="node-label-accent">leaf 叶子</text>
+          <text x="90"  y="249" text-anchor="middle" class="edge-label">10,20,30</text>
+
+          <rect x="190" y="212" width="100" height="44" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="240" y="232" text-anchor="middle" class="node-label-accent">leaf 叶子</text>
+          <text x="240" y="249" text-anchor="middle" class="edge-label">40,50,60</text>
+
+          <rect x="360" y="212" width="100" height="44" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="410" y="232" text-anchor="middle" class="node-label-accent">leaf 叶子</text>
+          <text x="410" y="249" text-anchor="middle" class="edge-label">70,80,90</text>
+
+          <rect x="540" y="212" width="100" height="44" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="590" y="232" text-anchor="middle" class="node-label-accent">leaf 叶子</text>
+          <text x="590" y="249" text-anchor="middle" class="edge-label">95,97,99</text>
+
+          <!-- doubly linked arrows between leaves -->
+          <line x1="140" y1="234" x2="190" y2="234" class="diagram-accent" marker-start="url(#bt-ar-acc-b)" marker-end="url(#bt-ar-acc-a)"/>
+          <line x1="290" y1="234" x2="360" y2="234" class="diagram-accent" marker-start="url(#bt-ar-acc-b)" marker-end="url(#bt-ar-acc-a)"/>
+          <line x1="460" y1="234" x2="540" y2="234" class="diagram-accent" marker-start="url(#bt-ar-acc-b)" marker-end="url(#bt-ar-acc-a)"/>
+
+          <text x="340" y="292" text-anchor="middle" class="edge-label">叶子层按键有序 · 双向链表相连 → 范围扫描沿链表顺序读</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>B-tree 的三层结构与有序叶子层。<strong>注意</strong>:红色的叶子层之间是<em>双向链表</em>,不是树边——这正是范围扫描和 <code>ORDER BY</code> 免排序的物理来源。找到区间起点后,顺着链表读即可,无需再回根节点。</figcaption>
+      </figure>
+
+      <h2 id="s32"><span class="num">3.2</span><span>多列索引与列序(含 skip scan 现状)</span></h2>
+
+      <p class="one-liner">多列索引 <code>(a, b, c)</code> 的列序决定它能服务哪些查询;列序排错,索引就服务不了你以为它能服务的查询。</p>
+
+      <p>多列 B-tree 的叶子按"<code>a</code> 为主、<code>b</code> 次之、<code>c</code> 再次"的字典序排列。这个排序方式直接推出经典的<strong>最左前缀规则</strong>:索引只能服务"从最左列开始、连续使用"的条件前缀。</p>
+
+      <p>以 <code>(a, b)</code> 为例:</p>
+      <ul>
+        <li><code>WHERE a = ?</code> —— 能用(用到最左列)。</li>
+        <li><code>WHERE a = ? AND b = ?</code> —— 能用(前缀完整)。</li>
+        <li><code>WHERE b = ?</code> —— 经典规则下<strong>用不上</strong>:缺了最左列 <code>a</code>,无法在按 <code>a</code> 排序的叶子里定位。</li>
+      </ul>
+
+      <h3>列序原则:等值列在前,范围列在后</h3>
+      <p>当查询里既有等值又有范围,把<strong>等值列放在前面、范围列放在后面</strong>。原因还是叶子的字典序:等值条件把扫描收窄到"<code>a</code> 固定"的一段,在这一段里 <code>b</code> 仍是有序的,范围条件 <code>b &gt; ?</code> 就能继续在这段内定位区间。反过来,<code>(b, a)</code> 且 <code>b</code> 是范围时,<code>b &gt; ?</code> 跨越多个 <code>b</code> 值,每段里的 <code>a</code> 各自有序但整体无序,等值条件 <code>a = ?</code> 就无法靠索引收窄。</p>
+
+      <p>所以查询 <code>WHERE a = ? AND b &gt; ?</code> 的最优索引是 <code>(a, b)</code>,不是 <code>(b, a)</code>。这条原则在 §3.6 的挑战题里会再用到。</p>
+
+      <h3>CURRENCY · PG 18 引入 B-tree skip scan(2025-09)</h3>
+      <p>PostgreSQL 18(GA 于 2025-09-25)给 B-tree 加入了 <strong>skip scan</strong>。它改变了上面"缺最左列就用不上"的结论:对索引 <code>(a, b)</code>,查询 <code>WHERE b = ?</code>(缺前导列 <code>a</code>)现在<em>也有机会</em>用上这个索引——优化器会遍历 <code>a</code> 的每一个 distinct 值,在每个值下用 <code>b = ?</code> 做一次子搜索,把多次子搜索拼起来。</p>
+
+      <div class="callout warning">
+        <span class="label">注意 · skip scan 只在低基数前导列才成立</span>
+        <p>skip scan 的代价正比于前导列 <code>a</code> 的 distinct 值个数:<code>a</code> 只有几个或几十个不同值(<strong>低基数</strong>)时,跳着搜很划算;<code>a</code> 高基数(成千上万个值)时,要跳的次数太多,优化器会放弃 skip scan、退回顺序扫描。所以"前导列必须出现在 WHERE"不再是<em>绝对</em>铁律,但松动仅限低基数前导列。PG 18 之前,这条规则没有例外。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 查询 × 索引 (a, b) 是否被服务 · PG18 前后对比</caption>
+        <thead>
+          <tr><th>查询条件</th><th>用到 (a, b)?<br>PG 18 之前</th><th>用到 (a, b)?<br>PG 18 之后</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>WHERE a = ?</code></td><td>是(最左前缀)</td><td>是</td></tr>
+          <tr><td><code>WHERE a = ? AND b = ?</code></td><td>是(前缀完整)</td><td>是</td></tr>
+          <tr class="selected"><td><code>WHERE b = ?</code>(a 低基数)</td><td>否</td><td>是(skip scan)</td></tr>
+          <tr><td><code>WHERE b = ?</code>(a 高基数)</td><td>否</td><td>否(skip 代价太高,退化)</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="最左前缀命中与 skip scan 的对比:前者一次定位,后者按低基数前导列逐值跳搜">
+          <defs>
+            <marker id="sk-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="sk-ar-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- left: 最左前缀 -->
+          <text x="160" y="26" text-anchor="middle" class="node-label">最左前缀:WHERE a=? AND b=?</text>
+          <rect x="40" y="44" width="240" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="160" y="69" text-anchor="middle" class="edge-label">按 a 定位 → 段内按 b 定位</text>
+          <line x1="160" y1="84" x2="160" y2="116" class="diagram-ink" marker-end="url(#sk-ar)"/>
+          <rect x="60" y="116" width="200" height="40" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="160" y="141" text-anchor="middle" class="node-label-accent">一次区间定位</text>
+
+          <!-- divider -->
+          <line x1="340" y1="20" x2="340" y2="276" class="diagram-soft"/>
+
+          <!-- right: skip scan -->
+          <text x="510" y="26" text-anchor="middle" class="node-label">skip scan:WHERE b=?(缺 a)</text>
+          <rect x="400" y="44" width="220" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="510" y="64" text-anchor="middle" class="edge-label">a 低基数:仅 a∈{1,2,3}</text>
+          <text x="510" y="79" text-anchor="middle" class="edge-label">对每个 a 值搜一次 b=?</text>
+
+          <!-- three sub-searches -->
+          <line x1="440" y1="84" x2="430" y2="116" class="diagram-accent" marker-end="url(#sk-ar-acc)"/>
+          <line x1="510" y1="84" x2="510" y2="116" class="diagram-accent" marker-end="url(#sk-ar-acc)"/>
+          <line x1="580" y1="84" x2="590" y2="116" class="diagram-accent" marker-end="url(#sk-ar-acc)"/>
+
+          <rect x="392" y="116" width="76" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="430" y="140" text-anchor="middle" class="edge-label">a=1, b=?</text>
+          <rect x="472" y="116" width="76" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="510" y="140" text-anchor="middle" class="edge-label">a=2, b=?</text>
+          <rect x="552" y="116" width="76" height="38" rx="5" class="diagram-ink node-fill"/>
+          <text x="590" y="140" text-anchor="middle" class="edge-label">a=3, b=?</text>
+
+          <text x="510" y="184" text-anchor="middle" class="branch-label">a 高基数 → 跳太多次 → 退化为顺序扫描</text>
+
+          <text x="340" y="244" text-anchor="middle" class="edge-label">左:前导列在 WHERE,一步到位 · 右:前导列缺席,靠遍历低基数前导值拼出来</text>
+          <text x="340" y="266" text-anchor="middle" class="edge-label">PG 18+ 才有右侧能力</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>最左前缀命中 vs skip scan。<strong>注意</strong>:skip scan 不是"列序随便排都行"——它把缺失前导列的代价转嫁成"遍历该列的每个 distinct 值"。前导列低基数时这笔代价小;高基数时优化器仍会放弃它。建索引时,列序原则照旧。</figcaption>
+      </figure>
+
+      <h2 id="s33"><span class="num">3.3</span><span>覆盖索引与 Index Only Scan</span></h2>
+
+      <p class="one-liner">查询要的列全在索引里时,优化器可以只读索引、不回表(Index Only Scan)——前提是数据页被标记为 all-visible。</p>
+
+      <p>普通 Index Scan 分两步:走索引拿到行的物理位置(TID),再<strong>回表</strong>(到堆表对应页)取出整行。回表是随机读,正是第 02 章里"命中行一多就该用顺序扫描"的代价来源。如果查询<em>需要的列恰好都在索引里</em>,这一步回表就能省掉——这就是 <strong>Index Only Scan</strong>。</p>
+
+      <h3>用 INCLUDE 把额外列搭进叶子</h3>
+      <p>让索引覆盖更多列,有两种写法。一是直接把列加进索引键 <code>(a, b)</code>,但这会让 <code>b</code> 参与排序和定位,有时并不需要。二是用 <code>INCLUDE</code> 子句:<code>INCLUDE</code> 的列只<strong>存进叶子节点</strong>(供取数、避免回表),<strong>不参与</strong>排序与查找。当某列只是要被 <code>SELECT</code> 出来、从不作为查询条件时,放进 <code>INCLUDE</code> 比放进索引键更省。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">covering-index.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-cover">复制</button>
+        </div>
+<pre id="cb-cover"><code class="language-sql">-- 查询:SELECT amount FROM orders WHERE customer_id = ?
+-- customer_id 用于查找,amount 只是要取出来
+CREATE INDEX idx_orders_cust_amt
+  ON orders (customer_id) INCLUDE (amount);</code></pre>
+      </div>
+
+      <p>建好后,上面那条查询就能走 Index Only Scan——<code>customer_id</code> 定位、<code>amount</code> 直接从叶子取,完全不碰堆表:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">ios-plan.txt</span>
+          <span class="lang">output</span>
+          <button class="copy" data-copy-target="cb-ios">复制</button>
+        </div>
+<pre id="cb-ios"><code class="language-bash">Index Only Scan using idx_orders_cust_amt on orders
+      (cost=0.42..8.4 rows=9 width=8)
+      (actual time=0.02..0.03 rows=9 loops=1)
+  Index Cond: (customer_id = 42)
+  Heap Fetches: 0</code></pre>
+      </div>
+
+      <p>关键看 <strong><code>Heap Fetches: 0</code></strong>:0 次回表,整条查询只读了索引。这是 Index Only Scan 跑在理想状态的标志。</p>
+
+      <div class="rationale">
+        <span class="label">关键连接 · 为什么 Heap Fetches 有时不为 0(连第 04 章)</span>
+        <p>Index Only Scan 有一个隐藏前提:索引项指向的堆页必须在<strong>可见性映射(visibility map,VM)</strong>里被标记为 <strong>all-visible</strong>。原因是索引项本身<em>不存</em>行的事务可见性信息(那存在堆表行头里);只有当某页"对所有事务都可见"时,优化器才敢断定"不回表也不会读到不该看见的行"。而这个 all-visible 标记<strong>由 VACUUM 维护</strong>。如果一张表写入频繁、VACUUM 跟不上,大量页的 VM 标记是脏的,Index Only Scan 就不得不逐个回表去查可见性——表现就是 <code>Heap Fetches</code> 变大,Index Only Scan 退化到接近普通 Index Scan。这条"VACUUM 不及时 → index-only 退化"的机制,在<a href="04-mvcc-vacuum.html#s43">第 04 章 §4.3</a>展开。</p>
+      </div>
+
+      <h2 id="s34"><span class="num">3.4</span><span>部分索引与表达式索引</span></h2>
+
+      <p class="one-liner">部分索引只索引"满足某条件的行",表达式索引索引"某个表达式的结果"——两者都是把索引精确对准查询。</p>
+
+      <h3>部分索引:只索引你真正会查的行</h3>
+      <p>部分索引在定义里带 <code>WHERE</code>,只为满足条件的行建索引项。它的好处是<strong>更小、写入更省</strong>:不满足条件的行根本不进索引,既省空间,这些行的增删改也不必维护索引项。</p>
+
+      <p>这正好接上第 02 章挑战题的悬念:<code>status</code> 有 <code>shipped 60% / paid 25% / pending 12% / cancelled 3%</code>,高频值走 Seq Scan、只有低频的 <code>cancelled</code> 适合走索引。但建一个完整的 <code>status</code> 单列索引,会为全部行(包括占 97% 的非 cancelled 行)建项,浪费且拖慢写入。更优解是只为 <code>cancelled</code> 行建部分索引:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">partial-index.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-partial">复制</button>
+        </div>
+<pre id="cb-partial"><code class="language-sql">-- 只索引低频值 cancelled 的行;索引体积≈全表的 3%
+CREATE INDEX idx_orders_cancelled
+  ON orders (created_at)
+  WHERE status = 'cancelled';
+
+-- 这条查询会走上面的部分索引
+SELECT * FROM orders
+WHERE status = 'cancelled' AND created_at &gt;= '2026-05-01';</code></pre>
+      </div>
+
+      <p>优化器识别出查询条件 <code>status = 'cancelled'</code> 与索引的 <code>WHERE</code> 谓词匹配,就会用这个只含 3% 行的小索引,既快又几乎不增加写入负担。这是"部分索引专门服务低频值查询"的标准用法。</p>
+
+      <h3>表达式索引:让函数包裹的列也能走索引</h3>
+      <p>§3.1 提过,<code>WHERE lower(email) = ?</code> 用不上 <code>email</code> 的普通 B-tree——索引存的是原值,不是 <code>lower()</code> 后的值。表达式索引(也叫函数索引)直接索引<strong>表达式的结果</strong>:</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">expression-index.sql</span>
+          <span class="lang">sql</span>
+          <button class="copy" data-copy-target="cb-expr">复制</button>
+        </div>
+<pre id="cb-expr"><code class="language-sql">-- 索引 lower(email) 的结果,而不是 email 本身
+CREATE INDEX idx_users_lower_email
+  ON users (lower(email));
+
+-- 现在这条大小写不敏感的查找能走索引
+SELECT * FROM users WHERE lower(email) = 'alice@example.com';</code></pre>
+      </div>
+
+      <p>注意查询里的表达式必须与索引定义里的<strong>完全一致</strong>(都是 <code>lower(email)</code>),优化器才会匹配。表达式索引的代价:每次 <code>INSERT/UPDATE</code> 都要计算一次该表达式来维护索引项,所以表达式应当是确定性的、不太重的函数。</p>
+
+      <h2 id="s35"><span class="num">3.5</span><span>索引类型全景</span></h2>
+
+      <p class="one-liner">B-tree 不是唯一的索引类型;数据形态和查询算子不同,最合适的索引结构也不同。</p>
+
+      <p>前四节都在讲 B-tree,因为它覆盖了绝大多数 OLTP 查询。但 jsonb 的包含查询、全文检索、几何最近邻、超大时序表——这些场景 B-tree 要么用不上,要么远不是最优。PostgreSQL 内置五种索引类型:</p>
+
+      <table class="compare-table">
+        <caption>表 3.2 · 五种索引类型适用场景</caption>
+        <thead>
+          <tr><th>类型</th><th>适用数据 / 查询</th><th>典型例子</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td><strong>B-tree</strong></td><td>可比较的标量:等值、范围、排序、前缀</td><td><code>WHERE id = ?</code> · <code>ORDER BY created_at</code></td></tr>
+          <tr><td><strong>GIN</strong></td><td>倒排索引:一个值含多个可检索项(jsonb、数组、全文)</td><td>jsonb <code>@&gt;</code> · 数组包含 · tsvector 全文检索</td></tr>
+          <tr><td><strong>GiST</strong></td><td>几何 / 范围类型 / 最近邻(KNN)</td><td>地理位置 <code>&amp;&amp;</code> 相交 · 范围重叠 · <code>ORDER BY point &lt;-&gt; ?</code></td></tr>
+          <tr><td><strong>BRIN</strong></td><td>超大表且物理顺序与列值相关(如追加写的时序表)</td><td>按时间分区的日志表上 <code>created_at &gt;= ?</code></td></tr>
+          <tr><td><strong>Hash</strong></td><td>仅等值(PG 10+ 已 WAL 安全 / 崩溃安全)</td><td><code>WHERE token = ?</code>(少用,B-tree 通常够)</td></tr>
+        </tbody>
+      </table>
+
+      <p>几点要点:</p>
+      <ul>
+        <li><strong>GIN</strong> 是"倒排":对一行里的多个元素分别建索引项(如 jsonb 的每个 key、数组的每个元素、文档的每个词)。配 <code>pg_trgm</code> 扩展时,GIN 还能服务 §3.1 里 B-tree 做不到的 <code>LIKE '%abc%'</code> 中缀匹配。</li>
+        <li><strong>BRIN</strong> 不存每一行,只存"每一段连续块的值范围摘要"。所以它<strong>极小</strong>(一张几百 GB 的表,BRIN 往往只有几 MB)。代价是它只在"物理顺序与列值强相关"时有效——按时间追加写入的时序表是最佳场景,行的物理位置天然按 <code>created_at</code> 递增。</li>
+        <li><strong>Hash</strong> 在 PG 10 起已经写 WAL、崩溃安全,不再是过去那个"不推荐"的状态。但它只支持等值、不支持范围,而 B-tree 同样能做等值,所以实践中仍少用。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="索引类型选择决策图:按查询/数据形态分支到 B-tree、GIN、GiST、BRIN">
+          <defs>
+            <marker id="ty-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <ellipse cx="120" cy="160" rx="76" ry="26" class="diagram-ink node-fill"/>
+          <text x="120" y="158" text-anchor="middle" class="node-label">要索引的</text>
+          <text x="120" y="174" text-anchor="middle" class="node-label">是什么?</text>
+
+          <!-- branch 1: scalar -> B-tree -->
+          <line x1="196" y1="142" x2="380" y2="58" class="diagram-ink" marker-end="url(#ty-ar)"/>
+          <text x="280" y="92" text-anchor="middle" class="edge-label">标量,等值/范围/排序</text>
+          <rect x="380" y="34" width="260" height="46" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="510" y="54" text-anchor="middle" class="node-label-accent">B-tree</text>
+          <text x="510" y="71" text-anchor="middle" class="edge-label">默认,覆盖绝大多数查询</text>
+
+          <!-- branch 2: composite value -> GIN -->
+          <line x1="196" y1="152" x2="380" y2="122" class="diagram-ink" marker-end="url(#ty-ar)"/>
+          <text x="286" y="128" text-anchor="middle" class="edge-label">jsonb / 数组 / 全文</text>
+          <rect x="380" y="100" width="260" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="510" y="120" text-anchor="middle" class="node-label">GIN</text>
+          <text x="510" y="137" text-anchor="middle" class="edge-label">倒排:@&gt; 包含 / 中缀 LIKE</text>
+
+          <!-- branch 3: geometry/range -> GiST -->
+          <line x1="196" y1="168" x2="380" y2="188" class="diagram-ink" marker-end="url(#ty-ar)"/>
+          <text x="286" y="196" text-anchor="middle" class="edge-label">几何 / 范围 / KNN</text>
+          <rect x="380" y="166" width="260" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="510" y="186" text-anchor="middle" class="node-label">GiST</text>
+          <text x="510" y="203" text-anchor="middle" class="edge-label">相交 / 重叠 / 最近邻</text>
+
+          <!-- branch 4: huge ordered -> BRIN -->
+          <line x1="178" y1="182" x2="380" y2="254" class="diagram-ink" marker-end="url(#ty-ar)"/>
+          <text x="282" y="240" text-anchor="middle" class="edge-label">超大且物理有序</text>
+          <rect x="380" y="232" width="260" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="510" y="252" text-anchor="middle" class="node-label">BRIN</text>
+          <text x="510" y="269" text-anchor="middle" class="edge-label">块范围摘要,索引极小</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>索引类型选择决策图。<strong>注意</strong>:绝大多数查询都落在最上面那条 B-tree 分支——其余四种是为特定数据形态准备的。先确认 B-tree 真的不合适(jsonb 包含、全文、几何、超大时序),再考虑换类型,而不是反过来。</figcaption>
+      </figure>
+
+      <h2 id="s36"><span class="num">3.6</span><span>索引为什么不被用 + 索引的代价</span></h2>
+
+      <p class="one-liner">建了索引不等于会被用;而且每个索引都对写入收税——索引是"读变快 vs 写变慢/占空间"的权衡。</p>
+
+      <h3>索引为什么不被用</h3>
+      <p>"明明建了索引,优化器却没走"是最常见的困惑。逐条对应根因:</p>
+      <ul>
+        <li><strong>统计信息过期,估错了选择率</strong>:优化器以为命中很多行,觉得索引不划算。根因和修法见<a href="02-planner.html#s22">第 02 章 §2.2</a>(<code>ANALYZE</code> / 提高统计精度)。这是头号原因。</li>
+        <li><strong>列被函数包裹</strong>:<code>WHERE lower(email) = ?</code> 用不上 <code>email</code> 的普通索引。修法:建 §3.4 的表达式索引。</li>
+        <li><strong>隐式类型不匹配</strong>:列是 <code>bigint</code>,查询写 <code>WHERE id = '42'</code>(字符串),或列是 <code>text</code> 却用数字比较——隐式转换会让索引失效。修法:让参数类型与列类型一致。</li>
+        <li><strong>命中行太多,Seq 更便宜</strong>:这不是 bug,是正确的代价权衡。命中全表很大比例时,顺序扫描比海量随机回表更快。机制见<a href="02-planner.html#s23">第 02 章 §2.3</a>。</li>
+        <li><strong>表太小</strong>:只有几百行的表,整页顺序读一遍比走索引还快,优化器直接选 Seq Scan。</li>
+        <li><strong><code>LIKE '%x'</code> 前导通配</strong>:通配符在前,B-tree 无法定位起点(§3.1)。修法:GIN + <code>pg_trgm</code>。</li>
+      </ul>
+
+      <h3>索引的代价:不是越多越好</h3>
+      <p>索引让读变快,但不是免费的。三笔代价:</p>
+      <ul>
+        <li><strong>拖慢写入</strong>:每个索引都要在 <code>INSERT/UPDATE/DELETE</code> 时同步维护索引项。一张表上有 8 个索引,一次 <code>INSERT</code> 就要写 1 个堆元组 + 8 个索引项。索引越多,写入越慢。</li>
+        <li><strong>破坏 HOT 优化</strong>:PostgreSQL 的 HOT(Heap-Only Tuple)优化能让"不改任何被索引列"的 <code>UPDATE</code> 不去更新索引,代价很低。但只要<em>改了被某个索引覆盖的列</em>,这次 UPDATE 就无法走 HOT,必须更新所有相关索引项。给一个频繁更新的列建索引,等于让每次更新都变贵。HOT 的机制见<a href="04-mvcc-vacuum.html#s44">第 04 章 §4.4</a>。</li>
+        <li><strong>索引自身会膨胀</strong>:和表一样,索引在大量更新/删除后也会积累死项、变得臃肿,需要 <code>REINDEX</code> 重建才能恢复紧凑。膨胀与重建见<a href="04-mvcc-vacuum.html">第 04 章</a>。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 索引是一笔权衡,不是一项收益</span>
+        <p>把读和写放在一起看:索引把<em>读</em>从全表扫描变成几次定位,但给<em>每一次写</em>都加了维护成本,还占磁盘、还会膨胀。所以"给所有想得到的列都建上索引"是反模式——它会让一张写多读少的表慢得不可理喻。正确做法:用第 01 章的 <code>pg_stat_statements</code> 找出真正高频、真正慢的查询,只为它们建必要的索引,然后用 <code>EXPLAIN</code> 复测确认索引被用上了。建索引前先问一句:这张表的读写比是多少?</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程,把答案写下来再对照。这一章的题大多没有"背一下就行"的答案,需要你把机制走一遍。
+        </p>
+        <ol>
+          <li>B-tree 为什么天然支持 <code>ORDER BY</code> 免排序和范围扫描?用它的叶子层结构解释,而不是只说"它有序"。</li>
+          <li>索引 <code>(a, b)</code>,查询 <code>WHERE b = ?</code>。在 PG 18 之前会用上它吗?PG 18 之后呢?后者成立的<strong>前提条件</strong>是什么?</li>
+          <li>一条 Index Only Scan 的 <code>Heap Fetches</code> 突然从 0 涨到很大,查询变慢。最大嫌疑的根因是什么?该去看哪一章?</li>
+          <li>(设计题)一张 <code>events</code> 表写极多、读极少,只偶尔按 <code>user_id</code> 查最近事件。有人提议给 <code>user_id</code>、<code>type</code>、<code>created_at</code>、<code>payload</code> 全部各建一个索引。指出这个方案的问题,给出更克制的设计,并说明你会怎么验证它有效。</li>
+        </ol>
+        <details>
+          <summary>答案(先做完再展开)</summary>
+          <ol>
+            <li>B-tree 的<strong>叶子层按键有序</strong>,且相邻叶子用<strong>双向链表</strong>相连。排序列与索引一致时,直接顺着有序叶子输出即可,无需显式 Sort;范围查询找到区间起点后,沿链表顺序读到终点即可。两项能力都来自叶子层的物理布局,不是抽象的"有序"。</li>
+            <li>PG 18 之前:<strong>不会</strong>,缺最左列 <code>a</code>,违反最左前缀。PG 18 之后:<strong>有机会</strong>,靠 skip scan。前提条件是 <strong>前导列 <code>a</code> 是低基数</strong>(distinct 值少);<code>a</code> 高基数时跳搜代价太高,优化器仍会退回顺序扫描。</li>
+            <li>根因:索引指向的堆页在可见性映射(VM)里不再是 all-visible——通常是表写入频繁而 <strong>VACUUM 跟不上</strong>,VM 标记变脏,Index Only Scan 不得不逐行回表查可见性。去看<a href="04-mvcc-vacuum.html#s43">第 04 章 §4.3</a>(VACUUM 与可见性映射)。</li>
+            <li>问题:这是写多读少的表,4 个索引会让<em>每次写入</em>都维护 4 个索引项,且给 <code>created_at</code> 这类频繁变化的列建索引会破坏 HOT 优化(连第 04 章),写入急剧变慢;<code>payload</code> 几乎不会作为查询条件,给它建索引纯属浪费。更克制的设计:只为唯一真实查询"按 <code>user_id</code> 查最近事件"建一个 <code>(user_id, created_at)</code> 索引(等值列在前、排序/范围列在后),其余不建。验证:用 <code>pg_stat_statements</code> 确认确实只有这一类查询是热点,再对该查询跑 <code>EXPLAIN (ANALYZE, BUFFERS)</code> 确认走了该索引、<code>Buffers</code> 大幅下降,同时观察写入吞吐没有明显退化。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>一条查询,设计一个最优索引(列序 + 覆盖)</h3>
+        <p>给定查询:<code>SELECT status, amount FROM orders WHERE customer_id = ? AND created_at &gt; ? ORDER BY created_at;</code>。它有一个等值条件、一个范围条件、一个排序、且只 <code>SELECT</code> 两列。请设计<strong>一个</strong>索引,使这条查询既能用索引定位、又能免排序、还能免回表。写出 <code>CREATE INDEX</code> 语句并说明每个决策。</p>
+        <details>
+          <summary>提示(卡住再展开)</summary>
+          <p>三步拼起来:① <strong>列序</strong>——等值列 <code>customer_id</code> 在前,范围/排序列 <code>created_at</code> 在后(§3.2 的"等值在前、范围在后"),这样既能定位又能让 <code>created_at</code> 在 <code>customer_id</code> 固定的那一段里保持有序,从而免排序。② <strong>覆盖</strong>——查询还要取 <code>status</code> 和 <code>amount</code>,但它们不作为条件,放进 <code>INCLUDE</code>(§3.3)就能免回表、走 Index Only Scan。③ 合起来:<code>CREATE INDEX ON orders (customer_id, created_at) INCLUDE (status, amount);</code>。验证时看 <code>EXPLAIN</code> 是否出现 <code>Index Only Scan</code>、没有 Sort 节点、且 <code>Heap Fetches</code> 接近 0(后者还取决于 VACUUM,见第 04 章)。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.postgresql.org/docs/current/indexes.html">Indexes</a>(官方:索引总览)</li>
+          <li><a href="https://www.postgresql.org/docs/current/indexes-types.html">Index Types</a>(官方:B-tree / GIN / GiST / BRIN / Hash)</li>
+          <li><a href="https://www.postgresql.org/docs/current/indexes-index-only-scans.html">Index-Only Scans and Covering Indexes</a>(官方:免回表与 INCLUDE)</li>
+          <li><a href="https://www.postgresql.org/docs/18/indexes-multicolumn.html">Multicolumn Indexes</a>(官方 PG 18:多列索引与 skip scan)</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-planner.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 查询优化器与执行计划</span>
+        </a>
+        <a href="04-mvcc-vacuum.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · MVCC、VACUUM 与表膨胀</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 B-tree 擅长什么</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 多列索引与列序</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 覆盖索引 / IOS</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 部分 / 表达式索引</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 索引类型全景</a></li>
+        <li><a href="#s36" data-toc-target="s36">3.6 不被用 + 代价</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

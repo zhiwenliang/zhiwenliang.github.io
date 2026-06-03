@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<!--
+  tech-tutorial · Redis 深度教程 · 06 Redis 作为 Agent 基础设施
+  Aesthetic: minimalist monochrome + single vermillion accent
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redis 作为 Agent 基础设施 · Redis 深度教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700;
+  font-size: 30px; line-height: 1.2; margin: 0 0 12px;
+  letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { font-size: 15.5px; line-height: 1.65; margin: 0; }
+
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em;
+  background: var(--bg-soft); padding: 1px 5px; border-radius: 2px;
+  color: var(--vermilion); border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px;
+  color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms;
+  user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px;
+  color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* index landing: chapter directory cards */
+.toc-cards { display: grid; grid-template-columns: 1fr; gap: 0; margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.toc-cards a { display: grid; grid-template-columns: 64px 1fr; gap: 16px; padding: 14px 18px; text-decoration: none; color: var(--ink); border-bottom: 1px solid var(--rule); transition: background 150ms; }
+.toc-cards a:last-child { border-bottom: none; }
+.toc-cards a:hover { background: var(--bg-soft); }
+.toc-cards .n { font-family: var(--mono); font-size: 13px; color: var(--vermilion); font-weight: 700; padding-top: 2px; }
+.toc-cards .t { font-weight: 600; font-size: 15px; }
+.toc-cards .d { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; line-height: 1.5; }
+
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-data-structures.html">01 数据结构</a><span class="sep">—</span>
+    <a href="02-single-thread-and-io.html">02 内核模型</a><span class="sep">—</span>
+    <a href="03-persistence-and-memory.html">03 持久化</a><span class="sep">—</span>
+    <a href="04-caching-patterns.html">04 缓存工程</a><span class="sep">—</span>
+    <a href="05-distributed.html">05 分布式</a><span class="sep">—</span>
+    <a href="06-redis-for-agents.html" class="current">06 Agent</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Redis 深度教程 · 06</p>
+        <h1>Redis 作为 Agent 基础设施</h1>
+        <p class="recap">前五章是经典 Redis——内存编码与单线程串行执行这两块基石已推导完毕。这一章把同两块基石搬到 AI Agent 场景：向量是新的数据形态（基石一），语义缓存查找和 LLM 限流是新的原子操作（基石二）。技术是新的，模型是旧的。基于 Redis 8.x / RedisVL ≈0.18.x / langgraph-redis ≈0.3.2，截至 2026-06。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>Redis 在 Agent 系统里扮演的五个角色，以及哪个角色该外置专用组件</li>
+          <li>向量检索的两条路径（RediSearch HNSW/FLAT vs Redis 8 原生 Vector Set）及选型依据</li>
+          <li>语义缓存（semantic cache）的机制与 <code>distance_threshold</code> 对命中率的影响</li>
+          <li>会话 buffer 与长期语义记忆的实现方式，以及 LangGraph checkpointer 的三个类</li>
+          <li>为什么 LLM 限流要把令牌桶逻辑包进 Lua 脚本，而非分步执行</li>
+          <li>Streams / pub/sub / List 三种消息机制的选型矩阵</li>
+        </ul>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">本章 = 两块基石的新数据形态</span>
+        <p>向量（embedding，嵌入向量）是一种新的数据形态——用基石一（精选内存编码）来存和检索它，链回第 01 章。语义缓存的相似度查找和令牌桶限流，都在单线程串行执行里天然原子，链回第 02 章。Agent 场景带来了新需求，但推导它行为的工具与前五章完全相同。</p>
+      </div>
+
+      <!-- ======================================================
+           图 6.1  Agent 系统里 Redis 的 5 个角色总览
+           ====================================================== -->
+      <figure>
+        <svg viewBox="0 0 760 390" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Redis 在 Agent 系统的五个角色围绕中心 Redis 实例">
+          <defs>
+            <marker id="ar6a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar6a-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Center: Redis instance -->
+          <rect x="290" y="155" width="180" height="80" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="380" y="189" text-anchor="middle" class="node-label-accent">Redis 实例</text>
+          <text x="380" y="207" text-anchor="middle" class="edge-label">单线程 · 内存编码</text>
+
+          <!-- Role 1: 向量检索 (top-left) -->
+          <rect x="30" y="30" width="160" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="110" y="52" text-anchor="middle" class="node-label">向量检索</text>
+          <text x="110" y="70" text-anchor="middle" class="edge-label">HNSW / FLAT · 基石一</text>
+          <line x1="190" y1="68" x2="290" y2="175" class="diagram-ink" marker-end="url(#ar6a-ink)"/>
+
+          <!-- Role 2: 语义缓存 (top-right) -->
+          <rect x="570" y="30" width="160" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="650" y="52" text-anchor="middle" class="node-label">语义缓存</text>
+          <text x="650" y="70" text-anchor="middle" class="edge-label">SemanticCache · 基石二</text>
+          <line x1="570" y1="68" x2="470" y2="175" class="diagram-ink" marker-end="url(#ar6a-ink)"/>
+
+          <!-- Role 3: 会话记忆 (left) -->
+          <rect x="20" y="178" width="160" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="100" y="200" text-anchor="middle" class="node-label">会话 / 记忆</text>
+          <text x="100" y="218" text-anchor="middle" class="edge-label">buffer + checkpointer</text>
+          <line x1="180" y1="205" x2="290" y2="205" class="diagram-ink" marker-end="url(#ar6a-ink)"/>
+
+          <!-- Role 4: LLM 限流 (right) -->
+          <rect x="580" y="178" width="160" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="660" y="200" text-anchor="middle" class="node-label">LLM 限流</text>
+          <text x="660" y="218" text-anchor="middle" class="edge-label">令牌桶 / GCRA · Lua</text>
+          <line x1="580" y1="205" x2="470" y2="205" class="diagram-ink" marker-end="url(#ar6a-ink)"/>
+
+          <!-- Role 5: 消息总线 (bottom) -->
+          <rect x="290" y="310" width="180" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="332" text-anchor="middle" class="node-label">消息总线</text>
+          <text x="380" y="350" text-anchor="middle" class="edge-label">Streams / pub/sub / List</text>
+          <line x1="380" y1="310" x2="380" y2="235" class="diagram-ink" marker-end="url(#ar6a-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>Redis 在 Agent 系统里的五个角色，全部围绕同一实例。<strong>注意</strong>：五个角色都依赖同两块基石——向量索引是内存编码的新形态，语义缓存与限流是单线程原子性的新用法，不是另起炉灶的独立能力。</figcaption>
+      </figure>
+
+      <!-- ====================================================== -->
+      <h2 id="vector"><span class="num">6.1</span><span>向量检索：两条路径与选型</span></h2>
+      <p class="one-liner">向量（embedding）是另一种内存编码形态——Redis 用 HNSW（分层可导航小世界图）或 FLAT 暴力索引存储高维浮点向量，以距离度量代替精确键匹配。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>LLM 把文本映射成高维浮点向量（通常 768–3072 维），语义相似度转化为向量空间距离。经典 Redis 的精确键查找对向量无效，必须有专门的近似最近邻（ANN）索引。Redis 提供了两条路径：通过 RediSearch 模块创建向量索引，或（Redis 8 起）使用原生 Vector Set 类型。</p>
+      </div>
+
+      <h3>路径一：RediSearch 向量索引</h3>
+      <p>RediSearch 在 Hash 或 JSON 文档的字段上创建向量索引。<code>FT.CREATE</code> 时声明 <code>VECTOR</code> 字段，选择算法和距离度量：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">redis-cli · RediSearch 向量索引创建</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-ft-create">复制</button></div>
+        <pre id="cb-ft-create"><code class="language-bash"># FLAT：暴力精确搜索，适合向量数 &lt; 5 万的小集合
+FT.CREATE idx:docs ON HASH PREFIX 1 doc: SCHEMA
+  content TEXT
+  embedding VECTOR FLAT 6 TYPE FLOAT32 DIM 1536 DISTANCE_METRIC COSINE
+
+# HNSW：近似图索引，亿级向量仍可低延迟搜索
+# M=16: 每节点连接数；EF_CONSTRUCTION=200: 构建时搜索宽度
+FT.CREATE idx:docs_hnsw ON HASH PREFIX 1 doc: SCHEMA
+  content TEXT
+  embedding VECTOR HNSW 10 TYPE FLOAT32 DIM 1536 DISTANCE_METRIC COSINE M 16 EF_CONSTRUCTION 200
+
+# 向量相似度搜索：找最近 5 个，同时按 tag 预过滤
+FT.SEARCH idx:docs_hnsw
+  "(@tag:{news})=>[KNN 5 @embedding $vec AS score]"
+  PARAMS 2 vec &lt;binary_blob&gt;
+  SORTBY score
+  DIALECT 2</code></pre>
+      </div>
+
+      <p><strong>FLAT</strong> 对每个查询向量做全量暴力比对，召回精确，时间复杂度 <code>O(N×D)</code>（N=向量数，D=维度）。在向量数不超过约 5 万时延迟可接受且实现简单。<strong>HNSW</strong>（Hierarchical Navigable Small World，分层可导航小世界图）是近似最近邻算法：构建一个多层图，查询时从顶层稀疏图逐层缩小搜索范围，查询复杂度约 <code>O(log N)</code>。参数 <code>M</code>（每节点出边数，默认 16）和 <code>EF_RUNTIME</code>（查询时搜索宽度，默认 10）控制精度与速度的权衡：EF 越大，召回越准，延迟越高。</p>
+
+      <p>距离度量三选一：<strong>COSINE</strong>（余弦距离，值域 0–2，值越小越相似，最常用）；<strong>L2</strong>（欧氏距离，适合需要绝对量级的场景）；<strong>IP</strong>（内积，适合已归一化向量，等价于 COSINE 但更快）。</p>
+
+      <h3>路径二：Redis 8 原生 Vector Set（VADD / VSIM）</h3>
+      <p>Redis 8.0（2025-05 GA）把向量类型内置进内核，不再依赖 RediSearch 模块。新类型基于 sorted set 的扩展，专用命令 <code>VADD</code> / <code>VSIM</code> / <code>VCARD</code> 等：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">redis-cli · Redis 8 原生 Vector Set</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-vadd">复制</button></div>
+        <pre id="cb-vadd"><code class="language-bash"># 插入向量（默认 int8 量化；NOQUANT=全精度 float32；BIN=二值化）
+VADD myvecs VALUES 1536 0.12 0.34 0.56 ... doc:42
+VADD myvecs NOQUANT VALUES 1536 0.12 0.34 0.56 ... doc:43
+
+# 相似度搜索：返回最近 5 个成员及距离
+VSIM myvecs VALUES 1536 0.11 0.33 0.55 ... COUNT 5 WITHSCORES
+
+# 查看集合大小
+VCARD myvecs</code></pre>
+      </div>
+
+      <p>Vector Set 默认以 <strong>int8 量化</strong>（每维 1 字节）存储向量，内存约为 float32 的 1/4，召回率略有损失（通常 &lt;1%）。<code>NOQUANT</code> 保留 float32 全精度，<code>BIN</code> 二值化至每维 1 bit，内存极省但适用场景有限。HNSW 的 EF 参数（查询搜索宽度）默认 200，可通过 <code>EF</code> 选项在 <code>VSIM</code> 时覆盖。</p>
+
+      <div class="callout warning">
+        <span class="label">Vector Set 的当前限制</span>
+        <p><code>VADD</code> 是单线程串行插入（与所有写命令一致），在需要批量导入数百万向量的场景下速度慢。Redis 8.0–8.2 阶段的 Vector Set 尚不支持 RediSearch 的预过滤（<code>KNN + 标签过滤</code>组合）——这是 RediSearch 路径的核心优势之一。截至 2026-06，生产环境大规模向量检索仍优先考察 RediSearch 或专用向量库。</p>
+      </div>
+
+      <h3>何时不该用 Redis 做向量检索</h3>
+      <table class="compare-table">
+        <caption>向量检索选型参考</caption>
+        <thead><tr><th>场景</th><th>推荐</th><th>理由</th></tr></thead>
+        <tbody>
+          <tr class="selected"><td>向量数 &lt; 50 万、已有 Redis</td><td>Redis RediSearch HNSW</td><td>零额外依赖，毫秒级延迟，预过滤能力强</td></tr>
+          <tr><td>向量数 &lt; 10 万、精确召回</td><td>Redis FLAT 或 pgvector</td><td>pgvector 在 PostgreSQL 里"够用"，不引入新基础设施</td></tr>
+          <tr><td>重过滤（多属性联合）+ 大规模</td><td>Qdrant</td><td>专为混合过滤设计的 payload index，召回精度更可控</td></tr>
+          <tr><td>十亿级、托管免运维</td><td>Pinecone / 云厂商向量服务</td><td>Redis 单实例内存上限和单线程写入在十亿级向量下成为瓶颈</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">链回基石一</span>
+        <p>向量也是一种内存编码——FLAT 是全量浮点数组（精确），HNSW 图是按访问频率剪枝的多层索引（近似但省内存），int8 量化是把 float32 压缩到 1/4 体积的紧凑编码。Redis 用不同的编码结构服务不同精度/规模需求，与 Hash 在 listpack 和 hashtable 之间切换的逻辑完全一致。</p>
+      </div>
+
+      <!-- ====================================================== -->
+      <h2 id="semantic-cache"><span class="num">6.2</span><span>语义缓存：用向量相似度命中 LLM 响应</span></h2>
+      <p class="one-liner">语义缓存（semantic cache）把用户 query 向量化，在历史 prompt 向量库里做相似度搜索，距离低于阈值时直接返回已缓存的 LLM 响应，跳过 LLM 调用。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>同一个问题的不同表述（「Redis 怎么限流」vs「Redis 如何做速率控制」）在语义上等价，但精确字符串缓存无法命中。语义缓存把命中粒度从「完全相同」降低到「语义足够近」，在问答类、客服类场景中节省大量 LLM token 费用和延迟（LLM 调用通常百毫秒级，缓存命中通常个位数毫秒）。</p>
+      </div>
+
+      <!-- 图 6.2  语义缓存命中流程 -->
+      <figure>
+        <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="语义缓存命中与未命中流程">
+          <defs>
+            <marker id="ar6b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar6b-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Step 1: query -->
+          <rect x="20" y="110" width="110" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="75" y="132" text-anchor="middle" class="node-label">用户 query</text>
+          <text x="75" y="150" text-anchor="middle" class="edge-label">文本字符串</text>
+          <line x1="130" y1="137" x2="170" y2="137" class="diagram-ink" marker-end="url(#ar6b-ink)"/>
+
+          <!-- Step 2: embed -->
+          <rect x="170" y="110" width="110" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="225" y="132" text-anchor="middle" class="node-label">向量化</text>
+          <text x="225" y="150" text-anchor="middle" class="edge-label">embedding API</text>
+          <line x1="280" y1="137" x2="320" y2="137" class="diagram-ink" marker-end="url(#ar6b-ink)"/>
+
+          <!-- Step 3: Redis vector search -->
+          <rect x="320" y="110" width="130" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="385" y="132" text-anchor="middle" class="node-label-accent">Redis 向量搜索</text>
+          <text x="385" y="150" text-anchor="middle" class="edge-label">历史 prompt 索引</text>
+
+          <!-- Branch: hit -->
+          <line x1="450" y1="125" x2="570" y2="85" class="diagram-accent" marker-end="url(#ar6b-accent)"/>
+          <text x="510" y="100" text-anchor="middle" class="branch-label">距离 ≤ threshold</text>
+          <rect x="570" y="55" width="160" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="650" y="77" text-anchor="middle" class="node-label-accent">返回缓存响应</text>
+          <text x="650" y="95" text-anchor="middle" class="edge-label">命中 · 省 token</text>
+
+          <!-- Branch: miss -->
+          <line x1="450" y1="150" x2="570" y2="185" class="diagram-ink" marker-end="url(#ar6b-ink)"/>
+          <text x="515" y="180" text-anchor="middle" class="edge-label">距离 &gt; threshold</text>
+          <rect x="570" y="165" width="160" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="650" y="187" text-anchor="middle" class="node-label">调 LLM</text>
+          <text x="650" y="205" text-anchor="middle" class="edge-label">未命中 · 写回缓存</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.2</span>语义缓存的命中与未命中流程。<strong>注意</strong>：向量搜索步骤在 Redis 单线程里原子执行，即「取向量 → 计算距离 → 返回最近邻」这一次 Redis 操作不会被其他命令插入，链回基石二。</figcaption>
+      </figure>
+
+      <h3>RedisVL SemanticCache 机制</h3>
+      <p><strong>RedisVL</strong>（Redis Vector Library，Python 库，≈0.18.x，2026-04）的 <code>SemanticCache</code> 类封装了完整的语义缓存流程：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">Python · RedisVL SemanticCache 基础用法</span><span class="lang">python</span><button class="copy" data-copy-target="cb-semantic-cache">复制</button></div>
+        <pre id="cb-semantic-cache"><code class="language-python">from redisvl.extensions.llmcache import SemanticCache
+from redisvl.utils.vectorize import OpenAITextVectorizer
+
+vectorizer = OpenAITextVectorizer(model="text-embedding-3-small")
+
+cache = SemanticCache(
+    name="llm_cache",
+    vectorizer=vectorizer,
+    redis_url="redis://localhost:6379",
+    distance_threshold=0.10,   # COSINE 距离，0.0–2.0，默认 0.1
+)
+
+# 查缓存（返回 None 时需调 LLM）
+result = cache.check(prompt="Redis 怎么做限流")
+if result:
+    answer = result[0]["response"]
+else:
+    answer = call_llm("Redis 怎么做限流")
+    cache.store(
+        prompt="Redis 怎么做限流",
+        response=answer,
+    )
+
+# 运行时调整阈值（无需重建索引）
+cache.set_threshold(0.15)</code></pre>
+      </div>
+
+      <p><code>distance_threshold</code> 使用 COSINE 距离（值域 0–2，0 表示完全相同，2 表示完全相反）。默认 0.1 偏严，约等价于余弦相似度 ≥ 0.9，误命中极少但命中率低；实际工程中 <strong>0.15</strong> 是常见起点，在问答类任务里误命中率仍可控。高于 0.3 时同主题不同意图的 query 开始混淆，错误答案出现概率显著上升。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 阈值调高会怎样</span>
+        <p>把 <code>distance_threshold</code> 从 0.1 调到 0.3，语义缓存的命中率和错误命中率各自如何变化？对客服 Agent 有什么实际风险？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p><strong>命中率上升</strong>：原来距离在 0.1–0.3 之间、被认为"不够近"而放过的 query，现在都会命中缓存——命中率显著提升，LLM 调用减少，延迟下降。</p>
+          <p><strong>错误命中率也上升</strong>：COSINE 距离 0.3 约等价于余弦相似度 0.85，同主题不同意图的问题（如「退款政策」vs「退货政策」）向量距离可能落在这个区间——缓存会把错误答案返回给用户。</p>
+          <p>对客服 Agent 的风险：用户问 A，返回的是语义相近但语义不等价的问题 B 的答案，导致客户投诉或错误操作。阈值调整必须在目标语料集上评估 precision@threshold，而非盲目上调。</p>
+        </details>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">Redis LangCache · 截至 2026-06 仍为 Preview</span>
+        <p>Redis 官方推出的托管语义缓存服务 <strong>Redis LangCache</strong>，底层即 RedisVL SemanticCache 的托管版，截至 2026 年中仍处于 Preview 阶段，尚未 GA（General Availability）。生产环境使用需评估 SLA 与功能完整性。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">链回基石二</span>
+        <p>语义缓存的「向量相似度查找」在 Redis 单线程里原子执行——没有其他命令能在「开始搜索」和「返回结果」之间插入。这保证了并发多个 Agent 同时查缓存时，不会出现中间态读到写了一半的向量索引。这正是「单线程串行执行使命令天然原子」在新场景下的直接体现。</p>
+      </div>
+
+      <!-- ====================================================== -->
+      <h2 id="memory"><span class="num">6.3</span><span>会话与记忆：buffer、checkpointer、语义召回</span></h2>
+      <p class="one-liner">短期会话 buffer 把最近 N 轮对话存为 JSON 列表，长期记忆用向量检索按语义召回历史片段；LangGraph checkpointer 在二者之上再加一层完整的 Agent 状态快照。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>LLM 无状态，每次调用独立。Agent 系统需要在调用之间保存上下文：短期是「这轮对话的最近几条消息」，长期是「跨会话的用户偏好 / 知识」，而 LangGraph 等框架还需要「整个 Agent 执行图的检查点」以支持断点续跑和分支回溯。Redis 的 JSON 存储、向量检索、有序数据结构恰好同时满足这三类需求。</p>
+      </div>
+
+      <h3>短期会话 Buffer：langchain-redis</h3>
+      <p><code>langchain-redis</code> 的 <code>RedisChatMessageHistory</code> 把对话历史存为 Redis 中的 JSON 数组（依赖 RedisJSON 模块，Redis 8 已内置）。每条消息包含 role（human/ai/system）和 content，整个 session 以 <code>session_id</code> 为 key，支持通过 RediSearch 创建辅助索引以做跨 session 检索：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">Python · langchain-redis 短期会话 buffer</span><span class="lang">python</span><button class="copy" data-copy-target="cb-chat-history">复制</button></div>
+        <pre id="cb-chat-history"><code class="language-python">from langchain_redis import RedisChatMessageHistory
+
+history = RedisChatMessageHistory(
+    session_id="user:42:session:001",
+    redis_url="redis://localhost:6379",
+    ttl=3600,   # 会话 1 小时无活动后自动过期
+)
+
+history.add_user_message("Redis 的 HNSW 是什么")
+history.add_ai_message("HNSW 是分层可导航小世界图...")
+
+# 取最近 20 条消息传给 LLM
+messages = history.messages[-20:]</code></pre>
+      </div>
+
+      <h3>LangGraph Redis Checkpointer</h3>
+      <p><code>langgraph-checkpoint-redis</code>（≈0.3.2，2026-04）为 LangGraph Agent 的状态图提供三个持久化类，依赖 RedisJSON + RediSearch（Redis 8 内置，Redis 7.x 需单独加载模块）：</p>
+
+      <table class="compare-table">
+        <caption>langgraph-checkpoint-redis 三个持久化类</caption>
+        <thead><tr><th>类</th><th>存储内容</th><th>适用场景</th></tr></thead>
+        <tbody>
+          <tr class="selected"><td><code>RedisSaver</code></td><td>完整 thread 检查点历史（每步一个快照）</td><td>需要回溯 / 分支重放 / 审计执行轨迹</td></tr>
+          <tr><td><code>ShallowRedisSaver</code></td><td>只存最新检查点（覆盖旧快照）</td><td>只需断点续跑、不需历史，内存占用小</td></tr>
+          <tr><td><code>RedisStore</code></td><td>KV + 向量的长期跨 thread 记忆</td><td>用户偏好、知识库，按语义检索跨会话记忆</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">Python · RedisSaver checkpointer 基础用法</span><span class="lang">python</span><button class="copy" data-copy-target="cb-checkpointer">复制</button></div>
+        <pre id="cb-checkpointer"><code class="language-python">from langgraph.graph import StateGraph
+from langgraph_checkpoint_redis import RedisSaver
+
+# 创建 checkpointer（同步版；异步版用 AsyncRedisSaver）
+checkpointer = RedisSaver.from_conn_string("redis://localhost:6379")
+checkpointer.setup()   # 初始化 Redis 索引结构
+
+# 编译 graph 时注入 checkpointer
+graph = StateGraph(AgentState)
+# ... add_node / add_edge ...
+app = graph.compile(checkpointer=checkpointer)
+
+# 执行时带 thread_id：同一 thread 自动从上次检查点恢复
+config = {"configurable": {"thread_id": "session:42"}}
+result = app.invoke({"messages": [("user", "继续上次的任务")]}, config)</code></pre>
+      </div>
+
+      <div class="callout example">
+        <span class="label">版本依赖说明</span>
+        <p>RedisVL ≈0.18.x（2026-04），langgraph-redis ≈0.3.2（含 <code>RedisSaver</code>、<code>ShallowRedisSaver</code>、<code>RedisStore</code>）。两个库均依赖 RedisJSON + RediSearch 模块，Redis 8.0 起已内置，Redis 7.x 需通过 Redis Stack 或单独模块加载。版本号以 PyPI 发布为准，关键 API 变动参考各自 changelog。</p>
+      </div>
+
+      <!-- ====================================================== -->
+      <h2 id="rate-limit"><span class="num">6.4</span><span>LLM 限流：令牌桶、滑动窗口与 Lua 原子性</span></h2>
+      <p class="one-liner">LLM 网关对每个租户做速率控制（token bucket，令牌桶），必须把「查剩余令牌 → 判断 → 扣减」包进一段 Lua 脚本用 <code>EVAL</code> 执行，单线程串行保证整个判断-扣减操作原子完成。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>LLM API 按 token 计费且有速率上限（如 OpenAI Tier 3：每分钟 150 万 token）。多实例网关（N 个 Pod 同时处理请求）如果各自用「先 GET 再 SET」两步操作控制速率，两个 Pod 可能同时读到「还有 100 个令牌」，各自决定放行，实际超发 200 个。把判断和扣减合并成一条原子脚本，Redis 单线程串行执行它，任意并发下都不会超发。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">链回基石二</span>
+        <p>Lua 脚本通过 <code>EVAL</code> 在 Redis 服务端执行，整段脚本被当成一条命令处理：它在主线程里连续执行完毕才返回，期间其他命令排队等待。这是「单线程串行执行使命令天然原子」用于分布式限流的直接应用——与第 05 章分布式锁的 <code>SET key value NX PX</code> 原子命令同理，都是用基石二消灭竞态条件。</p>
+      </div>
+
+      <h3>令牌桶 Lua 脚本思路</h3>
+      <p>令牌桶（token bucket）维护两个字段：当前令牌数 <code>tokens</code> 和上次补充时间戳 <code>last_refill</code>。每次请求到来时，先按时间差补充令牌（补充速率 = capacity / window），再判断是否有足够令牌，有则扣减并放行，无则拒绝：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">Lua · 令牌桶脚本思路（伪代码，非生产直用）</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-token-bucket">复制</button></div>
+        <pre id="cb-token-bucket"><code class="language-bash">-- KEYS[1]: bucket key, e.g. "ratelimit:tenant:42"
+-- ARGV[1]: capacity  (max tokens, e.g. 1000)
+-- ARGV[2]: refill_rate  (tokens/second)
+-- ARGV[3]: requested  (tokens this request needs)
+-- ARGV[4]: now  (current unix timestamp in ms, from client)
+
+local key      = KEYS[1]
+local capacity = tonumber(ARGV[1])
+local rate     = tonumber(ARGV[2])
+local req      = tonumber(ARGV[3])
+local now      = tonumber(ARGV[4])
+
+local data = redis.call("HMGET", key, "tokens", "last_refill")
+local tokens     = tonumber(data[1]) or capacity
+local last_refill = tonumber(data[2]) or now
+
+-- 按时间差补充令牌，不超过上限
+local elapsed = math.max(0, now - last_refill) / 1000.0
+tokens = math.min(capacity, tokens + elapsed * rate)
+
+if tokens &gt;= req then
+    tokens = tokens - req
+    redis.call("HMSET", key, "tokens", tokens, "last_refill", now)
+    redis.call("PEXPIRE", key, 60000)   -- 60s 无请求自动清理
+    return 1   -- 允许
+else
+    redis.call("HMSET", key, "tokens", tokens, "last_refill", now)
+    return 0   -- 拒绝
+end</code></pre>
+      </div>
+
+      <p>调用方用 <code>EVAL &lt;script&gt; 1 ratelimit:tenant:42 1000 100 5 &lt;now_ms&gt;</code> 执行。整段 Lua 在 Redis 主线程中连续执行，N 个网关 Pod 同时调用时，它们的请求在 Redis 侧串行处理，不存在超发。</p>
+
+      <div class="callout warning">
+        <span class="label">Lua 脚本执行时阻塞整个实例</span>
+        <p>脚本执行期间其他命令全部等待。令牌桶脚本只有几条 Redis 命令，执行时间在微秒级，无问题。但如果脚本里有循环（如遍历大集合），会阻塞整个实例——这是把 Lua 用于生产环境的强制约束：脚本必须 <code>O(1)</code> 或 <code>O(小常数)</code>，绝不允许在脚本内做大量遍历。</p>
+      </div>
+
+      <p>除令牌桶外，<strong>滑动窗口</strong>（用 <code>ZADD</code> 存请求时间戳 + <code>ZREMRANGEBYSCORE</code> 清过期 + <code>ZCARD</code> 计数，同样包进 Lua）和 <strong>GCRA</strong>（Generic Cell Rate Algorithm，固定间隔令牌，实现比令牌桶更简单）也是常见方案。三者都依赖 Lua 原子性，选型取决于是否需要允许短时突发（令牌桶允许，GCRA 不允许）。</p>
+
+      <!-- ====================================================== -->
+      <h2 id="streams"><span class="num">6.5</span><span>消息总线：Streams、pub/sub、List 的选型</span></h2>
+      <p class="one-liner">Streams 是持久化的、支持消费组确认的有序消息日志；pub/sub 是即发即弃的广播；List 是最简单的单消费者队列——三者不可互换，选型取决于是否需要持久重放与多消费者确认。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Agent 系统里有两类消息需求：一类是「任务分发」（需要可靠投递、任意时刻可重放、多 Agent 负载均衡消费），另一类是「状态广播」（多 Agent 订阅同一事件、不要求持久化、丢了就丢了）。Redis 为这两类需求提供了不同机制，混用会导致消息丢失或资源浪费。</p>
+      </div>
+
+      <h3>Streams：Agent 任务队列首选</h3>
+      <p>Redis Streams（<code>XADD</code> / <code>XREADGROUP</code> / <code>XACK</code>）是一个仅追加的消息日志，每条消息有自动生成的时间戳 ID。消费组（consumer group）机制允许多个消费者竞争消费同一个 stream（负载均衡），每条消息只被一个消费者取走；消费者调 <code>XACK</code> 确认后消息才从 PEL（Pending Entry List，待确认列表）移除。崩溃恢复时，PEL 里未 ack 的消息可通过 <code>XAUTOCLAIM</code> 转移给其他消费者重新处理：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">redis-cli · Streams 消费组基本操作</span><span class="lang">bash</span><button class="copy" data-copy-target="cb-streams">复制</button></div>
+        <pre id="cb-streams"><code class="language-bash"># 创建 stream + 消费组（从头读）
+XGROUP CREATE agent:tasks grp1 $ MKSTREAM
+
+# 生产者推任务
+XADD agent:tasks "*" task_type "summarize" payload "..." agent_hint "worker-1"
+
+# 消费者拉取（最多 10 条，阻塞 2000ms）
+XREADGROUP GROUP grp1 worker-1 COUNT 10 BLOCK 2000 STREAMS agent:tasks ">"
+
+# 处理完后确认（消息从 PEL 移除）
+XACK agent:tasks grp1 1718000000000-0
+
+# 查看 PEL（超时未 ack 的消息，可用于故障恢复）
+XPENDING agent:tasks grp1 - + 10</code></pre>
+      </div>
+
+      <h3>pub/sub：多 Agent 状态广播</h3>
+      <p>Redis pub/sub（<code>PUBLISH</code> / <code>SUBSCRIBE</code>）是纯内存的发布订阅：消息发出后立即投递给所有在线订阅者，不落盘、不留副本。订阅者上线前发布的消息永久丢失。适合 Agent 系统里的状态事件广播（如「任务 X 已完成」通知多个 Observer Agent），不适合需要可靠投递的任务队列。</p>
+
+      <h3>List：最简单的单消费者队列</h3>
+      <p><code>LPUSH</code> / <code>BRPOP</code> 组合实现阻塞队列：生产者 <code>LPUSH</code> 推消息，消费者 <code>BRPOP</code> 阻塞等待并弹出。无消费组、无 ack、无持久重放——消费者崩溃时正在处理的消息直接丢失。适合对丢失容忍的轻量单 Agent 场景，或开发调试用途。</p>
+
+      <!-- 图 6.3  Streams vs pub/sub vs List 决策树 -->
+      <figure>
+        <svg viewBox="0 0 760 350" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Streams vs pub/sub vs List 选型决策树">
+          <defs>
+            <marker id="ar6c-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar6c-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Root question -->
+          <rect x="270" y="16" width="220" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="38" text-anchor="middle" class="node-label">需要持久化 / 重放？</text>
+          <text x="380" y="56" text-anchor="middle" class="edge-label">消息丢了是否可接受</text>
+
+          <!-- No branch: pub/sub area -->
+          <line x1="270" y1="43" x2="160" y2="100" class="diagram-ink" marker-end="url(#ar6c-ink)"/>
+          <text x="196" y="80" text-anchor="middle" class="edge-label">否（可丢）</text>
+          <rect x="60" y="100" width="200" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="160" y="122" text-anchor="middle" class="node-label">广播给多个订阅者？</text>
+          <text x="160" y="140" text-anchor="middle" class="edge-label">是否扇出</text>
+
+          <!-- pub/sub leaf -->
+          <line x1="160" y1="154" x2="80" y2="210" class="diagram-accent" marker-end="url(#ar6c-accent)"/>
+          <text x="100" y="200" text-anchor="middle" class="branch-label">是</text>
+          <rect x="20" y="210" width="120" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="80" y="232" text-anchor="middle" class="node-label-accent">pub/sub</text>
+          <text x="80" y="250" text-anchor="middle" class="edge-label">即发即弃广播</text>
+
+          <!-- List leaf -->
+          <line x1="160" y1="154" x2="240" y2="210" class="diagram-ink" marker-end="url(#ar6c-ink)"/>
+          <text x="218" y="200" text-anchor="middle" class="edge-label">否（单消费）</text>
+          <rect x="170" y="210" width="140" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="240" y="232" text-anchor="middle" class="node-label">List BRPOP</text>
+          <text x="240" y="250" text-anchor="middle" class="edge-label">轻量单消费者</text>
+
+          <!-- Yes branch: Streams area -->
+          <line x1="490" y1="43" x2="580" y2="100" class="diagram-ink" marker-end="url(#ar6c-ink)"/>
+          <text x="555" y="80" text-anchor="middle" class="edge-label">是（要可靠）</text>
+          <rect x="460" y="100" width="240" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="122" text-anchor="middle" class="node-label">需要多 Agent 并行消费？</text>
+          <text x="580" y="140" text-anchor="middle" class="edge-label">是否要消费组负载均衡</text>
+
+          <!-- Streams + group leaf -->
+          <line x1="580" y1="154" x2="580" y2="210" class="diagram-accent" marker-end="url(#ar6c-accent)"/>
+          <rect x="460" y="210" width="240" height="54" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="580" y="232" text-anchor="middle" class="node-label-accent">Streams + 消费组</text>
+          <text x="580" y="250" text-anchor="middle" class="edge-label">XREADGROUP + XACK + PEL</text>
+
+          <!-- Note at bottom -->
+          <rect x="200" y="298" width="360" height="40" rx="4" class="diagram-soft node-fill"/>
+          <text x="380" y="322" text-anchor="middle" class="edge-label">Streams 也支持单消费者（无消费组）· 用 XREAD 即可</text>
+        </svg>
+        <figcaption><span class="fig-num">图 6.3</span>消息机制三选一决策树。<strong>注意</strong>：决策的核心维度只有两个——「是否需要持久重放」和「是否需要多消费者 ack」，两个 Yes 都满足时才选 Streams 消费组，否则 pub/sub 或 List 更简单。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想 · Agent 任务队列选哪个</span>
+        <p>一个 Agent 系统需要把「用户上传的文档摘要任务」分发给多个 Worker Agent 处理。Worker 偶尔崩溃，崩溃时正在处理的任务不能丢失。应该用 Streams 还是 pub/sub？核心理由是什么？</p>
+        <details>
+          <summary>展开思路与答案</summary>
+          <p><strong>选 Streams + 消费组</strong>。核心理由有两点：</p>
+          <p>① <strong>持久化 + 可靠投递</strong>：pub/sub 不持久，消息在发出瞬间没有在线订阅者就丢失；Worker 崩溃重启后，用 pub/sub 发出的任务已不存在。Streams 是仅追加日志，消息持久存在直到被显式删除。</p>
+          <p>② <strong>PEL + XACK 防丢失</strong>：消费组把每条消息放入 PEL，Worker 处理完调 <code>XACK</code> 才移除。Worker 崩溃时 PEL 里的未 ack 消息可用 <code>XAUTOCLAIM</code> 转移给其他 Worker 重试，实现 at-least-once 投递语义。pub/sub 和 List 都没有这个机制。</p>
+        </details>
+      </div>
+
+      <table class="compare-table">
+        <caption>三种消息机制对比</caption>
+        <thead><tr><th>特性</th><th>Streams</th><th>pub/sub</th><th>List BRPOP</th></tr></thead>
+        <tbody>
+          <tr><td>持久化</td><td>是（仅追加日志）</td><td>否（即发即弃）</td><td>是（key 存在即持久）</td></tr>
+          <tr><td>历史重放</td><td>是（<code>XRANGE</code>）</td><td>否</td><td>否（弹出即删除）</td></tr>
+          <tr class="selected"><td>多消费者 + ack</td><td>消费组 + PEL + XACK</td><td>广播，无 ack</td><td>竞争消费，无 ack</td></tr>
+          <tr><td>崩溃恢复</td><td>XAUTOCLAIM 重新投递</td><td>丢失</td><td>丢失（弹出后）</td></tr>
+          <tr><td>适用 Agent 场景</td><td>可靠任务队列</td><td>状态事件广播</td><td>开发/轻量单消费者</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ====================================================== -->
+      <section class="self-check">
+        <h2 id="self-check"><span class="num">·</span><span>自测</span></h2>
+        <ol>
+          <li>Redis 8 原生 Vector Set 的默认量化方式是什么？<code>NOQUANT</code> 和 <code>BIN</code> 各放弃了什么来换取什么？</li>
+          <li><code>SemanticCache</code> 的 <code>distance_threshold</code> 使用 COSINE 距离，值域 0–2。若设为 0.05，命中率和误命中率分别朝哪个方向变化？</li>
+          <li>为什么 LLM 限流的「查余量 → 判断 → 扣减」必须用 Lua 脚本而非三条独立命令？从基石二推导。</li>
+          <li>设计判别：一个多 Agent 客服系统，需要向量检索（100 万篇知识库文档）、语义缓存、会话记忆、LLM 限流、任务队列。哪几个角色可以留在 Redis？如果向量数扩张到 10 亿，哪个组件该外置，外置到什么？</li>
+        </ol>
+        <details>
+          <summary>展开全部答案</summary>
+          <p><strong>1.</strong> 默认 <strong>int8 量化</strong>（每维 1 字节），内存约为 float32 的 1/4，召回率略降（通常 &lt;1%）。<code>NOQUANT</code> 保留 float32 全精度——放弃内存节省，换取精确向量表示，适合维度不太高且召回精度敏感的场景。<code>BIN</code> 二值化至每维 1 bit——内存极省，但向量表达能力大幅下降，适合对精度要求极低的粗筛。</p>
+          <p><strong>2.</strong> 阈值降至 0.05（更严）：<strong>命中率下降</strong>（原来能命中的、距离在 0.05–0.1 之间的 query 不再命中）；<strong>误命中率也下降</strong>（进一步减少语义近但意图不同的错误命中）。极低阈值下缓存几乎失效，省 token 的效益消失。</p>
+          <p><strong>3.</strong> 三条独立命令（GET tokens → 客户端判断 → DECRBY tokens）之间，其他网关 Pod 的命令可以插入：两个 Pod 同时 GET 到 100 个令牌，各自判断「够用」，各自 DECRBY，实际扣了 200，超发。Lua 脚本用 <code>EVAL</code> 提交后，Redis 单线程把整段脚本连续执行完毕再处理下一条命令（基石二：单线程串行执行），两个 Pod 的脚本在 Redis 侧串行化，第二个看到的是第一个已扣减后的余量，不存在超发。</p>
+          <p><strong>4.</strong> <strong>可以留在 Redis 的角色</strong>：语义缓存（RedisVL SemanticCache）、会话记忆（RedisChatMessageHistory / RedisSaver）、LLM 限流（Lua 令牌桶）、任务队列（Streams + 消费组）——这四个角色的数据量和访问模式都在 Redis 单实例的能力范围内。<strong>向量检索 100 万文档</strong>目前仍可用 Redis RediSearch HNSW，是否外置取决于过滤复杂度和延迟要求。<strong>向量数扩张到 10 亿</strong>时，Redis 单实例内存上限和单线程写入成为瓶颈：应把向量检索外置到 <strong>Pinecone（托管）</strong> 或 <strong>Qdrant（自建，重过滤能力强）</strong>，Redis 继续承担其余四个角色。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>为客服 Agent 画出完整 Redis 用法并指出外置点</h3>
+        <p>一个客服 Agent 系统具备以下能力：用户问题先查语义缓存，未命中后检索知识库（向量检索），结合最近 10 轮会话历史生成回答，对每个租户做 LLM token 限流，后台定期任务（更新知识库索引）通过任务队列分发给多个 Worker。</p>
+        <p>画出这个系统里 Redis 承担的每个角色（数据结构 / 命令），并回答：如果知识库文档量从 10 万增长到 5 亿，哪个组件应该外置，应该换成什么，理由是什么？</p>
+        <details>
+          <summary>提示（不给全解）</summary>
+          <p><strong>角色梳理思路</strong>：对应本章五个角色逐一映射——语义缓存用哪个类；向量检索用哪种索引类型；会话历史用哪个 langchain-redis 类，TTL 怎么设；限流用 Lua 脚本绑定哪个 key（租户维度）；后台任务队列用 Streams 还是 pub/sub（提示：需要 Worker 崩溃可重试）。</p>
+          <p><strong>外置判断思路</strong>：5 亿文档 × 1536 维 × 4 字节/float ≈ 3TB 向量数据，超出 Redis 单实例实际可用内存上限。再考虑单线程 VADD 写入速度（每秒数万条）在批量导入时成为瓶颈。选型时对比 Pinecone（托管、serverless）和 Qdrant（自建、强过滤）的运维成本与过滤能力。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li><a href="https://redis.io/docs/latest/develop/interact/search-and-query/advanced-concepts/vectors/">redis.io · Vector search（RediSearch）</a></li>
+          <li><a href="https://redis.io/docs/latest/commands/vadd/">redis.io · VADD — Vector Set</a></li>
+          <li><a href="https://www.redisvl.com/api/semantic_cache.html">RedisVL · SemanticCache API 文档</a></li>
+          <li><a href="https://github.com/langchain-ai/langgraph-checkpoint-redis">langgraph-checkpoint-redis · GitHub 仓库</a></li>
+          <li><a href="https://redis.io/learn/howtos/ratelimiting">redis.io · Rate limiting with Redis</a></li>
+          <li><a href="https://redis.io/docs/latest/develop/data-types/streams/">redis.io · Redis Streams</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="05-distributed.html">
+          <span class="label">← 上一章</span>
+          <span class="title">05 复制 · 哨兵 · 集群 · 分布式锁</span>
+        </a>
+        <a class="next" href="07-self-check.html">
+          <span class="label">下一章 →</span>
+          <span class="title">07 自测与跨章辨析</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#vector" data-toc-target="vector">6.1 向量检索</a></li>
+        <li><a href="#semantic-cache" data-toc-target="semantic-cache">6.2 语义缓存</a></li>
+        <li><a href="#memory" data-toc-target="memory">6.3 会话与记忆</a></li>
+        <li><a href="#rate-limit" data-toc-target="rate-limit">6.4 LLM 限流</a></li>
+        <li><a href="#streams" data-toc-target="streams">6.5 消息总线</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

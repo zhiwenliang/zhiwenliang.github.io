@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 实操 · Kafka Streams 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html" class="current">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>实操：把原理写成一个能跑的 Streams 应用</h1>
+        <p class="recap">02 章把六个机制拆开讲透了——状态怎么存怎么恢复、改 key 何时偷偷建 repartition topic、窗口靠 stream-time 推进、join 的共分区要求、EOS 用一个事务包住什么。理解了机制，这章动手把它写成代码：一个完整可运行的 Streams 应用，从 <code>StreamsBuilder</code> 到 <code>KafkaStreams.start()</code>，再到窗口聚合 + 维表 join。三阶递进——完整示例逐行读、半成品填决策点、开放练习自己写。</p>
+      </header>
+
+      <div class="callout warning">
+        <span class="label">代码验证状态</span>
+        <p>本章代码基于 <strong>kafka-streams 4.x</strong> Java DSL，未在本机逐一运行。API 形态对照 4.x javadoc 写就；运行命令与预期输出按单机 KRaft broker 的行为描述。把它当可读的参照实现，落到你自己的环境时以本机编译/运行结果为准。</p>
+      </div>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>一个 Streams 应用的骨架：Properties（application.id + bootstrap.servers + 默认 serde）→ StreamsBuilder → Topology → KafkaStreams.start()</li>
+          <li>worked example：单词计数完整可运行——stream→flatMapValues→groupBy→count→toStream→to，每行映射回 01/02</li>
+          <li>partial example：窗口聚合留三个决策点（窗口类型与 grace、groupByKey vs groupBy、Materialized 显式 serde）</li>
+          <li>open exercise：5 分钟滚动窗口金额聚合 + KTable 维表 join 富集，自己写</li>
+          <li>常见环境失败：默认 serde 没配、输入 topic 没建、application.id 改名导致状态重置</li>
+        </ul>
+      </section>
+
+      <p>读这章前请带着 02 的结论：<a href="02-principles.html#repartition">改 key 会触发重分区</a>、<a href="02-principles.html#state-store">状态真相在 changelog</a>、<a href="02-principles.html#windowing-time">stream-time 只在有数据时前进</a>。下面每段代码都把这些结论落成一行行 DSL；逐行解读会反复指回 01 的概念和 02 的取舍——代码本身只是把那些机制具象出来的载体。</p>
+
+      <figure>
+        <svg viewBox="0 0 940 200" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="DSL 数据类型从 KStream 经 groupByKey 到 KGroupedStream 再经 windowedBy 与聚合变成窗口化 KTable 最后 toStream 写出 sink 的横向流">
+          <defs>
+            <marker id="flow03" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <text x="14" y="58" class="edge-label" font-weight="700">类型</text>
+          <text x="14" y="150" class="edge-label" font-weight="700">算子</text>
+
+          <!-- Stage 1: KStream -->
+          <rect x="60" y="36" width="150" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="58" text-anchor="middle" class="node-label">KStream</text>
+          <text x="135" y="75" text-anchor="middle" class="edge-label">&lt;String,Order&gt;</text>
+          <text x="135" y="150" text-anchor="middle" class="edge-label">stream()</text>
+
+          <line x1="210" y1="60" x2="252" y2="60" class="diagram-ink" marker-end="url(#flow03)"/>
+
+          <!-- Stage 2: KGroupedStream -->
+          <rect x="252" y="36" width="170" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="337" y="58" text-anchor="middle" class="node-label">KGroupedStream</text>
+          <text x="337" y="75" text-anchor="middle" class="edge-label">&lt;String,Order&gt;</text>
+          <text x="337" y="150" text-anchor="middle" class="edge-label">groupByKey()</text>
+
+          <line x1="422" y1="60" x2="464" y2="60" class="diagram-ink" marker-end="url(#flow03)"/>
+
+          <!-- Stage 3: TimeWindowedKStream -->
+          <rect x="464" y="36" width="190" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="559" y="58" text-anchor="middle" class="node-label">TimeWindowed</text>
+          <text x="559" y="75" text-anchor="middle" class="edge-label">KStream</text>
+          <text x="559" y="150" text-anchor="middle" class="edge-label">windowedBy()</text>
+
+          <line x1="654" y1="60" x2="696" y2="60" class="diagram-ink" marker-end="url(#flow03)"/>
+
+          <!-- Stage 4: windowed KTable -->
+          <rect x="696" y="36" width="180" height="48" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="786" y="58" text-anchor="middle" class="node-label-accent">KTable</text>
+          <text x="786" y="75" text-anchor="middle" class="edge-label">&lt;Windowed,Long&gt;</text>
+          <text x="786" y="150" text-anchor="middle" class="edge-label">count()/aggregate()</text>
+
+          <!-- toStream + sink, on second flow line down to a sink box -->
+          <line x1="786" y1="84" x2="786" y2="118" class="diagram-ink" marker-end="url(#flow03)"/>
+          <text x="786" y="178" text-anchor="middle" class="edge-label">toStream() → to(sink)</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>一条窗口聚合在 DSL 里走过的类型链。<strong>注意</strong>：类型在每个算子后<em>变了</em>——<code>groupByKey</code> 把 <code>KStream</code> 变成 <code>KGroupedStream</code>、<code>windowedBy</code> 再变成 <code>TimeWindowedKStream</code>、聚合产出的是 key 被 <code>Windowed</code> 包过的 <code>KTable</code>。能在脑子里跟住这条类型链，就不会在编译期被泛型卡住。</figcaption>
+      </figure>
+
+      <!-- ════════════════════════════════════════════════════════
+           #setup 环境准备
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="setup"><span class="num">3.1</span><span>环境：依赖、broker、应用骨架</span></h2>
+
+      <p class="one-liner">一个 Streams 应用就是一个普通 Java 进程，靠一份 Properties 接上 broker，靠 StreamsBuilder 描述拓扑，靠 KafkaStreams.start() 跑起来。</p>
+
+      <h3>Maven 坐标</h3>
+      <p>Streams 是一个库，加一个依赖就够——它会把 kafka-clients 作为传递依赖拉进来。运行 Streams + clients 需要 Java 11，broker（4.0 起）需要 Java 17。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">pom.xml</span>
+          <span class="lang">XML</span>
+          <button class="copy" data-copy-target="cb-pom">复制</button>
+        </div>
+<pre id="cb-pom"><code class="language-xml">&lt;dependency&gt;
+  &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
+  &lt;artifactId&gt;kafka-streams&lt;/artifactId&gt;
+  &lt;version&gt;4.3.0&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;!-- 序列化常用 JSON 时再加（本章 worked example 只用内置 Serdes，可不加）：
+&lt;dependency&gt;
+  &lt;groupId&gt;com.fasterxml.jackson.core&lt;/groupId&gt;
+  &lt;artifactId&gt;jackson-databind&lt;/artifactId&gt;
+  &lt;version&gt;2.17.0&lt;/version&gt;
+&lt;/dependency&gt; --&gt;</code></pre>
+      </div>
+      <div class="annotations">
+        <span class="line-ref">kafka-streams</span>这一个 artifact 就是 Streams 的全部入口；<code>StreamsBuilder</code>、<code>KStream</code>、<code>KafkaStreams</code>、<code>Serdes</code> 都在里面。<code>streams-scala</code> 在 4.3 已弃用、5.0 移除，Java DSL 是长期选项。
+      </div>
+
+      <h3>本地 broker</h3>
+      <p>Streams 需要一个能连的 Kafka 集群。本地起一个单机 KRaft broker（4.x 已彻底去掉 ZooKeeper）即可——具体步骤见<a href="../kafka/03-practice.html#setup">主教程 §3.1 的单机 KRaft 启动</a>，这里只取结论：broker 监听在 <code>localhost:9092</code>，用 <code>kafka-topics.sh</code> 建 topic。Streams 应用<strong>不会替你建输入 topic</strong>（只会建内部的 repartition / changelog topic），所以输入 topic 要先手动建好。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">create-topics.sh</span>
+          <span class="lang">Bash</span>
+          <button class="copy" data-copy-target="cb-topics">复制</button>
+        </div>
+<pre id="cb-topics"><code class="language-bash"># 输入 topic：单词计数的文本行（3 分区——决定了并行上限）
+bin/kafka-topics.sh --create --topic text-lines \
+  --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
+
+# 输出 topic：可不预建（to() 写入时若 auto.create.topics.enable=true 会自动建），
+# 但生产环境建议显式建，控制分区数与配置
+bin/kafka-topics.sh --create --topic word-counts-output \
+  --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
+
+# 验证已建：
+bin/kafka-topics.sh --list --bootstrap-server localhost:9092</code></pre>
+      </div>
+
+      <h3>应用骨架：Properties → Topology → start()</h3>
+      <p>每个 Streams 应用都是这同一副骨架。三块缺一不可：一份 <code>Properties</code> 告诉运行时连哪个 broker、用什么 <code>application.id</code>、默认怎么序列化；一个 <code>StreamsBuilder</code> 描述拓扑；一个 <code>KafkaStreams</code> 实例把拓扑跑起来并挂上关停钩子。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">AppSkeleton.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-skel">复制</button>
+        </div>
+<pre id="cb-skel"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
+import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+
+public class AppSkeleton {
+    public static void main(String[] args) {
+        Properties props = new Properties();
+        // application.id 同时就是消费组 group.id —— 改名 = 一个全新消费组 = 状态从头来
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "word-count-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        // 默认 serde：没有在算子里显式给 Consumed/Produced/Materialized 时，用这两个兜底
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+
+        StreamsBuilder builder = new StreamsBuilder();
+        // …在这里用 builder 描述拓扑（见 §3.2）…
+        Topology topology = builder.build();
+        System.out.println(topology.describe());   // 打印拓扑：能看清 Streams 实际建了哪些内部 topic
+
+        KafkaStreams streams = new KafkaStreams(topology, props);
+        CountDownLatch latch = new CountDownLatch(1);
+        // 优雅关停：close() 会提交 offset、刷写状态、退出消费组，避免下次启动多走一次恢复
+        Runtime.getRuntime().addShutdownHook(new Thread(() -&gt; {
+            streams.close();
+            latch.countDown();
+        }));
+
+        streams.start();   // 此刻才真正加入消费组、开始拉取与处理
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}</code></pre>
+      </div>
+      <div class="annotations">
+        <span class="line-ref">application.id</span>这一个字符串既是 Streams 应用的身份，也是底层消费组的 <code>group.id</code>，还是所有内部 topic 的命名前缀（<a href="01-concepts.html#library">01 §1.4</a> 的 instance/thread/task 模型就架在这个消费组上）。<span class="line-ref">DEFAULT_*_SERDE</span>没配它、又没在算子里显式给 serde，运行时会在第一条记录上抛 <code>ClassCastException</code> 或序列化异常。<span class="line-ref">start()</span>在调用前拓扑只是个对象，调用后才加入消费组、触发首次再平衡、开始处理。
+      </div>
+
+      <h3>三个最常见的环境失败</h3>
+      <table class="compare-table">
+        <caption>表 3.1 · 启动期最常见的三类失败：症状 → 根因</caption>
+        <thead>
+          <tr><th>症状</th><th>根因</th><th>修复</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>启动即抛序列化 / <code>ClassCastException</code></td>
+            <td>没配 <code>DEFAULT_*_SERDE</code>，又没在 <code>Consumed</code>/<code>Produced</code>/<code>Materialized</code> 里显式给 serde</td>
+            <td>设默认 serde，或在每个 I/O 算子上显式传 serde（值类型不一致时<strong>必须</strong>显式，见 <a href="04-pitfalls.html#correctness">04 章</a>）</td>
+          </tr>
+          <tr>
+            <td>启动后卡住、报 topic 不存在或一直再平衡</td>
+            <td>输入 topic 没预先建——Streams 只建内部 topic，不建你的输入 topic</td>
+            <td>先用 <code>kafka-topics.sh --create</code> 建好输入 topic 再启动</td>
+          </tr>
+          <tr>
+            <td>改了 <code>application.id</code> 后状态像被清空、从头重算</td>
+            <td><code>application.id</code> 即 group.id；改名等于一个<strong>全新消费组</strong>，新的内部 topic 前缀、新的 offset 起点</td>
+            <td>把 <code>application.id</code> 当不可变的部署身份；要重置状态用 <code>kafka-streams-application-reset.sh</code> 而非改名</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ════════════════════════════════════════════════════════
+           #worked 完整 worked example
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="worked"><span class="num">3.2</span><span>Worked example：完整可运行的单词计数</span></h2>
+
+      <p class="one-liner">把一行行文本拆成词、按词分组、计数、写回——经典的 WordCount 是把 01 的 KStream/KTable 和 02 的重分区、状态存储一次性具象出来的最短拓扑。</p>
+
+      <div class="rationale">
+        <span class="label">为什么从这个例子起步</span>
+        <p>单词计数同时踩中四个要点：<code>stream()</code> 产出 <a href="01-concepts.html#kstream-ktable">KStream</a>（每行一条事件）、<code>flatMapValues</code> 是 <a href="01-concepts.html#stateless-stateful">stateless</a> 的一拆多、<code>groupBy</code> 改 key 触发 <a href="02-principles.html#repartition">重分区</a>、<code>count</code> 是 stateful 且产出 <a href="01-concepts.html#kstream-ktable">KTable</a> 并背一条 <a href="02-principles.html#state-store">changelog</a>。读懂这一个拓扑，后面窗口和 join 只是在它上面加算子。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">WordCountApp.java</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-wc">复制</button>
+        </div>
+<pre id="cb-wc"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.*;
+import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.state.KeyValueStore;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
+
+public class WordCountApp {
+    public static void main(String[] args) {
+        Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "word-count-app");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+
+        StreamsBuilder builder = new StreamsBuilder();
+
+        KStream&lt;String, String&gt; lines =
+            builder.stream("text-lines", Consumed.with(Serdes.String(), Serdes.String()));
+
+        KTable&lt;String, Long&gt; counts = lines
+            // stateless：一行拆成多个词，值变了、key 还是原 key（此处不重分区）
+            .flatMapValues(line -&gt; Arrays.asList(line.toLowerCase(Locale.ROOT).split("\\W+")))
+            // 改 key：把词本身设成 key —— 触发下游重分区（§2.3）
+            .groupBy((key, word) -&gt; word, Grouped.with(Serdes.String(), Serdes.String()))
+            // stateful：计数，物化进名为 counts-store 的 RocksDB + 一条 changelog
+            .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store")
+                       .withKeySerde(Serdes.String())
+                       .withValueSerde(Serdes.Long()));
+
+        // KTable → 变更流 → 写回输出 topic（值是 Long，需显式 Long serde）
+        counts.toStream()
+              .to("word-counts-output", Produced.with(Serdes.String(), Serdes.Long()));
+
+        Topology topology = builder.build();
+        System.out.println(topology.describe());
+
+        KafkaStreams streams = new KafkaStreams(topology, props);
+        CountDownLatch latch = new CountDownLatch(1);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -&gt; { streams.close(); latch.countDown(); }));
+        streams.start();
+        try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+}</code></pre>
+      </div>
+
+      <h3>逐行解读（代码 → 概念，不是代码 → 语法）</h3>
+      <div class="annotations">
+        <span class="line-ref">builder.stream("text-lines", …)</span>把输入 topic 读成一个 <a href="01-concepts.html#kstream-ktable">KStream</a>——每行文本是一条独立事件、全部保留。<code>Consumed.with(...)</code> 显式声明读入时的 key/value serde，不依赖默认值，类型一目了然。
+      </div>
+      <div class="annotations">
+        <span class="line-ref">.flatMapValues(...)</span><a href="01-concepts.html#stateless-stateful">stateless</a> 算子：把一行拆成多个词，只改值不改 key。它不需要状态、不触发重分区——一条进、多条出。
+      </div>
+      <div class="annotations">
+        <span class="line-ref">.groupBy((key, word) -&gt; word, …)</span>这一步把 key 从「原 key」改成「词本身」。<a href="02-principles.html#repartition">改 key 就置了「需重分区」标志</a>：下游的 <code>count</code> 依赖 key 共分区，于是 Streams 在这里自动插一条 <code>word-count-app-counts-store-repartition</code> topic，把数据按词重洗，保证同一个词落同一 task。<code>Grouped.with(...)</code> 给这条重分区 topic 指定 serde。
+      </div>
+      <div class="annotations">
+        <span class="line-ref">.count(Materialized.as("counts-store")...)</span><a href="01-concepts.html#stateless-stateful">stateful</a> 算子，产出一个 <a href="01-concepts.html#kstream-ktable">KTable</a>（每个词→当前计数）。<code>Materialized</code> 把结果物化进名为 <code>counts-store</code> 的本地 RocksDB，Streams 同时为它建一条 compacted <a href="02-principles.html#state-store">changelog</a>（<code>word-count-app-counts-store-changelog</code>）——这条日志才是计数的真相源，崩溃后回放它重建。值类型是 <code>Long</code>，所以这里必须 <code>.withValueSerde(Serdes.Long())</code>，否则默认 String serde 会序列化失败。
+      </div>
+      <div class="annotations">
+        <span class="line-ref">.toStream().to(...)</span>KTable 是一条变更日志（<a href="01-concepts.html#kstream-ktable">01 §1.2 的对偶</a>）：<code>toStream()</code> 把「每次计数变化」转成 KStream 的一条条变更记录，再 <code>to(...)</code> 写回输出 topic。<code>Produced.with(...)</code> 声明写出 serde——值是 <code>Long</code>，对应读取方要用 Long deserializer。
+      </div>
+
+      <h3>运行 + 预期输出</h3>
+      <p>编译打包后跑起应用，另开两个终端：一个用 console producer 往 <code>text-lines</code> 灌文本，一个用 console consumer 读 <code>word-counts-output</code>。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">run.sh</span>
+          <span class="lang">Bash</span>
+          <button class="copy" data-copy-target="cb-run">复制</button>
+        </div>
+<pre id="cb-run"><code class="language-bash"># 1) 启动应用（假设已 mvn package 出可执行 jar / 或在 IDE 里 run main）
+java -cp target/streams-demo-1.0.jar WordCountApp
+
+# 2) 终端 A：输入文本行
+bin/kafka-console-producer.sh --topic text-lines --bootstrap-server localhost:9092
+&gt; kafka streams kafka
+&gt; streams streams
+
+# 3) 终端 B：读输出（值是 Long，要指定反序列化器）
+bin/kafka-console-consumer.sh --topic word-counts-output \
+  --bootstrap-server localhost:9092 --from-beginning \
+  --property print.key=true --property key.separator=" => " \
+  --value-deserializer org.apache.kafka.common.serialization.LongDeserializer</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">expected-output.txt</span>
+          <span class="lang">Text</span>
+          <button class="copy" data-copy-target="cb-out">复制</button>
+        </div>
+<pre id="cb-out"><code class="language-bash"># 灌入 "kafka streams kafka" 后：
+kafka   => 1
+streams => 1
+kafka   => 2
+# 灌入 "streams streams" 后：
+streams => 2
+streams => 3</code></pre>
+      </div>
+      <p>注意输出是<strong>变更流</strong>而非「每个词只发一行最终值」：每来一条改变某个词计数的记录，就发一条新的当前值。<code>kafka</code> 出现两次，下游就看到 <code>kafka=&gt;1</code> 再 <code>kafka=&gt;2</code>——这正是 01 §1.2「KTable 对外发的是 changelog」那道预测题在运行时的样子。要「每窗只发一个最终结果」得用 <code>suppress</code>，那是 §3.3 的决策点。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>把 <code>.groupBy((key, word) -&gt; word, …)</code> 换成 <code>.selectKey((key, word) -&gt; word)</code> 后面什么都不接（不接 count，也不接任何聚合/join），直接 <code>.to("out")</code>。Streams 会建出那条 repartition topic 吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p><strong>不会。</strong><code>selectKey</code> 是 <a href="02-principles.html#repartition">lazy</a> 的——它只置「需重分区」标志，自己不物化任何 topic。只有当下游出现真正依赖 key 共分区的 stateful 算子（<code>count</code>/<code>aggregate</code>/<code>join</code>）时，Streams 才会把那条 repartition topic 建出来。后面直接 <code>to()</code> 写出、没有共分区需求，标志就没人来兑现。</p>
+          <p>用 <code>topology.describe()</code> 的输出验证最直接：有重分区时拓扑里会出现一个 <code>Sink → repartition topic → Source</code> 的回环，把拓扑切成两个 sub-topology；没有时就是一条直线。这就是为什么排查「凭空多出来的内部 topic」第一步永远是看 <code>describe()</code>。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           #partial partial example
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="partial"><span class="num">3.3</span><span>Partial example：窗口聚合，留三个决策点</span></h2>
+
+      <p class="one-liner">把单词计数升级成「每 5 分钟每个词出现几次」，框架给全，三个关键决策留给你填——它们各对应一个会上线翻车的取舍。</p>
+
+      <p>需求变成带时间维度：不是「<code>kafka</code> 总共出现过几次」，而是「<code>kafka</code> 在每个 5 分钟滚动窗口里出现几次」。拓扑骨架和 WordCount 几乎一样，区别只在 <code>groupBy</code> 之后插一个 <code>windowedBy(...)</code>，聚合结果的 key 从 <code>String</code> 变成 <code>Windowed&lt;String&gt;</code>。下面的代码把不需要思考的部分写死，把<strong>三个会影响正确性的决策</strong>留成 <code>TODO</code>。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">WindowedWordCount.java（含 TODO）</span>
+          <span class="lang">Java</span>
+          <button class="copy" data-copy-target="cb-partial">复制</button>
+        </div>
+<pre id="cb-partial"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.*;
+import org.apache.kafka.streams.kstream.*;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Locale;
+
+StreamsBuilder builder = new StreamsBuilder();
+
+KStream&lt;String, String&gt; lines =
+    builder.stream("text-lines", Consumed.with(Serdes.String(), Serdes.String()));
+
+KTable&lt;Windowed&lt;String&gt;, Long&gt; windowedCounts = lines
+    .flatMapValues(line -&gt; Arrays.asList(line.toLowerCase(Locale.ROOT).split("\\W+")))
+
+    // ── 决策点 1：groupByKey 还是 groupBy？──────────────────────────
+    // flatMapValues 没改 key（key 仍是原始行 key），但聚合要按「词」分组。
+    // TODO: 选 groupByKey() 还是 groupBy((k, word) -> word, ...)?
+    .???(/* ... */)
+
+    // ── 决策点 2：窗口类型 + grace 宽限期 ──────────────────────────
+    // 需求是「每 5 分钟一个不重叠的窗口」。
+    // TODO: 用哪种 TimeWindows？要不要 grace？grace 给多久？
+    .windowedBy(/* TODO */)
+
+    // ── 决策点 3：Materialized 要不要显式 serde？──────────────────
+    // 聚合值类型是 Long。
+    // TODO: 这里能只写 Materialized.as("win-counts") 吗？还是必须补 serde？
+    .count(/* TODO */);
+
+windowedCounts.toStream()
+    // Windowed&lt;String&gt; 的 key 需要 WindowedSerdes，值是 Long
+    .to("windowed-counts-output",
+        Produced.with(WindowedSerdes.timeWindowedSerdeFrom(String.class, 5 * 60 * 1000L),
+                      Serdes.Long()));</code></pre>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 三个 TODO 各卡住一个真实取舍</span>
+        <p>这三处留白不是语法填空，是<strong>选错就上线出 bug</strong> 的决策：决策点 1 选错多付一条 repartition topic 的成本或干脆 join/聚合错乱；决策点 2 的 grace 决定迟到事件被采纳还是<a href="02-principles.html#windowing-time">静默丢弃</a>；决策点 3 漏了 serde 直接序列化崩溃。逐个想清楚再展开。</p>
+      </div>
+
+      <details>
+        <summary>决策点 1 答案 + 决策路径（先自己定再展开）</summary>
+        <p><strong>这里要用 <code>groupBy((k, word) -&gt; word, Grouped.with(Serdes.String(), Serdes.String()))</code>。</strong></p>
+        <p>决策路径：先问「当前 key 是不是已经是目标聚合维度？」。<code>flatMapValues</code> 只改了值、没碰 key，此刻 key 还是输入行的原始 key（甚至是 null），而聚合要按<em>词</em>分组——维度不匹配，必须改 key。改 key 只能用 <code>groupBy</code>（它接一个 <code>KeyValueMapper</code> 重新指定 key），<code>groupByKey</code> 是「key 已经对了、直接按现有 key 分组、不重分区」的快捷路径。</p>
+        <p>反过来说，02 §2.3 的「优先 <code>groupByKey</code>」指的是：<em>当 key 已经是目标维度时</em>别画蛇添足地 <code>selectKey</code> 成同样的 key 再 <code>groupBy</code>，那会凭空多一条 repartition topic。这里 key 本就不对，<code>groupBy</code> 的那次重分区是必要成本，不是浪费。</p>
+      </details>
+
+      <details>
+        <summary>决策点 2 答案 + 决策路径（先自己定再展开）</summary>
+        <p><strong>用 <code>TimeWindows.ofSizeAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(1))</code>。</strong></p>
+        <p>决策路径：① 「5 分钟不重叠」= <a href="02-principles.html#windowing-time">tumbling 滚动窗口</a>，用 <code>TimeWindows</code>（hopping 会传第二个 advance 参数造成重叠，sliding/session 是另外的类，都不符）。② grace 宽限期决定「窗口结束后，迟到的事件还能不能更新这个窗口」。4.x 推荐用 <code>ofSizeAndGrace(...)</code> <strong>显式</strong>声明 grace，而不是用已弃用的 <code>ofSizeWithNoGrace</code> 之外的旧默认（旧版曾静默给 24h grace，是迟到事件相关问题的来源）。给多少看业务能容忍多迟的数据——给 1 分钟意味着窗口结束后 1 分钟内到达的迟到事件仍计入，过了就按 02 的规则<strong>静默丢弃</strong>。</p>
+        <p>连带约束：changelog / 窗口存储的 retention 必须 ≥ 窗口大小 + grace，否则窗口还没关、状态先被压缩清掉。</p>
+      </details>
+
+      <details>
+        <summary>决策点 3 答案 + 决策路径（先自己定再展开）</summary>
+        <p><strong>必须显式给值 serde：</strong><code>.count(Materialized.&lt;String, Long, WindowStore&lt;Bytes, byte[]&gt;&gt;as("win-counts").withValueSerde(Serdes.Long()))</code>。</p>
+        <p>决策路径：默认 serde 在 Properties 里配的是 <code>String</code>（key 和 value 都是）。窗口计数的值类型是 <code>Long</code>，与默认值 serde 不一致——一旦不一致就<strong>不能</strong>依赖默认，否则在写状态存储/changelog 时按 String 序列化 Long 会抛异常。key serde 这里可省（窗口 key 的内层类型 String 与默认一致，Streams 会用 <code>WindowedSerdes</code> 包装它），但值 serde 必须补。判据：<em>只要某个算子处的实际类型和默认 serde 不同，就在那里显式声明</em>。</p>
+      </details>
+
+      <!-- ════════════════════════════════════════════════════════
+           #open 开放练习
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="open"><span class="num">3.4</span><span>开放练习：窗口金额聚合 + 维表 join 富集</span></h2>
+
+      <p class="one-liner">把订单流按用户做 5 分钟滚动窗口金额聚合，再 join 一张用户维表，给结果加上用户名/等级——这是把本章三阶能力合起来用的一道。</p>
+
+      <div class="rationale">
+        <span class="label">需求</span>
+        <p>输入 <code>orders</code>（key=订单号，value=含 <code>userId</code> 和 <code>amount</code> 的订单）。要算「每个用户在每个 5 分钟滚动窗口里的下单总金额」，并用一张 <code>users</code> 维表（key=userId，value=用户名+等级）把结果<strong>富集</strong>成「用户名 + 窗口 + 总金额 + 等级」，写到 <code>user-spending</code>。这道题要用到 01 的至少四个概念——<a href="01-concepts.html#kstream-ktable">KStream / KTable</a>、<a href="01-concepts.html#stateless-stateful">stateful 聚合</a>、<a href="01-concepts.html#duality">流表对偶（toStream）</a>——并踩中 02 的一个权衡：<a href="02-principles.html#joins">KStream-KTable join 的共分区要求</a>。</p>
+      </div>
+
+      <h3>要求</h3>
+      <ul>
+        <li>用 <code>selectKey</code> 把订单流改成按 <code>userId</code> 分组（订单原本按订单号分区，维度不对）。</li>
+        <li>用 <code>TimeWindows.ofSizeAndGrace</code> 做 5 分钟滚动窗口 + 一个你定的 grace。</li>
+        <li>聚合用 <code>aggregate(...)</code> 累加金额（不是 <code>count</code>，因为要的是金额求和），<code>Materialized</code> 显式给 serde。</li>
+        <li>把窗口结果 <code>toStream()</code> 后，<strong>去掉窗口包装、把 key 还原成 userId</strong>，再 join <code>users</code> 维表富集。</li>
+        <li>维表用 <code>KTable</code> 还是 <code>GlobalKTable</code>？给出理由。</li>
+        <li>可选：整条拓扑开 <code>exactly_once_v2</code>。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">陷阱预警</span>
+        <p>窗口聚合产出的 key 是 <code>Windowed&lt;String&gt;</code>，不是裸 <code>userId</code>。直接拿它去 join 按 <code>userId</code> 分区的维表会<a href="02-principles.html#joins">共分区不匹配 → 静默零输出</a>。必须先 <code>map</code> 把 key 从 <code>Windowed&lt;String&gt;</code> 取回 <code>userId</code>（同时把窗口信息塞进 value），让 join 两侧的 key 和分区方式对齐。</p>
+      </div>
+
+      <details>
+        <summary>参考实现 + 关键决策（自己写完再展开）</summary>
+        <div class="code-block">
+          <div class="header">
+            <span class="filename">OrderSpendingApp.java（参考）</span>
+            <span class="lang">Java</span>
+            <button class="copy" data-copy-target="cb-open">复制</button>
+          </div>
+<pre id="cb-open"><code class="language-java">import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.*;
+import org.apache.kafka.streams.kstream.*;
+import java.time.Duration;
+
+Properties props = new Properties();
+props.put(StreamsConfig.APPLICATION_ID_CONFIG, "order-spending-app");
+props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+// 可选 EOS：把 offset 提交 + changelog 写 + 输出 produce 绑进一个事务（§2.6）
+props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+
+StreamsBuilder builder = new StreamsBuilder();
+
+// 维表：小而慢变 → 用 KTable（理由见下）
+KTable&lt;String, String&gt; users =
+    builder.table("users", Consumed.with(Serdes.String(), Serdes.String()));
+
+// 订单流（假设 value 已是 "userId:amount" 形式的简化字符串；真实场景用 JSON serde）
+KStream&lt;String, String&gt; orders =
+    builder.stream("orders", Consumed.with(Serdes.String(), Serdes.String()));
+
+KTable&lt;Windowed&lt;String&gt;, Double&gt; perUserWindow = orders
+    // 改 key：订单号 → userId（聚合维度对齐；触发重分区）
+    .selectKey((orderId, v) -&gt; v.split(":")[0])
+    .mapValues(v -&gt; Double.parseDouble(v.split(":")[1]))
+    .groupByKey(Grouped.with(Serdes.String(), Serdes.Double()))   // 此刻 key 已是 userId
+    .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofMinutes(5), Duration.ofMinutes(1)))
+    .aggregate(
+        () -&gt; 0.0,                                  // 初始值
+        (userId, amount, sum) -&gt; sum + amount,      // 累加金额
+        Materialized.&lt;String, Double, WindowStore&lt;Bytes, byte[]&gt;&gt;as("spend-store")
+            .withValueSerde(Serdes.Double()));
+
+// 关键：把窗口结果的 key 从 Windowed&lt;String&gt; 还原成裸 userId，才能与 users 共分区 join
+KStream&lt;String, String&gt; enriched = perUserWindow.toStream()
+    .map((winKey, sum) -&gt; KeyValue.pair(
+            winKey.key(),                           // 取回 userId
+            winKey.window().start() + "|" + sum))   // 窗口起点 + 金额塞进 value
+    // KStream-KTable join：流记录探当前维表值（表更新不重触发）
+    .join(users, (winValue, userInfo) -&gt; userInfo + " | " + winValue);
+
+enriched.to("user-spending", Produced.with(Serdes.String(), Serdes.String()));</code></pre>
+        </div>
+        <p><strong>关键决策 1 — 为什么用 KTable 而非 GlobalKTable。</strong>聚合后的流已经按 <code>userId</code> 重分区，和按 <code>userId</code> 分区的 <code>users</code> 维表天然<a href="02-principles.html#joins">共分区</a>，KStream-KTable join 成立、每实例只持有自己那几个分区的维表、内存省。<code>GlobalKTable</code> 的价值是「<em>免</em>共分区」——当 join 左侧的 key 没法和维表对齐时才用它（代价是每实例全量加载）。这里 key 已对齐，没必要让每个实例都扛全量用户表。判据：<em>能共分区就用 KTable，对不齐又改不动分区时才上 GlobalKTable</em>。</p>
+        <p><strong>关键决策 2 — 为什么聚合用 <code>groupByKey</code> 而非再 <code>groupBy</code>。</strong><code>selectKey</code> 已经把 key 改成 <code>userId</code> 了，此刻 key 就是聚合维度，直接 <code>groupByKey</code>。重分区由 <code>selectKey</code> 的标志在 <code>groupByKey</code> 下游的聚合处兑现一次——只此一次。<code>groupBy((k,v)-&gt;k, …)</code> 把已经对的 key 再设一遍，语义上等价、不会减少重分区，却让读代码的人误以为这里改了 key。判据：key 已是目标维度时用 <code>groupByKey</code> 表达「key 已对」，把改 key 的意图只留给真正改 key 的 <code>selectKey</code>。</p>
+        <p><strong>关键决策 3 — 窗口 key 必须先还原。</strong>窗口聚合把 key 包成 <code>Windowed&lt;String&gt;</code>，它的分区落点和裸 <code>userId</code> 不同。不 <code>map</code> 回 <code>userId</code> 就 join，Streams 看分区数对得上、不报错，但相同 userId 落到不同分区号，匹配全部<a href="02-principles.html#joins">静默丢失</a>——零输出无异常，是最难查的一类。</p>
+        <div class="callout insight">
+          <span class="label">洞察 · 可选 EOS 小节</span>
+          <p>把 <code>PROCESSING_GUARANTEE_CONFIG</code> 设成 <code>EXACTLY_ONCE_V2</code>，这条拓扑的「输入 offset 提交 + 窗口状态 changelog 写 + 输出 produce」就被绑进<a href="02-principles.html#eos">一个 Kafka 事务</a>，下游配 <code>read_committed</code> 才看得到已提交结果。代价是 <code>commit.interval.ms</code> 默认从 30000ms 降到 100ms（更频繁提交、吞吐下降），且需要至少 3 个 broker——单机本地 broker（副本因子 1）下 EOS 起不来，本地验证时先用默认的 at_least_once，部署到 ≥3 broker 集群再开 EOS。</p>
+        </div>
+      </details>
+
+      <figure>
+        <svg viewBox="0 0 720 230" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="脚手架递减进度：worked 全给、partial 留决策点、open 自己写，读者承担逐阶递增">
+          <defs>
+            <marker id="prog03" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- Stage boxes -->
+          <rect x="40" y="48" width="180" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="130" y="76" text-anchor="middle" class="node-label">§3.2 worked</text>
+          <text x="130" y="96" text-anchor="middle" class="edge-label">代码全给</text>
+
+          <rect x="270" y="48" width="180" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="76" text-anchor="middle" class="node-label">§3.3 partial</text>
+          <text x="360" y="96" text-anchor="middle" class="edge-label">留 3 个决策点</text>
+
+          <rect x="500" y="48" width="180" height="64" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="590" y="76" text-anchor="middle" class="node-label-accent">§3.4 open</text>
+          <text x="590" y="96" text-anchor="middle" class="edge-label">框架自己搭</text>
+
+          <line x1="220" y1="80" x2="262" y2="80" class="diagram-ink" marker-end="url(#prog03)"/>
+          <line x1="450" y1="80" x2="492" y2="80" class="diagram-ink" marker-end="url(#prog03)"/>
+
+          <!-- Two opposing trend labels -->
+          <text x="360" y="160" text-anchor="middle" class="edge-label">脚手架（教程给的）：多 ───────→ 少</text>
+          <text x="360" y="190" text-anchor="middle" class="branch-label">你承担的：少 ───────→ 多</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>三阶训练的脚手架递减。<strong>注意</strong>：两条趋势是镜像的——教程给的脚手架逐阶变少，你要自己承担的逐阶变多。卡在哪一阶，就回那一阶对应的 01/02 概念，而不是往下硬抠。</figcaption>
+      </figure>
+
+      <!-- ════════════════════════════════════════════════════════
+           self-check
+           ════════════════════════════════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>一个 Streams 应用骨架由哪三块构成？<code>application.id</code> 在底层同时扮演了哪几个角色？把它改名会发生什么？</li>
+          <li>WordCount 里 <code>flatMapValues</code>、<code>groupBy</code>、<code>count</code> 三个算子，哪个是 stateless、哪个改了 key、哪个建了 changelog？分别对应 01/02 的哪个概念？</li>
+          <li>什么时候必须在 <code>Materialized</code> / <code>Consumed</code> / <code>Produced</code> 上显式给 serde、什么时候可以靠默认 serde？给一句可操作的判据。</li>
+          <li>窗口聚合产出的 key 是什么类型？为什么直接拿它去 join 一张按业务 key 分区的维表会静默零输出？怎么修？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>三块：① 一份 <code>Properties</code>（必含 <code>application.id</code> + <code>bootstrap.servers</code> + 默认 key/value serde）；② 一个 <code>StreamsBuilder</code> 描述拓扑、<code>build()</code> 出 <code>Topology</code>；③ 一个 <code>KafkaStreams</code> 实例 <code>start()</code> 跑起来并挂关停钩子。<code>application.id</code> 同时是底层消费组的 <code>group.id</code>、所有内部 topic（repartition/changelog）的命名前缀、以及应用的部署身份。改名 = 一个全新消费组 + 全新内部 topic 前缀 + offset 从头，等于状态被清空重算——要重置状态该用 reset 工具而非改名。</li>
+            <li><code>flatMapValues</code> 是 <a href="01-concepts.html#stateless-stateful">stateless</a>（一拆多、只改值不改 key、不需状态）；<code>groupBy</code> 改了 key（把词设成 key）→ 触发 <a href="02-principles.html#repartition">重分区</a>；<code>count</code> 是 stateful，产出 <a href="01-concepts.html#kstream-ktable">KTable</a> 并背一条 compacted <a href="02-principles.html#state-store">changelog</a>（真相源）。</li>
+            <li>判据：<em>只要某个算子处理的实际 key/value 类型与 Properties 里的默认 serde 不一致，就在那里显式给 serde；一致时可省。</em>WordCount 里 <code>count</code> 的值是 <code>Long</code>、默认是 <code>String</code>，所以 <code>Materialized</code> 必须 <code>.withValueSerde(Serdes.Long())</code>，<code>Produced</code> 写出也要 Long serde。类型不一致还靠默认 serde 会在序列化时抛异常（<a href="04-pitfalls.html#correctness">04 章</a>的 serde 失败）。</li>
+            <li>窗口聚合产出的 key 是 <code>Windowed&lt;K&gt;</code>（内含原 key + 窗口起止），不是裸 <code>K</code>。它的分区落点与裸业务 key 不同，所以和按业务 key 分区的维表<strong>不共分区</strong>；Streams 启动只校验分区数量、不校验分区方式，分区数对得上也不报错，但相同业务 key 落到不同分区号，<a href="02-principles.html#joins">匹配全部静默丢失 → 零输出无异常</a>。修复：join 前先 <code>map</code> 把 key 从 <code>Windowed&lt;K&gt;</code> 还原成裸 <code>K</code>（窗口信息塞进 value），让两侧 key 和分区方式对齐。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>把 worked 的 WordCount 改成 EOS 版 + suppress 只发最终结果</h3>
+        <p>在 §3.2 的 WordCount（或 §3.3 的窗口版）基础上做两处升级，不要参考实现，自己写：① 开 <code>exactly_once_v2</code>——想清楚它绑住了哪三件事、为什么需要 ≥3 broker、本地单机为什么起不来。② 给窗口计数加 <code>suppress(Suppressed.untilWindowCloses(...))</code>，让每个窗口<strong>只发一个最终结果</strong>而不是每次计数变化都发一条。回答：suppress 的缓冲状态存活在哪、它依赖什么时钟来判断「窗口关闭」、为什么一个空闲分区会让加了 suppress 的窗口永远不发结果？<code>untilWindowCloses</code> 与 <code>untilTimeLimit(..., emitEarlyWhenFull)</code> 在「保证最终性」上有什么区别？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>EOS：一行 <code>props.put(PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2)</code>，但事务状态 topic 默认副本因子 3，单 broker 建不出来；它绑的是 offset 提交 + changelog 写 + 输出 produce（<a href="02-principles.html#eos">§2.6</a>）。suppress：缓冲在一个内部状态存储里（也有自己的 changelog，retention 要 ≥ 窗口 + grace）；它靠 <a href="02-principles.html#windowing-time">stream-time</a> 判断窗口关闭，而 stream-time 只在有记录到达时前进——空闲分区不推进 stream-time，窗口永远不关、最终结果永远不发（要保证最终性必须 <code>untilWindowCloses</code> + 关窗信号能到达；<code>emitEarlyWhenFull</code> 在内存压力下会提前发非最终结果，破坏「只发最终」的承诺）。先 <code>topology.describe()</code> 看 suppress 给拓扑加了什么节点。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://kafka.apache.org/documentation/streams/quickstart">Kafka Streams Quickstart</a>（官方 · WordCount 上手）</li>
+          <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/dsl-api.html">Kafka Streams DSL Developer Guide</a>（官方 · DSL 算子参考）</li>
+          <li><a href="https://kafka.apache.org/40/javadoc/org/apache/kafka/streams/kstream/package-summary.html">Kafka Streams kstream package javadoc</a>（官方 API · KStream/KTable/Materialized/TimeWindows）</li>
+          <li><a href="https://kafka.apache.org/documentation/streams/developer-guide/config-streams.html">Streams Configuration</a>（官方 · application.id / serde / processing.guarantee 配置项）</li>
+          <li><a href="https://developer.confluent.io/courses/kafka-streams/get-started/">developer.confluent.io: Kafka Streams Get Started</a>（高质量教程 · 含运行示例，截至 2026-06-03）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-principles.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 原理</span>
+        </a>
+        <a href="04-pitfalls.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 常见陷阱</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#setup" data-toc-target="setup">3.1 环境准备</a></li>
+        <li><a href="#worked" data-toc-target="worked">3.2 worked 单词计数</a></li>
+        <li><a href="#partial" data-toc-target="partial">3.3 partial 窗口聚合</a></li>
+        <li><a href="#open" data-toc-target="open">3.4 open 金额聚合+join</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

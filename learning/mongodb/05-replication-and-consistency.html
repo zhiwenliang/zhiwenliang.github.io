@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 · 副本集与一致性 · MongoDB 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref { font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500; }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-document-model.html">01 模型</a><span class="sep">—</span>
+    <a href="02-query-and-aggregation.html">02 查询·聚合</a><span class="sep">—</span>
+    <a href="03-indexing-and-schema-design.html">03 索引·建模</a><span class="sep">—</span>
+    <a href="04-storage-wiredtiger.html">04 存储</a><span class="sep">—</span>
+    <a href="05-replication-and-consistency.html" class="current">05 复制·一致性</a><span class="sep">—</span>
+    <a href="06-sharding-and-when-to-use.html">06 分片·选型</a><span class="sep">—</span>
+    <a href="07-self-check.html">07 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 05</p>
+        <h1>副本集与一致性</h1>
+        <p class="recap">04 章讲了单节点怎么存、怎么本地持久——还埋了一个伏笔：WiredTiger 的 commit timestamp 由 oplog 驱动。这章把数据复制到多节点，看 oplog、选举、读写关注，以及"返回成功"到底意味着什么。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>oplog：local 库里的 capped 集合，条目幂等，secondary 主动 PULL 拉取并重放。</li>
+          <li>副本集协议：受 Raft 启发但不是 Raft——pull 而非 push、term、选举、priority takeover、dry-run election。</li>
+          <li>write concern / read concern：w:majority 的 commit point 怎么算；readConcern majority/snapshot/linearizable 各读到什么。</li>
+          <li>因果一致性 + HLC（$clusterTime 带 HMAC 签名）；持久性 ≠ 可见性。</li>
+        </ul>
+      </section>
+
+      <h2 id="s51"><span class="num">5.1</span><span>oplog：幂等操作日志</span></h2>
+      <p class="one-liner">oplog 是 primary 上一个 capped 集合（local.oplog.rs），记录幂等的操作条目，secondary 主动拉取重放。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>多节点复制要解决一个核心矛盾：同一批操作在不同节点上重放，结果必须一致，而网络重传、节点重启会让同一条操作被重放不止一次。oplog 把每条变更设计成可重复执行而结果不变的形式，重放就不必担心"放了几遍"。</p>
+      </div>
+
+      <p><strong>底层机制（深一层）</strong>：oplog 条目被设计成<strong>幂等</strong>——<code>$inc</code> 被转写成绝对值 <code>$set</code>，一条改多文档的操作被拆成逐文档条目——所以重复重放同一批不会出错。secondary 用一个 OplogFetcher exhaust cursor 按 optime tail primary，主动 <strong>PULL</strong>，primary 从不 push。oplog window（大小 ÷ 写入速率）决定 secondary 最多能落后多久；落后超窗口就要 full resync。对照 Postgres：既不是物理 WAL ship，也不是逻辑解码，而是一个<strong>可查询的、幂等的操作日志</strong>，由状态机重放。</p>
+
+      <div class="callout insight">
+        <span class="label">机制对照</span>
+        <p><code>$inc: 1</code> 这种相对操作不是幂等的——重放两遍就多加了一次。oplog 在 primary 执行后把结果落成绝对值：primary 把计数器从 41 加到 42，写进 oplog 的是 <code>$set: { counter: 42 }</code>。secondary 重放一遍是 42，重放十遍还是 42。把相对操作转写成绝对结果，是幂等的来源。</p>
+      </div>
+
+      <p>下面是同一条写入操作在 primary 执行后落进 oplog 的样子。注意 <code>o</code> 字段里已经是绝对值。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">oplog-entry</span>
+          <span class="lang">mongosh</span>
+          <button class="copy" data-copy-target="c-oplog">复制</button>
+        </div>
+<pre id="c-oplog"><code class="language-javascript">// 应用层发的是相对操作
+db.counters.updateOne({ _id: "page" }, { $inc: { hits: 1 } })
+
+// primary 执行后，落进 oplog 的条目（节选）——已转写为绝对值
+db.getSiblingDB("local").oplog.rs.find().sort({ $natural: -1 }).limit(1)
+// {
+//   op: "u",                       // update
+//   ns: "app.counters",
+//   ts: Timestamp(1717300000, 1),  // optime：secondary 按它 tail
+//   o:  { $v: 2, diff: { u: { hits: 42 } } },  // 绝对值 42，非 +1
+//   o2: { _id: "page" }            // 定位目标文档
+// }</code></pre>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="副本集拓扑：一个 primary 持有 oplog，两个 secondary 主动从 primary 的 oplog 拉取并重放">
+          <defs>
+            <marker id="ar-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="350" y="34" text-anchor="middle" class="node-label">副本集：3 节点，secondary 主动拉取</text>
+
+          <!-- primary 顶部居中 -->
+          <rect x="270" y="58" width="160" height="64" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.8"/>
+          <text x="350" y="84" text-anchor="middle" class="node-label-accent">PRIMARY</text>
+          <text x="350" y="104" text-anchor="middle" class="edge-label">持有 oplog · 接受写</text>
+
+          <!-- oplog 块，挂在 primary 下方 -->
+          <rect x="285" y="140" width="130" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="350" y="158" text-anchor="middle" class="node-label">oplog.rs</text>
+          <text x="350" y="172" text-anchor="middle" class="edge-label">capped · 幂等</text>
+          <line x1="350" y1="122" x2="350" y2="140" class="diagram-ink"/>
+
+          <!-- 两个 secondary 底部两侧，留足间距 -->
+          <rect x="40" y="248" width="170" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="125" y="274" text-anchor="middle" class="node-label">SECONDARY</text>
+          <text x="125" y="294" text-anchor="middle" class="edge-label">OplogFetcher</text>
+
+          <rect x="490" y="248" width="170" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="575" y="274" text-anchor="middle" class="node-label">SECONDARY</text>
+          <text x="575" y="294" text-anchor="middle" class="edge-label">OplogFetcher</text>
+
+          <!-- 箭头从 secondary 指向 primary 的 oplog：强调主动拉 -->
+          <line x1="195" y1="252" x2="300" y2="178" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <text x="218" y="222" text-anchor="middle" class="branch-label">PULL / tail</text>
+
+          <line x1="505" y1="252" x2="400" y2="178" class="diagram-accent" marker-end="url(#ar-acc)"/>
+          <text x="482" y="222" text-anchor="middle" class="branch-label">PULL / tail</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>副本集拓扑与复制方向。<strong>注意</strong>：箭头从 secondary 指向 primary——复制是 secondary 主动拉，不是 primary 推，这点和 Raft 的 leader-push 相反。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 secondary 宕机维护了几小时，期间 primary 写入很猛。它重新上线后，能直接从断点继续 tail oplog 吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>不一定。取决于它落后的量有没有超过 <strong>oplog window</strong>。oplog 是 capped 集合，容量固定，写入速率越高、覆盖越快。如果 secondary 需要的那条 optime 已经被新条目<strong>覆盖滚掉</strong>，断点处的 oplog 不存在了，它无法增量追赶，只能 <strong>full resync</strong>（全量重新同步整个数据集）。所以高写入负载下要把 oplog 调大，给慢节点留出追赶窗口。</p>
+        </details>
+      </div>
+
+      <h2 id="s52"><span class="num">5.2</span><span>选举与协议：像 Raft，但不是 Raft</span></h2>
+      <p class="one-liner">副本集用 protocolVersion 1，借了 Raft 的 term 与单 leader 思想，但在复制方式、提交点计算、选举细节上都不同。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>primary 宕机后，集群要在没有人工介入的情况下选出新 primary 并继续接受写入，同时保证不会有两个 primary 同时被认可（脑裂）。Raft 提供了 term + 多数票的骨架来解决这件事，副本集采用了这套骨架，但按自己的复制模型做了改造。</p>
+      </div>
+
+      <p><strong>底层机制（深一层）</strong>：与 Raft 的差异要明确列出——(1) 日志条目是<strong>幂等操作</strong>，不是状态机命令；(2) 复制是 secondary <strong>pull</strong>，不是 Raft 的 AppendEntries push；(3) commit point 由 primary <strong>轮询多数节点的 lastDurable/lastWritten</strong> 算出，而不是逐条计票；(4) 增加了 priority takeover（高优先级节点上线后抢主）和 dry-run election（选赢之前不 bump term，避免无谓的 term 膨胀）。心跳每 2s，10s 超时触发选举。rollback 用 WiredTiger 的 recover-to-stable-timestamp 回到公共点，而<strong>不是</strong>截断日志。</p>
+
+      <div class="callout insight">
+        <span class="label">核心洞察</span>
+        <p>为什么强调"不是 Raft"——照搬 Raft 心智会误判它的提交语义。在 Raft 里，leader 把一条日志复制到多数节点就提交了该条目；在副本集里，提交点是 primary <strong>周期性轮询</strong>各 secondary 已 durable 的 optime 后算出的一个"多数已达"水位线，是 optime 维度的水位，而不是逐条目的计票。把它当 Raft 来推断"写到多数即提交的精确时刻"会偏差。</p>
+      </div>
+
+      <p>dry-run election 是一个容易被忽略的细节：候选人在真正发起选举、bump term 之前，先问一轮"若此刻发起选举，能否拿到多数票"。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">election-mechanics</span>
+          <span class="lang">概念</span>
+          <button class="copy" data-copy-target="c-elect">复制</button>
+        </div>
+<pre id="c-elect"><code class="language-javascript">// 选举触发与 dry-run 的次序（伪代码，描述协议行为）
+onHeartbeatTimeout() {                 // 10s 收不到 primary 心跳
+  if (dryRunElection().wonMajority()) {  // 1) 试选：不 bump term
+    bumpTerm();                          // 2) 真选才 +1，避免 term 膨胀
+    requestVotes(currentTerm);           // 3) 正式拉票
+  }
+  // 试选失败：term 保持原值，集群不被一次无谓选举打扰
+}
+
+// priority takeover：高优先级节点追平 oplog 后主动抢主
+if (this.priority > primary.priority &amp;&amp; this.isCaughtUp()) {
+  callElection();                        // 把主导权交还给更高优先级节点
+}</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>primary 失联又恢复，发现自己写过几条 oplog 是当时的少数派、从未被多数确认。这些条目会怎样？日志会被截断吗？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>这些未达多数的条目会被 <strong>rollback</strong>。但机制上<strong>不是截断 oplog 文件</strong>——而是借 WiredTiger 的 <strong>recover-to-stable-timestamp</strong>，把整个存储引擎状态回退到与新 primary 的<strong>公共提交点</strong>一致的稳定时间戳，被回退的写从存储层一并消失。这把"日志截断"换成了"存储回到一个已知稳定快照"，和 04 章的 stable timestamp 是同一套机制。</p>
+        </details>
+      </div>
+
+      <h2 id="s53"><span class="num">5.3</span><span>write concern / read concern</span></h2>
+      <p class="one-liner">writeConcern 决定一次写要多少节点确认才返回，readConcern 决定一次读看到哪个一致性级别的数据。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>持久性和延迟是一对可调的权衡，不存在对所有写入都最优的固定点。writeConcern 与 readConcern 把这个权衡交到每次操作手里：要更强的不丢与不回滚保证，就多等几个节点；要更低延迟，就少等。两个旋钮分别管"写返回前等谁"和"读看见什么"。</p>
+      </div>
+
+      <p><strong>底层机制（深一层）</strong>：<code>w:majority</code> 在多数节点 durable 后才返回；primary 跟踪 <strong>lastCommittedOpTime</strong>（majority commit point）。readConcern 的层级：<strong>local</strong>（不保证已提交，存在回滚风险）/ <strong>majority</strong>（读 majority commit point 的 WiredTiger 快照，不会被回滚）/ <strong>snapshot</strong>（钉住一个集群级多数提交时间戳，事务用）/ <strong>linearizable</strong>（额外发一个 no-op majority 写来确认自己仍是 primary，给实时线性读）。read preference：primary/secondary/nearest——从 secondary 读会读到滞后数据。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">concern-knobs</span>
+          <span class="lang">mongosh</span>
+          <button class="copy" data-copy-target="c-concern">复制</button>
+        </div>
+<pre id="c-concern"><code class="language-javascript">// 写：等多数节点 durable 才返回（不丢、不被回滚）
+db.accounts.updateOne(
+  { _id: 7 },
+  { $set: { balance: 100 } },
+  { writeConcern: { w: "majority" } }
+)
+
+// 读：只看已被多数提交的快照，读到的值不会被 rollback
+db.accounts.find(
+  { _id: 7 }
+).readConcern("majority")
+
+// 实时线性读：linearizable 会额外发一个 no-op majority 写，
+// 确认本节点仍是 primary，代价最高，只能读 primary
+db.accounts.find({ _id: 7 }).readConcern("linearizable")</code></pre>
+      </div>
+
+      <p>把常见组合摊开看保证与代价。表里每一行是一个真实会被选用的搭配。</p>
+      <table class="compare-table">
+        <caption>表 5.1 · writeConcern × readConcern 典型组合</caption>
+        <thead>
+          <tr><th>组合</th><th>保证</th><th>代价</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>w:1 + readConcern local</td><td>最快返回；单节点 durable 即应答</td><td>failover 时有丢失或回滚风险；可读到未提交、将回滚的数据</td></tr>
+          <tr class="selected"><td>w:majority + readConcern majority</td><td>不丢、不回滚；读到的是多数提交快照</td><td>写要等多数 durable，读看的是稍旧的提交点，延迟更高</td></tr>
+          <tr><td>w:majority + readConcern linearizable</td><td>实时线性读，读到最新已提交值</td><td>额外 no-op majority 写确认主身份，最慢，仅 primary</td></tr>
+          <tr><td>w:1 + 从 secondary 读</td><td>读写吞吐高，分散读负载</td><td>secondary 有复制滞后，读到旧值；写在 failover 时也有丢失风险</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一次 <code>w:majority</code> 的写已返回成功，紧接着用 <code>readConcern: local</code> 从 primary 读同一文档。读到的一定是这次写的值吗？读到的会被回滚吗？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>读到的<strong>是</strong>这次写的值——primary 上 local 读看到的是最新已应用的状态，而这次写既已在 primary 应用、又已多数 durable。它<strong>不会被回滚</strong>，但这份"不会回滚"的保证来自<strong>写用了 w:majority</strong>，不是来自 readConcern local。换 readConcern majority 读会同样安全；二者的区别在别处——若写只是 w:1，local 读可能读到尚未多数提交、将被回滚的数据，而 majority 读不会。</p>
+        </details>
+      </div>
+
+      <h2 id="s54"><span class="num">5.4</span><span>因果一致性、HLC，与"持久性 ≠ 可见性"</span></h2>
+      <p class="one-liner">一个写在本地持久，不等于它已对多数可见；这两件事被 write/read concern 分开调。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>分布式读写里有一类高频期望："刚写入的值，紧接着的读要能看到"（read-your-writes），以及"读到的顺序不倒退"（单调读）。这些保证不靠墙钟，因为节点间时钟不可信。因果一致性用一个逻辑时间把"谁先于谁"传递下去，读端据此等待节点追平。</p>
+      </div>
+
+      <p><strong>底层机制（深一层）</strong>：HLC（Hybrid Logical Clock）生成 <code>$clusterTime</code>，随每条消息 gossip，并且 <strong>HMAC 签名</strong>防客户端伪造逻辑时间；<code>afterClusterTime</code> 让读等节点追上某个 cluster time，给 read-your-writes / 单调读。HLC 选型：胜过 Lamport 钟（无物理时间亲和）、向量钟（消息 O(N) 膨胀）、纯墙钟（要时钟同步）。</p>
+
+      <div class="callout warning">
+        <span class="label">核心洞察 · 第二条主线</span>
+        <p><code>w:1</code> 返回成功的写，在 failover 后<strong>可被回滚</strong>——有时甚至没有 rollback 文件留下痕迹。"返回成功" ≠ "持久且可见"。一次写返回成功只说明它<strong>在某个节点本地落了盘</strong>；它是否已跨越多数、是否不可回滚、是否对其他读者可见，是由 writeConcern 和 readConcern 分别决定的另外两件事。把"应答"等同于"安全"，是这一层最常见的误判。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一次写入的时间线：t0 primary 本地 durable，此刻 w:1 返回；t0 到 t1 之间是危险窗口；t1 多数确认后不可回滚">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <text x="360" y="34" text-anchor="middle" class="node-label">一次写入的两个时刻：返回 ≠ 不可回滚</text>
+
+          <!-- 时间主轴 -->
+          <line x1="80" y1="150" x2="660" y2="150" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <text x="668" y="154" class="edge-label">time</text>
+
+          <!-- t0 标记 -->
+          <line x1="200" y1="108" x2="200" y2="186" class="diagram-ink"/>
+          <circle cx="200" cy="150" r="4" fill="#0A0A0A"/>
+          <text x="200" y="100" text-anchor="middle" class="node-label">t0</text>
+          <text x="200" y="206" text-anchor="middle" class="edge-label">primary 本地 durable</text>
+          <text x="200" y="222" text-anchor="middle" class="branch-label">w:1 此刻返回</text>
+
+          <!-- t1 标记 -->
+          <line x1="520" y1="108" x2="520" y2="186" class="diagram-accent"/>
+          <circle cx="520" cy="150" r="4" fill="#B73B2F"/>
+          <text x="520" y="100" text-anchor="middle" class="node-label-accent">t1</text>
+          <text x="520" y="206" text-anchor="middle" class="edge-label">多数确认 = majority commit</text>
+          <text x="520" y="222" text-anchor="middle" class="branch-label">此后不可回滚</text>
+
+          <!-- 危险窗口：t0→t1 用 accent 弧线/括号标注 -->
+          <path d="M 200 78 Q 360 56 520 78" class="diagram-accent"/>
+          <text x="360" y="64" text-anchor="middle" class="branch-label">危险窗口：此时 failover，w:1 的写就丢</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>一次写入的持久性时间线。<strong>注意</strong>：w:1 在 t0 就返回成功，但真正"不可回滚"要等到 t1；这段时间差就是持久性与可见性的缝隙。</figcaption>
+      </figure>
+
+      <p>因果一致性的用法是开一个会话，让连续操作携带并推进 <code>$clusterTime</code>，读端用 <code>afterClusterTime</code> 等节点追平。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">causal-session</span>
+          <span class="lang">mongosh</span>
+          <button class="copy" data-copy-target="c-causal">复制</button>
+        </div>
+<pre id="c-causal"><code class="language-javascript">// 因果一致性会话：写后读保证 read-your-writes
+const s = db.getMongo().startSession({ causalConsistency: true });
+const coll = s.getDatabase("app").profiles;
+
+coll.updateOne({ _id: 7 }, { $set: { nick: "lin" } },
+               { writeConcern: { w: "majority" } });
+
+// 同一会话内的读携带上一步的 $clusterTime（HMAC 签名，不可伪造），
+// 读端用 afterClusterTime 等本节点追平该 cluster time 再返回
+coll.find({ _id: 7 }).readConcern("majority");  // 必读到 nick: "lin"
+s.endSession();</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>从 secondary 读，readConcern local，刚写入（w:1）的数据一定读得到吗？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>不一定——secondary 可能还没重放到该 oplog 条目，读到旧值。w:1 只保证写在 primary 本地落盘，复制到 secondary 有滞后，而 local 读又不等任何提交点。要 read-your-writes 用<strong>因果一致性会话 + majority</strong>：会话把写的 <code>$clusterTime</code> 带给后续读，<code>afterClusterTime</code> 让 secondary 先追平再返回，majority 又保证读到的值不会被回滚。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>为什么 oplog 条目必须幂等？举一个被改写的例子（<code>$inc</code> → <code>$set</code>）。</li>
+          <li>副本集协议和 Raft 的两个关键差异是什么？</li>
+          <li>w:majority 与 readConcern majority 各保证什么？</li>
+          <li>（综合题）"返回成功"的写在什么条件下还会丢？怎么配置避免？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>因为同一批 oplog 会被重传、节点重启后重放，重复重放不能改变结果。例：应用发 <code>$inc: { hits: 1 }</code>，primary 执行后把结果落成绝对值 <code>$set: { hits: 42 }</code> 写进 oplog；secondary 重放一遍是 42，重放多遍仍是 42。相对操作转成绝对结果即幂等。</li>
+            <li>任取其二：(1) 日志条目是幂等操作而非状态机命令；(2) 复制是 secondary <strong>pull</strong> 而非 Raft 的 AppendEntries push；(3) commit point 由 primary 轮询多数节点的 lastDurable/lastWritten 算出的 optime 水位，而非逐条计票；(4) 有 priority takeover 与 dry-run election；(5) rollback 用 recover-to-stable-timestamp 而非截断日志。</li>
+            <li>w:majority：写在<strong>多数节点 durable</strong> 后才返回，因此不丢、不会被回滚。readConcern majority：读 <strong>majority commit point 的 WiredTiger 快照</strong>，看到的数据已被多数提交、不会被回滚（但可能比最新写稍旧）。一个管写返回前等谁，一个管读看见哪个快照。</li>
+            <li>用 <code>w:1</code> 的写在 t0 返回后、t1 多数确认前若发生 failover，可能被回滚而丢失（图 5.2 的危险窗口）。避免：写用 <code>w:majority</code>，要读到不被回滚的值再配 <code>readConcern: majority</code>；需要 read-your-writes 时加因果一致性会话。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>按访问点分别选一致性级别</h3>
+        <p>设计一个一致性方案：用户改完资料后<strong>立刻跳详情页必须看到新值</strong>，但允许<strong>全站列表页读到稍旧数据</strong>以换取吞吐。先不查资料，写出详情页和列表页各自的 writeConcern / readConcern / read preference，并说明每个选择的理由。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>详情页用<strong>因果一致性会话</strong>（causally consistent session）+ readConcern majority 或直接读 primary，保证 read-your-writes：改资料的写用 w:majority，同会话的详情读带上该写的 <code>$clusterTime</code>，读端追平后再返回。列表页可读 <strong>secondary + readConcern local</strong> 换吞吐，接受复制滞后带来的稍旧数据。要点是<strong>按访问点分别选一致性级别</strong>，而不是全站一刀切——强一致只加在真正需要 read-your-writes 的那条路径上。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.mongodb.com/docs/manual/core/replica-set-oplog/">Replica Set Oplog</a>（官方 · oplog 与复制）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/core/replica-set-elections/">Replica Set Elections</a>（官方 · 选举与 protocolVersion）</li>
+          <li><a href="https://www.mongodb.com/docs/manual/reference/read-concern/">Read Concern / Write Concern</a>（官方 · 读写关注层级）</li>
+          <li><a href="https://github.com/mongodb/specifications/blob/master/source/causal-consistency/causal-consistency.md">Causal Consistency</a>（spec · github mongodb/specifications）</li>
+          <li><a href="https://github.com/mongodb/mongo/blob/master/src/mongo/db/repl/README.md">repl/README</a>（源码 · 复制子系统设计文档）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="04-storage-wiredtiger.html" class="prev">
+          <span class="label">← 上一页</span>
+          <span class="title">04 · WiredTiger 存储引擎</span>
+        </a>
+        <a href="06-sharding-and-when-to-use.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">06 · 分片与选型</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s51" data-toc-target="s51">5.1 oplog</a></li>
+        <li><a href="#s52" data-toc-target="s52">5.2 选举与协议</a></li>
+        <li><a href="#s53" data-toc-target="s53">5.3 读写关注</a></li>
+        <li><a href="#s54" data-toc-target="s54">5.4 因果一致性与可见性</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写入路径：为什么是"近实时" · Elasticsearch 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 16px; line-height: 1.6; }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* index-specific: route cards + capability list */
+.route-list { margin: 16px 0; }
+.route-list .route {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 12px 16px;
+  margin: 10px 0;
+}
+.route-list .route .who {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em;
+  color: var(--vermilion); font-weight: 700; text-transform: uppercase;
+  margin: 0 0 4px; display: block;
+}
+.route-list .route p { margin: 4px 0; font-size: 14.5px; }
+.toc-chapters { margin: 16px 0; }
+.toc-chapters a {
+  display: block; padding: 14px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  margin: 8px 0; text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-chapters a:hover { border-color: var(--vermilion); }
+.toc-chapters .ch-num {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-faint);
+  letter-spacing: 0.08em; font-weight: 500;
+}
+.toc-chapters .ch-title { font-weight: 600; font-size: 15.5px; margin: 2px 0; }
+.toc-chapters .ch-desc { font-size: 13.5px; color: var(--ink-soft); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-write-path.html" class="current">02 写入</a><span class="sep">—</span>
+    <a href="03-search-path.html">03 检索</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>写入路径：为什么是"近实时"</h1>
+        <p class="recap">上一章理清了名词和层级，尤其点出 segment 是不可变的。这一章顺着"不可变"这条线，追一条文档从写入到能被搜到，中间到底发生了什么——近实时、持久化、删除与合并，全是这条公理的推论。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>倒排索引怎么从一段文本建出来（analyzer → term → postings list），以及它为什么让搜索快</li>
+          <li>"段不可变"如何同时解释 近实时(refresh)、持久化(translog / flush)、删除与更新(merge)</li>
+          <li>refresh / flush / merge 是三件不同的事——混淆它们是大多数写入困惑的根源</li>
+        </ul>
+      </section>
+
+      <p>写入路径上的每一个反直觉行为，根都扎在 01 章那条公理里：<strong>底层是一堆不可变的 Lucene segment</strong>。一段已经写出的 segment 永不被原地改写——这一条同时逼出了三个看似无关的现象：写完为什么搜不到（refresh）、崩溃为什么不丢数据（translog / flush）、删除为什么不立刻回收磁盘（merge）。本章四节顺着一条文档的旅程走：先看它被切成什么（倒排索引），再看它何时可见（refresh）、何时落盘（flush），最后看它被删时发生了什么（merge）。</p>
+
+      <h2 id="inverted-index"><span class="num">2.1</span><span>倒排索引：搜索为什么快</span></h2>
+
+      <p class="one-liner">写入时把文本切成规范化的 term，每个 term 指向一个有序的文档 id 列表（postings）；搜索因此变成几个有序列表的归并，而不是全表扫描。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>没有倒排索引，"找出所有含 <code>fox</code> 的文档"只能逐行取出每篇文章、在正文里做子串匹配，代价是 O(N · 字段长)——文档越多越慢，且每个查询词重来一遍。倒排索引把这份扫描代价<strong>一次性预付在写入时</strong>：写入时就按词建好索引，于是读取时无需再碰原文。</p>
+      </div>
+
+      <h3>运行方式：analyzer 管线 → term → postings</h3>
+
+      <p>一个 <code>text</code> 字段被写入时，它的内容先过一条 <strong>analyzer 管线</strong>，分三段：</p>
+      <ul>
+        <li><strong>char filter</strong>：在分词之前对原始字符做替换，例如剥掉 HTML 标签、把 <code>&amp;</code> 换成 <code>and</code>。</li>
+        <li><strong>tokenizer</strong>：按规则把字符流切成 token，最常见的 <code>standard</code> tokenizer 按词边界切，并丢掉大部分标点。</li>
+        <li><strong>token filters</strong>：对切出的 token 逐个规范化——小写化（lowercase）、去停用词（stop，如 <code>the</code> / <code>a</code>）、词干还原（stemmer，把 <code>foxes</code> 还原成 <code>fox</code>）。</li>
+      </ul>
+
+      <p>管线的产物是一串规范化后的 <strong>term</strong>。索引之所以叫"倒排"，是因为它不存"文档 → 它含哪些词"，而是反过来存 <strong>每个 term → 一个 postings list</strong>：一个按文档 id 升序排列的列表，每个条目还附带词频（term frequency）和位置（position，供短语查询用）。所有 term 本身又被收进一个有序的 <strong>term 词典</strong>。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="analyzer 管线把一段文本切成规范化 term，再倒排成 term 指向 postings 列表">
+          <defs>
+            <marker id="ix-flow" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <text x="14" y="58" class="edge-label" font-weight="700">管线</text>
+
+          <!-- input -->
+          <rect x="56" y="34" width="128" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="120" y="63" text-anchor="middle" class="node-label">"The Quick Fox"</text>
+
+          <line x1="184" y1="58" x2="216" y2="58" class="diagram-ink" marker-end="url(#ix-flow)"/>
+
+          <!-- char filter -->
+          <rect x="216" y="34" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="276" y="56" text-anchor="middle" class="node-label">char filter</text>
+          <text x="276" y="73" text-anchor="middle" class="edge-label">清洗字符</text>
+
+          <line x1="336" y1="58" x2="368" y2="58" class="diagram-ink" marker-end="url(#ix-flow)"/>
+
+          <!-- tokenizer -->
+          <rect x="368" y="34" width="120" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="428" y="56" text-anchor="middle" class="node-label">tokenizer</text>
+          <text x="428" y="73" text-anchor="middle" class="edge-label">切词</text>
+
+          <line x1="488" y1="58" x2="520" y2="58" class="diagram-ink" marker-end="url(#ix-flow)"/>
+
+          <!-- token filters -->
+          <rect x="520" y="34" width="184" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="612" y="56" text-anchor="middle" class="node-label">token filters</text>
+          <text x="612" y="73" text-anchor="middle" class="edge-label">小写 / 去停用词 / 词干</text>
+
+          <!-- down to terms -->
+          <line x1="612" y1="82" x2="612" y2="118" class="diagram-ink" marker-end="url(#ix-flow)"/>
+          <rect x="520" y="118" width="184" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="612" y="145" text-anchor="middle" class="node-label-accent">[ quick, fox ]</text>
+
+          <!-- inverted mapping table -->
+          <text x="56" y="138" class="edge-label" font-weight="700">倒排映射</text>
+          <rect x="56" y="158" width="232" height="118" rx="6" class="diagram-ink node-fill"/>
+          <line x1="160" y1="158" x2="160" y2="276" class="diagram-soft"/>
+          <line x1="56" y1="188" x2="288" y2="188" class="diagram-soft"/>
+          <text x="108" y="179" text-anchor="middle" class="edge-label" font-weight="700">term</text>
+          <text x="224" y="179" text-anchor="middle" class="edge-label" font-weight="700">postings (doc id)</text>
+          <text x="108" y="212" text-anchor="middle" class="node-label">quick</text>
+          <text x="224" y="212" text-anchor="middle" class="edge-label">→ [1, 4, 9]</text>
+          <text x="108" y="240" text-anchor="middle" class="node-label">fox</text>
+          <text x="224" y="240" text-anchor="middle" class="edge-label">→ [4, 7, 9]</text>
+          <text x="108" y="268" text-anchor="middle" class="node-label">brown</text>
+          <text x="224" y="268" text-anchor="middle" class="edge-label">→ [2, 4]</text>
+
+          <!-- terms feed mapping -->
+          <line x1="520" y1="140" x2="372" y2="140" class="diagram-soft" marker-end="url(#ix-flow)"/>
+          <text x="446" y="132" text-anchor="middle" class="edge-label">写入映射</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>一段文本经 analyzer 管线切成规范化 term，再倒排成"term → 有序 doc id 列表"。<strong>注意</strong>：词典与每个 postings list 都是<em>有序</em>的——正是这份有序让 <code>quick AND fox</code> 退化成两个排好序列表的归并，而非全表扫描。</figcaption>
+      </figure>
+
+      <h3>搜索时为什么快</h3>
+
+      <p>查询 <code>quick AND fox</code> 时，查询词先过<strong>同一条 analyzer</strong>得到 term <code>quick</code> 和 <code>fox</code>，在有序 term 词典里二分定位到各自的 postings，然后两个已排序的 doc id 列表做归并求交集——两个指针各自只向前走，命中相同 id 的就是结果。整个过程不碰任何一篇原文，代价只与命中文档数相关，与索引里文档总数基本无关，这就是"亚线性"。行存数据库走的是相反路线：扫每一行、对字段做子串匹配，代价随行数线性增长。倒排索引把这份代价从"每次查询"挪到了"一次写入"。</p>
+
+      <h3>带来的代价</h3>
+
+      <p>预付不是免费的。写入时要跑完整条 analyzer 管线并构建索引结构，因此写比"直接落一行"重。更隐蔽的代价是<strong>一致性约束</strong>：查询分词器必须和索引分词器一致，否则查询词规范化出的 term 和存储的 term 对不上，结果就是"字段里明明有这个词却搜不到"。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 呼应 01 章 text / keyword</span>
+        <p>这正是 01 章 <code>text</code> 与 <code>keyword</code> 那条分水岭的底层原因。<code>text</code> 字段过 analyzer、被切成多个 term，所以要用 <code>match</code>（查询词也过同一 analyzer、再匹配 term）；<code>keyword</code> 字段<em>不分词</em>、整段当成一个 term 存，所以要用 <code>term</code>（精确匹配整个值）。对 <code>text</code> 用 <code>term</code> 去查一整句话，等于拿"没分过词的原句"去比"分过词的单个 term"——永远对不上。<code>term</code> vs <code>match</code> 的区别，本质是"绕不绕过 analyzer"。</p>
+      </div>
+
+      <div class="callout example">
+        <span class="label">例</span>
+        <p>字段值 <code>"Running Foxes"</code> 经 standard analyzer + lowercase + 英文 stemmer，存进去的 term 是 <code>[run, fox]</code>（停用词无、<code>running</code> 词干还原成 <code>run</code>、<code>foxes</code> 还原成 <code>fox</code>）。用 <code>match: "ran"</code> 查，若查询侧用同一 stemmer，<code>ran</code> 也还原成 <code>run</code>，命中；用 <code>term: "Running"</code> 查，拿未规范化的 <code>Running</code> 直接比 term 词典里的 <code>run</code>，不命中。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>给一个 <code>text</code> 字段写入 <code>"E-mail"</code>，standard analyzer 会把它切成几个 term？之后用 <code>term: "e-mail"</code> 能精确命中吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>standard tokenizer 在连字符处断开并丢弃标点，<code>"E-mail"</code> 切成两个 term：<code>e</code> 和 <code>mail</code>（再经 lowercase）。词典里根本不存在 <code>e-mail</code> 这个整体 term，所以 <code>term: "e-mail"</code>（不过 analyzer、精确比对整串）匹配不到。</p>
+          <p>它指向的设计点：<code>text</code> 字段存的是<em>切碎并规范化后的 term 集合</em>，不是原文。要按原值精确匹配 / 排序 / 聚合，得用 <code>keyword</code>——这又回到 01 章那条分水岭。</p>
+        </details>
+      </div>
+
+      <h2 id="refresh"><span class="num">2.2</span><span>不可变的 segment 与 refresh：近实时从哪来</span></h2>
+
+      <p class="one-liner">新文档先进内存 buffer；一次 refresh 把 buffer 写成一个新 segment 并重开 reader——"近实时"就是这个 reader 重开的节奏，默认约 1 秒，不是实时。</p>
+
+      <div class="rationale">
+        <span class="label">为什么这样设计</span>
+        <p>segment 一旦写出就不可变（01 章公理）。"不可变"意味着新文档不能塞进已有 segment，只能攒在内存里、再整批写成一个<em>新</em> segment。而 Lucene 的搜索是针对"已打开的 segment 集合"做的——只有重新打开一个包含新 segment 的 reader，新文档才进入搜索的视野。这一步重开就是 refresh。</p>
+      </div>
+
+      <h3>运行方式：buffer → refresh → 新 segment → reader 重开</h3>
+
+      <p>一条文档被索引后，先落进一个 <strong>in-memory buffer</strong>（同时也写了 translog，见 2.3）。此时它<strong>还搜不到</strong>——搜索看的是已打开的 segment，而 buffer 不是 segment。直到一次 <strong>refresh</strong> 发生：buffer 里积攒的文档被写成一个新的磁盘 segment，并打开一个新的 <strong>reader</strong>，把这个新 segment 纳入可搜索集合。从此刻起，这批文档才能被搜到。</p>
+
+      <p>refresh 默认每 <strong>1 秒</strong>触发一次，但有个常被忽略的条件：自 ES 7.0 起，只有<strong>最近 30 秒内被搜索过</strong>的 index 才会自动周期 refresh；完全没有查询打进来的 index 不会空跑 refresh，避免给纯写入负载白白制造小 segment。这就是 <strong>near-real-time（近实时）</strong> 的全部含义——不是写完即可见的实时，而是"reader 按节奏重开"带来的、上限约 1 秒的可见延迟。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 412" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="写入路径的两条正交轴：可见性轴 buffer 到 refresh 到新 segment，持久化轴每个操作到 translog 到 flush">
+          <defs>
+            <marker id="wp-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="wp-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- incoming doc -->
+          <rect x="288" y="20" width="144" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="47" text-anchor="middle" class="node-label">写入一条文档</text>
+
+          <!-- split to two axes -->
+          <line x1="320" y1="64" x2="180" y2="104" class="diagram-accent" marker-end="url(#wp-acc)"/>
+          <line x1="400" y1="64" x2="540" y2="104" class="diagram-ink" marker-end="url(#wp-ink)"/>
+
+          <!-- ============ left: visibility axis ============ -->
+          <text x="64" y="98" class="branch-label">可见性轴</text>
+          <rect x="40" y="104" width="280" height="262" rx="8" class="diagram-soft"/>
+
+          <rect x="80" y="120" width="200" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="142" text-anchor="middle" class="node-label">in-memory buffer</text>
+          <text x="180" y="159" text-anchor="middle" class="edge-label">搜不到</text>
+
+          <line x1="180" y1="168" x2="180" y2="204" class="diagram-accent" marker-end="url(#wp-acc)"/>
+          <text x="180" y="190" text-anchor="middle" class="branch-label">refresh ~1s</text>
+
+          <rect x="80" y="204" width="200" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="180" y="226" text-anchor="middle" class="node-label-accent">新 segment</text>
+          <text x="180" y="243" text-anchor="middle" class="edge-label">打开新 reader</text>
+
+          <line x1="180" y1="252" x2="180" y2="288" class="diagram-ink" marker-end="url(#wp-ink)"/>
+          <rect x="80" y="288" width="200" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="310" text-anchor="middle" class="node-label">可被搜索</text>
+          <text x="180" y="327" text-anchor="middle" class="edge-label">near-real-time</text>
+
+          <!-- ============ right: durability axis ============ -->
+          <text x="560" y="98" class="branch-label">持久化轴</text>
+          <rect x="400" y="104" width="280" height="262" rx="8" class="diagram-soft"/>
+
+          <rect x="440" y="120" width="200" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="142" text-anchor="middle" class="node-label">追加 translog</text>
+          <text x="540" y="159" text-anchor="middle" class="edge-label">每个 op 都写</text>
+
+          <line x1="540" y1="168" x2="540" y2="204" class="diagram-ink" marker-end="url(#wp-ink)"/>
+          <text x="540" y="190" text-anchor="middle" class="edge-label">崩溃可重放</text>
+
+          <rect x="440" y="204" width="200" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="226" text-anchor="middle" class="node-label">flush (fsync)</text>
+          <text x="540" y="243" text-anchor="middle" class="edge-label">默认周期 / translog 满</text>
+
+          <line x1="540" y1="252" x2="540" y2="288" class="diagram-ink" marker-end="url(#wp-ink)"/>
+          <rect x="440" y="288" width="200" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="540" y="310" text-anchor="middle" class="node-label">落盘并清空 translog</text>
+
+          <!-- divider note -->
+          <text x="360" y="392" text-anchor="middle" class="edge-label">两条轴各管各的：refresh 管"可见"，flush 管"落盘"</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>一条文档写入后分头走两条<em>正交</em>的轴：左边可见性轴（refresh）决定它何时能被搜到，右边持久化轴（flush）决定它何时落盘。<strong>注意</strong>：朱红色的 refresh 链条和黑色的 flush 链条互不依赖——这就是为什么"可见"和"落盘"是两件事，下一节展开。</figcaption>
+      </figure>
+
+      <h3>带来的代价</h3>
+
+      <p>refresh 越频繁，单位时间内生成的小 segment 越多，而段越多越碎，后续 <strong>merge</strong>（2.4）要重写合并的负担就越重——代价不在 refresh 当下，而滞后到合并阶段。<code>?refresh=true</code> 能强制一次立即可见的 refresh，但每调一次就多新建一个小 segment；在高频写入路径上滥用，等于主动制造段爆炸、把成本压给 merge。</p>
+
+      <div class="callout tip">
+        <span class="label">提示</span>
+        <p>需要"写完立刻读回"时，优先用 <code>?refresh=wait_for</code> 而非 <code>?refresh=true</code>：前者让请求挂起、等到下一次<em>自然</em>的周期 refresh 再返回，不额外制造 segment；后者强制立刻 refresh，多一个小段。两者都能保证读回，代价档次不同。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>写入一条文档后<strong>立刻</strong>发一个 <code>GET _search</code>，默认配置下搜得到吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>默认<strong>搜不到</strong>。文档此刻还在 in-memory buffer 里，没被写成 segment、reader 也没重开，不在可搜索集合中。要等下一次 refresh——最长约 1 秒——它才可见。</p>
+          <p>要立刻读回，有两条路：按 <code>_id</code> 走 <code>GET /index/_doc/{id}</code>（实时读，直接查 translog + segment，不受 refresh 影响），或写入时带 <code>?refresh=wait_for</code> 让请求等到下一次 refresh 完成再返回。注意"实时 GET"和"近实时 search"是两条不同的路径——前者按主键点查，后者走倒排索引。</p>
+        </details>
+      </div>
+
+      <h2 id="translog"><span class="num">2.3</span><span>持久化 ≠ 可见性：translog 与 flush</span></h2>
+
+      <p class="one-liner">可见性（refresh）和持久化（durability）是两条独立的轴：每个写操作先追加 translog 保证崩溃不丢，flush 才把内存 segment fsync 落盘并清空 translog。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要 translog</span>
+        <p>refresh 把 buffer 变成 segment，但这个新 segment 起初只在<strong>文件系统缓存</strong>里，还没 <code>fsync</code> 到物理磁盘——此时断电，它会丢。把每个 segment 都立刻 fsync 又太慢（fsync 是昂贵的磁盘同步）。translog 是这道矛盾的解：每个写操作在进 buffer 的同时<strong>顺序追加</strong>到一个事务日志，顺序写很快；万一在 flush 之前崩溃，重启时<strong>重放 translog</strong> 就能把尚未落盘的操作全部补回来。持久化由 translog 兜底，落盘的昂贵动作则可以攒着批量做。</p>
+      </div>
+
+      <h3>运行方式：两条轴各走各的</h3>
+
+      <p>把图 2.2 的两条轴拆开看：</p>
+      <ul>
+        <li><strong>可见性轴（refresh）</strong>：buffer → 新 segment → reader 重开 → 可搜索。管"什么时候能搜到"。</li>
+        <li><strong>持久化轴（durability）</strong>：每个 op → 追加 translog → flush 时 fsync segment 落盘并清空 translog。管"崩溃了丢不丢"。</li>
+      </ul>
+
+      <p>两条轴由不同的触发条件驱动、互不等待。refresh 默认 1 秒一次；<strong>flush</strong> 则在 translog 达到阈值（默认 512MB）或周期到点时触发，把内存里的 segment fsync 到磁盘、然后清空已落盘部分对应的 translog。一次 flush 之后，那段 translog 的使命完成、可以丢弃。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">translog 持久化策略</span>
+          <span class="lang">JSON</span>
+          <button class="copy" data-copy-target="code-translog">复制</button>
+        </div>
+<pre id="code-translog"><code class="language-json">PUT /logs/_settings
+{
+  "index.translog.durability": "request",
+  "index.translog.flush_threshold_size": "512mb"
+}
+// durability=request（默认）：每个写请求返回前，translog 先 fsync
+//   → 单条写确认即不丢，代价是每请求一次磁盘同步
+// durability=async：translog 每 5s 才 fsync 一次
+//   → 写吞吐更高，但崩溃可能丢掉最近 5s 的已确认写</code></pre>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 头号写入困惑的根因</span>
+        <p>因为这两条轴正交，一条文档可以处在它们的任意组合态。一种是<strong>已持久化、但还不可见</strong>：操作进了 translog（崩溃能重放回来），但还没 refresh，所以搜不到。另一种是<strong>已可见、但还没 fsync 落盘</strong>：refresh 了、能搜到，但那个新 segment 仍在文件系统缓存里，尚未 flush——此刻真断电，segment 本身会丢，但数据并不丢，因为它还在 translog 里，重启重放即可恢复。把 refresh 和 flush 当成同一回事——以为"搜得到就等于落了盘"或"落了盘就等于搜得到"——是绝大多数写入困惑的头号根因。</p>
+      </div>
+
+      <h3>带来的代价</h3>
+
+      <p>translog 不是没有成本的。translog 攒得越大，崩溃后重启要重放的操作越多，<strong>恢复时间越长</strong>；这也是 flush 阈值不能设得过大的原因。反过来，flush 太频繁则把"攒批落盘"的优化吃掉了，每次 fsync 都是一次昂贵的磁盘同步，<strong>增加 I/O 压力</strong>。<code>durability: request</code>（默认）保证每条已确认的写都不丢，但代价是每个写请求都要等一次 translog fsync；改成 <code>async</code> 能换吞吐，但崩溃时会丢掉最近一个 fsync 间隔内的已确认写——这是一道明确的"持久化保证 vs 写吞吐"权衡。</p>
+
+      <h2 id="merge"><span class="num">2.4</span><span>删除不真删、更新=删+插：merge</span></h2>
+
+      <p class="one-liner">段不可变，所以删除只是在位图里打个标记（soft delete），被删文档的空间要等后台 merge 把若干段重写成新段时才真正回收；更新 = 旧文档标删 + 新文档进新段。</p>
+
+      <div class="rationale">
+        <span class="label">为什么删除不能"真删"</span>
+        <p>从一个不可变的 segment 里抠掉一条文档，等于原地改写它——这与"段不可变"直接冲突。于是 ES 走了另一条路：删除时不动 segment，只在一个伴随该 segment 的位图（<code>.liv</code> 文件，每个文档一个 bit）里把对应文档标记为已删（<strong>soft delete</strong>）。搜索时跳过被标记的文档，对外看起来"删掉了"，但它仍占着 segment 的物理空间。</p>
+      </div>
+
+      <h3>运行方式：标删 → 后台 merge 才真正回收</h3>
+
+      <p>被 soft-delete 的文档一直躺在原 segment 里，直到后台的 <strong>merge</strong> 发生：merge 选若干个小 segment，把其中<strong>仍存活</strong>的文档重写进一个新的、更大的 segment，然后丢弃旧 segment。被标删的文档在重写时<strong>不会被带进新段</strong>——这一刻，它们的空间才真正释放。merge 因此身兼两职：把碎段合并成大段（减少段数、加快搜索），以及顺带清理掉积压的已删文档。</p>
+
+      <p><strong>更新</strong>（包括用相同 <code>_id</code> 重新索引）在底层就是"删 + 插"：把旧版本文档 soft-delete，把新版本写进当前 buffer、等下次 refresh 进新 segment。所以高频更新同一批文档，会持续制造"标删的旧版本"，把回收压力堆给 merge。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三个小 segment 含若干 soft-deleted 文档，经 merge 重写成一个新 segment，被删文档消失、空间回收">
+          <defs>
+            <marker id="mg-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <text x="120" y="34" text-anchor="middle" class="edge-label" font-weight="700">3 个小 segment（含 soft-deleted）</text>
+
+          <!-- seg 1 -->
+          <rect x="40" y="52" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+          <rect x="52" y="66" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+          <rect x="86" y="66" width="28" height="30" rx="3" fill="#E5E5E5" stroke="#A3A3A3" stroke-width="1"/>
+          <rect x="120" y="66" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+          <rect x="154" y="66" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+
+          <!-- seg 2 -->
+          <rect x="40" y="128" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+          <rect x="52" y="142" width="28" height="30" rx="3" fill="#E5E5E5" stroke="#A3A3A3" stroke-width="1"/>
+          <rect x="86" y="142" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+          <rect x="120" y="142" width="28" height="30" rx="3" fill="#E5E5E5" stroke="#A3A3A3" stroke-width="1"/>
+          <rect x="154" y="142" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+
+          <!-- seg 3 -->
+          <rect x="40" y="204" width="160" height="58" rx="6" class="diagram-ink node-fill"/>
+          <rect x="52" y="218" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+          <rect x="86" y="218" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+          <rect x="120" y="218" width="28" height="30" rx="3" fill="#E5E5E5" stroke="#A3A3A3" stroke-width="1"/>
+          <rect x="154" y="218" width="28" height="30" rx="3" class="diagram-ink node-fill"/>
+
+          <!-- legend -->
+          <rect x="40" y="282" width="20" height="20" rx="3" fill="#E5E5E5" stroke="#A3A3A3" stroke-width="1"/>
+          <text x="68" y="297" class="edge-label">= soft-deleted（占空间）</text>
+
+          <!-- merge arrow -->
+          <line x1="200" y1="157" x2="408" y2="157" class="diagram-accent" marker-end="url(#mg-ink)"/>
+          <text x="304" y="148" text-anchor="middle" class="branch-label">merge 重写</text>
+          <text x="304" y="176" text-anchor="middle" class="edge-label">只搬存活文档</text>
+
+          <!-- new merged segment -->
+          <text x="560" y="100" text-anchor="middle" class="edge-label" font-weight="700">1 个新 segment</text>
+          <rect x="436" y="116" width="248" height="82" rx="6" class="diagram-accent node-fill-accent"/>
+          <rect x="452" y="140" width="32" height="34" rx="3" class="diagram-ink node-fill"/>
+          <rect x="492" y="140" width="32" height="34" rx="3" class="diagram-ink node-fill"/>
+          <rect x="532" y="140" width="32" height="34" rx="3" class="diagram-ink node-fill"/>
+          <rect x="572" y="140" width="32" height="34" rx="3" class="diagram-ink node-fill"/>
+          <rect x="612" y="140" width="32" height="34" rx="3" class="diagram-ink node-fill"/>
+          <text x="560" y="216" text-anchor="middle" class="node-label-accent">被删文档消失 · 空间回收</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>merge 选若干小 segment，把存活文档重写进一个新段，旧段连同被标删文档一起丢弃。<strong>注意</strong>：灰格子（soft-deleted）在 merge<em>之前</em>一直占着磁盘——删除命令本身不回收空间，回收发生在 merge 那一刻。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">反直觉</span>
+        <p>批量删除一半文档后，磁盘占用<strong>不会立刻下降</strong>，甚至会<em>先涨</em>：删除产生的标记、以及为承接后续写入而新建的 segment，都和旧 segment 并存，要等 merge 完成才回收。merge 是 ES 里最容易被忽略、却最重的隐藏 I/O 成本——它在后台默默重写整段整段的数据，能在写入高峰把磁盘读写吃满。"删了为什么磁盘没降""明明没怎么写为什么 I/O 这么高"，根都在这里。</p>
+      </div>
+
+      <h3>带来的代价</h3>
+
+      <p>merge 把"读到稳定快照、写走顺序追加"的好处，换成了一项后台开销：被删 / 被更新文档在 merge 前持续占用磁盘（<strong>空间回收滞后</strong>），而 merge 本身是重 I/O 的整段重写，与正常读写争抢磁盘带宽。ES 用一套策略限制并发 merge 数与速率来平摊这份成本，但它无法被消除——只能被调度。这也是为什么"段不可变"虽然让读路径干净，却必然附带一个永远在后台运转的 merge。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>对一个 index 执行 <code>DELETE _by_query</code> 删掉一半文档，磁盘占用会立刻降一半吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不会。这些文档只是被 soft-delete——在各自 segment 的 <code>.liv</code> 位图里标了一位，文档数据原封不动留在 segment 里继续占空间。磁盘占用要等后台 merge 把这些段重写、把存活文档搬进新段、丢弃旧段时，才逐步下降。短期内甚至可能因为删除操作本身写入 translog、以及并发的新写入制造新段而<em>略升</em>。</p>
+          <p>它指向的设计点：删除的"逻辑生效"（搜不到了）和"物理回收"（磁盘降了）是分离的两件事，由 merge 这条后台通路连接。想强制立刻回收可以触发 <code>_forcemerge</code>，但那是一次极重的全量重写，只适合冷数据。</p>
+        </details>
+      </div>
+
+      <h3>为什么是"不可变段 + 后台合并"，而不是原地更新</h3>
+
+      <p>把前三节的代价摊开看，会自然冒出一个问题：既然不可变带来了近实时延迟、删除滞后、merge 重 I/O 这么多麻烦，为什么不干脆让 segment 可原地更新？下表对比三条路线，解释为什么 ES（及其底层 Lucene）选了不可变这条。</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 为什么用"不可变段 + 后台合并"而不是原地更新</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>原地更新倒排索引</td>
+            <td>立即可见、无合并开销</td>
+            <td>postings 是有序压缩结构，在中间插 / 删一个 doc id 要重排整段、极难高效；并发读写必须加锁；且无法给搜索一个稳定不变的快照——读到一半底层数据就变了</td>
+          </tr>
+          <tr>
+            <td>每次写都建独立小索引</td>
+            <td>实现简单、天然不可变</td>
+            <td>段爆炸：一个查询要把成百上千个小段的结果合并，读极慢，小段的固定开销也压垮内存</td>
+          </tr>
+          <tr class="selected">
+            <td>不可变段 + 后台 merge</td>
+            <td>顺序追加写得快、读到稳定快照、读路径可无锁、filter 结果可缓存且不失效</td>
+            <td>选中。代价是近实时延迟（refresh）、删除空间滞后回收、merge 占 I/O——本章前三节正是这些代价</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 前向引用 03 章</span>
+        <p>"读路径可无锁 + filter 结果可缓存且不失效"这条优势，到 03 章会兑现成一个具体机制：filter 查询的结果被缓存成<strong>按 segment 的 bitset</strong>，因为 segment 不可变，这份缓存<em>永远不需要失效</em>——细节在 <a href="03-search-path.html#query-filter">03 章 query 与 filter</a>。本章只需记住：不可变这条公理在写路径上付出了延迟和 merge 的代价，到读路径上会以"缓存免失效"的形式连本带利还回来。</p>
+      </div>
+
+      <h2 id="synthesis"><span class="num">2.5</span><span>把三件事拼回一条链路</span></h2>
+
+      <p>refresh / flush / merge 是三件不同的事，触发条件、负责的轴、产出各不相同。混淆它们是写入困惑的总根源，所以单独列一张表钉死区别：</p>
+
+      <table class="compare-table">
+        <caption>表 2.2 · refresh / flush / merge 三者对照</caption>
+        <thead>
+          <tr><th>操作</th><th>负责哪条轴</th><th>默认触发</th><th>产出 / 效果</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>refresh</td>
+            <td>可见性</td>
+            <td>~1s（且 index 近 30s 被查过）</td>
+            <td>buffer → 新 segment、重开 reader，新文档可被搜到</td>
+          </tr>
+          <tr>
+            <td>flush</td>
+            <td>持久化</td>
+            <td>translog 达 512MB 或周期到点</td>
+            <td>把内存 segment fsync 落盘，清空已落盘部分的 translog</td>
+          </tr>
+          <tr>
+            <td>merge</td>
+            <td>空间 / 段数</td>
+            <td>后台按段数与大小启发式</td>
+            <td>小段重写成大段，真正丢弃 soft-deleted 文档、回收空间</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>把一条文档的完整旅程串起来：被索引 → 同时进 buffer 和 translog（已持久化、未可见）→ 下次 refresh 写成新 segment、可被搜到（已可见、仍在文件缓存）→ 下次 flush 把 segment fsync 落盘、清 translog（已落盘）→ 若干次写入后，它所在的小段被 merge 进大段；若期间它被删 / 被更新，旧版本在这次 merge 里被真正丢弃。四段路、三件事，全是"segment 不可变"这一条公理的连续推论。</p>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>用一句话说清 refresh、flush、merge 各自<strong>负责什么</strong>、各自<strong>默认什么时候</strong>发生。</li>
+          <li>一条刚写入、还没 refresh 的文档，此刻服务器断电，数据会丢吗？为什么？这说明可见性和持久化是什么关系？</li>
+          <li>对 <code>text</code> 字段写入 <code>"Quick Foxes"</code>、再用 <code>term: "Quick Foxes"</code> 查，为什么查不到？换成什么查询、或换成什么字段类型能查到？</li>
+          <li><strong>（设计层）</strong>为什么 refresh 和 flush 要拆成两件独立的事，而不是合并成一个"落盘并可见"的单一操作？合并会牺牲掉什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>refresh 负责<em>可见性</em>：把 buffer 写成新 segment、重开 reader，使新文档可搜，默认约 1 秒一次（且该 index 近 30s 被查过）。flush 负责<em>持久化</em>：把内存 segment fsync 落盘、清空 translog，默认在 translog 达阈值（512MB）或周期到点时发生。merge 负责<em>段数与空间</em>：把小段重写成大段、顺带真正丢弃 soft-deleted 文档回收空间，后台按段数 / 大小启发式触发。</li>
+            <li>不会丢。每个写操作在进 buffer 的同时已追加到 translog，断电重启后重放 translog 即可恢复这条文档。这说明<em>持久化（translog 兜底）和可见性（refresh）是两条独立的轴</em>：文档可以"已持久化但还不可见"——在 translog 里崩溃不丢，但因为没 refresh 而搜不到。</li>
+            <li><code>text</code> 字段过 analyzer，<code>"Quick Foxes"</code> 被切并规范化成 term（如 <code>quick</code>、<code>fox</code>），词典里不存在 <code>Quick Foxes</code> 这个整体；而 <code>term</code> 查询不过 analyzer、拿原串精确比对 term，对不上。改用 <code>match: "Quick Foxes"</code>（查询词过同一 analyzer、再匹配 term）能查到；或把字段设成 <code>keyword</code>（整段当一个 term 存），再用 <code>term</code> 精确匹配整个值。</li>
+            <li>因为它们各自换的是不同的东西，合并会逼这两笔交易绑死、互相拖累。可见性想要<em>低延迟</em>（约 1 秒就让用户搜到），但 refresh 生成的新 segment 起初只在文件系统缓存里，并不昂贵；持久化想要的是<em>崩溃不丢</em>，要靠昂贵的 fsync 落盘。若合并成"落盘即可见"，要么每秒都 fsync（把 1 秒可见延迟的代价抬成每秒一次磁盘同步，写吞吐崩）、要么把可见延迟拖到 flush 周期那么长（用户要等很久才搜得到）。拆开后，refresh 用便宜的"重开 reader"买低延迟可见，translog 用便宜的"顺序追加"买持久化、把昂贵的 fsync 攒批到 flush——两笔交易各自取到最优。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>每秒百万文档、查询容忍 30s 延迟的日志场景，refresh_interval 怎么调？</h3>
+        <p>一个日志写入场景：每秒约百万条文档涌入，但查询侧完全能容忍最新数据 30 秒后才可见。保持默认 <code>refresh_interval: 1s</code> 会发生什么？把它调成 <code>30s</code>（甚至写入期间设成 <code>-1</code> 关掉自动 refresh）能换来什么？沿着 refresh → segment → merge 这条链路推一遍代价的流向。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>默认 1s 时，每秒都把 buffer 刷成一个新 segment——百万文档 / 秒意味着海量小段被持续生产，而段越碎，后台 merge 要重写合并的工作量越大，写入高峰期 merge 抢走的磁盘 I/O 越多，反过来拖慢写入本身。把 refresh_interval 拉到 30s，等于让 buffer 多攒 30 倍的数据再一次性刷成<em>一个更大的</em> segment：单位时间内的段数量骤降，merge 压力随之大幅下降，写吞吐显著回升。代价正好是查询侧愿意付的那个：可见延迟从 1s 变成最长 30s。这就是"用查询能容忍的延迟，去换写入侧的段数和 merge 开销"——refresh 的快慢，最终是在 segment 数量和 merge I/O 上结账。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.elastic.co/docs/manage-data/data-store/near-real-time-search">Near real-time search</a>（官方 · 近实时与 refresh 机制）</li>
+          <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-refresh.html">Refresh API</a>（官方 · <code>refresh=true</code> / <code>wait_for</code> 语义与代价）</li>
+          <li><a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/index-modules-translog.html">Translog</a>（官方 · 事务日志、durability 与 flush）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 名词地图</span>
+        </a>
+        <a href="03-search-path.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 检索路径</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#inverted-index" data-toc-target="inverted-index">2.1 倒排索引</a></li>
+        <li><a href="#refresh" data-toc-target="refresh">2.2 refresh 近实时</a></li>
+        <li><a href="#translog" data-toc-target="translog">2.3 translog / flush</a></li>
+        <li><a href="#merge" data-toc-target="merge">2.4 删除与 merge</a></li>
+        <li><a href="#synthesis" data-toc-target="synthesis">2.5 拼回链路</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

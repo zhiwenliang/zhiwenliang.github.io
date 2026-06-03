@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 带过滤的检索 · pgvector</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" integrity="sha384-rCCjoCPCsizaAAYVoz1Q0CmCTvnctK0JkfCSjx7IIxexTBg+uCKtFYycedUjMyA2" crossorigin="anonymous">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-model.html">01 数据模型</a><span class="sep">—</span>
+    <a href="02-index-build.html">02 索引构建</a><span class="sep">—</span>
+    <a href="03-mvcc-lifecycle.html">03 生命周期</a><span class="sep">—</span>
+    <a href="04-filtering.html" class="current">04 过滤检索</a><span class="sep">—</span>
+    <a href="05-landscape.html">05 选型前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04 · ★ 核心</p>
+        <h1>带过滤的检索：RAG 真正的难处</h1>
+        <p class="recap">前三章讲了向量怎么存（01）、索引怎么建（02）、建完怎么在 MVCC 里腐烂（03）。这一章把它们拧成一股：当查询同时要 <code>WHERE tenant_id = 42</code> <strong>和</strong> <code>ORDER BY embedding &lt;=&gt; $1</code> 时会发生什么。这正是把 RAG demo 变成多租户生产系统时第一个撞上的墙。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>带 <code>WHERE</code> 的向量查询是一道 planner 选择题，有三条计划，各有代价。</li>
+          <li>默认那条（post-filter）会<strong>欠返</strong>——返回不足 <code>LIMIT k</code> 条，根因是 §1.4 的排序契约。</li>
+          <li>三条出路：iterative scan（0.8.0）、partial index、先 B-tree 精确排序——按<strong>过滤选择性</strong>选。</li>
+          <li>planner "有索引却不走"是成本估算或 §1.4 契约被破坏的结果，用 <code>EXPLAIN</code> 诊断。</li>
+          <li>稠密向量叠加词法检索（BM25 / tsvector）+ RRF 融合，是 RAG 召回的生产标配。</li>
+        </ul>
+      </section>
+
+      <!-- ============ §4.1 ============ -->
+      <h2 id="s41"><span class="num">4.1</span><span>planner 的三选一</span></h2>
+
+      <p>回到那条贯穿全教程的查询。它把关系过滤和向量排序焊在一起：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">filtered-query.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-fq">复制</button>
+        </div>
+<pre id="c-fq"><code class="language-sql">SELECT id, content
+FROM   doc_chunks
+WHERE  tenant_id = 42 AND lang = 'zh'   -- 关系过滤：B-tree 的活
+ORDER  BY embedding &lt;=&gt; $1               -- 向量排序：HNSW 的活
+LIMIT  10;</code></pre>
+      </div>
+
+      <p class="one-liner">向量索引只管 <code>ORDER BY 距离 + LIMIT</code>（§1.4），<code>WHERE</code> 得在别处解决——于是 planner 必须在三条计划里选一条。</p>
+
+      <p>§1.4 那条契约（向量索引是 <code>amcanorderbyop</code> 排序索引，不碰 <code>WHERE</code>）在这里第一次产生真实后果。既然一个索引管排序、另一种手段管过滤，planner 就得决定<strong>谁先谁后</strong>：</p>
+
+      <figure>
+        <svg viewBox="0 0 740 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="planner 对带 WHERE 的向量查询有三条计划：向量索引后过滤、B-tree 后精确排序、iterative scan">
+          <defs>
+            <marker id="p4" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- query node -->
+          <rect x="210" y="24" width="320" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="370" y="46" text-anchor="middle" class="node-label">带 WHERE 的向量查询</text>
+          <text x="370" y="66" text-anchor="middle" class="edge-label">WHERE tenant=42 · ORDER BY emb &lt;=&gt; q · LIMIT 10</text>
+
+          <!-- three arrows -->
+          <line x1="255" y1="80" x2="130" y2="180" class="diagram-ink" marker-end="url(#p4)"/>
+          <text x="170" y="128" class="branch-label">选择 1</text>
+          <line x1="370" y1="80" x2="370" y2="180" class="diagram-ink" marker-end="url(#p4)"/>
+          <text x="380" y="128" class="branch-label">选择 2</text>
+          <line x1="485" y1="80" x2="610" y2="180" class="diagram-ink" marker-end="url(#p4)"/>
+          <text x="560" y="128" class="branch-label">选择 3</text>
+
+          <!-- three plan boxes -->
+          <rect x="20" y="180" width="220" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="130" y="204" text-anchor="middle" class="node-label-accent">① 向量索引 → 后过滤</text>
+          <text x="130" y="224" text-anchor="middle" class="edge-label">post-filter · 默认 · 易欠返</text>
+
+          <rect x="260" y="180" width="220" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="370" y="204" text-anchor="middle" class="node-label">② B-tree → 精确排序</text>
+          <text x="370" y="224" text-anchor="middle" class="edge-label">正确 · 不走 ANN</text>
+
+          <rect x="500" y="180" width="220" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="610" y="204" text-anchor="middle" class="node-label">③ iterative scan</text>
+          <text x="610" y="224" text-anchor="middle" class="edge-label">0.8.0 · 边扫边补够 k</text>
+
+          <!-- verdicts -->
+          <text x="130" y="266" text-anchor="middle" class="edge-label" fill="#B73B2F">RAG 最常见事故 → §4.2</text>
+          <text x="370" y="266" text-anchor="middle" class="edge-label">选择性高时最优</text>
+          <text x="610" y="266" text-anchor="middle" class="edge-label">推荐默认 → §4.3</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>同一条查询，planner 有三条计划。<strong>注意</strong>：朱红的 ① 是<strong>默认</strong>也是<strong>欠返之源</strong>——它先用向量索引取一批，再拿 <code>WHERE</code> 筛，而向量索引一次只吐固定条数（§1.4）。② 和 ③ 是后面要讲的两条解法。</figcaption>
+      </figure>
+
+      <!-- ============ §4.2 ============ -->
+      <h2 id="s42"><span class="num">4.2</span><span>post-filter 为何欠返：预算用完，不是数据不够</span></h2>
+
+      <p class="one-liner">HNSW 先按距离取 <code>ef_search</code> 个候选（固定预算），<code>WHERE</code> 在<strong>之后</strong>才筛——筛剩的未必够 <code>k</code> 条。</p>
+
+      <div class="rationale">
+        <span class="label">为什么会这样</span>
+        <p>把 §1.4 的排序契约和 §2.4 的 <code>ef_search</code> 预算拼起来，结论是强制的：索引的工作是"按距离吐最近的 <code>ef_search</code>（默认 40）个，吐完就停"。<code>WHERE tenant_id = 42</code> 只能在这 40 个里筛。如果 <code>tenant=42</code> 在全表占 10%，这 40 个候选里平均只有 <strong>4 个</strong>属于租户 42——于是 <code>LIMIT 10</code> 的查询返回 4 条。缺口不是"数据库里没有第 5 到第 10 段"，而是"索引的预算在过滤之前就花完了"。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 620 230" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="post-filter 欠返：ef_search 取 40 个候选，WHERE 过滤后只剩 4 个，低于 LIMIT 10 的目标线">
+          <defs>
+            <marker id="f4" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- stage 1 bar: 40 candidates -->
+          <text x="20" y="44" class="edge-label" font-weight="700">① 索引先取</text>
+          <rect x="120" y="30" width="400" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="320" y="55" text-anchor="middle" class="node-label">ef_search = 40 个候选（固定预算）</text>
+
+          <line x1="320" y1="70" x2="320" y2="108" class="diagram-ink" marker-end="url(#f4)"/>
+          <text x="330" y="92" class="edge-label">再过滤 WHERE</text>
+
+          <!-- stage 2 bar: 4 survive -->
+          <text x="20" y="134" class="edge-label" font-weight="700">② 过滤后</text>
+          <rect x="120" y="120" width="40" height="40" rx="4" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="320" y="145" text-anchor="middle" class="edge-label">tenant=42 命中 ~10% → 幸存 4 条</text>
+
+          <!-- LIMIT 10 marker line -->
+          <line x1="220" y1="20" x2="220" y2="178" class="diagram-soft"/>
+          <text x="226" y="196" class="branch-label">LIMIT 10 这条线</text>
+
+          <!-- gap annotation -->
+          <line x1="160" y1="140" x2="218" y2="140" class="diagram-accent"/>
+          <text x="189" y="206" text-anchor="middle" class="edge-label" fill="#B73B2F">缺口</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>条形长度即数量：索引取的 40 个候选（上）经 <code>WHERE</code> 筛剩 4 个（下），<strong>够不到 <code>LIMIT 10</code> 的虚线</strong>。<strong>注意</strong>：这和 §3.1 可见性重检导致的欠返是<strong>同一个形状</strong>——固定预算先取、条件后筛、筛完不够。记住这个形状，两类事故就只是一个根因。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · RAG 里最隐蔽的一个</span>
+        <p>欠返不报错。用户搜出来"只有几条结果"，工程师以为是文档不够，实则是 post-filter 把召回偷偷砍了。选择性越低（命中率越小，比如冷门租户、小语种），欠返越严重。0.8.0 之前这<strong>无解</strong>，只能加大 <code>ef_search</code> 硬扛——但那是在为所有查询付代价。下一节给真正的解法。</p>
+      </div>
+
+      <!-- ============ §4.3 ============ -->
+      <h2 id="s43"><span class="num">4.3</span><span>三条出路：按选择性选</span></h2>
+
+      <p>欠返的解法不止一个，选哪个取决于 <code>WHERE</code> 的<strong>选择性</strong>（命中行占比）和<strong>过滤值的多样性</strong>（有多少种不同的 tenant）。</p>
+
+      <h3>出路一：iterative scan（0.8.0，推荐默认）</h3>
+      <p class="one-liner">让索引"边扫边补"：取满后若不足 <code>k</code> 条，继续往外扩，直到够 <code>k</code> 或撞上上限。</p>
+      <p><strong>底层机制（比文档深一层）</strong>：iterative scan 把"取一次 <code>ef_search</code>"变成"不够就再取一轮"，直到过滤后的幸存数达到 <code>LIMIT</code>，或扫描量撞到 <code>hnsw.max_scan_tuples</code>（默认 <strong>20000</strong>）、内存撞到 <code>hnsw.scan_mem_multiplier × work_mem</code>（默认 <strong>1×</strong>）。两种顺序模式：<code>strict_order</code> 重新按精确距离排序后返回；<code>relaxed_order</code> 按找到的顺序返回（略微乱序，但更快，质量约 95–99%）。默认是 <code>off</code>——<strong>必须显式打开</strong>，这是 0.8.0 之后欠返仍然普遍存在的唯一原因：很多人升级了版本却没开这个开关。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">iterative-scan.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-iter">复制</button>
+        </div>
+<pre id="c-iter"><code class="language-sql">-- 会话级打开（relaxed 更快，多数 RAG 够用）
+SET hnsw.iterative_scan = relaxed_order;
+SET hnsw.max_scan_tuples = 20000;   -- 扫描上限，护栏
+
+SELECT id, content
+FROM   doc_chunks
+WHERE  tenant_id = 42 AND lang = 'zh'
+ORDER  BY embedding &lt;=&gt; $1
+LIMIT  10;   -- 现在能补够 10 条（除非命中实在太稀疏）</code></pre>
+      </div>
+
+      <h3>出路二：partial index（过滤值少且固定时）</h3>
+      <p class="one-liner">为某个固定过滤值单独建一张只含匹配行的索引，让 ANN 直接在"已过滤"的集合上跑。</p>
+      <p>把 <code>WHERE</code> 写进索引定义，索引就只对匹配行建图——过滤变成了<strong>预过滤</strong>（pre-filter），召回完全恢复，因为 ANN 搜的本来就只有 <code>tenant=42</code> 的行。代价：<strong>一个过滤值一张索引</strong>。10 个大租户可以各建一张；10 万个租户行不通——那是 §2.3 构建成本和 §3.2 churn 成本的 10 万倍。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">partial-index.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-partial">复制</button>
+        </div>
+<pre id="c-partial"><code class="language-sql">-- 只为大租户 42 建：图里只有它的行，搜出来必然都属于它
+CREATE INDEX ON doc_chunks
+    USING hnsw (embedding vector_cosine_ops)
+    WHERE tenant_id = 42;</code></pre>
+      </div>
+
+      <h3>出路三：先 B-tree 精确排序（选择性高时其实最优）</h3>
+      <p class="one-liner">命中行很少时，根本不需要 ANN：B-tree 过滤出几十行，逐一算精确距离再排序，又快又对。</p>
+      <p>如果 <code>tenant=42 AND lang='zh'</code> 全表只命中 200 行，对这 200 行做精确距离排序是微秒级的事，还没有任何近似误差。这时 planner <strong>主动放弃</strong>向量索引、走 B-tree + 精确排序，是<strong>正确的选择</strong>——别去强迫它走 HNSW。"索引没被用"不总是 bug（§4.4 详谈）。</p>
+
+      <table class="compare-table">
+        <caption>表 4.1 · 三条出路怎么选</caption>
+        <thead>
+          <tr><th>策略</th><th>适用选择性</th><th>召回</th><th>写入 / 运维成本</th><th>限制</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>iterative scan</td><td>中 · 低</td><td>可调到目标</td><td>仅查询期内存</td><td>需显式开；极稀疏时仍会撞上限</td></tr>
+          <tr><td>partial index</td><td>任意</td><td>完全恢复</td><td>每值一张索引</td><td>过滤值必须少且固定</td></tr>
+          <tr><td>B-tree + 精确排序</td><td>高（命中很少）</td><td>精确 100%</td><td>低</td><td>命中多时退化为慢扫描</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ============ §4.4 ============ -->
+      <h2 id="s44"><span class="num">4.4</span><span>planner 为何"有索引却不走"</span></h2>
+
+      <p class="one-liner">向量索引被忽略，要么是 §1.4 的契约被破坏，要么是 planner 算下来扫表更便宜——两者都用 <code>EXPLAIN</code> 看得见。</p>
+
+      <p>"建了 HNSW 索引，查询还是很慢"是高频求助。根因分两类，都不神秘：</p>
+
+      <p><strong>第一类——契约被破坏（回到 §1.4）</strong>：</p>
+      <ul>
+        <li><code>ORDER BY ... DESC</code>：索引只升序吐，<code>DESC</code> 直接出局（§1.4 的想一想）。</li>
+        <li>没有 <code>LIMIT</code>：要求全量有序，planner 算下来不如全表排序。</li>
+        <li><code>ORDER BY</code> 里是表达式而非纯运算符、或表太小（几百行扫表更快）。</li>
+      </ul>
+
+      <p><strong>第二类——成本估算（§2 的延伸）</strong>：0.8.0 之前 pgvector 把 ANN 扫描的启动成本估得过低（估 ~116，实际可达 ~7200），planner 经常误判，在带 CTE / 复杂谓词的查询里退回 <code>Parallel Seq Scan + Sort</code>。0.8.0 修了成本模型，这类误判大幅减少。诊断永远是同一招：<code>EXPLAIN</code> 看走的是 <code>Index Scan using ..._hnsw</code> 还是 <code>Seq Scan</code> + <code>Sort</code>。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">diagnose.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-diag">复制</button>
+        </div>
+<pre id="c-diag"><code class="language-sql">EXPLAIN (ANALYZE, BUFFERS)
+SELECT id FROM doc_chunks
+ORDER BY embedding &lt;=&gt; $1
+LIMIT 10;
+
+-- 走索引（想要的）：
+--   Index Scan using doc_chunks_embedding_idx on doc_chunks
+-- 没走索引（要排查）：
+--   Sort  ->  Seq Scan on doc_chunks      ← 全表 + 排序，慢</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一张只有 500 行的 <code>doc_chunks</code> 测试表，建了 HNSW 索引，<code>EXPLAIN</code> 却显示 <code>Seq Scan</code>。这是 bug 吗？该怎么办？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p><strong>不是 bug。</strong>500 行全表暴力算 500 次距离是亚毫秒的事，比走 HNSW 图（随机 I/O、§2.2）更快，planner 选 <code>Seq Scan</code> 完全正确。教训：<strong>在小表上验证不了索引是否生效</strong>。要测索引行为，灌到至少几万行；要强制对照精确结果，用 §2.4 的 <code>SET LOCAL enable_indexscan = off</code>，但那是为了量召回，不是生产配置。</p>
+        </details>
+      </div>
+
+      <!-- ============ §4.5 ============ -->
+      <h2 id="s45"><span class="num">4.5</span><span>叠加词法：hybrid 检索与 RRF</span></h2>
+
+      <p class="one-liner">稠密向量擅长语义、漏掉精确关键词；叠加一路词法检索（BM25 / tsvector），用 RRF 融合两个排名，是 RAG 召回的生产标配。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>纯稠密检索会漏掉"必须命中的词"——产品型号 <code>SKU-7731</code>、人名、罕见术语，这些在向量空间里和邻居挤成一团，排不上来。词法检索（精确匹配 token）正好补这个洞。两条召回腿各取所长，但它们的打分不可比（cosine 距离 vs BM25 分），不能直接相加——RRF 用<strong>排名</strong>而非分值来融合，绕开了量纲问题。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：Reciprocal Rank Fusion 给每个文档的得分是 <code>Σ 1/(k + rank_i)</code>，<code>rank_i</code> 是它在第 <code>i</code> 个榜单里的名次，<code>k</code> 取经验值 <strong>60</strong>。<code>k</code> 的作用是压平头部差距——名次第 1 和第 2 的得分差，远小于"上榜与没上榜"的差，于是<strong>同时出现在两个榜单</strong>的文档被显著抬升。这就是 hybrid 想要的效果：双榜共识的结果排最前。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 290" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="hybrid 检索：稠密向量排名与词法 BM25 排名经 RRF 融合成最终排名">
+          <defs>
+            <marker id="h4" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="h4v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- left: dense -->
+          <rect x="34" y="40" width="200" height="120" rx="6" class="diagram-ink node-fill"/>
+          <text x="134" y="62" text-anchor="middle" class="node-label">稠密：emb &lt;=&gt; q</text>
+          <text x="134" y="88" text-anchor="middle" class="edge-label">1. 文档 A</text>
+          <text x="134" y="110" text-anchor="middle" class="edge-label">2. 文档 C</text>
+          <text x="134" y="132" text-anchor="middle" class="edge-label">3. 文档 B</text>
+
+          <!-- right: lexical -->
+          <rect x="466" y="40" width="200" height="120" rx="6" class="diagram-ink node-fill"/>
+          <text x="566" y="62" text-anchor="middle" class="node-label">词法：BM25 / tsvector</text>
+          <text x="566" y="88" text-anchor="middle" class="edge-label">1. 文档 B</text>
+          <text x="566" y="110" text-anchor="middle" class="edge-label">2. 文档 A</text>
+          <text x="566" y="132" text-anchor="middle" class="edge-label">3. 文档 D</text>
+
+          <!-- RRF node -->
+          <rect x="290" y="70" width="120" height="60" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="350" y="94" text-anchor="middle" class="node-label-accent">RRF 融合</text>
+          <text x="350" y="114" text-anchor="middle" class="edge-label">Σ 1/(k+rank)</text>
+
+          <line x1="234" y1="100" x2="290" y2="100" class="diagram-ink" marker-end="url(#h4)"/>
+          <line x1="466" y1="100" x2="410" y2="100" class="diagram-ink" marker-end="url(#h4)"/>
+          <line x1="350" y1="130" x2="350" y2="206" class="diagram-accent" marker-end="url(#h4v)"/>
+          <text x="360" y="170" class="edge-label">k ≈ 60</text>
+
+          <!-- fused result -->
+          <rect x="250" y="206" width="200" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="350" y="230" text-anchor="middle" class="node-label">融合排名</text>
+          <text x="350" y="250" text-anchor="middle" class="edge-label">A · B · C · D</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.3</span>两条召回腿各出一个排名，RRF 按名次融合。<strong>注意</strong>：文档 A 在两个榜单都靠前，融合后稳居第一；只在词法榜出现的 D 仍被纳入——这正是 hybrid 兜住"稠密漏掉的关键词命中"的方式。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">hybrid-rrf.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-rrf">复制</button>
+        </div>
+<pre id="c-rrf"><code class="language-sql">-- 两条召回腿各取 top-40，再用 RRF 融合（k=60）
+WITH dense AS (
+    SELECT id, RANK() OVER (ORDER BY embedding &lt;=&gt; $1) AS rank
+    FROM doc_chunks
+    WHERE tenant_id = 42
+    ORDER BY embedding &lt;=&gt; $1
+    LIMIT 40
+),
+lexical AS (
+    SELECT id, RANK() OVER (ORDER BY ts_rank_cd(content_tsv, q) DESC) AS rank
+    FROM doc_chunks, plainto_tsquery('simple', $2) AS q
+    WHERE tenant_id = 42 AND content_tsv @@ q
+    LIMIT 40
+)
+SELECT COALESCE(d.id, l.id) AS id,
+       COALESCE(1.0/(60 + d.rank), 0)
+     + COALESCE(1.0/(60 + l.rank), 0) AS score
+FROM dense d
+FULL OUTER JOIN lexical l USING (id)
+ORDER BY score DESC
+LIMIT 10;</code></pre>
+      </div>
+
+      <div class="callout tip">
+        <span class="label">提示 · 词法腿正在升级</span>
+        <p>上面用的 <code>ts_rank_cd</code> 是 Postgres 自带全文检索，够用但不是真正的 BM25。截至 2026，ParadeDB <code>pg_search</code> 等扩展把工业级 BM25（<code>USING bm25</code>、<code>@@@</code> 运算符）带进了 Postgres，正在取代 <code>ts_rank</code> 作为 hybrid 的词法腿。第 5 章细讲这条前沿。</p>
+      </div>
+
+      <!-- ============ self-check ============ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里，再点开对照。</p>
+        <ol>
+          <li>用一句话说清：<code>WHERE tenant_id = 42 ORDER BY embedding &lt;=&gt; $1 LIMIT 10</code> 为什么会只返回 4 条？根因在哪一章的哪条规则？</li>
+          <li><code>tenant=42</code> 命中全表 0.5%（极稀疏）。iterative scan、partial index、B-tree 精确排序，你优先选哪个？为什么另外两个不合适？</li>
+          <li>升级到 0.8.0 后欠返还在。最常漏了哪一步？</li>
+          <li>hybrid 检索里，为什么用 RRF 按"排名"融合，而不是把 cosine 距离和 BM25 分直接相加？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>向量索引一次只按距离吐 <code>ef_search</code>（默认 40）个候选，<code>WHERE</code> 在之后才筛；命中率 10% 时筛剩 ~4 条。根因是 §1.4：向量索引是排序索引、只管 <code>ORDER BY+LIMIT</code>，过滤被迫后置（与 §3.1 可见性重检同构）。</li>
+            <li>命中极稀疏（0.5%）时优先 <strong>B-tree + 精确排序</strong>：命中行少，精确算距离又快又准，无近似误差。iterative scan 会一路扫到 <code>max_scan_tuples</code> 上限仍可能补不够；partial index 对单值有效但 0.5% 散落在大量行间、且若过滤值多则不可维护。</li>
+            <li>没执行 <code>SET hnsw.iterative_scan = relaxed_order</code>（或 <code>strict_order</code>）。这个开关默认 <code>off</code>，升级版本不会自动启用。</li>
+            <li>因为两者量纲不可比：cosine 距离和 BM25 分不在一个尺度，直接相加由尺度大的一方主导。RRF 只用名次（<code>1/(k+rank)</code>），天然无量纲，还能让"双榜共识"的文档浮到最前。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>partial index 对 10 个大租户可行，对 10 万个小租户不可行。中间地带怎么办？</h3>
+        <p>你的系统有 10 个大租户（各占全表 8%）和 10 万个长尾小租户（各占 &lt; 0.001%）。给大租户建 partial index、给查询开 iterative scan，分别解决了哪一类？长尾小租户的查询走哪条计划最稳？把"按选择性路由到不同计划"这件事，设计成一个可落地的规则。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>大租户命中率高（8%），post-filter 欠返不严重，但量大——partial index 让它们各自走干净的小图，召回满、延迟低。长尾小租户命中率极低，partial index 维护不起，但正因为命中行少（§4.3 出路三），<strong>B-tree + 精确排序</strong>反而最稳最准。中间的中租户用 iterative scan 兜底。所以路由规则可以按"该过滤值的行数"分三档：很多 → partial index；中等 → iterative scan；很少 → 让 planner 走 B-tree 精确。关键是先量出每个租户的行数分布，再决定阈值。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://github.com/pgvector/pgvector#filtering">pgvector README — Filtering 与 iterative index scans</a>（官方）</li>
+          <li><a href="https://aws.amazon.com/blogs/database/supercharging-vector-search-performance-and-relevance-with-pgvector-0-8-0-on-amazon-aurora-postgresql/">AWS — pgvector 0.8.0 iterative scan 实测</a></li>
+          <li><a href="https://www.thenile.dev/blog/pgvector-080">Nile — pgvector 0.8.0 解决过滤欠返</a></li>
+          <li><a href="https://github.com/pgvector/pgvector/issues/835">pgvector #835 — 为什么 DESC / 无 LIMIT 不走索引（维护者答复）</a></li>
+          <li><a href="https://supabase.com/docs/guides/ai/hybrid-search">Supabase — Hybrid search 与 RRF 融合</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-mvcc-lifecycle.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · MVCC 生命周期</span>
+        </a>
+        <a href="05-landscape.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 选型与前沿</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 planner 三选一</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 post-filter 欠返</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.3 三条出路</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.4 索引为何不走</a></li>
+        <li><a href="#s45" data-toc-target="s45">4.5 hybrid 与 RRF</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

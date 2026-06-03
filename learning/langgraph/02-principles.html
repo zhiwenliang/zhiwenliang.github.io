@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作原理与设计权衡 · LangGraph 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" integrity="sha384-rCCjoCPCsizaAAYVoz1Q0CmCTvnctK0JkfCSjx7IIxexTBg+uCKtFYycedUjMyA2" crossorigin="anonymous">
+
+<style>
+:root {
+  --bg: #FFFFFF; --bg-soft: #FAFAFA; --bg-edge: #F4F4F4;
+  --ink: #0A0A0A; --ink-soft: #525252; --ink-faint: #A3A3A3;
+  --rule: #E5E5E5;
+  --vermilion: #B73B2F; --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F; --code-number: #8B6914; --code-fn: #2C3E50;
+  --sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure: 880px; --page-max: 1280px; --line: 1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15.5px; line-height: var(--line); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip, .callout.example, .callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink { stroke: var(--ink); fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill { fill: var(--bg); }
+.node-fill-accent { fill: var(--vermilion-soft); }
+.node-label { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径"><a href="index.html">00 起点</a><span class="sep">—</span><a href="01-concepts.html">01 概念</a><span class="sep">—</span><a href="02-principles.html" class="current">02 原理</a><span class="sep">—</span><a href="03-comparison.html">03 对比选型</a><span class="sep">—</span><a href="04-self-check.html">04 自测</a></nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02 · 工作原理与设计权衡</p>
+        <h1>工作原理与设计权衡 · 为什么这么设计，以及为什么 checkpoint 是杀手锏</h1>
+        <p class="recap">上一章把状态图的积木铺开了——state、reducer、node、edge、compile、checkpointer 各是什么，已经清楚。这一章讲它<strong>为什么</strong>是这个样子：图为什么比 LCEL 的直线链多了回边和动态分支、reducer 为什么是字段级声明、以及为什么"每步把 state 存档"这一个 checkpoint 动作会变成续跑、time-travel、人在环、故障恢复四件事的共同地基。看不到放弃了哪些备选方案、付出了什么代价，就只是会用，不是懂。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章要建立的心智模型</p>
+        <ul>
+          <li>图 = 直线链 + 回边 + 动态分支 + 可持有状态；多出来的这几样正是 LCEL 表达不了、手写循环又难管的那部分</li>
+          <li>reducer 是字段级的合并协议，把"并发写如何 merge"从临时加锁提升成一阶机制</li>
+          <li>checkpoint 每步存档是 threshold：续跑 / time-travel / 人在环 / 故障恢复都是读写同一份存档的副产品，不是四套独立功能</li>
+          <li>durable execution 有 sync / async / exit 三档 durability，是"一致性 vs 吞吐延迟"这条轴上的三个点</li>
+          <li>interrupt() 暂停—存档—等人工—从存档恢复，把"人在环"做成读写 checkpoint 的一个特例</li>
+        </ul>
+      </section>
+
+      <h2 id="arch"><span class="num">2.0</span><span>整体架构 · compile 一次、逐节点跑、每步存档</span></h2>
+
+      <p>把这一章要讲的五个机制压进一张图：图在 <code>compile()</code> 时被冻结成可运行对象，运行时按"超级步（super-step）"逐节点推进，<strong>每个超级步结束都把整份 state 写进 checkpoint store</strong>。这条"每步存档"的竖线，是后面 s23 / s24 / s25 三节反复回来的同一根轴。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="LangGraph 运行时三层：声明层 compile 成运行时、运行时逐超级步执行、每步把 state 写入 checkpoint store">
+          <defs>
+            <marker id="a2-arr-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="a2-arr-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 左侧分层标签 -->
+          <text x="14" y="62" class="edge-label" font-weight="700">声明层</text>
+          <text x="14" y="200" class="edge-label" font-weight="700" fill="#B73B2F">运行时</text>
+          <text x="14" y="406" class="edge-label" font-weight="700">持久化层</text>
+
+          <!-- 第一层：声明 -->
+          <rect x="150" y="34" width="220" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="260" y="58" text-anchor="middle" class="node-label">StateGraph（声明）</text>
+          <text x="260" y="76" text-anchor="middle" class="edge-label">state + node + edge</text>
+
+          <rect x="420" y="34" width="220" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="530" y="58" text-anchor="middle" class="node-label">invoke / stream</text>
+          <text x="530" y="76" text-anchor="middle" class="edge-label">config 带 thread_id</text>
+
+          <line x1="260" y1="92" x2="260" y2="150" class="diagram-ink" marker-end="url(#a2-arr-ink)"/>
+          <text x="270" y="124" class="edge-label">compile 冻结</text>
+          <line x1="530" y1="92" x2="530" y2="150" class="diagram-ink" marker-end="url(#a2-arr-ink)"/>
+          <text x="540" y="124" class="edge-label">进入循环</text>
+
+          <!-- 第二层：运行时（朱红高亮） -->
+          <rect x="90" y="150" width="580" height="92" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="380" y="176" text-anchor="middle" class="node-label-accent">逐超级步执行循环</text>
+          <text x="210" y="204" text-anchor="middle" class="edge-label">挑选被触发的 node</text>
+          <text x="380" y="204" text-anchor="middle" class="edge-label">并行执行</text>
+          <text x="552" y="204" text-anchor="middle" class="edge-label">reducer 合并输出</text>
+          <text x="380" y="226" text-anchor="middle" class="branch-label">→ 存档 → 下一超级步 / END</text>
+
+          <!-- 第三层：持久化 -->
+          <rect x="150" y="372" width="460" height="74" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="396" text-anchor="middle" class="node-label">Checkpoint store</text>
+          <text x="380" y="414" text-anchor="middle" class="edge-label">InMemorySaver / SqliteSaver / PostgresSaver</text>
+          <text x="380" y="432" text-anchor="middle" class="edge-label">key = (thread_id, checkpoint_id)，存整份 state 快照</text>
+
+          <!-- 运行时 → 持久化：每步存档（朱红竖线） -->
+          <line x1="380" y1="242" x2="380" y2="372" class="diagram-accent" marker-end="url(#a2-arr-v)"/>
+          <text x="392" y="312" class="branch-label">每个超级步都写</text>
+
+          <!-- 持久化 → 运行时：续跑读回（虚线回边，靠右不交叉） -->
+          <path d="M 610 408 L 700 408 L 700 222 L 672 222" class="diagram-soft" marker-end="url(#a2-arr-ink)"/>
+          <text x="700" y="316" text-anchor="middle" class="edge-label">resume</text>
+          <text x="700" y="332" text-anchor="middle" class="edge-label">读回</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.0</span>运行时三层。读这张图盯三点：<strong>一</strong>，<code>compile()</code> 是声明层到运行时的单向冻结边界——冻结后才能做拓扑校验、注入 checkpointer。<strong>二</strong>，朱红那根竖线"每个超级步都写"是全章的引力中心，s23 之后的机制全都在它上面长出来。<strong>三</strong>，右侧那条虚线回边——续跑只是把上一步的快照读回来再往下跑，没有第二套机制。</figcaption>
+      </figure>
+
+      <h2 id="s21"><span class="num">2.1</span><span>为什么用图 · vs LCEL 直线链 · vs 手写 while 循环</span></h2>
+
+      <p class="one-liner">图比 LCEL 的 <code>a | b | c</code> 多了三样东西：<strong>回边</strong>（能跳回前面的 node 形成循环）、<strong>动态分支</strong>（运行时按 state 决定下一步，而不是编译时定死）、<strong>可持有的状态</strong>（跨节点、跨轮次累积的 state）。这三样正是 agent 控制流必需、而直线链结构上给不了的。</p>
+
+      <div class="rationale">
+        <span class="label">运行方式</span>
+        <p>LCEL 的 <code>|</code> 把 Runnable 串成一条有向<em>无环</em>管道：数据从左流到右，每个箭头只能指向后面、不能回指，分支结构在 <code>compile</code> 时就定死。LangGraph 把这条管道换成一张<em>有向图</em>：边可以回指（A 跑完跳回 B，形成循环），可以是 conditional edge（运行时调一个函数、按当前 state 返回下一个 node 名），节点之间共享一份持久 state。所以"让模型自己判断要不要再调一次工具"这种循环，在图里是一条回边；在直线链里结构上画不出来。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.1 · 控制流载体备选方案</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 局限</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>LCEL 直线链（<code>a | b | c</code>）</td><td>极简、调试直观、读代码一眼到底；串好默认带 stream / batch / retry</td><td>无环——画不出回边（循环）；分支只能编译时静态定死，运行时不能按 state 改道；没有跨节点累积的状态</td></tr>
+          <tr><td>手写 <code>while</code> 循环 + if 分支</td><td>Python 原生，循环和分支想怎么写怎么写，零框架</td><td>难观测（每步状态在局部变量里，外面看不见）、难恢复（进程一崩内存全丢，没有存档点）、难中断（没有干净的"暂停—等人工—接着跑"协议）</td></tr>
+          <tr class="selected"><td>状态图（StateGraph）</td><td>回边 + 动态分支 + 持久 state 三样齐全；每步状态进 checkpoint → 可观测 / 可恢复 / 可中断成为副产品</td><td>选中——付出"要先声明 state 与 edge、比直线链多一层心智"的代价</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">带来的代价</span>
+        <p>图的代价是<strong>前置成本</strong>：写一条 LCEL 链三行就跑起来，写一张图要先声明 state（含每个并发字段的 reducer）、再连 edge、再 <code>compile</code>。对"prompt 进、文本出"这种纯直线任务，图是过度设计——这类场景该停在 LCEL。判断分界的那条线是 03 章的主题：<strong>不需要回边、不需要运行时改道、不需要跨步累积状态，就别上图</strong>。把图用在该用的地方，不是把所有东西都塞进图。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>"让模型反复调工具直到它认为答完了"这个 agent 循环——为什么 LCEL 的 <code>|</code> 管道结构上做不出来，换成手写 <code>while</code> 又会缺什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p><strong>LCEL 做不出</strong>：循环需要一条"回到模型节点"的回边，而 <code>|</code> 串出的是有向<em>无环</em>管道，箭头只能往后、不能回指——"反复"这个词在无环结构里没有对应物。次数还是运行时由模型决定的，编译时连展开成几段都不知道。</p>
+          <p><strong>手写 <code>while</code> 缺三样</strong>：① 观测——每轮的中间 state 在局部变量里，外部要看进度得自己埋日志；② 恢复——循环跑到第 7 轮进程崩了，内存里的 state 全丢，没有"从第 6 轮的存档接着跑"；③ 中断——想在某轮插入人工审批，得自己设计暂停信号、状态外存、恢复入口这一整套。状态图把这三样做成了内建：回边表达循环，checkpoint 提供观测和恢复点，interrupt 提供中断协议。后面 s23 / s25 正是讲这三样怎么从"每步存档"长出来。</p>
+        </details>
+      </div>
+
+      <h2 id="s22"><span class="num">2.2</span><span>state + reducer 机制 · 并发写如何 merge</span></h2>
+
+      <p class="one-liner">同一个超级步里若有多个并行 node 写同一个 state 字段，框架不靠加锁、不靠"后写覆盖"猜——它调这个字段声明的 <strong>reducer</strong>（<code>(老值, 新值) → 合并值</code>）把多份写折叠成一份。reducer 是字段级的、声明式的，是一阶机制而不是临时手段。</p>
+
+      <div class="rationale">
+        <span class="label">运行方式</span>
+        <p>每个 state 字段在运行时是一个"带 reducer 的命名收件箱"。超级步期间所有 node 对这个字段的写入先塞进收件箱，超级步结束时框架调一次该字段的 reducer，把收件箱里的内容折叠回字段当前值。没挂 reducer 的字段走默认行为——<strong>覆盖</strong>（last-write-wins）；挂了 <code>Annotated[list, add]</code> 就是拼接；挂了 <code>add_messages</code>（见 <a href="01-concepts.html#s11">§1.1</a>）就是按消息 id 做 upsert。合并语义被提升成字段上的一句声明，而不是散在各 node 里的加锁代码。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 并发写合并机制备选方案</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 局限</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>不写 reducer，默认覆盖（last-write-wins）</td><td>最简单，单线程下完全够用</td><td>并发分支下会丢写——两个 node 同步写 <code>messages</code>，覆盖语义只能留一份，另一份消息丢了；这正是消息累积场景的致命点</td></tr>
+          <tr><td>运行时给字段加锁串行写</td><td>不丢写，并发安全</td><td>合并语义仍未定义（锁只保证不同时写，没说两份怎么合）；还引入锁的复杂度与争用，把并发优势抵消</td></tr>
+          <tr><td>全局单一 reducer 树（Redux 风格）</td><td>全局状态演变可预测、集中</td><td>过度集中——每加一个字段都要改全局那棵 reducer 树，字段之间互相牵连，扩展性差</td></tr>
+          <tr class="selected"><td>字段级 reducer（<code>Annotated[T, fn]</code>）</td><td>每个字段独立声明合并语义、partial update 自然、reducer 就是普通函数不发明新写法</td><td>选中——付出"写并发字段时必须意识到 reducer 的存在"的代价</td></tr>
+        </tbody>
+      </table>
+
+      <p>把覆盖与不写 reducer 的后果摆在一起看，最直观。下面这段把"漏写 reducer"和"正确声明"放进同一张图的两条并发分支（代码用于演示，未在本机运行，标 2026-06）：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">reducer_concurrent.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-22-1">复制</button>
+        </div>
+<pre id="code-22-1"><code class="language-python">from typing import Annotated, TypedDict
+from operator import add
+from langgraph.graph import StateGraph, START, END
+
+class State(TypedDict):
+    # 漏写 reducer 的字段：默认覆盖。两个并发分支同步写它 → 报错
+    winner: str
+    # 正确声明 reducer 的字段：并发写被 add 拼接，谁都不丢
+    notes: Annotated[list[str], add]
+
+def branch_a(state: State) -&gt; dict:
+    return {"winner": "A", "notes": ["a 跑过了"]}
+
+def branch_b(state: State) -&gt; dict:
+    return {"winner": "B", "notes": ["b 跑过了"]}
+
+def join(state: State) -&gt; dict:
+    return {"notes": [f"合并后共 {len(state['notes'])} 条"]}
+
+graph = (
+    StateGraph(State)
+    .add_node("branch_a", branch_a)
+    .add_node("branch_b", branch_b)
+    .add_node("join", join)
+    # 关键：a 和 b 都从 START 出发 → 同一超级步并行 → 同步写同一字段
+    .add_edge(START, "branch_a")
+    .add_edge(START, "branch_b")
+    .add_edge("branch_a", "join")
+    .add_edge("branch_b", "join")
+    .add_edge("join", END)
+    .compile()
+)
+
+# notes 有 add reducer：["a 跑过了", "b 跑过了"] 两条都在，join 看到 2 条
+# winner 无 reducer 又被两个并发分支同步写 → 抛 InvalidUpdateError：
+#   Can receive only one value per step. Use an Annotated key to handle multiple values.
+result = graph.invoke({"winner": "", "notes": []})
+</code></pre>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">带来的代价</span>
+        <p>字段级 reducer 的代价：<strong>程序员必须主动意识到 reducer</strong>。漏写 <code>Annotated[..., add]</code> 在单线程下毫无症状，一旦开了并发分支就直接抛 <code>InvalidUpdateError</code>——这是新手最常见的崩溃。这是框架的<em>刻意选择</em>：它不替你猜两份并发写该怎么合，而是把"没声明合并语义又并发写"判定成程序员错误、当场报错，而不是悄悄用某种策略合并、留下一个查不出的丢数据 bug。代价换来的是确定性——错误暴露在编码期，不是上线后。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>上面这段把 <code>branch_a</code> 和 <code>branch_b</code> 改成<strong>串行</strong>（START → a → b → join），<code>winner</code> 仍然没有 reducer——还会报 <code>InvalidUpdateError</code> 吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不会。串行时 a 和 b 落在<strong>不同的超级步</strong>：a 在第一步写 <code>winner="A"</code>、存档，b 在第二步写 <code>winner="B"</code>、覆盖成 "B"、再存档。每个超级步对这个字段只有一份写，默认覆盖 reducer 完全能决策，最终 <code>winner=="B"</code>。报错只在<em>同一超级步内多份写</em>且字段无 reducer 时触发。</p>
+          <p><strong>洞察</strong>：是否需要 reducer，取决于<em>会不会在同一超级步里被多个 node 同时写</em>，而不是字段类型。这也解释了为什么"加 Annotated reducer"是绝大多数并发崩溃的标准修法——把同一超级步的多份写定义清楚怎么合，报错就消失了。</p>
+        </details>
+      </div>
+
+      <h2 id="s23"><span class="num">2.3</span><span>checkpoint 持久化机制 · 一个动作，四件事的地基</span></h2>
+
+      <p class="one-liner">checkpointer 在<strong>每个超级步结束</strong>把整份 state 拍一张快照（<code>StateSnapshot</code>）存进 store，按 <code>(thread_id, checkpoint_id)</code> 寻址。续跑、time-travel 调试、人在环、故障恢复——这四件事不是四套独立功能，而是<strong>读写这同一串快照的四种方式</strong>。这是本章最该记住的一句。</p>
+
+      <div class="rationale">
+        <span class="label">运行方式</span>
+        <p>每个超级步推进完，checkpointer 调一次"存"，把当前所有 state 字段的值打包成一个 <code>StateSnapshot</code>（含 <code>values</code> 当前值、<code>next</code> 下一步要跑的 node、<code>config</code> 里的 <code>thread_id</code> 和 <code>checkpoint_id</code>、<code>parent_config</code> 指向上一张快照）写进 store。同 <code>thread_id</code> 的快照串成一条时间线。除了超级步级的整份快照，框架<strong>还在 node（task）级别</strong>记录每个 node 完成时的写入——这是更深一层的细节：一个超级步里 fan-out 出多个 node，其中一个崩了重跑时，已成功 node 的写入是 durable 的、不会被重算。</p>
+      </div>
+
+      <p>下面这张图是全章的论证核心：四件看似不同的能力，箭头全部指回中间那串"每步存档的快照"。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="续跑、time-travel、人在环、故障恢复四件事都指向中心的同一串 checkpoint 快照">
+          <defs>
+            <marker id="ck-arr-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 中心：checkpoint 快照串（朱红） -->
+          <rect x="270" y="140" width="180" height="78" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="170" text-anchor="middle" class="node-label-accent">checkpoint 快照串</text>
+          <text x="360" y="190" text-anchor="middle" class="edge-label">每超级步一张</text>
+          <text x="360" y="206" text-anchor="middle" class="edge-label">(thread_id, ckpt_id)</text>
+
+          <!-- 四角：四种用法 -->
+          <rect x="60" y="40" width="190" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="155" y="62" text-anchor="middle" class="node-label">续跑 / 对话记忆</text>
+          <text x="155" y="80" text-anchor="middle" class="edge-label">同 thread_id 接着追加</text>
+
+          <rect x="470" y="40" width="190" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="565" y="62" text-anchor="middle" class="node-label">time-travel 调试</text>
+          <text x="565" y="80" text-anchor="middle" class="edge-label">指定旧 ckpt_id 重放</text>
+
+          <rect x="60" y="266" width="190" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="155" y="288" text-anchor="middle" class="node-label">人在环 (HITL)</text>
+          <text x="155" y="306" text-anchor="middle" class="edge-label">暂停时落一张快照</text>
+
+          <rect x="470" y="266" width="190" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="565" y="288" text-anchor="middle" class="node-label">故障恢复</text>
+          <text x="565" y="306" text-anchor="middle" class="edge-label">从最后成功快照重启</text>
+
+          <!-- 四条箭头都指向中心 -->
+          <line x1="250" y1="78" x2="288" y2="142" class="diagram-accent" marker-end="url(#ck-arr-v)"/>
+          <line x1="470" y1="78" x2="432" y2="142" class="diagram-accent" marker-end="url(#ck-arr-v)"/>
+          <line x1="250" y1="280" x2="288" y2="216" class="diagram-accent" marker-end="url(#ck-arr-v)"/>
+          <line x1="470" y1="280" x2="432" y2="216" class="diagram-accent" marker-end="url(#ck-arr-v)"/>
+
+          <text x="360" y="338" text-anchor="middle" class="edge-label" font-style="italic">同一份存档，四种读写方式——不是四套独立机制</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>checkpoint 是杀手锏的真正含义。<strong>注意</strong>：四个角上的能力没有各自的存储——续跑是"同 thread_id 接着写"，time-travel 是"挑一张旧快照重放"，人在环是"暂停时也落一张快照"，故障恢复是"从最后一张成功快照重启"。它们共用中心那串快照，所以做一份持久化等于一次拿到四样能力，这是 LangGraph 相对裸 agent 框架的结构性优势。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 2.3 · checkpoint store 实现取舍</caption>
+        <thead>
+          <tr><th>实现</th><th>适用</th><th>代价 / 局限</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>InMemorySaver</code></td><td>本地实验、单测、Notebook 里跑 demo</td><td>进程内 dict，重启即丢——名字里没有 "memory" 的持久含义，生产用它等于没有持久化</td></tr>
+          <tr><td><code>SqliteSaver</code> / <code>AsyncSqliteSaver</code></td><td>单机、本地工作流、小规模部署</td><td>单文件数据库，不适合多进程 / 分布式并发写</td></tr>
+          <tr class="selected"><td><code>PostgresSaver</code> / <code>AsyncPostgresSaver</code></td><td>生产、分布式、多副本——LangSmith 自身用的就是它</td><td>选中（生产首选）——付出"要运维一个 Postgres"的代价；要选对 sync / async 变体匹配调用方式</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">带来的代价</span>
+        <p>"每步整份快照"的代价是<strong>存储与延迟开销</strong>：state 越大、超级步越多，写的字节数和 IO 次数越多。这正是 s24 要解决的——<code>durability</code> 模式让你在"每步都同步落盘"和"攒着异步落盘"之间选。另一处代价是寻址纪律：<code>thread_id</code> 是 LangGraph 里<em>唯一</em>的隔离边界，没有内建的用户 / 租户概念。生产里把它硬编码成 <code>"default"</code>，所有人共用一条时间线，对话历史会互相串台。正确做法是把它当租户 key 设计，比如 <code>thread_id = f"{user_id}:{session_id}"</code>。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>同一个 <code>thread_id</code> 连续 <code>invoke</code> 三次、每次都传初始 state <code>{"count": 0}</code>，<code>count</code> 字段会一直从 0 重新开始吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不会。第一次 invoke 之后 store 里已有这个 thread 的快照；从第二次起，传进去的初始 state <strong>被忽略</strong>——框架在最后一张 checkpoint 之上接着追加，<code>count</code> 从上次的值往下走，不是从 0。这经常让人困惑："每次明明都传了 count=0，为什么它还在累积？"——因为续跑读的是存档，不是这次传进去的初始值。要真正重置，得换一个新的 <code>thread_id</code>。这正印证了 s23 的主线：续跑不过是"在同一串快照后面接着写"。</p>
+        </details>
+      </div>
+
+      <h2 id="s24"><span class="num">2.4</span><span>durable execution · sync vs async durability 的取舍</span></h2>
+
+      <p class="one-liner">既然每步都要存档，那"什么时候真正落盘"就成了一个可调的权衡。LangGraph 用 <code>durability</code> 参数（传给 <code>invoke</code> / <code>stream</code>）给三档：<code>"sync"</code>（每步同步落盘，最强一致、最慢）、<code>"async"</code>（异步落盘，快、有窄故障窗口）、<code>"exit"</code>（只在图结束时落盘，最快、中途崩了不可恢复）。这是"一致性 vs 吞吐 / 延迟"同一条轴上的三个点。</p>
+
+      <div class="rationale">
+        <span class="label">运行方式</span>
+        <p>三档的差别只在"落盘的时机相对于下一步执行"：<br>
+        <strong><code>"sync"</code></strong>——当前超级步的 checkpoint <em>必须先写进 store</em>，下一步才开始。任何时刻崩溃，已跑完的步一定在盘上，可从最后一步精确恢复。代价是每步都卡一次 IO，吞吐和延迟都受影响。<br>
+        <strong><code>"async"</code></strong>——checkpoint 的写入<em>异步进行</em>，同时下一步已经在跑。性能接近不落盘，但存在一个<em>窄故障窗口</em>：如果进程恰好在某些 checkpoint 还没刷进 store 时崩溃，这几步会丢，恢复时回到更早的一致点。<br>
+        <strong><code>"exit"</code></strong>——只在图<em>整体结束</em>（成功、报错或被 interrupt 中断）时才落盘。中途完全不存，性能最好，但进程崩在中间 = 这次运行的中间状态全丢、无法续跑。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.4 · durability 三档取舍</caption>
+        <thead>
+          <tr><th>模式</th><th>落盘时机</th><th>一致性 / 故障窗口</th><th>性能</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>"exit"</code></td><td>仅图结束时</td><td>最弱——中途崩则本次运行中间态全丢，不可恢复</td><td>最快</td></tr>
+          <tr class="selected"><td><code>"async"</code></td><td>下一步执行的同时异步写</td><td>较强——仅在"写未刷完即崩"的窄窗口丢几步</td><td>快（生产常用默认权衡点）</td></tr>
+          <tr><td><code>"sync"</code></td><td>下一步开始前同步写完</td><td>最强——任意时刻崩都能从最后成功步精确恢复</td><td>最慢（每步一次 IO 开销）</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">带来的代价 · 没有免费的一致性</span>
+        <p>这三档本身就是"代价段"——选哪一个都在拿某样东西换另一样。误区是把 <code>"sync"</code> 当默认猛用：对一个有大量短超级步的高吞吐 agent，每步同步落盘的 IO 会变成主要瓶颈。也别无脑选 <code>"exit"</code> 图快：跑长任务、跑要人工审批的流程时，中途崩溃不可恢复等于前功尽弃。更深一层的安全网在 node 级——即使在一个超级步内，已完成 node 的写入也是单独记录的，所以一个超级步里 fan-out 的多个 node、其中一个失败重跑时，已成功的那些不会被重算。把 <code>durability</code> 当一个<em>按场景调的旋钮</em>：审批 / 长流程偏 <code>sync</code>，高吞吐短步偏 <code>async</code>，一次性纯计算可考虑 <code>exit</code>。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个跑几十个超级步的批量 agent，原本用 <code>durability="sync"</code>，吞吐上不去。换成 <code>"async"</code> 之后吞吐明显改善——这次改动把什么风险<strong>引进来</strong>了？什么场景下这个风险不可接受？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>引进来的是<strong>窄故障窗口</strong>：<code>"async"</code> 让 checkpoint 异步刷盘、下一步同时往前跑，于是存在一小段"某些 checkpoint 还没落到 store、进程已经崩了"的时间——崩在这个窗口里，最近几步会丢，恢复时退回更早的一致点。对纯只读 / 可重算的批处理，丢几步重跑一遍没代价，<code>"async"</code> 划算。但若<em>某个 node 在 interrupt 之后做了不可逆副作用</em>（已经扣过款、已经发过邮件），而记录这步"已完成"的 checkpoint 落在丢失窗口里，恢复后会把这步当没跑过<strong>重做一遍</strong>——重复扣款。这类不可逆副作用 + 强恢复要求的流程，要么用 <code>"sync"</code>，要么在 node 里用 state 标志做幂等守卫（见 s25）。</p>
+        </details>
+      </div>
+
+      <h2 id="s25"><span class="num">2.5</span><span>中断与人在环 · interrupt() 暂停—存档—等人工—恢复</span></h2>
+
+      <p class="one-liner">在 node 内部调 <code>interrupt(payload)</code>，graph 立即暂停、<strong>保存 checkpoint</strong>、把 <code>payload</code> 抛回调用方等人工；调用方决定后用 <code>Command(resume=value)</code> 重新 invoke，被中断的 node <strong>从头整段重跑</strong>，到 <code>interrupt()</code> 这里返回 <code>value</code> 继续。人在环就是"读写同一串 checkpoint"的又一个特例。</p>
+
+      <div class="rationale">
+        <span class="label">运行方式</span>
+        <p>调 <code>interrupt()</code> 触发五步：① graph 在调用点<em>挂起</em>；② 当前 state 经 checkpointer <em>存档</em>（复用 s23 那串快照，没有第二套存储）；③ <code>payload</code> 返回给调用方（<code>invoke</code> 走 <code>__interrupt__</code>，流式走 <code>stream.interrupts</code>）；④ graph <em>无限等待</em>，直到外部 resume；⑤ 用 <code>Command(resume=value)</code> 恢复时，<code>value</code> 成为 <code>interrupt()</code> 的返回值传回 node。关键且反直觉的一点：恢复时运行时<strong>从 node 开头整段重跑</strong>，不是从 <code>interrupt()</code> 那一行续跑——所以 <code>interrupt()</code> <em>之前</em>的代码会在每次 resume 时再执行一遍。这是"暂停—存档—等人工—恢复"四步全都建在 checkpoint 上的直接后果：存得下的是 state（可序列化的 dict），存不下的是函数调用栈，所以只能靠重跑 node、用 state 把走到哪一步表达出来。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.5 · 暂停—恢复机制备选方案</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 局限</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>编译时静态暂停点（旧 <code>interrupt_before=[...]</code>）</td><td>无运行时开销、拓扑上可视</td><td>只能在 node 边界停，不能 node 内任意位置暂停；不能按条件触发；payload 得从 state 反推</td></tr>
+          <tr><td>generator / 协程 yield 式暂停</td><td>保留调用栈，恢复时在 yield 处续跑、不重复前面的代码</td><td>调用栈无法序列化 → 跨进程 / 跨重启不可恢复 → 与"暂停状态要进 checkpoint 持久化"根本冲突</td></tr>
+          <tr><td>外部 callback / webhook 暂停</td><td>极灵活，可对接任意外部审批系统</td><td>把分布式回调的复杂度甩给框架使用者，大多数场景过度</td></tr>
+          <tr class="selected"><td><code>interrupt()</code> raise—存档，<code>Command(resume=)</code> 重跑 node</td><td>暂停态全进可序列化的 checkpoint、跨重启可恢复、payload 任意 JSON、可 node 内任意位置 + 条件触发</td><td>选中——付出"<code>interrupt()</code> 之前的代码会在 resume 时重跑"的代价</td></tr>
+        </tbody>
+      </table>
+
+      <p>下面这张图把 s23 的 checkpoint、s25 的 interrupt、s22 的 reducer 串成一条人在环的完整往返——一份审批从暂停到带修改恢复，三个机制各出一份力：</p>
+
+      <figure>
+        <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="人在环往返：node 调 interrupt 暂停存档、抛 payload 给人工、Command resume 回来从头重跑 node、update 经 reducer 折回 state">
+          <defs>
+            <marker id="hl-arr-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="hl-arr-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- 左：node 调 interrupt -->
+          <rect x="40" y="40" width="200" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="66" text-anchor="middle" class="node-label">node 内 interrupt()</text>
+          <text x="140" y="84" text-anchor="middle" class="edge-label">挂起 + 抛 payload</text>
+
+          <!-- 下：checkpoint 存档（朱红强调，s23 复用） -->
+          <rect x="40" y="200" width="200" height="64" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="140" y="226" text-anchor="middle" class="node-label-accent">存进 checkpoint</text>
+          <text x="140" y="244" text-anchor="middle" class="edge-label">复用 s23 的快照串</text>
+
+          <line x1="140" y1="104" x2="140" y2="200" class="diagram-accent" marker-end="url(#hl-arr-v)"/>
+          <text x="150" y="156" class="branch-label">暂停即存档</text>
+
+          <!-- 右上：人工审批 -->
+          <rect x="480" y="40" width="200" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="66" text-anchor="middle" class="node-label">人工审批 / 修改</text>
+          <text x="580" y="84" text-anchor="middle" class="edge-label">可改要删的表名等</text>
+
+          <line x1="240" y1="72" x2="478" y2="72" class="diagram-ink" marker-end="url(#hl-arr-ink)"/>
+          <text x="360" y="62" text-anchor="middle" class="edge-label">payload 抛给人工</text>
+
+          <!-- 右下：Command resume，带 update -->
+          <rect x="480" y="200" width="200" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="222" text-anchor="middle" class="node-label">Command(resume, update)</text>
+          <text x="580" y="240" text-anchor="middle" class="edge-label">node 从头整段重跑</text>
+          <text x="580" y="256" text-anchor="middle" class="branch-label">update 经 reducer 折回 state</text>
+
+          <line x1="580" y1="104" x2="580" y2="200" class="diagram-ink" marker-end="url(#hl-arr-ink)"/>
+          <text x="590" y="156" class="edge-label">决定后恢复</text>
+
+          <!-- 底部回边：resume 把控制交回 checkpoint 串往下跑（虚线，不交叉） -->
+          <path d="M 480 240 L 360 240 L 360 232 L 242 232" class="diagram-soft" marker-end="url(#hl-arr-ink)"/>
+          <text x="360" y="290" text-anchor="middle" class="edge-label" font-style="italic">读回快照 → 注入 resume 值 → 接着往下跑</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>人在环的一次完整往返。<strong>注意</strong>：左下的"存进 checkpoint"（朱红）就是 s23 那串快照，人在环没有新建任何存储；右下 <code>Command</code> 的 <code>update</code> 字段经 s22 的 reducer 折回 state（审批人改表名走的是按字段合并、不是覆盖）。少了 checkpoint 就找不回暂停点、少了 reducer 审批人就只能 yes/no 不能改——三个机制缺一不可。这正是 03 章对比里其他框架"做不了等小时级人工审批"的根因。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">带来的代价 · 写 node 的纪律</span>
+        <p>因为 resume 时 node <strong>从头整段重跑</strong>，<code>interrupt()</code> <em>之前</em>的所有副作用（发邮件、扣款、写库、调外部 API）都会重复触发。三条纪律：① 把副作用放在 <code>interrupt()</code> <em>之后</em>；② 能拆就把副作用拆进单独的 node；③ 必须放在前面又挪不动的，用 state 标志做幂等守卫——<code>if not state.get("email_sent"): send_email(...); return {"email_sent": True}</code>。还有一条：一个 node 里多次 <code>interrupt()</code> 时，恢复值与各次调用是<strong>严格按出现顺序（下标）匹配</strong>的，所以别按非确定数据条件性地跳过或循环 interrupt——顺序错位会把 A 的回答喂给 B。</p>
+      </div>
+
+      <h2 id="synthesis"><span class="num">2.6</span><span>跨机制综合 · 一份"删库前审批"工作流</span></h2>
+
+      <p>五个机制到这里都是单点。把它们拼起来看一个贴近生产的需求最能看清协同：<strong>agent 要调"删生产库表"工具时，弹给人审批；审批通过才执行；审批人可以修改具体要删哪些表</strong>。这条线把 s21–s25 几乎全用上了——下面这道综合题请先自己拆，再对答案。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想 · 跨机制综合</span>
+        <p>把上面这个"删库前审批"工作流，拆成本章哪几个机制的组合？每个机制在这里具体承担什么？哪些地方藏着会反咬一口的代价？</p>
+        <details>
+          <summary>展开答案（先认真拆完再点）</summary>
+          <ol>
+            <li><strong>s21 用图</strong>：这是带审批回环 + 条件分支的流程（审批拒绝要回到规划、通过才往执行走），LCEL 直线链结构上做不出，必须用 StateGraph。节点：<code>planner</code> → <code>approval_gate</code> → <code>execute</code>。</li>
+            <li><strong>s22 reducer</strong>：state 里 <code>proposed_tables</code>（默认覆盖即可）、<code>audit_log: Annotated[list, add]</code>（审计记录要拼接不能覆盖）。审批人改表名时，<code>Command(resume=..., update={"proposed_tables": [...]})</code> 的 <code>update</code> 经 reducer 折回 state，execute 才拿得到改后的值。</li>
+            <li><strong>s23 checkpoint + thread_id</strong>：审批可能等几分钟到几小时，暂停点必须存档才找得回；<code>thread_id</code> 保证 A 用户的审批不会触发 B 用户的执行——它是唯一隔离边界，别硬编码。</li>
+            <li><strong>s24 durability</strong>：删库是不可逆副作用，要恢复必须可靠 → 这条流程偏向 <code>"sync"</code>，或至少不能用会丢步的 <code>"exit"</code>；否则恢复时可能把"已删"当没删重做。</li>
+            <li><strong>s25 interrupt</strong>：<code>approval_gate</code> 内调 <code>interrupt({"tables": state["proposed_tables"]})</code> 暂停、抛表名给人工。</li>
+            <li><strong>代价（必踩）</strong>：真正的删表副作用必须放在 <code>interrupt()</code> <em>之后</em>（在 <code>execute</code> 里），且 <code>planner</code> / <code>approval_gate</code> 不能有不可逆副作用——否则 resume 时 node 从头重跑会让它们再执行一次。这是 s25 的纪律与 s24 的故障窗口在同一处叠加的地方。</li>
+          </ol>
+          <p>一句话收束：人在环 = <strong>图（回环）+ checkpoint（找回暂停点）+ interrupt（触发暂停）+ reducer（折回审批修改）</strong>，再用 durability 决定恢复有多可靠。任意拆掉一个，这条流程就缺一块。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程作答。直接展开 = 把这节当再读一遍。
+        </p>
+        <ol>
+          <li>图比 LCEL 直线链多出来的三样东西是什么？手写 <code>while</code> 循环又缺哪三样？</li>
+          <li>state 字段不写 reducer 时默认行为是什么？什么<em>具体条件</em>下这个默认会触发 <code>InvalidUpdateError</code>？</li>
+          <li>为什么说"checkpoint 是杀手锏"？续跑 / time-travel / 人在环 / 故障恢复这四件事和 checkpoint 是什么关系？</li>
+          <li><code>durability</code> 的 <code>"sync"</code> 与 <code>"async"</code> 各自的落盘时机、一致性、性能如何取舍？<code>"async"</code> 引入了什么风险？</li>
+          <li><code>interrupt()</code> 恢复时 node 是从中断那一行续跑、还是从头重跑？这个选择的根本原因是什么？带来什么纪律？</li>
+          <li><strong>跨机制综合</strong>：人在环由本章哪几个机制共同实现？任意去掉一个会发生什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>图多出：<strong>回边</strong>（循环）、<strong>动态分支</strong>（运行时按 state 改道）、<strong>可持有的跨节点状态</strong>。手写 <code>while</code> 缺：<strong>可观测</strong>（中间状态在局部变量里）、<strong>可恢复</strong>（崩了内存全丢、无存档点）、<strong>可中断</strong>（没有干净的暂停—等人工—恢复协议）。后三样在图里由 checkpoint + interrupt 内建提供。</li>
+            <li>默认行为是<strong>覆盖</strong>（last-write-wins）。触发条件不是字段类型，而是<em>同一个超级步内被多个并行 node 同时写、且该字段没挂 reducer</em>——框架无法决策保哪份，当场抛 <code>InvalidUpdateError</code>。串行写（落在不同超级步）则不报错，最后一次覆盖生效。修法是给字段加 <code>Annotated[..., reducer]</code> 定义清楚怎么合。</li>
+            <li>因为续跑 / time-travel / 人在环 / 故障恢复<strong>不是四套独立功能，而是读写同一串"每步存档的快照"的四种方式</strong>：续跑 = 同 thread_id 接着追加；time-travel = 挑一张旧 checkpoint_id 重放；人在环 = 暂停时也落一张快照、resume 时读回；故障恢复 = 从最后一张成功快照重启。做一份持久化等于一次拿到四样能力，这是它相对裸 agent 框架的结构性优势。</li>
+            <li><code>"sync"</code>：下一步开始前同步把 checkpoint 写完 → 一致性最强（任意时刻崩都能从最后成功步精确恢复）、性能最慢（每步一次 IO）。<code>"async"</code>：下一步执行的同时异步写 → 性能快、但有<strong>窄故障窗口</strong>（写未刷完即崩会丢最近几步，恢复退回更早的一致点）。风险即这个丢步窗口；对带不可逆副作用又要可靠恢复的流程不可接受。（还有更快但中途崩不可恢复的 <code>"exit"</code>。）</li>
+            <li><strong>从头整段重跑</strong>，不是从中断那行续跑。根本原因：暂停态要进 checkpoint 持久化、跨重启可恢复，而能序列化的是 state（dict），函数调用栈序列化不了——所以只能重跑 node、用 state 表达"走到哪了"。带来的纪律：副作用必须放在 <code>interrupt()</code> 之后，或拆进单独 node，或用 state 标志做幂等守卫；多次 interrupt 时恢复值按下标严格匹配，不能条件性跳过。</li>
+            <li>人在环 = <strong>图（提供审批回环）+ checkpoint（暂停时存档、找回暂停点）+ interrupt（在 node 内触发暂停并抛 payload）+ reducer（让 <code>Command.update</code> 折回 state）</strong>，再由 durability 决定恢复可靠度。<br>去掉 <strong>checkpoint</strong>：暂停点重启即丢，分钟级以上的等待无法可靠实现，退化成同进程同步等待。<br>去掉 <strong>interrupt</strong>：只能用旧的 <code>interrupt_before</code> 在 node 边界静态停，不能 node 内任意位置、不能条件触发、不能带 payload。<br>去掉 <strong>reducer</strong>：<code>Command.update</code> 无法干净折回 state，审批人只能 yes/no、不能修改要删的表名，退化成开关式审批。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给"审批超时自动降级"设计存档与恢复语义</h3>
+        <p>把 s25 的审批流程再推一步：要求"人工审批<strong>超过 30 分钟没响应就自动按拒绝处理</strong>，并且整个过程崩溃后能恢复到正确状态"。基于本章理解回答：(a) 这个 30 分钟的等待计时，状态应该存在哪里才能跨进程崩溃存活——存在 node 的局部变量里行不行，为什么？(b) <code>durability</code> 该选哪一档，理由？(c) "超时降级"这个动作本身要不要走 <code>interrupt()</code> 的 resume 路径，还是另起一个 node 判定？写出你的节点拆分与 state 字段设计骨架（不需要能跑）。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>核心矛盾：计时这种"经过了多久"的信息，一旦放进 node 局部变量，进程崩了就丢——而本章反复强调能跨重启存活的<em>只有进 checkpoint 的 state</em>。所以要把"审批发起时间戳"写进 state（<code>approval_started_at</code>），让它进快照；恢复时拿"当前时间 − 存档里的发起时间"重新判断是否已超时，而不是依赖一个活着的计时器。</p>
+          <pre style="font-family: var(--mono); font-size: 12px; background: var(--bg-soft); padding: 8px; border-radius: 2px; overflow-x: auto;">class S(TypedDict):
+    proposed_tables: list[str]
+    approval_started_at: float          # 进 checkpoint，崩了也在
+    decision: str                       # "approved" / "rejected" / ""
+    audit_log: Annotated[list, add]
+
+# approval_gate：发起审批前先盖时间戳（注意幂等——只盖一次）
+def approval_gate(state: S):
+    if not state.get("approval_started_at"):
+        state = {"approval_started_at": now()}   # 返回 partial，先存档
+    # interrupt 抛给人工；resume 时此 node 从头重跑，
+    # 上面的 if 守卫保证时间戳不会被重置
+    answer = interrupt({"tables": state["proposed_tables"]})
+    return {"decision": answer, "audit_log": ["human responded"]}
+
+# 超时判定单独一个 node（不走 resume，而是恢复后由它重新算）：
+def timeout_check(state: S):
+    if now() - state["approval_started_at"] > 1800 and not state["decision"]:
+        return {"decision": "rejected", "audit_log": ["auto-rejected: timeout"]}
+    return {}</pre>
+          <p>(b) 选 <code>"sync"</code>（或至少非 <code>"exit"</code>）：审批后接的是删库这类不可逆副作用，恢复必须可靠，不能容忍 <code>"async"</code> 的丢步窗口把"已审批/已超时"的状态丢掉。(c) "超时降级"不该塞进 resume——resume 是"人工真的回应了"的路径；超时是"人工<em>没</em>回应"，更自然的是恢复后由独立的 <code>timeout_check</code> node 拿存档里的时间戳重新判定。两者都改写同一个 <code>decision</code> 字段，execute 只认 <code>decision</code>。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考 · Further Reading</h3>
+        <ul>
+          <li><a href="https://docs.langchain.com/oss/python/langgraph/durable-execution" rel="noopener">LangGraph · Durable Execution</a>（官方，2026-06 查阅 · <code>durability</code> 的 sync / async / exit 三档与 node 级 pending writes）</li>
+          <li><a href="https://docs.langchain.com/oss/python/langgraph/persistence" rel="noopener">LangGraph · Persistence</a>（官方 · checkpoint / StateSnapshot / thread_id / time-travel / 三种 saver）</li>
+          <li><a href="https://docs.langchain.com/oss/python/langgraph/interrupts" rel="noopener">LangGraph · Interrupts</a>（官方 · interrupt() 与 Command(resume) 的暂停—存档—重跑语义、多 interrupt 按序匹配）</li>
+          <li><a href="https://www.langchain.com/blog/langchain-langgraph-1dot0" rel="noopener">LangChain & LangGraph v1.0 发布博客</a>（维护者，2025-10-22 · v1.0、agent 跑在 LangGraph 执行引擎上、create_agent 可下沉 StateGraph）</li>
+          <li><a href="https://research.google/pubs/pub37252/" rel="noopener">Pregel: A System for Large-Scale Graph Processing</a>（Malewicz et al. 2010 · 超级步执行模型的源头）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 核心概念</span>
+        </a>
+        <a href="03-comparison.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 横向对比与选型</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#arch" data-toc-target="arch">2.0 整体架构</a></li>
+        <li><a href="#s21" data-toc-target="s21">2.1 为什么用图</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 state + reducer</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 checkpoint 持久化</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 durable execution</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 中断与人在环</a></li>
+        <li><a href="#synthesis" data-toc-target="synthesis">2.6 跨机制综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

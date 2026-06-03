@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 索引构建与存储 · pgvector</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css" integrity="sha384-rCCjoCPCsizaAAYVoz1Q0CmCTvnctK0JkfCSjx7IIxexTBg+uCKtFYycedUjMyA2" crossorigin="anonymous">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* SVG utility classes for hand-drawn diagrams */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-model.html">01 数据模型</a><span class="sep">—</span>
+    <a href="02-index-build.html" class="current">02 索引构建</a><span class="sep">—</span>
+    <a href="03-mvcc-lifecycle.html">03 生命周期</a><span class="sep">—</span>
+    <a href="04-filtering.html">04 过滤检索</a><span class="sep">—</span>
+    <a href="05-landscape.html">05 选型前沿</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>索引构建与存储</h1>
+        <p class="recap">第 1 章定下排序契约：向量索引只服务 <code>ORDER BY 距离 ... LIMIT k</code>，HNSW 和 IVFFlat 是它的两个实现。这一章把这两个名字落成 Postgres 里真实的<strong>索引对象</strong>——它们的 DDL 和默认参数、图怎么躺在 8KB 索引页里、构建时为什么会在某个内存阈值上突然慢 10–50 倍，以及一个没人会警告你的事实：默认参数的召回率并不高。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>HNSW 和 IVFFlat 都注册成 PG 的索引访问方法；HNSW 能建在空表上，IVFFlat 必须等数据灌完再建。</li>
+          <li>HNSW 的图被拆成 element tuple 和 neighbor tuple，散落在不同的 8KB 页上——检索是<strong>随机 I/O 密集型</strong>，图一旦超出内存延迟就崩。</li>
+          <li>构建在内存里跑，直到 <code>maintenance_work_mem</code> 装满，越过这道坎就掉进逐元组落盘的慢路径——这就是"构建悬崖"。</li>
+          <li>build 参数（<code>m</code> / <code>ef_construction</code> / <code>lists</code>）和 query 参数（<code>ef_search</code> / <code>probes</code>）各管一头；默认值给的召回率很普通，且<strong>没有任何提示</strong>。</li>
+        </ul>
+      </section>
+
+      <p>沿用第 1 章的多租户文档块表 <code>doc_chunks</code>（<code>embedding vector(1536)</code>）。第 1 章建索引时只写了 opclass、没碰参数；这一章把 <code>WITH (...)</code> 里的每个数字摊开，看它们如何决定构建时间、索引体积和召回率。</p>
+
+      <!-- ============ §2.1 ============ -->
+      <h2 id="s21"><span class="num">2.1</span><span>HNSW 与 IVFFlat：两种 PG 访问方法</span></h2>
+
+      <p class="one-liner">HNSW 和 IVFFlat 都是 Postgres 的索引访问方法（access method），同一条 <code>CREATE INDEX</code> 语法、不同的 <code>USING</code> 和参数；它们的本质区别是<strong>能不能建在空表上</strong>。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>第 1 章说"HNSW / IVFFlat 是排序索引"，但没说怎么把它们造出来。落到工程上，第一个要回答的问题不是算法细节，而是：这两个东西在 Postgres 里<strong>是什么对象、怎么建、建之前要不要有数据</strong>。选错顺序，IVFFlat 索引会建出一个几乎没用的结构。</p>
+      </div>
+
+      <p>两者的 DDL 形状一致，差别在 <code>USING</code> 后面的方法名和 <code>WITH</code> 里的构建参数：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">index_methods.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-methods">复制</button>
+        </div>
+<pre id="c-methods"><code class="language-sql">-- HNSW：可以建在空表上，之后每次 INSERT 增量把节点接进图
+CREATE INDEX ON doc_chunks
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);     -- m 默认 16，ef_construction 默认 64
+
+-- IVFFlat：必须先灌数据再建，lists 个质心来自对已有行做 k-means
+CREATE INDEX ON doc_chunks
+    USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 100);                       -- lists 默认 100</code></pre>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：这条"建之前要不要有数据"的差别，根子在两种索引的结构怎么来。HNSW 是一张<strong>增量可生长的图</strong>——空图也是合法的图，每来一行就把它的节点连进去，所以建在空表上、再慢慢 <code>INSERT</code> 完全成立。IVFFlat 不是图，它先把向量空间切成 <code>lists</code> 个单元（cell），每个单元一个质心（centroid），而<strong>质心是对当前表里已有的行跑 k-means 算出来的</strong>。表是空的，就没有行可聚类，质心退化成随机点，整个倒排结构形同虚设。所以 IVFFlat 的铁律是：<strong>先把数据灌进去，再建索引</strong>；数据分布大改之后还得重建。算法层面 HNSW 的贪婪搜索、IVF 的聚类怎么工作，见隔壁 <a href="../vector-database/02-indexing.html">vector-database 教程 02</a>；这一章只把它们当 Postgres 对象看。</p>
+
+      <p>参数怎么取，有经验公式。IVFFlat 的 <code>lists</code> 和 query 端的 <code>probes</code> 都随行数走：</p>
+
+      <table class="compare-table">
+        <caption>表 2.1 · IVFFlat 参数经验值（按行数 N）</caption>
+        <thead>
+          <tr><th>参数</th><th>阶段</th><th>经验取值</th><th>含义</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>lists</code></td><td>build</td><td>N ≤ 1M 取 <code>N/1000</code>；N &gt; 1M 取 <code>sqrt(N)</code></td><td>把空间切成几个单元</td></tr>
+          <tr><td><code>probes</code></td><td>query</td><td><code>sqrt(lists)</code> 起步</td><td>查询时探查几个单元（默认 <strong>1</strong>）</td></tr>
+        </tbody>
+      </table>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 两种访问方法的工程取舍</caption>
+        <thead>
+          <tr><th>维度</th><th>HNSW</th><th>IVFFlat</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>建在空表上</td><td><strong>可以</strong>（增量建图）</td><td>不行（质心需已有数据）</td></tr>
+          <tr><td>构建速度</td><td>慢</td><td>快</td></tr>
+          <tr><td>内存占用</td><td>高</td><td>低</td></tr>
+          <tr><td>召回 / 延迟</td><td>更好</td><td>较低</td></tr>
+          <tr class="selected"><td>定位</td><td><strong>0.5.0 起的默认选择</strong></td><td>legacy，仅低内存 / 快构建场景</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 默认选 HNSW，IVFFlat 是退路</span>
+        <p>pgvector 0.5.0 引入 HNSW 后，它就成了默认选择：同样召回率下延迟更低，且支持增量写入。IVFFlat 没有被删，但定位变成 legacy——只有在内存紧张、要求构建极快、且能接受较低召回的窄场景才选它。换句话说，<strong>新项目默认 HNSW，除非有明确理由退回 IVFFlat</strong>。本章余下三节全部围绕 HNSW 展开，因为它是绝大多数 RAG 检索层的实际选择，也是构建和存储问题真正复杂的那一个。</p>
+      </div>
+
+      <!-- ============ §2.2 ============ -->
+      <h2 id="s22"><span class="num">2.2</span><span>图在索引页里怎么躺</span></h2>
+
+      <p class="one-liner">HNSW 的图被拆成两种 tuple、散落在多张 8KB 页上；检索靠 TID 指针在页之间跳，所以它是<strong>随机 I/O 密集型</strong>——图装不进内存，延迟就崩。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"HNSW 索引要放进内存"是所有调优指南的第一条，但很少有人说<em>为什么</em>。答案不在算法里，在<strong>存储布局</strong>里：图是怎么切成 tuple、摊到页上的，决定了检索的 I/O 模式。看懂这一层，"装进内存"就从一句口诀变成一个能推出来的结论——也解释了第 3 章为什么删改向量会让图越来越碎。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：HNSW 在索引里存两种 tuple。<strong>element tuple</strong>（<code>HnswElementTuple</code>）装一个节点：向量原值、一个 <code>heaptids[]</code> 数组（最多约 10 个堆表 TID，指向这个向量对应的实际数据行）、节点所在的层级（level），以及一个指向<strong>独立的 neighbor tuple</strong> 的指针。neighbor tuple 单独存这个节点的邻居列表，大小约 <code>(level+2) × m</code> 个邻居槽。这两种 tuple 都按普通堆页规则塞进一张张 8KB 页里，<strong>谁和谁同页是不确定的</strong>。索引的 0 号元数据页（metadata page）记着图的<strong>入口点</strong>（entry point）——它的 block 号和页内 offset，每次检索都从这里出发。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="HNSW 存储布局：元数据页存入口点，element tuple 含向量与 heaptids 与邻居指针，邻居指针跳到另一张页上的 neighbor tuple，每跳一次都是随机 I/O，图超出内存即触发缺页">
+          <defs>
+            <marker id="af" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="af-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- metadata page 0 -->
+          <rect x="24" y="40" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="99" y="64" text-anchor="middle" class="node-label">元数据页 0</text>
+          <text x="99" y="84" text-anchor="middle" class="edge-label">entry point</text>
+          <text x="99" y="98" text-anchor="middle" class="edge-label">(block, offset)</text>
+
+          <!-- arrow to element tuple page -->
+          <line x1="174" y1="72" x2="232" y2="72" class="diagram-ink" marker-end="url(#af)"/>
+          <text x="203" y="62" text-anchor="middle" class="edge-label">入口</text>
+
+          <!-- page A: element tuple -->
+          <rect x="232" y="28" width="246" height="120" rx="6" class="diagram-ink node-fill"/>
+          <text x="244" y="46" class="edge-label">索引页 A</text>
+          <rect x="246" y="54" width="218" height="84" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="355" y="74" text-anchor="middle" class="node-label-accent">element tuple</text>
+          <text x="355" y="94" text-anchor="middle" class="edge-label">向量值 + heaptids[]</text>
+          <text x="355" y="110" text-anchor="middle" class="edge-label">level + 邻居指针 ──┐</text>
+          <text x="355" y="128" text-anchor="middle" class="edge-label">heaptids → 堆表数据行</text>
+
+          <!-- neighbor pointer jumps to arbitrary page B -->
+          <line x1="464" y1="116" x2="556" y2="116" class="diagram-accent"/>
+          <line x1="556" y1="116" x2="556" y2="220" class="diagram-accent"/>
+          <line x1="556" y1="220" x2="556" y2="244" class="diagram-accent" marker-end="url(#af-v)"/>
+          <text x="566" y="180" class="branch-label">随机 I/O</text>
+
+          <!-- page B: neighbor tuple, "arbitrary page" -->
+          <rect x="446" y="248" width="246" height="92" rx="6" class="diagram-ink node-fill"/>
+          <text x="458" y="266" class="edge-label">索引页 B（任意一张）</text>
+          <rect x="460" y="274" width="218" height="56" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="569" y="296" text-anchor="middle" class="node-label-accent">neighbor tuple</text>
+          <text x="569" y="316" text-anchor="middle" class="edge-label">(level+2)×m 个邻居 TID</text>
+
+          <!-- each neighbor TID points to yet another element tuple -->
+          <line x1="460" y1="302" x2="360" y2="302" class="diagram-soft" marker-end="url(#af)"/>
+          <rect x="190" y="276" width="170" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="275" y="298" text-anchor="middle" class="node-label">下一个 element</text>
+          <text x="275" y="316" text-anchor="middle" class="edge-label">又在别的页 → 再跳</text>
+
+          <!-- consequence box -->
+          <rect x="500" y="28" width="236" height="92" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="618" y="52" text-anchor="middle" class="node-label-accent">图 &gt; 内存</text>
+          <text x="618" y="74" text-anchor="middle" class="edge-label">每一跳撞 page fault</text>
+          <text x="618" y="92" text-anchor="middle" class="edge-label">→ 延迟成数量级恶化</text>
+          <text x="618" y="110" text-anchor="middle" class="edge-label">"装进内存"是第一杠杆</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>HNSW 一次遍历的物理轨迹：从元数据页的入口点出发，读 element tuple，顺着邻居指针跳到<strong>另一张任意页</strong>上的 neighbor tuple，再顺着每个邻居 TID 跳向下一个 element——每一跳都是一次随机页访问。<strong>注意</strong>：这些页摊在哪里不可控，所以检索是随机 I/O 密集型；一旦图的总体积超过可用内存，每一跳都得从磁盘补页，延迟从毫秒级塌到几十上百毫秒。这就是"HNSW 必须装进内存"的物理根源。</figcaption>
+      </figure>
+
+      <p>把机制推到后果：检索沿图遍历，每一跳都要解引用一个落在<strong>任意页</strong>上的邻居 TID。当整张图能装进 <code>shared_buffers</code> / 操作系统页缓存时，这些跳大多命中内存，延迟是毫秒级。一旦图的体积超过可用内存，落在未缓存页上的那些跳就各自触发一次<strong>缺页</strong>（page fault），要从磁盘把那张页读上来——一次 ANN 检索动辄几十上百跳，延迟随之从毫秒塌到几十甚至上百毫秒。这就是为什么"索引能不能装进内存"是 HNSW 性能的<strong>头号杠杆</strong>，压倒一切参数微调。</p>
+
+      <div class="callout warning">
+        <span class="label">警告 · 估一估图的体积，而不是只看表大小</span>
+        <p>HNSW 索引体积远大于"行数 × 向量字节数"，因为每个节点还要存 <code>(level+2) × m</code> 个邻居槽。1536 维、百万行的 HNSW 索引常到几个 GB；这个数才是你要拿去和 <code>shared_buffers</code> + 可用内存比的数。建完用 <code>SELECT pg_size_pretty(pg_relation_size('索引名'));</code> 量它的真实大小，别用表大小估。</p>
+      </div>
+
+      <!-- ============ §2.3 ============ -->
+      <h2 id="s23"><span class="num">2.3</span><span>构建悬崖：maintenance_work_mem</span></h2>
+
+      <p class="one-liner">HNSW 构建在内存里跑，直到 <code>maintenance_work_mem</code> 装满；越过这道坎，构建掉进逐元组落盘的慢路径，同样的数据、同一个阈值，构建时间炸开 10–50 倍。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>构建一个百万行的 HNSW 索引，有人 10 分钟建完，有人同样的机器跑 3 小时还没完。差别往往不在 CPU、不在磁盘，而在一个内存参数有没有覆盖住图。这一节解释那道看不见的坎在哪、越过去会发生什么，以及为什么参数没调对会<strong>同时</strong>关掉并行、又触发慢路径——双重惩罚。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：HNSW 构建时，pgvector 先尝试把<strong>整张正在生长的图放进 <code>maintenance_work_mem</code></strong> 里建——这条内存路径快。一旦图的体积超过这个上限，pgvector 在日志里打出一行：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">postgres.log</span>
+          <span class="lang">LOG</span>
+          <button class="copy" data-copy-target="c-cliff">复制</button>
+        </div>
+<pre id="c-cliff"><code class="language-bash">NOTICE:  hnsw graph no longer fits into maintenance_work_mem after 524288 tuples
+HINT:  Building will take significantly more time.</code></pre>
+      </div>
+
+      <p>这行 <code>NOTICE</code> 一出，构建就从"整图在内存"切到<strong>逐元组落盘</strong>（on-disk, one tuple at a time）的路径：每接一个新节点都要在磁盘上的图结构里读写，慢 <strong>10–50 倍</strong>。同一批数据，只因为跨过 <code>maintenance_work_mem</code> 这一个阈值，构建时间就从线性增长变成断崖式爆炸。这就是<strong>构建悬崖</strong>。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="构建悬崖：图小于 maintenance_work_mem 时走内存快路径，越过阈值后每接一个新节点都落盘读写，构建时间从平缓上升突然抬升 10 到 50 倍">
+          <defs>
+            <marker id="cf" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="cf-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- axes -->
+          <line x1="70" y1="280" x2="700" y2="280" class="diagram-ink" marker-end="url(#cf)"/>
+          <line x1="70" y1="280" x2="70" y2="40" class="diagram-ink" marker-end="url(#cf)"/>
+          <text x="700" y="304" text-anchor="end" class="edge-label">已插入元组数 →</text>
+          <text x="58" y="50" text-anchor="end" class="edge-label">构建</text>
+          <text x="58" y="64" text-anchor="end" class="edge-label">耗时</text>
+
+          <!-- threshold vertical line -->
+          <line x1="360" y1="280" x2="360" y2="60" class="diagram-soft"/>
+          <text x="360" y="50" text-anchor="middle" class="branch-label">maintenance_work_mem 上限</text>
+
+          <!-- in-memory path: gentle slope up to threshold -->
+          <path d="M 70 268 L 360 232" class="diagram-ink"/>
+          <text x="200" y="250" text-anchor="middle" class="edge-label">内存快路径（整图在内存）</text>
+
+          <!-- elbow + steep disk path after threshold -->
+          <circle cx="360" cy="232" r="4" class="diagram-accent" fill="#B73B2F"/>
+          <path d="M 360 232 L 430 150 L 560 90 L 660 70" class="diagram-accent"/>
+          <text x="556" y="138" text-anchor="middle" class="branch-label">落盘慢路径</text>
+          <text x="556" y="154" text-anchor="middle" class="edge-label">逐元组读写，慢 10–50×</text>
+
+          <!-- the NOTICE marker -->
+          <line x1="360" y1="200" x2="430" y2="200" class="diagram-accent" marker-end="url(#cf-v)"/>
+          <text x="446" y="196" class="edge-label">NOTICE: graph no longer fits</text>
+          <text x="446" y="212" class="edge-label">→ 切到 on-disk 路径</text>
+
+          <!-- dotted continuation of in-memory slope for contrast -->
+          <path d="M 360 232 L 660 195" class="diagram-soft"/>
+          <text x="618" y="214" text-anchor="middle" class="edge-label">本应如此</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>构建耗时随插入元组数的两条路径：阈值左侧整图在 <code>maintenance_work_mem</code> 里，曲线平缓；越过阈值，pgvector 打出 <code>NOTICE</code> 并切到逐元组落盘的慢路径，曲线急转直上。<strong>注意</strong>：拐点不是渐变而是<strong>断崖</strong>——同一份数据，参数够与不够，构建时间差一个数量级。虚线是"内存够时本该走的延长线"，和实线朱红段的落差就是这 10–50 倍。</figcaption>
+      </figure>
+
+      <h3>并行构建：又一个被 maintenance_work_mem 掐住的开关</h3>
+
+      <p>pgvector 0.6.0（2024-01）给 HNSW 加了<strong>并行构建</strong>。它的做法是把正在生长的图放进一段<strong>共享内存</strong>（内部叫 <code>hnswarea</code>），多个 worker 同时往里接节点。两个工程细节决定了它的边界：</p>
+      <ul>
+        <li><strong>用相对偏移指针</strong>：共享内存段在每个 worker 进程里映射到的虚拟地址不同，所以图内的指针不能存绝对地址，必须存<strong>相对段起点的偏移</strong>，每个 worker 解引用时各自加上自己的基址——这样大家看到的是同一张图。</li>
+        <li><strong>段不能扩容、按元素加 LWLock</strong>：每个 element 用一把轻量锁（LWLock）保护并发修改；但这段共享内存<strong>一旦分配就不能再长大</strong>。它的大小同样由 <code>maintenance_work_mem</code> 决定。</li>
+      </ul>
+
+      <p>把两节的机制叠起来，就看出 <code>maintenance_work_mem</code> 偏小是<strong>双重惩罚</strong>：它既让共享内存段装不下图、<strong>提前关掉并行</strong>（worker 无段可用），又触发 §2.3 的<strong>逐元组落盘慢路径</strong>。一个参数没给够，并行和快路径一起没了。控制并行度的是 <code>max_parallel_maintenance_workers</code>，默认 <strong>2</strong>（外加 leader 进程本身）。</p>
+
+      <div class="callout warning">
+        <span class="label">警告 · 内存不是越堆越稳，要按图来配</span>
+        <p>有过真实报告：1700 万行 × 1536 维的 HNSW 构建，即便 <code>maintenance_work_mem</code> 给到 48GB，参数配比不当时仍会在约 2 小时后失败。结论不是"内存越大越好"，而是 <strong>maintenance_work_mem 要按图的实际体积来配</strong>（百万行级就是多个 GB），并同步抬高 <code>max_parallel_maintenance_workers</code>。两个参数配套调，才能既吃满并行、又稳稳走在内存快路径上。</p>
+      </div>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">build_tuning.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-build">复制</button>
+        </div>
+<pre id="c-build"><code class="language-sql">-- 为这次构建临时放大内存与并行度（按图体积，百万行级常配多个 GB）
+SET maintenance_work_mem = '8GB';
+SET max_parallel_maintenance_workers = 7;   -- 默认 2；加上 leader 共 8 路
+
+CREATE INDEX ON doc_chunks
+    USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+
+-- 建完核对索引真实体积，确认它能被内存覆盖
+SELECT pg_size_pretty(pg_relation_size('doc_chunks_embedding_idx'));</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>给一台 64GB 内存的机器建 HNSW 索引，构建日志里没有出现 <code>graph no longer fits</code> 那行 <code>NOTICE</code>，构建也很快。但上线后单条检索 P99 高达 200ms。<code>maintenance_work_mem</code> 在<strong>检索</strong>阶段还起作用吗？问题更该往哪里查？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p><code>maintenance_work_mem</code> 只在<strong>构建/维护</strong>阶段生效，检索期它一点用都没有——构建快、没触发悬崖，只说明<em>建</em>得顺，不代表<em>查</em>得快。</p>
+          <p>P99 200ms 的嫌疑落在 §2.2：检索期决定延迟的是图能不能驻留在 <strong><code>shared_buffers</code> + 操作系统页缓存</strong>里。构建用的 8GB <code>maintenance_work_mem</code> 和检索期的缓存是两笔预算。如果 <code>shared_buffers</code> 配得小、或同机别的负载把页缓存挤掉，遍历每跳都缺页，延迟自然塌。<strong>构建参数和检索内存要分别核算</strong>——这正是把 §2.2 的存储布局和 §2.3 的构建路径分开理解的价值。</p>
+        </details>
+      </div>
+
+      <!-- ============ §2.4 ============ -->
+      <h2 id="s24"><span class="num">2.4</span><span>参数与"怎么真正量召回"</span></h2>
+
+      <p class="one-liner">build 参数定下索引的"上限"，query 参数定下每次查询花多少力气；默认 <code>ef_search = 40</code> / <code>probes = 1</code> 给的召回率很普通，而<strong>没有任何东西会警告你</strong>——召回率必须自己量。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>ANN 是<em>近似</em>检索，它会漏掉一些真正的最近邻。漏多少，由参数决定。最危险的地方在于：用默认参数建好索引、查询返回 10 条、看起来一切正常——但这 10 条里往往只有 7、8 条落在真正的 top-10 里，<strong>数据库不会报错、不会变慢、不给任何信号</strong>。要知道召回率，只有一条路：自己测。</p>
+      </div>
+
+      <p>先把四个参数归位。它们分成 build 和 query 两端，调高都换来更高召回、更慢速度：</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · HNSW / IVFFlat 的 build 与 query 参数</caption>
+        <thead>
+          <tr><th>索引</th><th>build 参数</th><th>query 参数（默认）</th><th>调高的效果</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>HNSW</td><td><code>m</code>(16) · <code>ef_construction</code>(64)</td><td><code>hnsw.ef_search</code>（<strong>40</strong>）</td><td>召回↑、构建/查询变慢</td></tr>
+          <tr><td>IVFFlat</td><td><code>lists</code>(100)</td><td><code>ivfflat.probes</code>（<strong>1</strong>）</td><td>召回↑、查询变慢</td></tr>
+        </tbody>
+      </table>
+
+      <p>分工要分清：<strong>build 参数</strong>（<code>m</code> / <code>ef_construction</code> / <code>lists</code>）在建索引时一次性定下结构质量的<strong>上限</strong>，建完不可调，要变只能重建；<strong>query 参数</strong>（<code>ef_search</code> / <code>probes</code>）每条查询都能用 <code>SET</code> 调，控制这一次"搜得多狠"。一条硬规则：<strong><code>ef_search</code> 必须 ≥ 你要取的 k</strong>——要取 top-10 却把 <code>ef_search</code> 设成 5，索引连 10 个候选都凑不齐。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：默认 <code>ef_search = 40</code> 意味着 HNSW 遍历时维护一个大小 40 的候选集，<code>probes = 1</code> 意味着 IVFFlat 只探查 1 个单元。这两个默认值偏向<strong>速度</strong>，给出的召回率在很多数据集上只有八九成、甚至更低，取决于数据分布。pgvector 没有内置的召回率监控——索引照常返回 k 条、查询照常很快，<strong>召回率低这件事完全不可见</strong>。唯一的办法是拿<strong>精确暴力检索的结果当 ground truth</strong>，去比对索引返回的结果。</p>
+
+      <p>怎么逼 Postgres 跑一次精确暴力检索？在一个事务里关掉索引扫描，让 planner 退化成顺序扫描 + 精确排序，同一条 <code>ORDER BY ... LIMIT k</code> 就成了 ground truth：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">measure_recall.sql</span>
+          <span class="lang">SQL</span>
+          <button class="copy" data-copy-target="c-recall">复制</button>
+        </div>
+<pre id="c-recall"><code class="language-sql">-- 1) ground truth：关掉索引扫描，强制精确暴力 top-10
+BEGIN;
+SET LOCAL enable_indexscan = off;
+SET LOCAL enable_indexonlyscan = off;
+SELECT id FROM doc_chunks ORDER BY embedding &lt;=&gt; $1 LIMIT 10;   -- 真值
+COMMIT;
+
+-- 2) 索引结果：正常走 HNSW，先定 ef_search
+SET hnsw.ef_search = 40;                                        -- 默认值
+SELECT id FROM doc_chunks ORDER BY embedding &lt;=&gt; $1 LIMIT 10;   -- 近似
+
+-- 3) recall@10 = 两个 id 集合的交集大小 / 10
+--    多取一批查询向量求平均，才是这套参数的真实召回率
+-- 4) 召回不达标就抬高 ef_search（48 → 64 → 100 ...）重测，直到达标</code></pre>
+      </div>
+
+      <p>流程固定：<strong>关索引取真值 → 走索引取近似 → 算 <code>overlap@k / k</code> → 不达标就抬 <code>ef_search</code> / <code>probes</code> 重测</strong>，直到召回率压过你的目标（比如 0.95）。单条查询不算数，要在一批有代表性的查询向量上取平均。这是验收一个向量索引<strong>唯一可信的</strong>方式——延迟能用秒表测，召回率只能这么算出来。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="召回率测量流程：同一个查询向量分两路，一路关索引精确暴力得到真值 top-k，一路走 HNSW 得到近似 top-k，取两个结果集的交集除以 k 得到召回率，不达标就抬高 ef_search 回到走索引那一路重测">
+          <defs>
+            <marker id="rf" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="rf-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- query vector source -->
+          <rect x="24" y="108" width="140" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="94" y="130" text-anchor="middle" class="node-label">查询向量 $1</text>
+          <text x="94" y="150" text-anchor="middle" class="edge-label">同一个，分两路</text>
+
+          <!-- split up: ground truth -->
+          <line x1="164" y1="124" x2="236" y2="74" class="diagram-ink" marker-end="url(#rf)"/>
+          <rect x="236" y="44" width="230" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="351" y="66" text-anchor="middle" class="node-label">精确暴力（真值）</text>
+          <text x="351" y="86" text-anchor="middle" class="edge-label">enable_indexscan = off</text>
+
+          <!-- split down: indexed -->
+          <line x1="164" y1="148" x2="236" y2="198" class="diagram-accent" marker-end="url(#rf-v)"/>
+          <rect x="236" y="168" width="230" height="60" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="351" y="190" text-anchor="middle" class="node-label-accent">走 HNSW（近似）</text>
+          <text x="351" y="210" text-anchor="middle" class="edge-label">hnsw.ef_search = 40</text>
+
+          <!-- both into recall box -->
+          <line x1="466" y1="74" x2="538" y2="124" class="diagram-ink" marker-end="url(#rf)"/>
+          <line x1="466" y1="198" x2="538" y2="148" class="diagram-accent" marker-end="url(#rf-v)"/>
+          <rect x="538" y="106" width="198" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="637" y="128" text-anchor="middle" class="node-label">recall@k</text>
+          <text x="637" y="148" text-anchor="middle" class="edge-label">交集 / k</text>
+
+          <!-- feedback loop: not enough → raise ef_search -->
+          <line x1="637" y1="166" x2="637" y2="250" class="diagram-soft"/>
+          <line x1="637" y1="250" x2="351" y2="250" class="diagram-soft"/>
+          <line x1="351" y1="250" x2="351" y2="230" class="diagram-soft" marker-end="url(#rf-v)"/>
+          <text x="494" y="244" text-anchor="middle" class="branch-label">不达标 → 抬高 ef_search 重测</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>召回率测量回路：同一个查询向量分两路——关索引那路给出精确 top-k 真值，走索引那路给出近似 top-k，交集除以 k 就是 <code>recall@k</code>。<strong>注意</strong>：达不到目标时不是去改索引，而是回到"走索引"那一路抬高 <code>ef_search</code> / <code>probes</code> 重测（朱红回环）——这是 query 参数能在线调、build 参数不能调的直接体现。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">洞察 · ef_search 这根弦，后两章还要拨</span>
+        <p><code>ef_search</code> 不止管召回率，它是后面两章的共同前置。第 3 章会讲：HNSW 检索时拿到的候选要回堆表做<strong>可见性 recheck</strong>（MVCC），而这个 recheck 只在 <code>ef_search</code> 圈定的候选集里做、不会为了凑数额外扩大——删改一多，被过滤掉的死元组会让实际返回数缩水，见 <a href="03-mvcc-lifecycle.html#s31">03 章 §3.1</a>。第 4 章会讲：带 <code>WHERE</code> 过滤时，<code>ef_search</code> 圈的候选要先满足过滤条件才算数，所以它直接决定<strong>过滤后还剩几条</strong>的预算，见 <a href="04-filtering.html">04 章 过滤检索</a>。这一节把 <code>ef_search</code> 当召回旋钮，后两章把同一个旋钮接到可见性和过滤上。</p>
+      </div>
+
+      <!-- ============ self-check ============ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把答案写在纸上或编辑器里，再点开对照。直接展开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>给一张空表建索引，HNSW 成立、IVFFlat 几乎无用。说出这个差别的根因。</li>
+          <li>HNSW 检索为什么是"随机 I/O 密集型"？从 element tuple / neighbor tuple 的存储布局说一句话，并由此推出"索引必须装进内存"。</li>
+          <li>构建悬崖是哪个参数、跨过哪条线触发的？为什么这个参数偏小是"双重惩罚"？</li>
+          <li>用默认 <code>ef_search = 40</code> 建好索引、查询返回 10 条、速度也快。凭什么说召回率不一定够？要拿到 ground truth，那一行关键的 <code>SET</code> 是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>HNSW 是增量可生长的图，空图也合法，每次 <code>INSERT</code> 把节点接进去即可。IVFFlat 的 <code>lists</code> 个质心要对<strong>已有行</strong>跑 k-means——空表没有行可聚类，质心退化、倒排结构形同虚设。所以 IVFFlat 必须先灌数据再建。</li>
+            <li>图被拆成 element tuple（向量 + heaptids[] + 邻居指针）和 neighbor tuple，散落在不同 8KB 页上；遍历每一跳都解引用一个落在<strong>任意页</strong>的邻居 TID，访问模式是随机的。一次检索几十上百跳，图若超出内存，未缓存的跳就逐个缺页 → 延迟成数量级恶化，所以"装进内存"是头号杠杆。</li>
+            <li><code>maintenance_work_mem</code>；当正在生长的图体积超过它时触发，pgvector 打出 <code>graph no longer fits</code> 的 <code>NOTICE</code> 并切到逐元组落盘路径，慢 10–50 倍。双重惩罚：偏小既让 0.6.0 的并行共享内存段装不下图、提前关掉并行，又触发这条落盘慢路径。</li>
+            <li>ANN 是近似检索、本就会漏最近邻，而 pgvector 不监控召回率——返回 k 条、速度快，都不代表这 k 条就是真 top-k，<strong>低召回完全不可见</strong>。ground truth 靠在事务里 <code>SET LOCAL enable_indexscan = off;</code> 强制精确暴力扫描得到，再算 <code>overlap@k / k</code>，不达标抬高 <code>ef_search</code> 重测。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>构建快、索引也"装得下"，为什么召回率还是上不去？</h3>
+        <p>你把 <code>maintenance_work_mem</code> 配得很足，构建没触发悬崖、很快建完，索引体积也小于内存，检索延迟漂亮。但无论怎么抬 <code>ef_search</code>，<code>recall@10</code> 始终卡在 0.88 上不去。问题出在哪一类参数？在不接受"召回封顶"的前提下，唯一的出路是什么、代价是什么？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>把参数分成两端想（§2.4）：<code>ef_search</code> 是 <strong>query 参数</strong>，它只能在"索引这张图已经定下的结构上限"之内找更多候选。召回率封顶，说明瓶颈不在查得够不够狠，而在<strong>图本身的连通质量</strong>——那是 <strong>build 参数</strong> <code>m</code> 和 <code>ef_construction</code> 决定的，建完不可调。出路：用更大的 <code>m</code>（每个节点更多邻居）和更大的 <code>ef_construction</code>（建图时每个节点搜更多候选邻居）<strong>重建索引</strong>。代价回到 §2.2 和 §2.3：<code>m</code> 变大 → 每个节点的 neighbor tuple 更大 → 索引体积涨、对内存的要求更高；<code>ef_construction</code> 变大 → 构建更慢、更容易撞上构建悬崖。所以这是一道"召回率 vs 构建成本 vs 内存占用"的三方取舍，而不是一个能在线拧的旋钮。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://github.com/pgvector/pgvector#hnsw">pgvector README — HNSW：<code>m</code> / <code>ef_construction</code> / <code>ef_search</code> 与并行构建</a>（官方）</li>
+          <li><a href="https://github.com/pgvector/pgvector#ivfflat">pgvector README — IVFFlat：<code>lists</code> / <code>probes</code> 与"建索引前需有数据"</a>（官方）</li>
+          <li><a href="https://www.postgresql.org/docs/current/runtime-config-resource.html#GUC-MAINTENANCE-WORK-MEM">PostgreSQL 文档 — <code>maintenance_work_mem</code> 与 <code>max_parallel_maintenance_workers</code></a>（机制源头）</li>
+          <li><a href="https://github.com/pgvector/pgvector/blob/master/src/hnswbuild.c">pgvector 源码 — <code>hnswbuild.c</code>：构建路径、<code>hnswarea</code> 共享内存与相对偏移指针</a></li>
+          <li><a href="https://tembo.io/blog/vector-indexes-in-pgvector">Tembo — pgvector 索引构建与召回率实测</a></li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-model.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 数据模型与排序契约</span>
+        </a>
+        <a href="03-mvcc-lifecycle.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · MVCC 生命周期</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 两种访问方法</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 图的存储布局</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 构建悬崖</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 参数与量召回</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js" integrity="sha384-MXybTpajaBV0AkcBaCPT4KIvo0FzoCiWXgcihYsw4FUkEz0Pv3JGV6tk2G8vJtDc" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js" integrity="sha384-Uq05+JLko69eOiPr39ta9bh7kld5PKZoU+fF7g0EXTAriEollhZ+DrN8Q/Oi8J2Q" crossorigin="anonymous"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>底层机制与设计权衡 · FastAPI 深潜教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-architecture.html">02 架构</a><span class="sep">—</span>
+    <a href="03-principles.html" class="current">03 原理</a><span class="sep">—</span>
+    <a href="04-self-check.html">04 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>底层机制与设计权衡</h1>
+        <p class="recap">上一章追踪了请求穿过的四层——这一章钻进其中最关键的几个机制，看它们各自怎么实现、代价是什么，以及把 FastAPI 放进整个生态里该何时选、何时别选。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>类型注解如何在导入时被读出，派生出校验、转换、序列化、OpenAPI 四个产物</li>
+          <li>Pydantic v2 在类定义时把字段编译进 Rust 内核，每次请求只是一次 Rust 调用</li>
+          <li>依赖注入图的解析顺序（DFS 先子后父）、每请求缓存、yield 依赖的 LIFO 清理</li>
+          <li>单线程事件循环：<code>async def</code> 跑在循环上、<code>def</code> 被丢进线程池——以及由此而来的反直觉结论</li>
+          <li>WSGI 与 ASGI 的分水岭，FastAPI / Starlette / Flask / Django / Litestar 的取舍</li>
+        </ul>
+      </section>
+
+      <p>把"底层机制"讲清楚的标准只有一个：能说出被放弃的备选方案，并解释代价落在哪里。下面五个机制，每一个都配一张备选方案对比表——表里被放弃的两三行，正是这个设计存在的理由。读完任何一节，工程师都应能回答"换成另一种做法会怎样"。</p>
+
+      <!-- ══════════════════════════════ §1 type system ══════════════════════════════ -->
+      <h2 id="p-typesystem"><span class="num">3.1</span><span>类型注解 → 四个产物</span></h2>
+
+      <p class="one-liner">一份函数签名被读一次，同时驱动校验、类型转换、OpenAPI 文档和编辑器补全。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>在没有这套机制的框架里，工程师要分三处重复声明同一份"数据形状"：在处理函数里手动从请求取值并转型、单独写一个校验层、再手写一份接口文档。三份描述同一件事，任何一处改动都要同步另外两处，漏掉就出 bug 或文档失真。01 章把这条命题命名为"<a href="01-concepts.html#c-typehint">类型注解即规约</a>"；这一节看它在机制层面怎么落地。</p>
+      </div>
+
+      <h3>运行方式</h3>
+
+      <p>程序导入时，<code>@app.get(...)</code> 装饰器（这是 01 章定义的 <a href="01-concepts.html#c-pathop">path operation decorator，路径操作装饰器</a>）就调用 <code>inspect.signature()</code> 读出处理函数每个参数的注解与默认值。来源按三条规则推断——这三条是 FastAPI 的核心约定：</p>
+
+      <ul>
+        <li>参数名出现在路径模板的 <code>{}</code> 里 → <strong>路径参数（path parameter）</strong>；</li>
+        <li>注解是一个 Pydantic 模型（<a href="01-concepts.html#c-pydantic">用类型注解声明数据形状的类</a>）→ <strong>请求体（request body）</strong>；</li>
+        <li>注解是普通标量（<code>int</code>、<code>str</code>、<code>bool</code> 等）且名字不在路径里 → <strong>查询参数（query parameter）</strong>。</li>
+      </ul>
+
+      <p>用 <code>Path()</code> / <code>Query()</code> / <code>Body()</code> 标注可以显式覆盖默认推断。规则定下来源后，<em>同一个</em>注解被分发给四个去处：Pydantic 校验器（值合法吗）、类型转换（URL 里的 <code>"5"</code> 转成 <code>int</code> 的 <code>5</code>）、OpenAPI schema 生成器（写进 <code>/openapi.json</code>）、以及静态类型检查器与编辑器。没有第二份 schema 文件——签名本身就是规约。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">inference_rules.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-infer">复制</button>
+        </div>
+<pre id="code-infer"><code class="language-python">from fastapi import FastAPI
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class Item(BaseModel):       # 一个 Pydantic 模型
+    name: str
+    price: float
+
+@app.put("/items/{item_id}")
+def update_item(item_id: int, q: str | None = None, item: Item = None):
+    # item_id —— 名字在路径 {item_id} 里      → 路径参数
+    # q       —— 普通标量、名字不在路径里      → 查询参数
+    # item    —— 注解是 Pydantic 模型          → 请求体
+    return {"item_id": item_id, "q": q, "item": item}
+</code></pre>
+      </div>
+
+      <div class="annotations">
+        <span class="line-ref">item_id</span>同一规则把它定位成路径参数并转成 <code>int</code>；
+        <span class="line-ref">item</span>同一规则把它认成请求体，请求时 JSON 会被喂进 <code>Item</code> 的校验器。三个参数、三种来源，全部从一行签名推出，不需要任何 <code>request.get(...)</code> 调用。
+      </div>
+
+      <p>这条推断链的全貌见下图：一个注解进去，四个产物出来。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一个类型注解被读出后派生出四个产物">
+          <defs>
+            <marker id="rad-a" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Central node -->
+          <rect x="270" y="150" width="160" height="62" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="350" y="176" text-anchor="middle" class="node-label-accent">item: Item</text>
+          <text x="350" y="196" text-anchor="middle" class="edge-label">一行签名注解</text>
+
+          <!-- Top-left spoke → 请求校验 -->
+          <line x1="290" y1="150" x2="170" y2="86" class="diagram-accent" marker-end="url(#rad-a)"/>
+          <rect x="20" y="44" width="150" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="95" y="71" text-anchor="middle" class="node-label">请求校验</text>
+
+          <!-- Top-right spoke → 响应序列化 -->
+          <line x1="410" y1="150" x2="530" y2="86" class="diagram-accent" marker-end="url(#rad-a)"/>
+          <rect x="530" y="44" width="150" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="605" y="71" text-anchor="middle" class="node-label">响应序列化</text>
+
+          <!-- Bottom-left spoke → OpenAPI 文档 -->
+          <line x1="290" y1="212" x2="170" y2="276" class="diagram-accent" marker-end="url(#rad-a)"/>
+          <rect x="20" y="276" width="150" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="95" y="303" text-anchor="middle" class="node-label">OpenAPI 文档</text>
+
+          <!-- Bottom-right spoke → 编辑器补全 -->
+          <line x1="410" y1="212" x2="530" y2="276" class="diagram-accent" marker-end="url(#rad-a)"/>
+          <rect x="530" y="276" width="150" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="605" y="303" text-anchor="middle" class="node-label">编辑器补全</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>一行类型注解被 <code>inspect.signature()</code> 读出后，派生出四个互相一致的产物。<strong>注意</strong>：四个产物来自<em>同一份</em>声明，所以它们永远不会互相脱节——这正是"没有第二份 schema"的含义。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 「数据形状声明在哪里」的三种做法</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>手写取值 + 手动校验（Flask 风格 <code>request.args.get()</code>）</td>
+            <td>零抽象、零依赖，所见即所得</td>
+            <td>每个参数手动取、手动转型、手动校验；文档要另写，与代码必然脱节；改一处要追三处</td>
+          </tr>
+          <tr>
+            <td>单独的 Serializer 类（DRF 风格）</td>
+            <td>校验逻辑集中、可复用、可继承</td>
+            <td>函数签名与 Serializer 是两份 schema，必须人工保持同步；漏改一处就出静默 bug</td>
+          </tr>
+          <tr class="selected">
+            <td>类型注解即规约（FastAPI）</td>
+            <td>一份签名派生校验/转换/序列化/文档，无法脱节</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <span class="label">带来的代价</span>
+        <p>整套机制强耦合于 Python 的类型注解系统：注解写得越精确，框架能做的越多；注解一旦缺失或写成 <code>Any</code>，校验、转换、文档同时退化。动态参数（运行时才知道字段名、数量可变的场景）无法用静态注解直接表达，要绕到 <code>Annotated</code> 或自定义依赖里处理。换言之，便利来自一个前提——你愿意把规约写成类型。当数据形状本身是动态的，这个前提就成了约束。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>把签名改成 <code>def f(q: str)</code>——<code>q</code> 没有默认值、注解是标量、名字不在路径里。请求 <code>GET /items/5</code>（没带 <code>?q=...</code>）会发生什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p><code>q</code> 被推断为查询参数；没有默认值意味着它是必填的。缺失时框架在你的函数执行<em>之前</em>就返回 <code>422 Unprocessable Entity</code>，错误体里精确指出 <code>query.q: field required</code>。</p>
+          <p>设计点：必填/可选不是单独的开关，而是"有没有默认值"这一个 Python 语法事实推出来的——又一次，签名即规约。</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §2 pydantic-core ══════════════════════════════ -->
+      <h2 id="p-pydantic-core"><span class="num">3.2</span><span>Pydantic v2 在定义时编译进 Rust</span></h2>
+
+      <p class="one-liner">模型类一被定义，字段就被编译成 Rust 校验器并缓存；每次请求只是一次 Rust 调用，没有逐字段的 Python 循环。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>校验是热路径——每个带请求体的请求都要跑一遍。若校验逻辑用解释执行的 Python 在每次请求时逐字段循环，开销会随字段数线性堆叠。把"解析模型定义"这件事从<em>每请求</em>挪到<em>每类定义一次</em>，再把热路径下沉到编译后的本地代码，是 Pydantic v2 比 v1 快 5–50× 的根因。</p>
+      </div>
+
+      <h3>运行方式</h3>
+
+      <p><code>class Item(BaseModel)</code> 这行触发 Pydantic 的元类（metaclass，控制类如何被创建的类）。元类里的 <code>GenerateSchema</code> 遍历每个字段的注解，产出一份 <strong>core schema</strong>——一个带 <code>type</code> 键的嵌套 dict（例如 <code>{'type': 'model', 'fields': {...}}</code>），存在类属性 <code>__pydantic_core_schema__</code> 上。这份 dict 随即交给 Rust 写的 <code>pydantic-core</code>，编译成两个分开的本地对象：</p>
+
+      <ul>
+        <li><code>SchemaValidator</code>——一棵校验器树，缓存为 <code>__pydantic_validator__</code>，负责 <code>validate_python()</code> / <code>validate_json()</code>（输入 → 模型实例）；</li>
+        <li><code>SchemaSerializer</code>——序列化器，缓存为 <code>__pydantic_serializer__</code>，负责 <code>to_python()</code> / <code>to_json()</code>（模型实例 → 可发送的数据）。</li>
+      </ul>
+
+      <p>校验与序列化是<em>两个不同的编译产物</em>，方向相反、独立编译。这解释了 01 章 <a href="01-concepts.html#c-response-model">response_model</a> 的行为：请求进来走 <code>SchemaValidator</code>，响应出去走 <code>SchemaSerializer</code>，是两段独立的本地代码，不是同一个对象正反跑。运行时每次请求只调用一次编译好的校验器，把整批数据交给 Rust，没有 Python 层的逐字段 for 循环。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">compiled_at_definition.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-pydcore">复制</button>
+        </div>
+<pre id="code-pydcore"><code class="language-python">from pydantic import BaseModel
+
+class Item(BaseModel):       # ← 类定义这一刻：元类触发，编译已发生
+    name: str
+    price: float
+
+# 编译产物在类<emphasis>定义后</emphasis>立刻就存在，无需先校验一次：
+print(type(Item.__pydantic_validator__))   # SchemaValidator
+print(type(Item.__pydantic_serializer__))  # SchemaSerializer
+print(Item.__pydantic_core_schema__["type"])  # 'model'
+
+# 每次校验只是一次 Rust 调用，不是 Python 逐字段循环：
+obj = Item.model_validate({"name": "pen", "price": 2.5})
+print(obj.model_dump())  # {'name': 'pen', 'price': 2.5}
+</code></pre>
+      </div>
+
+      <div class="annotations">
+        <span class="line-ref">class Item</span>这一行执行完，三个 <code>__pydantic_*__</code> 属性已经存在——证明编译发生在定义时，不是首次校验时；
+        <span class="line-ref">model_validate</span>这是一次进入 Rust 的调用，校验器树在那边遍历数据。
+        <br>运行环境：FastAPI 0.135.2 / Pydantic 2.12.4 / Python 3.13（本机实测）。
+      </div>
+
+      <p>注：示例输出基于 Pydantic 2.12.4；<code>SchemaValidator</code> / <code>SchemaSerializer</code> 是 <code>pydantic_core</code> 暴露的类型名，跨小版本稳定。</p>
+
+      <table class="compare-table">
+        <caption>表 3.2 · 校验/序列化引擎的几种实现路线</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Pydantic v1（纯 Python 校验）</td>
+            <td>纯 Python、易读易改、无编译步骤</td>
+            <td>每次校验在解释器里逐字段循环，热路径慢；v1 写法已在 FastAPI 0.136.x 移除</td>
+          </tr>
+          <tr>
+            <td>marshmallow（独立校验/序列化库）</td>
+            <td>成熟、灵活、与框架解耦</td>
+            <td>schema 要单独声明（又是两份），且同样是 Python 层执行，无类型注解驱动</td>
+          </tr>
+          <tr>
+            <td>attrs + 手写校验</td>
+            <td>轻量、对数据类友好</td>
+            <td>校验逻辑全要自己写，无自动 JSON schema、无 OpenAPI 输出</td>
+          </tr>
+          <tr class="selected">
+            <td>pydantic-core（Rust 内核）</td>
+            <td>定义时编译、运行时一次本地调用，快 5–50×</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <span class="label">带来的代价</span>
+        <p>三笔代价。其一，定义时有编译开销——模型多的程序<em>启动</em>会稍慢，因为所有 <code>SchemaValidator</code> 都在导入时建好。其二，错误信息由 Rust 产生，格式与 v1 不同，旧的按字符串匹配错误的代码会失效。其三，自定义校验器（<code>field_validator</code> 等）是 Python 函数，运行时要跨 Python/Rust 边界来回调用，频繁触发会吃掉一部分本地代码的速度优势。换句话说，把热路径搬进 Rust 的收益，在大量自定义 Python 校验逻辑面前会打折。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个有 30 个字段的模型，和一个有 3 个字段的模型，单次校验的 Python 端开销差多少？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>从 Python 端看几乎一样——两者都只是一次进入 Rust 的调用。字段遍历发生在编译好的校验器树内部（Rust 里），不在 Python 解释器里。字段数主要影响的是<em>定义时</em>的编译量，而不是每请求的 Python 调用开销。</p>
+          <p>设计点：这正是 v2 把循环下沉到 Rust 的目的——让每请求成本对字段数不敏感。v1 里这个差距会随字段数明显拉大。</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §3 DI ══════════════════════════════ -->
+      <h2 id="p-di"><span class="num">3.3</span><span>依赖注入图：解析、缓存、清理</span></h2>
+
+      <p class="one-liner"><code>Depends</code> 存的是未调用的函数；框架递归读签名连成一张图，请求时深度优先解析，<code>yield</code> 依赖按 LIFO 逆序清理。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>多个 path operation 常常需要同一批前置准备：拿数据库连接、解析当前用户、读配置。手动在每个函数里调用这些准备步骤，会导致顺序写死、共享逻辑复制多份、且无法表达"准备好后还要在请求结束时清理"。<a href="01-concepts.html#c-depends">Depends</a> 把这些前置声明成函数，由框架负责调用顺序、去重和清理。</p>
+      </div>
+
+      <h3>运行方式</h3>
+
+      <p><code>Depends(get_db)</code> 存进去的是<em>未被调用</em>的函数对象 <code>get_db</code> 本身（注意没有那对括号）。框架对它做递归签名自省：<code>get_db</code> 的参数若也是 <code>Depends(...)</code>，就继续往下读，直到所有依赖连成一张有向图。请求到来时，框架对这张图做<strong>深度优先遍历（DFS）</strong>——<em>先解析子依赖，再解析父依赖</em>，因为父依赖的执行需要子依赖的结果作为入参。</p>
+
+      <p>两个机制决定行为细节：</p>
+
+      <ul>
+        <li><strong>每请求缓存</strong>：默认 <code>use_cache=True</code>，每个唯一可调用对象在<em>一次请求内</em>只执行一次，结果存进请求级的字典。同一个 <code>get_db</code> 出现在五个子依赖里，也只调用一次、五处共享同一结果。传 <code>use_cache=False</code> 才强制每次重跑。</li>
+        <li><strong>yield 依赖的清理</strong>：用 <code>yield</code> 而非 <code>return</code> 的依赖，被当作（异步）上下文管理器压入一个 <code>AsyncExitStack</code>（一个能按栈序统一关闭多个上下文的对象）。<code>yield</code> <em>之前</em>是 setup、<code>yield</code> 出的值被注入处理函数、<code>yield</code> <em>之后</em>的清理代码在栈展开时按 <strong>LIFO（后进先出）</strong>逆序执行。默认清理发生在<em>响应已经发出之后</em>。</li>
+      </ul>
+
+      <p>LIFO 顺序不是细节：它保证父依赖的清理代码运行时，它依赖的子资源还没被关。下图把一张三层依赖图的解析顺序与清理顺序并排画出。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 430" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="依赖图的 DFS 解析顺序与 yield 清理的 LIFO 逆序">
+          <defs>
+            <marker id="di-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="di-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- column titles -->
+          <text x="180" y="28" text-anchor="middle" class="edge-label" font-weight="700">依赖图（谁需要谁）</text>
+          <text x="540" y="28" text-anchor="middle" class="edge-label" font-weight="700">解析与清理时序</text>
+
+          <!-- divider -->
+          <line x1="360" y1="46" x2="360" y2="410" class="diagram-soft"/>
+
+          <!-- ===== LEFT: dependency graph ===== -->
+          <!-- handler (top) -->
+          <rect x="105" y="56" width="150" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="180" y="83" text-anchor="middle" class="node-label">handler</text>
+
+          <!-- A (left) and B (right) -->
+          <rect x="40" y="160" width="110" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="95" y="187" text-anchor="middle" class="node-label">依赖 A</text>
+          <rect x="210" y="160" width="110" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="265" y="187" text-anchor="middle" class="node-label">依赖 B</text>
+
+          <!-- C (bottom, under A) -->
+          <rect x="40" y="270" width="110" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="95" y="297" text-anchor="middle" class="node-label">依赖 C</text>
+
+          <!-- edges: handler→A, handler→B (needs), A→C -->
+          <line x1="150" y1="92" x2="118" y2="160" class="diagram-ink" marker-end="url(#di-ink)"/>
+          <line x1="225" y1="100" x2="258" y2="160" class="diagram-ink" marker-end="url(#di-ink)"/>
+          <line x1="95" y1="204" x2="95" y2="270" class="diagram-ink" marker-end="url(#di-ink)"/>
+          <text x="118" y="135" text-anchor="middle" class="edge-label">需要</text>
+          <text x="262" y="135" text-anchor="middle" class="edge-label">需要</text>
+          <text x="111" y="240" text-anchor="middle" class="edge-label">需要</text>
+
+          <!-- ===== RIGHT: resolve + teardown order ===== -->
+          <!-- resolve order downward -->
+          <text x="450" y="64" class="branch-label">解析 DFS →</text>
+          <text x="470" y="92"  class="edge-label" font-weight="700">①</text>
+          <text x="490" y="92"  class="node-label">C</text>
+          <text x="470" y="120" class="edge-label" font-weight="700">②</text>
+          <text x="490" y="120" class="node-label">A</text>
+          <text x="470" y="148" class="edge-label" font-weight="700">③</text>
+          <text x="490" y="148" class="node-label">B</text>
+          <text x="470" y="176" class="edge-label" font-weight="700">④</text>
+          <text x="490" y="176" class="node-label">handler 执行</text>
+
+          <line x1="455" y1="186" x2="455" y2="250" class="diagram-ink" marker-end="url(#di-ink)"/>
+          <text x="540" y="222" text-anchor="middle" class="edge-label">响应发出</text>
+
+          <!-- teardown LIFO upward -->
+          <text x="445" y="278" class="branch-label">清理 LIFO →</text>
+          <text x="470" y="306" class="edge-label" font-weight="700">⑤</text>
+          <text x="490" y="306" class="node-label">B 清理</text>
+          <text x="470" y="334" class="edge-label" font-weight="700">⑥</text>
+          <text x="490" y="334" class="node-label">A 清理</text>
+          <text x="470" y="362" class="edge-label" font-weight="700">⑦</text>
+          <text x="490" y="362" class="node-label">C 清理</text>
+          <line x1="640" y1="296" x2="640" y2="368" class="diagram-accent" marker-end="url(#di-verm)"/>
+          <text x="662" y="336" text-anchor="middle" class="edge-label" transform="rotate(90 662 336)">逆序</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>handler 需要 A 和 B，A 需要 C：解析按 DFS 先子后父（C→A→B→handler），清理按 LIFO 逆序（B→A→C）。<strong>注意</strong>：清理顺序是解析顺序的镜像，这保证 A 的清理代码运行时它用的 C 还没关。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">yield_dependency.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-yield">复制</button>
+        </div>
+<pre id="code-yield"><code class="language-python">from typing import Annotated
+from fastapi import Depends, FastAPI
+
+app = FastAPI()
+
+def get_db():
+    db = open_connection()   # yield 之前：setup
+    try:
+        yield db             # yield 出的值被注入处理函数
+    finally:
+        db.close()           # yield 之后：清理，默认在响应发出后跑
+
+@app.get("/items")
+def list_items(db: Annotated[Connection, Depends(get_db)]):
+    return db.query("select * from items")
+    # 函数返回后，响应先发给客户端，然后才执行上面的 db.close()
+</code></pre>
+      </div>
+
+      <div class="annotations">
+        <span class="line-ref">yield db</span>这一行把控制权交回框架；<code>db</code> 注入处理函数，<code>finally</code> 块成为压进 <code>AsyncExitStack</code> 的清理动作；
+        <span class="line-ref">Annotated</span>这是现代写法（FastAPI 文档默认），取代旧的 <code>db = Depends(get_db)</code> 默认值写法。
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.3 · 「共享前置资源」的几种组织方式</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>全局单例 / 模块级变量</td>
+            <td>写法最简单，随处可取</td>
+            <td>无法做每请求隔离，难测试（替换不掉），生命周期与请求脱节，并发下易串数据</td>
+          </tr>
+          <tr>
+            <td>装饰器手动包裹处理函数</td>
+            <td>显式、就近可见</td>
+            <td>多个依赖嵌套时装饰器叠成洋葱，顺序与清理要自己管，无自动去重</td>
+          </tr>
+          <tr>
+            <td>函数参数层层透传</td>
+            <td>完全显式、无魔法</td>
+            <td>深层调用链里每一层都要重复声明同一个参数，签名污染、改动放大</td>
+          </tr>
+          <tr class="selected">
+            <td>Depends 依赖图</td>
+            <td>自动解析顺序、每请求去重缓存、yield 统一清理</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <span class="label">带来的代价</span>
+        <p>解析顺序是隐式的——它由图结构推出，不在代码里显式写出，读代码时要在脑子里重建这张图才知道谁先跑。更尖锐的代价在缓存：默认每请求缓存对有副作用的依赖是陷阱。一个本意"每次生成新随机 token"或"每次开新连接"的依赖，若在一次请求里被多处引用，默认只会执行一次、各处拿到<em>同一个</em>值。要它每次重跑必须显式传 <code>use_cache=False</code>，忘了就得到一个安静的错误。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个依赖 <code>new_request_id()</code> 每次调用返回一个新 UUID。它被三个子依赖各引用一次。一次请求里它实际执行几次？三处拿到的 ID 一样吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>执行一次。默认 <code>use_cache=True</code>，三处拿到的是<em>同一个</em> UUID。若意图是"每处一个独立 ID"，结果就错了——要在那个 <code>Depends</code> 上写 <code>use_cache=False</code> 才会执行三次、拿到三个不同 ID。</p>
+          <p>设计点：缓存默认开是为了让"取数据库连接"这类幂等依赖天然只跑一次；但它对"每次都该不同"的副作用型依赖是反的。判断标准是这个依赖幂等吗，不是它看起来该不该缓存。</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §4 async ══════════════════════════════ -->
+      <h2 id="p-async"><span class="num">3.4</span><span>async 并发模型（第二个反直觉转折）</span></h2>
+
+      <p class="one-liner">事件循环单线程：<code>async def</code> 直接跑在循环上，普通 <code>def</code> 被框架丢进线程池——所以在 <code>def</code> 里写阻塞调用反而更安全。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Web 服务的瓶颈通常不是 CPU，而是等待——等数据库、等下游 API、等磁盘。传统"每请求一线程"模型下，上千个等待中的连接就是上千个几乎全程闲置却各占内存的线程，到一定规模内存就爆（经典的 C10k 问题：单机一万并发连接）。事件循环用<em>一个</em>线程在多个等待点之间切换，把闲置的等待时间利用起来。</p>
+      </div>
+
+      <h3>运行方式</h3>
+
+      <p>事件循环（event loop，一个在单线程里轮流推进多个协程的调度器）是整个 ASGI 栈的心脏。两类路由进入它的方式完全不同：</p>
+
+      <ul>
+        <li><strong><code>async def</code> 路由</strong>直接跑在事件循环这<em>一个</em>线程上。函数里每个 <code>await</code> 是一个让出点（yield point）：协程在此暂停、把线程交回循环，循环趁机去服务别的连接，等这个 <code>await</code> 的 I/O 就绪再回来续跑。</li>
+        <li><strong>普通 <code>def</code> 路由</strong>被框架自动包成 <code>await run_in_threadpool(fn)</code>，丢进 AnyIO 的工作线程池（默认 <strong>40 个</strong>线程）。它在另一个线程里跑，<em>不占用</em>事件循环那个线程。</li>
+      </ul>
+
+      <p>"阻塞循环"的确切含义：在 <code>async def</code> 里执行 CPU 密集计算或<em>同步</em> I/O（<code>time.sleep()</code>、同步数据库驱动）且中途没有 <code>await</code>。因为整个事件循环就一个线程，这段不让出的代码一旦占住它，循环无法切去服务任何其它连接——<em>所有</em>并发请求一起卡住，不只是当前这个。</p>
+
+      <div class="callout warning">
+        <span class="label">第二个反直觉转折</span>
+        <p>同步阻塞代码放在普通 <code>def</code> 路由里更<strong>安全</strong>——它被丢进线程池，卡住的是 40 个工作线程中的一个，事件循环照常服务其他连接。把<em>同一段</em>阻塞代码放进 <code>async def</code> 却不 <code>await</code>，是灾难：它冻住整个服务。"async 一定更快"是直觉，但用错位置时 <code>async def</code> 比 <code>def</code> 危险得多。这就是 index 与本章开头预告的那个反转。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 440" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一个请求按路由类型分两路：事件循环或线程池">
+          <defs>
+            <marker id="as-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="as-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- request in -->
+          <ellipse cx="360" cy="40" rx="92" ry="24" class="diagram-ink node-fill"/>
+          <text x="360" y="46" text-anchor="middle" class="node-label">请求到达</text>
+
+          <!-- split labels -->
+          <line x1="320" y1="60" x2="190" y2="118" class="diagram-ink" marker-end="url(#as-ink)"/>
+          <line x1="400" y1="60" x2="530" y2="118" class="diagram-ink" marker-end="url(#as-ink)"/>
+          <text x="222" y="92" text-anchor="middle" class="branch-label">async def</text>
+          <text x="498" y="92" text-anchor="middle" class="branch-label">def</text>
+
+          <!-- LEFT path: event loop, single thread -->
+          <rect x="60" y="118" width="260" height="56" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="190" y="142" text-anchor="middle" class="node-label-accent">事件循环（单线程）</text>
+          <text x="190" y="161" text-anchor="middle" class="edge-label">每个 await 让出</text>
+
+          <line x1="190" y1="174" x2="190" y2="226" class="diagram-accent" marker-end="url(#as-verm)"/>
+
+          <rect x="60" y="226" width="260" height="78" rx="6" class="diagram-ink node-fill"/>
+          <text x="190" y="252" text-anchor="middle" class="node-label">单线程轮流推进</text>
+          <text x="190" y="272" text-anchor="middle" class="edge-label">多连接共享一个线程</text>
+          <text x="190" y="290" text-anchor="middle" class="edge-label">await 时切到别的连接</text>
+
+          <!-- RIGHT path: threadpool 40 -->
+          <rect x="400" y="118" width="260" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="530" y="142" text-anchor="middle" class="node-label">run_in_threadpool</text>
+          <text x="530" y="161" text-anchor="middle" class="edge-label">框架自动包裹</text>
+
+          <line x1="530" y1="174" x2="530" y2="226" class="diagram-ink" marker-end="url(#as-ink)"/>
+
+          <rect x="400" y="226" width="260" height="78" rx="6" class="diagram-ink node-fill"/>
+          <text x="530" y="252" text-anchor="middle" class="node-label">AnyIO 线程池（40 线程）</text>
+          <text x="530" y="272" text-anchor="middle" class="edge-label">阻塞只卡住其中一个线程</text>
+          <text x="530" y="290" text-anchor="middle" class="edge-label">循环不受影响</text>
+
+          <!-- bottom consequence band -->
+          <rect x="60" y="346" width="260" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="190" y="372" text-anchor="middle" class="node-label">阻塞放这里</text>
+          <text x="190" y="392" text-anchor="middle" class="branch-label">全服务冻住</text>
+
+          <rect x="400" y="346" width="260" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="530" y="372" text-anchor="middle" class="node-label">阻塞放这里</text>
+          <text x="530" y="392" text-anchor="middle" class="edge-label">只占一个工作线程，安全</text>
+
+          <line x1="190" y1="304" x2="190" y2="346" class="diagram-accent" marker-end="url(#as-verm)"/>
+          <line x1="530" y1="304" x2="530" y2="346" class="diagram-ink" marker-end="url(#as-ink)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>同一个请求按路由类型分两路：<code>async def</code> 进单线程事件循环，<code>def</code> 进 40 线程池。<strong>注意</strong>：把阻塞调用放在左路（<code>async def</code> 且不 await）会冻住整个服务；放在右路（<code>def</code>）只占用一个工作线程——这就是"<code>def</code> 更安全"的机制。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">blocking_placement.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-async">复制</button>
+        </div>
+<pre id="code-async"><code class="language-python">import time
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/sync-blocking")
+def sync_blocking():
+    time.sleep(10)        # 阻塞——但被丢进线程池，只卡住一个工作线程
+    return {"ok": True}   # 其它请求照常被事件循环服务
+
+@app.get("/async-blocking")
+async def async_blocking():
+    time.sleep(10)        # 灾难：在事件循环线程上同步阻塞、没有 await
+    return {"ok": True}   # 这 10 秒内，整个服务的所有连接都冻住
+
+@app.get("/async-correct")
+async def async_correct():
+    import asyncio
+    await asyncio.sleep(10)  # 正确：await 让出，循环可服务别的连接
+    return {"ok": True}
+</code></pre>
+      </div>
+
+      <div class="annotations">
+        <span class="line-ref">sync_blocking</span><code>def</code> + 阻塞：被 <code>run_in_threadpool</code> 隔离，安全；
+        <span class="line-ref">async_blocking</span><code>async def</code> + 同步阻塞：冻结整个循环；
+        <span class="line-ref">async_correct</span><code>async def</code> + <code>await</code>：让出点让循环继续工作。
+      </div>
+
+      <div class="callout warning">
+        <span class="label">常见错误</span>
+        <p>在 <code>async def</code> 路由里用<em>同步</em>数据库驱动（如普通 <code>psycopg2</code>、同步 SQLAlchemy 会话），常以 <code>MissingGreenlet</code> 异常炸出来。根因是同步驱动期望在一个真实线程里阻塞等待，而 <code>async def</code> 把它放在了事件循环上、没有可阻塞的 greenlet 上下文。修法二选一：要么用异步驱动（<code>asyncpg</code> + SQLAlchemy 2.0 async），要么把这个端点改成普通 <code>def</code>，让框架替你丢进线程池。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.4 · 高并发 I/O 下的几种并发模型</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>每请求一线程</td>
+            <td>编程模型简单，阻塞代码随便写</td>
+            <td>上千等待连接 = 上千闲置线程，内存爆（C10k）；线程切换开销随并发上升</td>
+          </tr>
+          <tr>
+            <td>每请求一进程</td>
+            <td>隔离彻底、绕开 GIL</td>
+            <td>进程比线程更重，内存与启动成本更高，并发规模更受限</td>
+          </tr>
+          <tr>
+            <td>回调式异步（callback）</td>
+            <td>单线程、无线程开销</td>
+            <td>嵌套回调难读难维护（callback hell），错误处理与控制流割裂</td>
+          </tr>
+          <tr class="selected">
+            <td>async 事件循环（async/await）</td>
+            <td>单线程高并发、await 让出点显式、代码读起来像同步</td>
+            <td>选中</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <span class="label">带来的代价</span>
+        <p>async 是协作式调度：循环依赖每个协程主动在 <code>await</code> 处让出。<em>一个</em>不让出的协程（CPU 密集或同步阻塞）就能破坏整体公平，让其他连接饿死。第二笔代价是那 40 个线程是 <code>def</code> 路由的硬上限——超过 40 个并发的阻塞 <code>def</code> 请求，后来的就得排队等线程。第三，CPU 密集任务用 <code>async def</code> 不但没好处，反而更糟：Python 的 GIL（全局解释器锁，同一时刻只允许一个线程执行 Python 字节码）让计算无法真正并行，而占住循环又冻住所有 I/O 连接——这类任务该交给进程池或任务队列。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个端点要做 5 秒的纯 CPU 计算（图像处理、压缩）。写成 <code>async def</code> 还是 <code>def</code>？两者各自的后果是什么？哪个其实都不够好？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>两者都不理想，但程度不同。写成 <code>async def</code>：这 5 秒占住事件循环线程、没有 await 让出点，整个服务冻 5 秒——最坏。写成 <code>def</code>：被丢进线程池，至少不冻循环；但 GIL 让这段 Python 计算无法与其他线程真正并行，且会占满一个工作线程。</p>
+          <p>设计点：真正的解法是把 CPU 密集任务移出请求路径——交给进程池（<code>ProcessPoolExecutor</code>）或任务队列（Celery/RQ）。这条结论直接喂给下一节的"何时不要用 FastAPI"。</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §5 tradeoffs ══════════════════════════════ -->
+      <h2 id="p-tradeoffs"><span class="num">3.5</span><span>设计权衡与生态定位</span></h2>
+
+      <p class="one-liner">WSGI 与 ASGI 是 Python web 生态的根本分水岭；FastAPI 的真正优势是 I/O 等待下的并发，不是裸速度。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>选型不是"哪个最快"，而是"哪个匹配你的瓶颈"。把 FastAPI 放进生态坐标里——它在哪一侧的分水岭、相比邻居强在哪、哪些场景反而是别的框架的主场——才能在真实项目里做出不后悔的决定。这一节为 04 章的判别题铺垫。</p>
+      </div>
+
+      <h3>运行方式：两条协议血脉</h3>
+
+      <p>02 章讲过 <a href="02-architecture.html#a-asgi">ASGI 协议</a>把应用定义成一个 async 可调用对象，靠 <code>receive</code>/<code>send</code> 收发消息，所以 <code>send</code> 能调用多次——这是流式输出和 WebSocket 的根基。它的前身 WSGI 是一次同步调用、一进一出，无法在一条连接上多次收发，也无法在空闲时让出。这条协议差异把整个生态切成两半：</p>
+
+      <ul>
+        <li><strong>WSGI 一侧</strong>：Flask、传统同步 Django。成熟、生态厚、同步编程模型直观，但天生不擅长长连接与高并发 I/O。</li>
+        <li><strong>ASGI 一侧</strong>：FastAPI、Starlette、Litestar、现代异步 Django。原生支持 async、流式、WebSocket。</li>
+      </ul>
+
+      <table class="compare-table">
+        <caption>表 3.5 · 五个框架的定位与选择时机</caption>
+        <thead>
+          <tr><th>框架</th><th>协议 / 定位</th><th>何时选它</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Flask</td>
+            <td>WSGI，极简微框架</td>
+            <td>小型同步服务、服务端渲染 HTML、团队已熟悉、不需要高并发 I/O</td>
+          </tr>
+          <tr>
+            <td>Django（+ DRF）</td>
+            <td>WSGI 为主，全家桶</td>
+            <td>要 admin 后台 + ORM + 模板开箱、内容站、CRUD 重、团队要"电池全包"</td>
+          </tr>
+          <tr>
+            <td>Starlette</td>
+            <td>ASGI，轻量工具箱</td>
+            <td>只要路由 + Request/Response + 中间件，不需要校验/DI/自动文档的薄转发层</td>
+          </tr>
+          <tr>
+            <td>Litestar</td>
+            <td>ASGI，电池较全</td>
+            <td>想要类 FastAPI 的体验但偏好其内置 DI/ORM 集成与项目结构约定</td>
+          </tr>
+          <tr class="selected">
+            <td>FastAPI</td>
+            <td>ASGI（基于 Starlette），API 优先</td>
+            <td>要类型驱动的校验 + DI + 自动 OpenAPI 文档 + 高并发 I/O 的 JSON/流式 API</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>下面这棵决策树把"何时选谁"压成四个问题。它直接对应 04 章的判别题。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 600" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="按四个问题在进程池、Django、Starlette、FastAPI 之间选型的决策树">
+          <defs>
+            <marker id="dt-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- start -->
+          <ellipse cx="250" cy="36" rx="70" ry="22" class="diagram-ink node-fill"/>
+          <text x="250" y="42" text-anchor="middle" class="node-label">选型开始</text>
+
+          <!-- Q1 CPU-bound -->
+          <polygon points="250,78 380,150 250,222 120,150" class="diagram-ink node-fill"/>
+          <text x="250" y="146" text-anchor="middle" class="node-label">CPU 密集为主？</text>
+          <line x1="250" y1="58" x2="250" y2="78" class="diagram-ink" marker-end="url(#dt-ink)"/>
+
+          <!-- Q1 yes → 进程池/队列 -->
+          <line x1="380" y1="150" x2="500" y2="150" class="diagram-ink" marker-end="url(#dt-ink)"/>
+          <text x="430" y="140" text-anchor="middle" class="branch-label">是</text>
+          <rect x="500" y="124" width="160" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="580" y="146" text-anchor="middle" class="node-label">进程池 / 任务队列</text>
+          <text x="580" y="164" text-anchor="middle" class="edge-label">不是框架问题</text>
+
+          <!-- Q1 no → Q2 -->
+          <line x1="250" y1="222" x2="250" y2="252" class="diagram-ink" marker-end="url(#dt-ink)"/>
+          <text x="268" y="244" class="branch-label">否</text>
+
+          <!-- Q2 admin+ORM -->
+          <polygon points="250,252 390,324 250,396 110,324" class="diagram-ink node-fill"/>
+          <text x="250" y="320" text-anchor="middle" class="node-label">要 admin + ORM？</text>
+
+          <!-- Q2 yes → Django -->
+          <line x1="390" y1="324" x2="510" y2="324" class="diagram-ink" marker-end="url(#dt-ink)"/>
+          <text x="440" y="314" text-anchor="middle" class="branch-label">是</text>
+          <rect x="510" y="298" width="150" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="585" y="320" text-anchor="middle" class="node-label">Django</text>
+          <text x="585" y="338" text-anchor="middle" class="edge-label">后台/ORM 开箱</text>
+
+          <!-- Q2 no → Q3 -->
+          <line x1="250" y1="396" x2="250" y2="426" class="diagram-ink" marker-end="url(#dt-ink)"/>
+          <text x="268" y="418" class="branch-label">否</text>
+
+          <!-- Q3 need validation/DI/docs -->
+          <polygon points="250,426 410,498 250,570 90,498" class="diagram-ink node-fill"/>
+          <text x="250" y="494" text-anchor="middle" class="node-label">要校验/DI/自动文档？</text>
+
+          <!-- Q3 yes → FastAPI -->
+          <line x1="410" y1="498" x2="510" y2="498" class="diagram-ink" marker-end="url(#dt-ink)"/>
+          <text x="455" y="488" text-anchor="middle" class="branch-label">是</text>
+          <rect x="510" y="472" width="150" height="52" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="585" y="494" text-anchor="middle" class="node-label-accent">FastAPI</text>
+          <text x="585" y="512" text-anchor="middle" class="edge-label">类型即规约</text>
+
+          <!-- Q3 no → Starlette -->
+          <line x1="250" y1="570" x2="160" y2="570" class="diagram-ink" marker-end="url(#dt-ink)"/>
+          <text x="205" y="560" text-anchor="middle" class="branch-label">否</text>
+          <rect x="10" y="544" width="150" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="85" y="566" text-anchor="middle" class="node-label">裸 Starlette</text>
+          <text x="85" y="584" text-anchor="middle" class="edge-label">薄 ASGI 转发</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.4</span>四个问题决定选型落点：CPU 密集走进程池/队列，要后台走 Django，要校验/DI/文档走 FastAPI，只要转发走裸 Starlette。<strong>注意</strong>：第一个问题先把"这其实不是框架能解决的问题"筛掉——CPU 密集换框架没用。</figcaption>
+      </figure>
+
+      <h3>何时不要用 FastAPI</h3>
+
+      <ul>
+        <li><strong>CPU 密集型负载</strong>：GIL 让 async 帮不上忙，放进 <code>async def</code> 还会阻塞循环（见 3.4）。该用进程池或任务队列，框架选择无关紧要。</li>
+        <li><strong>重服务端渲染 HTML</strong>：要返回大量模板渲染的页面而非 JSON，Django 或 Flask + 模板引擎是更顺的主场，FastAPI 的类型/校验优势用不上。</li>
+        <li><strong>需要开箱的 admin 后台 / 成熟 ORM</strong>：Django 的 admin 和 ORM 是几乎无可替代的生产力来源；FastAPI 不自带这些，要自己拼装。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">基准测试警告</span>
+        <p>TechEmpower 这类 hello-world 基准（FastAPI 约 15–20k RPS、Flask 约 2–4k RPS）剥离了真实应用必有的鉴权、ORM、中间件和校验，把框架开销放大成了主角。真实应用里约 93% 的延迟发生在框架之外（业务逻辑、网络、序列化），而 DB-bound 端点的瓶颈在数据库——框架选择对总性能的影响很小。FastAPI 真正的优势是 <strong>I/O 等待下的并发能力</strong>（事件循环把等待时间利用起来），不是单请求的裸速度。拿 hello-world RPS 当选型依据会得出错误结论。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.6 · WSGI vs ASGI：分水岭的两侧</caption>
+        <thead>
+          <tr><th>维度</th><th>WSGI（Flask、传统 Django）</th><th>ASGI（FastAPI、Starlette、Litestar）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>应用形态</td><td>同步可调用，一进一出</td><td>async 可调用，receive/send 收发消息</td></tr>
+          <tr><td>一条连接上多次收发</td><td>不支持</td><td>支持（send 可多次调用）</td></tr>
+          <tr><td>WebSocket / 流式 / SSE</td><td>原生不支持</td><td>一等公民</td></tr>
+          <tr><td>高并发 I/O 等待</td><td>靠多线程/多进程堆</td><td>事件循环单线程复用</td></tr>
+          <tr><td>同步阻塞代码</td><td>天然适配</td><td>要丢线程池或改异步驱动</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <span class="label">带来的代价</span>
+        <p>站在 ASGI 一侧的代价是：整个调用链要"异步感知"。一个不小心的同步阻塞调用就能拖垮事件循环（3.4）；异步生态虽已成熟，但仍比 WSGI 那套久经考验的同步库少一些选择，且异步代码的调试与心智模型门槛更高。选 FastAPI 等于承诺团队理解事件循环——这是它的能力来源，也是它的入门成本。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个端点只是把收到的请求体原样转发给另一个内部服务，不需要校验、不需要文档、不需要 DI。裸 Starlette 够用吗？什么时候 FastAPI 那层封装才值回它的开销？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>裸 Starlette 够用——这个端点用不到 FastAPI 在每个路由外加的"读类型→校验→序列化→生成文档"那层（02 章 <a href="02-architecture.html#a-fastapi">#a-fastapi</a>）。FastAPI 的封装在出现<em>结构化输入输出</em>时才值回票价：需要校验请求体、需要自动文档、需要依赖注入。纯转发场景这些全为零，封装是净开销。</p>
+          <p>设计点：FastAPI = Starlette + 一层 per-endpoint 封装。封装的价值与"你的端点有多少结构化数据契约"成正比；契约为零时，封装的价值也趋近零。</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ cross-mechanism synthesis ══════════════════════════════ -->
+      <h2 id="p-synthesis"><span class="num">3.6</span><span>跨机制综合：一个请求如何同时用上四者</span></h2>
+
+      <p>前五节把机制拆开看。真实的一个请求会在几毫秒内<em>同时</em>用上类型系统、Pydantic 内核、依赖图和并发模型。把它们串成一条时间线，机制之间的接缝才显出来。</p>
+
+      <p>设想一个 <code>async def</code> 处理函数：它声明了一个 <code>item: Item</code> 请求体、一个 <code>user: Annotated[User, Depends(get_current_user)]</code> 依赖，而 <code>get_current_user</code> 又依赖 <code>get_db</code>（一个 <code>yield</code> 依赖）。一次 <code>POST /items</code> 进来：</p>
+
+      <ol>
+        <li><strong>导入时（早已发生）</strong>：<code>inspect.signature()</code> 读出这个函数的签名（3.1），把 <code>item</code> 定位成请求体、<code>user</code> 认成依赖；同时 <code>Item</code> 类定义触发元类，<code>SchemaValidator</code> 已编译进 Rust 并缓存（3.2）；<code>get_current_user</code>→<code>get_db</code> 的依赖图也已连好（3.3）。这些都不在请求路径上发生。</li>
+        <li><strong>依赖解析</strong>：请求到来，框架对依赖图做 DFS——先解析子依赖 <code>get_db</code>（运行到它的 <code>yield</code>，连接被压入 <code>AsyncExitStack</code>），再用其结果解析 <code>get_current_user</code>（3.3）。</li>
+        <li><strong>请求体校验</strong>：框架把 JSON body 喂给 <code>Item</code> 那个编译好的 <code>SchemaValidator</code>——一次 Rust 调用（3.2）；不合法就在处理函数执行<em>之前</em>返回 422（3.1 的推断决定了"哪些字段必填"）。</li>
+        <li><strong>函数执行</strong>：因为是 <code>async def</code>，处理函数直接跑在事件循环线程上；函数体里每个 <code>await</code>（比如 await 数据库）都让出，循环趁机服务别的连接（3.4）。若这里误用同步阻塞调用，整个循环会冻住。</li>
+        <li><strong>响应序列化</strong>：返回值过 <code>response_model</code> 对应的 <code>SchemaSerializer</code>——另一个 Rust 产物，方向与校验相反（3.2），多余字段被过滤掉。</li>
+        <li><strong>清理</strong>：响应发出<em>之后</em>，<code>AsyncExitStack</code> 按 LIFO 展开，<code>get_db</code> 的 <code>yield</code> 之后那段关闭连接（3.3）。</li>
+      </ol>
+
+      <p>四个机制不是四个独立特性，而是<em>同一份类型注解</em>在请求生命周期不同阶段被反复使用的结果：<code>Item</code> 这一个注解，在第 3 步被校验、第 5 步被序列化；<code>Depends</code> 声明的图在第 2 步解析、第 6 步清理。这正是 index 那句"类型签名就是规约"在机制层的全貌——也接上了 02 章 <a href="02-architecture.html#a-lifecycle">请求生命周期 7 阶段</a>的同一条链。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 接缝在哪</span>
+        <p>四个机制的接缝都落在<em>同一份类型注解</em>上。类型系统（3.1）决定注解被读成什么；Pydantic 内核（3.2）决定注解被编译成校验/序列化两个产物；依赖图（3.3）决定带 <code>Depends</code> 的注解何时解析与清理；并发模型（3.4）决定这一切跑在循环上还是线程池里。改一行注解，四处行为同时变——便利与耦合是同一枚硬币的两面。</p>
+      </div>
+
+      <!-- ══════════════════════════════ self-check ══════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>FastAPI 用哪个标准库函数在导入时读出处理函数的参数注解？把 <code>item: Item</code> 推断成请求体、把不在路径里的标量推断成查询参数，分别依据哪条规则？</li>
+          <li>Pydantic v2 的 <code>SchemaValidator</code> 在<em>什么时刻</em>被编译？为什么这让单次校验的 Python 端开销对字段数不敏感？校验器和序列化器是同一个对象吗？</li>
+          <li>一个依赖出现在三个子依赖里，默认执行几次？要让它每次都重跑该传什么参数？yield 依赖的清理代码按什么顺序、在什么时间点跑？</li>
+          <li>为什么把 <code>time.sleep(10)</code> 放在普通 <code>def</code> 路由里不会冻住整个服务，放在 <code>async def</code> 路由里却会？（设计层面，不只是"因为线程池"）</li>
+          <li><strong>跨机制综合</strong>：一次 <code>POST /items</code> 请求里，<code>item: Item</code> 这<em>同一个</em>注解在哪两个不同阶段被用到、分别用的是哪个编译产物？把这两个阶段相对于"你的函数执行"的先后位置说清楚。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><code>inspect.signature()</code>。<code>item: Item</code> 的注解是 Pydantic 模型 → 请求体；不在路径 <code>{}</code> 里的普通标量 → 查询参数。用 <code>Path()/Query()/Body()</code> 可显式覆盖。</li>
+            <li>在<em>类定义时</em>由元类触发 <code>GenerateSchema</code> → core schema → Rust 编译，缓存为 <code>__pydantic_validator__</code>。因为字段遍历在编译好的 Rust 校验器树内部进行，Python 端每次只是一次调用，与字段数无关。校验器（<code>SchemaValidator</code>）和序列化器（<code>SchemaSerializer</code>）是两个分开的编译产物，方向相反。</li>
+            <li>默认 <code>use_cache=True</code>，一次请求内只执行一次，三处共享同一结果。要每次重跑传 <code>use_cache=False</code>。yield 依赖的清理被压入 <code>AsyncExitStack</code>，按 LIFO 逆序、默认在响应发出之后执行。</li>
+            <li><code>def</code> 路由被框架 <code>run_in_threadpool</code> 丢进 AnyIO 线程池（40 线程），阻塞只占住其中一个工作线程，事件循环照常服务其它连接。<code>async def</code> 直接跑在单线程事件循环上，同步阻塞且无 <code>await</code> 让出点会占死这唯一的线程，所有连接一起冻住。设计层面：安全性取决于阻塞代码跑在哪个线程上，而路由的 <code>def</code>/<code>async def</code> 决定了这一点。</li>
+            <li><code>item: Item</code> 在请求体校验阶段（你的函数执行<em>之前</em>）走 <code>SchemaValidator</code>；在响应序列化阶段（你的函数执行<em>之后</em>）走 <code>SchemaSerializer</code>。同一份注解，两个方向相反的 Rust 产物，分居函数执行的前后两侧。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>自定义校验器会把"快 5–50×"吃掉多少？</h3>
+        <p>3.2 说每次请求只是一次 Rust 调用，所以快。但若给模型的某个字段加一个 Python <code>field_validator</code>，校验过程就要在 Rust 校验器树跑到那个字段时回调进 Python，跑完再回 Rust。一个有 10 个字段、其中 8 个带 Python 自定义校验器的模型，它相比纯 Rust 校验的模型，速度优势还剩多少？为什么？这对"什么时候该用自定义校验器、什么时候该换成 <code>Annotated</code> 内置约束"有什么指导？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>想清楚跨边界调用的成本：每次 Rust→Python→Rust 往返都有固定开销，且 Python 段本身是解释执行。8 个字段各一次回调，意味着 8 次往返 + 8 段 Python 执行——本地代码的优势按"被 Python 回调打断的比例"递减。内置约束（如 <code>Annotated[int, Field(gt=0)]</code>）则完全在 Rust 里执行，不跨边界。结论方向：能用内置约束表达的，别写 Python 校验器。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://fastapi.tiangolo.com/async/">FastAPI · Concurrency and async / await</a>（官方，事件循环与 <code>def</code>/<code>async def</code> 路由）</li>
+          <li><a href="https://fastapi.tiangolo.com/tutorial/dependencies/dependencies-with-yield/">FastAPI · Dependencies with yield</a>（官方，AsyncExitStack 与 LIFO 清理）</li>
+          <li><a href="https://docs.pydantic.dev/latest/internals/architecture/">Pydantic v2 · Architecture</a>（官方，core schema 与 pydantic-core 编译模型）</li>
+          <li><a href="https://docs.pydantic.dev/latest/concepts/performance/">Pydantic v2 · Performance</a>（官方，v2 vs v1 性能与自定义校验器代价）</li>
+          <li><a href="https://asgi.readthedocs.io/en/latest/specs/main.html">ASGI Specification</a>（协议层，receive/send 与 WSGI 的差异）</li>
+          <li><a href="https://www.starlette.io/">Starlette 文档</a>（FastAPI 继承的路由 / Request / 线程池 / lifespan）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-architecture.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 分层架构与请求生命周期</span>
+        </a>
+        <a href="04-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 自测与辨析</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#p-typesystem" data-toc-target="p-typesystem">3.1 类型注解 → 四产物</a></li>
+        <li><a href="#p-pydantic-core" data-toc-target="p-pydantic-core">3.2 定义时编译进 Rust</a></li>
+        <li><a href="#p-di" data-toc-target="p-di">3.3 依赖注入图</a></li>
+        <li><a href="#p-async" data-toc-target="p-async">3.4 async 并发模型</a></li>
+        <li><a href="#p-tradeoffs" data-toc-target="p-tradeoffs">3.5 设计权衡与生态</a></li>
+        <li><a href="#p-synthesis" data-toc-target="p-synthesis">3.6 跨机制综合</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
