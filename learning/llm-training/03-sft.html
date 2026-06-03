@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SFT：把能力对齐到「听话」· 大模型训练教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:#FFFFFF; --bg-soft:#FAFAFA; --bg-edge:#F4F4F4; --ink:#0A0A0A; --ink-soft:#525252;
+  --ink-faint:#A3A3A3; --rule:#E5E5E5; --vermilion:#B73B2F; --vermilion-soft:rgba(183,59,47,0.06);
+  --code-string:#2D6A4F; --code-number:#8B6914; --code-fn:#2C3E50;
+  --sans:'Noto Sans SC',-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Menlo',monospace; --measure:880px; --page-max:1280px; --line:1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15.5px; line-height:var(--line); font-feature-settings:"kern","liga"; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+main { position: relative; }
+.progress-bar { position:fixed; top:0; left:0; height:2px; width:0; background:var(--vermilion); z-index:100; transition:width 80ms linear; }
+.learning-path { max-width:var(--page-max); margin:0 auto; padding:16px 40px 0; font-family:var(--mono); font-size:11px; letter-spacing:0.04em; color:var(--ink-faint); }
+.learning-path a { color:var(--ink-faint); text-decoration:none; padding:2px 0; margin:0 4px; }
+.learning-path a:first-child { margin-left:0; }
+.learning-path .sep { color:var(--ink-faint); margin:0 2px; user-select:none; }
+.learning-path .current { color:var(--vermilion); font-weight:700; }
+.page { display:grid; grid-template-columns:minmax(0,1fr) 200px; gap:48px; max-width:var(--page-max); margin:0 auto; padding:24px 40px 80px; }
+@media (max-width:1080px) { .page { grid-template-columns:1fr; gap:0; padding:16px 24px 64px; } .toc-sidebar { display:none; } }
+article { max-width:var(--measure); min-width:0; }
+.chapter-opener { padding:24px 0 16px; border-bottom:1px solid var(--rule); margin-bottom:24px; }
+.chapter-opener .chapter-label { font-family:var(--mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 8px; font-weight:500; }
+.chapter-opener h1 { font-family:var(--sans); font-weight:700; font-size:30px; line-height:1.2; margin:0 0 12px; letter-spacing:-0.01em; color:var(--ink); }
+.chapter-opener .recap { font-size:14px; color:var(--ink-soft); margin:0; max-width:640px; }
+@media (max-width:640px) { .chapter-opener h1 { font-size:24px; } }
+.schema-panel { border-left:2px solid var(--ink); padding:4px 0 4px 16px; margin:16px 0 32px; }
+.schema-panel .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 8px; font-weight:500; }
+.schema-panel ul { list-style:none; padding:0; margin:0; }
+.schema-panel li { padding:4px 0; font-size:14.5px; line-height:1.55; color:var(--ink); }
+.schema-panel li::before { content:"—  "; color:var(--ink-faint); }
+article p, article li { font-size:15.5px; line-height:var(--line); color:var(--ink); margin:0.9em 0; }
+article strong { font-weight:600; color:var(--ink); }
+article em { font-style:italic; color:var(--ink); }
+article :not(pre) > code { font-family:var(--mono); font-size:0.88em; background:var(--bg-soft); padding:1px 5px; border-radius:2px; color:var(--vermilion); border:1px solid var(--rule); }
+article a { color:var(--ink); text-decoration:underline; text-decoration-color:var(--ink-faint); text-underline-offset:2px; text-decoration-thickness:1px; transition:color 150ms, text-decoration-color 150ms; }
+article a:hover { color:var(--vermilion); text-decoration-color:var(--vermilion); }
+article h2 { font-family:var(--sans); font-weight:700; font-size:22px; line-height:1.3; margin:36px 0 8px; padding-top:16px; border-top:1px solid var(--rule); letter-spacing:-0.005em; }
+article h2 .num { font-family:var(--mono); font-weight:500; font-size:15px; color:var(--ink-faint); margin-right:10px; }
+article h3 { font-family:var(--sans); font-weight:600; font-size:16px; margin:20px 0 8px; color:var(--ink); }
+article .one-liner { font-size:16px; line-height:1.55; color:var(--ink); font-weight:500; margin:8px 0 18px; padding-left:12px; border-left:2px solid var(--ink-faint); }
+article .rationale { background:var(--bg-soft); padding:12px 16px; border-left:2px solid var(--ink-soft); margin:16px 0; font-size:14.5px; }
+article .rationale > .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:500; margin-bottom:4px; display:block; }
+article .rationale p { margin:4px 0; }
+.code-block { margin:16px 0; border:1px solid var(--rule); border-radius:3px; overflow:hidden; background:var(--bg-soft); }
+.code-block .header { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:var(--bg-edge); border-bottom:1px solid var(--rule); font-family:var(--mono); font-size:11px; color:var(--ink-soft); }
+.code-block .header .filename { font-weight:500; }
+.code-block .header .lang { color:var(--ink-faint); text-transform:uppercase; font-weight:500; font-size:10px; }
+.code-block .header .copy { border:none; background:transparent; font-family:var(--mono); font-size:10px; color:var(--ink-soft); cursor:pointer; padding:2px 6px; letter-spacing:0.05em; text-transform:uppercase; transition:color 150ms; }
+.code-block .header .copy:hover { color:var(--vermilion); }
+.code-block .header .copy.copied { color:var(--vermilion); }
+.code-block pre { margin:0; padding:14px 16px; overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.6; color:var(--ink); background:var(--bg-soft); }
+.code-block pre code { background:none; padding:0; color:inherit; border:none; font-weight:400; }
+.token.keyword, .token.boolean, .token.constant { color:var(--vermilion); font-weight:500; }
+.token.string, .token.char { color:var(--code-string); }
+.token.number { color:var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color:var(--ink-faint); font-style:italic; }
+.token.function { color:var(--code-fn); font-weight:500; }
+.token.class-name { color:var(--ink); font-weight:700; }
+.token.operator, .token.punctuation { color:var(--ink-soft); }
+.token.builtin { color:var(--vermilion); }
+.token.property { color:var(--ink); }
+.token.tag, .token.attr-name { color:var(--code-fn); }
+.token.attr-value { color:var(--code-string); }
+.annotations { margin:10px 0 18px; font-size:14px; color:var(--ink-soft); }
+.annotations .line-ref { font-family:var(--mono); font-size:11px; background:var(--bg-soft); border:1px solid var(--rule); padding:1px 6px; border-radius:2px; margin-right:4px; color:var(--vermilion); font-weight:500; }
+.predict { margin:16px 0; padding:12px 16px; background:var(--bg-soft); border-left:2px solid var(--vermilion); border-radius:2px; }
+.predict > .question-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--vermilion); font-weight:500; margin:0 0 4px; display:block; }
+.predict p { margin:4px 0; color:var(--ink); }
+details { margin:10px 0 0; border-top:1px dashed var(--rule); padding-top:10px; }
+details > summary { cursor:pointer; list-style:none; font-family:var(--mono); font-size:11px; color:var(--ink-soft); letter-spacing:0.04em; padding:4px 0; transition:color 150ms; user-select:none; display:flex; align-items:center; gap:6px; }
+details > summary::-webkit-details-marker { display:none; }
+details > summary::before { content:"▸"; display:inline-block; color:var(--ink-faint); transition:transform 200ms, color 150ms; font-size:9px; }
+details[open] > summary::before { transform:rotate(90deg); color:var(--vermilion); }
+details > summary:hover { color:var(--vermilion); }
+details > summary:hover::before { color:var(--vermilion); }
+details > *:not(summary) { margin-top:8px; padding-left:14px; border-left:1px solid var(--rule); }
+.callout { margin:16px 0; padding:10px 16px; border-left:2px solid var(--ink-soft); background:var(--bg-soft); font-size:14.5px; }
+.callout .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:var(--ink-soft); margin:0 0 4px; display:block; }
+.callout p { margin:4px 0; }
+.callout.warning { border-left-color:var(--vermilion); background:var(--vermilion-soft); }
+.callout.warning .label { color:var(--vermilion); }
+.callout.tip { border-left-color:var(--ink-soft); }
+.callout.example { border-left-color:var(--ink-soft); }
+.callout.insight { border-left-color:var(--ink-soft); }
+.compare-table { margin:20px 0; width:100%; border-collapse:collapse; font-size:14px; }
+.compare-table caption { text-align:left; font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); padding:0 0 8px; font-weight:500; }
+.compare-table thead th { text-align:left; font-family:var(--sans); font-weight:600; font-size:13px; color:var(--ink); padding:8px 10px; border-bottom:1px solid var(--ink); }
+.compare-table tbody td { padding:8px 10px; border-bottom:1px solid var(--rule); vertical-align:top; line-height:1.5; }
+.compare-table tbody tr.selected td { font-weight:500; }
+.compare-table tbody tr.selected td:first-child { border-left:2px solid var(--vermilion); padding-left:8px; color:var(--vermilion); position:relative; }
+figure { margin:24px 0; }
+figure svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+figcaption { font-family:var(--sans); font-size:13px; color:var(--ink-soft); text-align:center; margin-top:10px; line-height:1.5; }
+figcaption .fig-num { font-family:var(--mono); font-weight:600; color:var(--vermilion); margin-right:6px; font-size:11px; letter-spacing:0.04em; }
+.self-check { margin:32px 0 20px; border-top:1px solid var(--ink); padding-top:20px; }
+.self-check h2 { border:none; padding-top:0; margin-top:0; font-size:18px; }
+.self-check ol { padding-left:22px; }
+.self-check ol li { margin:10px 0; padding-left:4px; }
+.self-check ol li::marker { font-family:var(--mono); color:var(--ink-faint); font-weight:500; font-size:13px; }
+.challenge { margin:24px 0; padding:14px 18px; background:var(--bg-soft); border-left:2px solid var(--vermilion); border-radius:2px; }
+.challenge .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:var(--vermilion); margin:0 0 8px; display:block; }
+.challenge h3 { margin-top:0; font-size:15px; }
+.references { margin:32px 0 16px; padding-top:16px; border-top:1px solid var(--rule); }
+.references h3 { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:500; margin:0 0 8px; }
+.references ul { padding-left:16px; }
+.references li { font-size:13.5px; line-height:1.55; color:var(--ink-soft); }
+.references li a { color:var(--ink); }
+.chapter-nav { margin-top:28px; padding-top:16px; border-top:1px solid var(--rule); display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.chapter-nav a { display:block; padding:12px 14px; border:1px solid var(--rule); text-decoration:none; color:var(--ink); transition:border-color 150ms; }
+.chapter-nav a:hover { border-color:var(--vermilion); }
+.chapter-nav a.next { text-align:right; }
+.chapter-nav .label { display:block; font-family:var(--mono); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:2px; }
+.chapter-nav .title { font-weight:500; font-size:14px; }
+.toc-sidebar { position:sticky; top:24px; align-self:start; padding-top:24px; font-family:var(--mono); font-size:11px; line-height:1.55; max-height:calc(100vh - 48px); overflow-y:auto; }
+.toc-sidebar .toc-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); font-weight:500; margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+.toc-sidebar ul { list-style:none; padding:0; margin:0; }
+.toc-sidebar li { margin:2px 0; }
+.toc-sidebar a { display:block; padding:3px 0 3px 10px; color:var(--ink-soft); text-decoration:none; border-left:2px solid transparent; transition:all 150ms; font-size:11px; }
+.toc-sidebar a:hover { color:var(--ink); }
+.toc-sidebar a.active { color:var(--vermilion); border-left-color:var(--vermilion); font-weight:500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation:fade-in 400ms cubic-bezier(0.2,0.7,0.3,1) both; }
+  .schema-panel { animation:fade-in 400ms 100ms cubic-bezier(0.2,0.7,0.3,1) both; }
+}
+@keyframes fade-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+.diagram-ink { stroke:var(--ink); fill:none; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }
+.diagram-accent { stroke:var(--vermilion); fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.diagram-soft { stroke:var(--ink-faint); fill:none; stroke-width:1.1; stroke-dasharray:3 3; }
+.node-fill { fill:var(--bg); }
+.node-fill-accent { fill:var(--vermilion-soft); }
+.node-label { font-family:var(--sans); font-size:13px; font-weight:500; fill:var(--ink); }
+.node-label-accent { font-family:var(--sans); font-size:13px; font-weight:700; fill:var(--vermilion); }
+.edge-label { font-family:var(--mono); font-size:11px; fill:var(--ink-soft); paint-order:stroke; stroke:var(--bg); stroke-width:4px; stroke-linejoin:round; }
+.branch-label { font-family:var(--mono); font-size:11px; font-weight:700; fill:var(--vermilion); paint-order:stroke; stroke:var(--bg); stroke-width:4px; stroke-linejoin:round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-overview.html">01 全景</a><span class="sep">—</span>
+    <a href="02-pretraining.html">02 预训练</a><span class="sep">—</span>
+    <a href="03-sft.html" class="current">03 SFT</a><span class="sep">—</span>
+    <a href="04-alignment.html">04 对齐</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>SFT：把能力对齐到「听话」</h1>
+        <p class="recap">上一章看了"能力"怎么长出来——一个满脑子知识却只会续写的基座模型。这一章是后训练第一步 SFT（监督微调）：用同一个 loss、换一种数据，把它从"会续写"调成"会回答"。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>对齐问题：为什么"有用 / 无害"压根不是一个能直接求导的 loss，后训练因此存在</li>
+          <li>SFT 的机制：还是 §1.2 的交叉熵，只是换成"指令→回答"数据并对 prompt 做掩码</li>
+          <li>SFT 的能与不能：能调行为，灌新知识却不可靠，还会"教模型幻觉"——以及由此推出的微调 vs RAG 选型</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>对齐问题：从"会续写"到"会回答"</span></h2>
+
+      <p class="one-liner">基座模型有能力但不听话；后训练要解决的是行为没对齐，而不是能力不够。</p>
+
+      <p><a href="01-overview.html#s13">§1.3 的能力 vs 对齐</a>已经画出这张图：基座模型的能力条几乎被预训练填满，行为条却是空的。具体表现是：给基座模型输入"请解释一下反向传播"，它多半不给解释，而是续写出"请解释一下反向传播。这是一个深度学习领域的核心问题。请解释一下梯度消失……"——知识在，回答意愿不在。</p>
+
+      <p>这不是能力缺失，是行为没有对齐到"被提问时应当回答"这种姿态。SFT 要修的正是这一点。</p>
+
+      <div class="rationale">
+        <span class="label">为什么对齐问题难</span>
+        <p>人类想要的"有用、无害、诚实"，本质上是<strong>主观偏好</strong>，不是一个能写出来然后对其求导的函数。人类判断才是 ground truth，但它昂贵（标注一条需要人时间）、主观（不同标注员意见不同）、可被 Goodhart 定律钻空子（模型一旦学会"看起来有用"，和真正有用之间就出现裂缝）。整个后训练工程，都是在绕开"无法直接求导"这个根本困难。</p>
+      </div>
+
+      <p>本章 SFT 只解决第一层："听指令、有格式、会回答"。更精细的问题——"哪个回答更好""价值观怎么对齐"——留给第 4 章的偏好优化。SFT 是行为克隆（behavioral cloning）：给模型看大量"好的行为示范"，让它学会模仿。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>同一个基座模型，给它加几条"问→答"格式的 few-shot 示例放在 prompt 里，有时就能让它开始"好好回答"。既然 in-context prompting 能临时对齐行为，SFT 还有什么不可替代的价值？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>in-context 对齐每次都要消耗 context 窗口，推理成本高；行为也不稳定，一旦 prompt 稍变就退回续写模式。SFT 把行为刻进参数，推理时无需额外示例，稳定且零额外 token 开销。此外，SFT 可以调整模型对特殊 token（如 <code>&lt;|user|&gt;</code>）的敏感度，这是 prompt 做不到的。</p>
+        </details>
+      </div>
+
+      <h2 id="s32"><span class="num">3.2</span><span>SFT 的机制：换数据，不换机器</span></h2>
+
+      <p class="one-liner">SFT 与预训练用同一个交叉熵 loss；唯一区别是数据格式和 loss 的计算位置。</p>
+
+      <p>§1.2 建立的那台机器——token → 预测下一个 → 交叉熵 loss → 梯度下降——在 SFT 里原封不动地运行。变化的是两件事：</p>
+
+      <ul>
+        <li><strong>数据格式</strong>：不再是海量无标注文本，而是人写或合成的"（指令，理想回答）"对。每条样本都有明确的"该说什么"。</li>
+        <li><strong>loss 的计算位置</strong>：只在<strong>回答</strong>部分的 token 上计算交叉熵；指令（prompt）部分的 token 被掩码，label 设为 <code>-100</code>，梯度不经过这些位置。优化器只被告知"给定这种输入，回答是什么"，而不是"输入本身是什么"。</li>
+      </ul>
+
+      <h3>图示：prompt 掩码</h3>
+
+      <figure>
+        <svg viewBox="0 0 820 200" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一条 token 序列分为两段：指令段灰色不算 loss，回答段朱红色算 loss">
+          <defs>
+            <marker id="sft-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="sft-ar-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ——— token blocks: prompt section ——— -->
+          <!-- special token: user -->
+          <rect x="20"  y="72" width="72" height="40" rx="3" fill="#EDEDED" stroke="#A3A3A3" stroke-width="1"/>
+          <text x="56"  y="97" text-anchor="middle" class="edge-label" style="fill:#525252;">&lt;|user|&gt;</text>
+
+          <!-- prompt tokens (3 blocks) -->
+          <rect x="100" y="72" width="56" height="40" rx="3" fill="#EDEDED" stroke="#A3A3A3" stroke-width="1"/>
+          <text x="128" y="97" text-anchor="middle" class="edge-label" style="fill:#525252;">解释</text>
+
+          <rect x="162" y="72" width="56" height="40" rx="3" fill="#EDEDED" stroke="#A3A3A3" stroke-width="1"/>
+          <text x="190" y="97" text-anchor="middle" class="edge-label" style="fill:#525252;">反向</text>
+
+          <rect x="224" y="72" width="56" height="40" rx="3" fill="#EDEDED" stroke="#A3A3A3" stroke-width="1"/>
+          <text x="252" y="97" text-anchor="middle" class="edge-label" style="fill:#525252;">传播</text>
+
+          <!-- special token: eot -->
+          <rect x="286" y="72" width="76" height="40" rx="3" fill="#EDEDED" stroke="#A3A3A3" stroke-width="1"/>
+          <text x="324" y="97" text-anchor="middle" class="edge-label" style="fill:#525252;">&lt;|eot_id|&gt;</text>
+
+          <!-- ——— separator gap ——— -->
+          <line x1="370" y1="72" x2="370" y2="112" stroke="#A3A3A3" stroke-width="1" stroke-dasharray="4 3"/>
+
+          <!-- ——— token blocks: answer section ——— -->
+          <!-- special token: assistant -->
+          <rect x="378" y="72" width="100" height="40" rx="3" fill="var(--vermilion-soft)" stroke="var(--vermilion)" stroke-width="1.4"/>
+          <text x="428" y="97" text-anchor="middle" class="edge-label" style="fill:var(--vermilion);">&lt;|assistant|&gt;</text>
+
+          <!-- answer tokens -->
+          <rect x="484" y="72" width="56" height="40" rx="3" fill="var(--vermilion-soft)" stroke="var(--vermilion)" stroke-width="1.4"/>
+          <text x="512" y="97" text-anchor="middle" class="edge-label" style="fill:var(--vermilion);">反向</text>
+
+          <rect x="546" y="72" width="56" height="40" rx="3" fill="var(--vermilion-soft)" stroke="var(--vermilion)" stroke-width="1.4"/>
+          <text x="574" y="97" text-anchor="middle" class="edge-label" style="fill:var(--vermilion);">传播</text>
+
+          <rect x="608" y="72" width="56" height="40" rx="3" fill="var(--vermilion-soft)" stroke="var(--vermilion)" stroke-width="1.4"/>
+          <text x="636" y="97" text-anchor="middle" class="edge-label" style="fill:var(--vermilion);">是…</text>
+
+          <rect x="670" y="72" width="76" height="40" rx="3" fill="var(--vermilion-soft)" stroke="var(--vermilion)" stroke-width="1.4"/>
+          <text x="708" y="97" text-anchor="middle" class="edge-label" style="fill:var(--vermilion);">&lt;|eot_id|&gt;</text>
+
+          <!-- ——— brace labels below ——— -->
+          <!-- prompt brace -->
+          <line x1="20"  y1="122" x2="362" y2="122" class="diagram-soft"/>
+          <line x1="20"  y1="118" x2="20"  y2="126" class="diagram-soft"/>
+          <line x1="362" y1="118" x2="362" y2="126" class="diagram-soft"/>
+          <text x="191" y="140" text-anchor="middle" class="edge-label">指令段 · label = −100 · 不算 loss</text>
+
+          <!-- answer brace -->
+          <line x1="378" y1="122" x2="754" y2="122" class="diagram-accent"/>
+          <line x1="378" y1="118" x2="378" y2="126" class="diagram-accent"/>
+          <line x1="754" y1="118" x2="754" y2="126" class="diagram-accent"/>
+          <text x="566" y="140" text-anchor="middle" class="branch-label">回答段 · 算 loss · 梯度回传</text>
+
+          <!-- top label -->
+          <text x="410" y="50" text-anchor="middle" class="edge-label" style="font-size:12px;">一条 SFT 样本的 token 序列（chat 模板展开后）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>SFT prompt 掩码示意：指令段（灰）label 设 −100，梯度不流经此处；回答段（红）正常计算交叉熵 loss。<strong>注意</strong>：chat 模板特殊 token（<code>&lt;|user|&gt;</code>、<code>&lt;|assistant|&gt;</code>、<code>&lt;|eot_id|&gt;</code>）属于回答段的起始定界，决定模型是否将其纳入 loss 计算因实现而异——但训练与推理时的模板格式必须完全一致，否则行为静默退化。</figcaption>
+      </figure>
+
+      <h3>伪代码：labels 掩码</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">sft_masking.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="sft-code-mask">复制</button>
+        </div>
+        <pre id="sft-code-mask"><code class="language-python"># 伪代码：SFT 样本的 labels 掩码构造
+# input_ids: [bos, u1, u2, ..., &lt;eot&gt;, a1, a2, ..., &lt;eot&gt;]
+# 其中 u* 是 prompt tokens，a* 是 response tokens
+
+IGNORE_INDEX = -100  # PyTorch CrossEntropyLoss 忽略此值
+
+def build_labels(input_ids, prompt_len):
+    """
+    prompt_len: prompt 占用的 token 数（含特殊 token）
+    返回同长度的 labels，prompt 部分设为 IGNORE_INDEX
+    """
+    labels = input_ids.clone()
+    # 对 prompt 段做掩码——优化器不在这里算梯度
+    labels[:prompt_len] = IGNORE_INDEX
+    return labels
+
+# 训练 step 示意
+for batch in dataloader:
+    input_ids = batch["input_ids"]          # (B, T)
+    labels    = batch["labels"]             # (B, T)，prompt 部分已是 -100
+    logits    = model(input_ids).logits     # (B, T, vocab_size)
+    # CrossEntropyLoss 自动跳过 label == -100 的位置
+    loss = cross_entropy(
+        logits[:, :-1].reshape(-1, vocab_size),
+        labels[:, 1:].reshape(-1),          # next-token prediction
+        ignore_index=IGNORE_INDEX,
+    )
+    loss.backward()
+    optimizer.step()</code></pre>
+      </div>
+
+      <div class="annotations">
+        <span class="line-ref">labels[:prompt_len] = IGNORE_INDEX</span>
+        这一行是 SFT 与预训练在实现上的<strong>唯一区别</strong>。把它去掉，代码就退化成普通的语言模型预训练。
+      </div>
+
+      <h3>chat 模板与特殊 token</h3>
+
+      <p><code>&lt;|user|&gt;</code>、<code>&lt;|assistant|&gt;</code>、<code>&lt;|eot_id|&gt;</code> 这类角色标记是词表的一部分，在 tokenizer 训练阶段就已注册。SFT 期间，模型学会了"看到 <code>&lt;|assistant|&gt;</code> 就该开始回答"。推理时若 chat 模板与训练时不一致（哪怕只是空格或换行位置不同），对应的 token id 序列就会错位，行为静默掉点。这是部署时最常见的格式陷阱之一。</p>
+
+      <h3>数据规模：质量远重于数量</h3>
+
+      <p>三个代表性数据集说明了这条规律：InstructGPT（2022）使用约 1.3 万条人工示范；Alpaca（2023）用 GPT-3.5 合成了 5.2 万条数据；LIMA（2023）只用 1000 条精选数据，对齐效果已相当有竞争力。数量差距高达 52 倍，对齐质量的差距远没有这么大。这个现象引出了下一节。</p>
+
+      <h2 id="s33"><span class="num">3.3</span><span>表层对齐假说：SFT 到底教会了什么</span></h2>
+
+      <p class="one-liner">LIMA 的实验说明：对齐教的是"用哪种格式/风格的子分布"，不是在教新知识。</p>
+
+      <p>LIMA（2023）提出<strong>表层对齐假说</strong>（Superficial Alignment Hypothesis）：模型的知识与能力几乎全部在预训练阶段习得；对齐只是教模型"在与用户交互时，该从预训练学到的分布中采用哪个子集"——即回答风格、格式偏好、"应该先说什么"这类表层决策。这正是 §1.3 那条不对称实证的直接反映：能力条是预训练填满的，SFT 动的是行为条。</p>
+
+      <p>假说的预测是：少量高质量示范就能饱和对齐效果，因为格式/风格信号的信息量本来就不大。1000 条数据的 LIMA 验证了这个预测。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 假说的边界</span>
+        <p>2024 年，"Revisiting the Superficial Alignment Hypothesis"给出了更细致的图景：表层对齐假说<strong>方向正确但被高估</strong>。风格/格式维度约 100 条示范就达到饱和，但<strong>推理能力随 SFT 数据规模继续呈幂律提升</strong>——对于需要多步推理或多领域覆盖的模型，数据量仍然重要。此外，SFT 也能整合一部分新知识，只是效率远低于预训练。诚实结论："纯格式"说法过于简化，但"主要是行为，不是知识"的大方向成立。</p>
+      </div>
+
+      <h2 id="s34"><span class="num">3.4</span><span>教模型幻觉：SFT 最隐蔽的失败模式</span></h2>
+
+      <p class="one-liner">在模型内部没有依据的问答对上做行为克隆，等于在教模型"无论知不知道，都要自信作答"。</p>
+
+      <p>SFT 本质上是<strong>行为克隆</strong>：给定一个（指令，回答）对，优化器只知道"看到这种输入，就该输出这种回答"，不知道也不关心"模型内部是否真的掌握了这个答案的依据"。</p>
+
+      <p>John Schulman 在多个公开场合指出这个机制性问题：标注者给出的答案，未必对应<em>模型参数里已有的知识</em>。在这样的样本上做 SFT，梯度在教的不是"如何正确回答"，而是"在没有内部依据时，也要输出一个听起来合理的答案"——即<strong>学会了"永远回答"这个行为，却没有学会"只回答有内部依据的内容"这个边界</strong>。</p>
+
+      <p>Gekhman 等（2024）对此做了量化：在含有模型<em>原本不知道</em>的新知识的样本上微调，幻觉倾向与新知识样本的数量呈<strong>线性正相关</strong>。新知识样本在训练中学得更慢（loss 下降缓慢），一旦被"记住"，模型反而泛化出"编造"的行为倾向——因为优化器学到的是"遇到不确定输入也要给出确定答案"这个更广泛的模式。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 用微调"灌知识"是双重错误</span>
+        <p>第一重错误：SFT 数据量远小于预训练，灌不动知识条（§1.3）。第二重错误：强行在模型不知道的知识上做 SFT，不只是灌不进去——还会<strong>主动训高幻觉倾向</strong>，让模型在不确定时更倾向于编造而非拒绝。修复方向：行为克隆用来教<em>行为</em>（格式、风格、交互姿态）；教模型"何时该说不知道"这个<em>边界</em>，需要第 4 章的强化学习——当模型说"我不确定"得到的奖励高于"自信编造"时，边界才能被学进去。</p>
+      </div>
+
+      <h2 id="s35"><span class="num">3.5</span><span>SFT 的能与不能：微调 vs RAG vs LoRA</span></h2>
+
+      <p class="one-liner">改行为用微调，加可更新事实用 RAG；两者常组合，LoRA 是微调的省显存变体。</p>
+
+      <h3>微调 vs RAG：先问目标</h3>
+
+      <p>两类需求对应两种工具，判断标准只有一个：<strong>目标是改行为还是加事实？</strong></p>
+
+      <ul>
+        <li><strong>改行为 / 格式 / 语气 / 领域推理风格</strong>：用微调（全量或 LoRA）。行为刻在参数里，推理时零额外开销，稳定。</li>
+        <li><strong>加可更新、可溯源的事实</strong>：用 RAG（检索增强生成）。事实存在外部知识库，可以随业务更新，无需重新训练，且检索来源可以展示给用户核实。</li>
+      </ul>
+
+      <p>Lewis 等（arxiv 2312.05934）的对比研究表明，RAG 在知识注入上稳定优于无监督微调。两者并不互斥：常见的生产配置是微调管格式/语气，RAG 管事实——每一层的工具用在对应的目标上。</p>
+
+      <h3>LoRA：冻结权重，只训低秩旁路</h3>
+
+      <p>全量微调更新模型的全部参数（表达力最强，但显存占用是模型本身的数倍，且容易灾难性遗忘预训练行为）。<strong>LoRA</strong>（Low-Rank Adaptation）提出一种参数高效方案：冻结预训练权重矩阵 <strong>W</strong>，只在旁路引入两个低秩矩阵 <strong>B</strong>（维度 <em>d</em>×<em>r</em>）和 <strong>A</strong>（维度 <em>r</em>×<em>d</em>），前向传播变为：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:15px; margin:12px 0;">h = W·x + B·A·x</p>
+
+      <p>其中秩 <em>r</em> 通常取 4–64，约占原参数量的 1–5%。<strong>W 不参与梯度更新，只有 B 和 A 被训练</strong>。显存需求显著下降，且由于预训练权重保持不变，遗忘风险也更低。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 240" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="LoRA 低秩分解：大矩阵 W 冻结，旁路两个细长矩阵 B 和 A 可训">
+          <defs>
+            <marker id="sft-lora-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="sft-lora-ar-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- input x -->
+          <text x="30" y="125" text-anchor="middle" class="node-label">x</text>
+          <line x1="46" y1="120" x2="80" y2="120" class="diagram-ink" marker-end="url(#sft-lora-ar)"/>
+
+          <!-- W block (frozen, large) -->
+          <rect x="80" y="60" width="120" height="120" rx="4" class="diagram-ink node-fill"/>
+          <text x="140" y="116" text-anchor="middle" class="node-label">W</text>
+          <text x="140" y="133" text-anchor="middle" class="edge-label">d × d</text>
+          <text x="140" y="148" text-anchor="middle" class="edge-label">冻结</text>
+
+          <!-- W output arrow -->
+          <line x1="200" y1="120" x2="480" y2="120" class="diagram-ink" marker-end="url(#sft-lora-ar)"/>
+          <!-- W output label -->
+          <text x="340" y="113" text-anchor="middle" class="edge-label">W·x</text>
+
+          <!-- LoRA path: A block -->
+          <rect x="240" y="20" width="72" height="56" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="276" y="46" text-anchor="middle" class="node-label-accent">A</text>
+          <text x="276" y="62" text-anchor="middle" class="edge-label">r × d</text>
+
+          <!-- LoRA path: B block -->
+          <rect x="350" y="20" width="72" height="56" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="386" y="46" text-anchor="middle" class="node-label-accent">B</text>
+          <text x="386" y="62" text-anchor="middle" class="edge-label">d × r</text>
+
+          <!-- x → A -->
+          <line x1="80" y1="95" x2="80" y2="48" class="diagram-accent"/>
+          <line x1="80" y1="48" x2="240" y2="48" class="diagram-accent" marker-end="url(#sft-lora-ar-red)"/>
+
+          <!-- A → B -->
+          <line x1="312" y1="48" x2="350" y2="48" class="diagram-accent" marker-end="url(#sft-lora-ar-red)"/>
+
+          <!-- B → adder -->
+          <line x1="422" y1="48" x2="490" y2="48" class="diagram-accent"/>
+          <line x1="490" y1="48" x2="490" y2="108" class="diagram-accent" marker-end="url(#sft-lora-ar-red)"/>
+
+          <!-- adder circle -->
+          <circle cx="490" cy="120" r="14" class="diagram-ink node-fill"/>
+          <text x="490" y="125" text-anchor="middle" class="node-label" style="font-size:18px;">+</text>
+
+          <!-- adder → h -->
+          <line x1="504" y1="120" x2="560" y2="120" class="diagram-ink" marker-end="url(#sft-lora-ar)"/>
+          <text x="600" y="125" text-anchor="middle" class="node-label">h</text>
+
+          <!-- B·A label -->
+          <text x="386" y="10" text-anchor="middle" class="branch-label">只训 B、A（r ≪ d）</text>
+
+          <!-- bottom annotation -->
+          <text x="350" y="205" text-anchor="middle" class="edge-label">h = W·x + B·A·x　·　秩 r 通常 4–64，约占全量参数的 1–5%</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>LoRA 低秩分解：预训练权重 W（冻结）走主路径，旁路由两个低秩矩阵 B·A（可训）组成，输出相加。<strong>注意</strong>：LoRA 改变的仍是行为条（§1.3），不改变知识条——它只是让微调更省显存，并不解决"灌新知识不可靠"的根本问题。</figcaption>
+      </figure>
+
+      <h3>四种手段的对比</h3>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 灌知识 / 改行为的四种手段</caption>
+        <thead>
+          <tr>
+            <th>手段</th>
+            <th>改什么</th>
+            <th>适合的目标</th>
+            <th>主要代价</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>全量微调（Full SFT）</td>
+            <td>全部参数</td>
+            <td>行为 / 格式 / 推理风格；数据充足时表达力最强</td>
+            <td>显存高；易灾难性遗忘；训练周期长</td>
+          </tr>
+          <tr>
+            <td>LoRA / 参数高效微调</td>
+            <td>低秩旁路（1–5% 参数）</td>
+            <td>行为 / 风格调整；显存受限时的首选</td>
+            <td>表达力略低于全量；r 需调参</td>
+          </tr>
+          <tr class="selected">
+            <td>RAG（检索增强）</td>
+            <td>不改参数；检索时注入上下文</td>
+            <td>可更新 / 可溯源的动态事实；知识频繁迭代的场景</td>
+            <td>推理延迟增加；检索质量决定上限</td>
+          </tr>
+          <tr>
+            <td>长上下文（In-context）</td>
+            <td>不改参数；在 prompt 里放文档</td>
+            <td>临时注入少量事实或示范；无需任何训练</td>
+            <td>消耗 context 窗口；推理成本高；不稳定</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>表中 RAG 被标注为"当目标是加可更新事实"时的选型。改行为时，在全量微调和 LoRA 之间按显存预算和数据量选择；两种方式不互斥，生产配置中常见"LoRA 调行为 + RAG 管事实"的组合。</p>
+
+      <div class="callout tip">
+        <span class="label">提示 · §1.5 表中的 SFT 行</span>
+        <p>回到 §1.5 的全书地图：SFT 行的三列分别是——loss（直觉）：同样交叉熵，只在"回答"部分计算；信号来源：人写或合成的指令→回答；显存里几个模型：1（与预训练相同）。这三列与预训练的唯一差异在第一列的"只在回答部分"——这就是 prompt 掩码的全部工程含义。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color:var(--ink-soft); font-style:italic; font-size:15px;">先合上答案，把能想到的写在纸上或编辑器里，写完再点开对照。</p>
+        <ol>
+          <li>SFT 和预训练用的是同一个 loss 吗？两者在训练机制上的唯一区别是什么？</li>
+          <li>表层对齐假说说"SFT 只教格式不教知识"。2024 年的后续研究补充了哪一点让它不再绝对？</li>
+          <li>为什么"在模型并不知道答案的问答对上做 SFT"会训出更爱幻觉的模型？</li>
+          <li>（设计题）业务要求模型用每周更新的内部产品文档回答用户。选微调还是 RAG？若还要它"用固定话术开头"，这部分应用哪种手段？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>是同一个交叉熵 loss（−log P(正确 token)，即 §1.2 的那台机器）。唯一区别：SFT 只在回答段的 token 上计算 loss，对 prompt 段做掩码（label 设为 −100），梯度不经过 prompt 部分。</li>
+            <li>表层对齐假说方向正确但被高估：风格/格式维度约 100 条示范就饱和，但推理能力随 SFT 数据规模继续呈幂律提升；SFT 也能整合部分新知识，只是效率低。"主要是行为，不是知识"成立，"只教格式"过于简化。</li>
+            <li>SFT 是行为克隆，优化器只知道"看到这种输入就输出这种答案"，不关心模型内部是否有依据。在没有依据的样本上微调，梯度教的是"无论确不确定都要给出答案"这个更广的行为模式——幻觉倾向随新知识样本数量线性增加（Gekhman 2024）。</li>
+            <li>产品文档每周更新、内容动态且需可溯源：选 RAG，检索后注入上下文，无需重训。固定话术/开头格式属于行为/格式调整，稳定不变：选微调（全量或 LoRA）。两者组合——RAG 管事实，微调管格式——是生产中的标准配置。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>LIMA 1000 条——是否意味着"SFT 数据越少越好"？</h3>
+        <p>LIMA 用 1000 条精选数据对齐效果不错——是否说明 SFT 数据越少越好？什么情况下 1000 条远远不够？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>1000 条能把"格式/风格"这条饱和得快的曲线压平（表层对齐假说的有效范围）。但 §3.3 的 2024 反驳指出，推理能力随 SFT 数据继续呈幂律上升。面向需要复杂多步推理、多领域覆盖、或高度特化任务的模型，少量精数据只能覆盖行为层，能力层的提升仍需数据规模。结论：1000 条对"格式/风格对齐"足够，对"推理深度对齐"不够——目标不同，阈值不同。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2203.02155">InstructGPT（Ouyang et al., 2022）</a>——SFT + RLHF 流水线的原始完整描述，约 1.3 万条人工示范</li>
+          <li><a href="https://arxiv.org/abs/2305.11206">LIMA: Less Is More for Alignment（Zhou et al., 2023）</a>——表层对齐假说的来源，1000 条精选数据的实验证据</li>
+          <li><a href="https://arxiv.org/abs/2410.03717">Revisiting the Superficial Alignment Hypothesis（2024）</a>——量化格式饱和 vs 推理幂律，修正假说边界</li>
+          <li><a href="https://arxiv.org/abs/2405.05904">Does Fine-Tuning LLMs on New Knowledge Encourage Hallucinations?（Gekhman et al., 2024）</a>——新知识微调与幻觉倾向线性关系的量化研究</li>
+          <li><a href="https://arxiv.org/abs/2312.05934">Fine-Tuning or Retrieval? Comparing Knowledge Injection（2023）</a>——RAG 在知识注入上稳定优于无监督微调的对比证据</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-pretraining.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 预训练：从压缩里长出能力</span>
+        </a>
+        <a href="04-alignment.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 对齐：偏好、奖励与 RL</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 对齐问题</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 SFT 机制</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 表层对齐假说</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 教模型幻觉</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 能与不能</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.copy[data-copy-target]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = document.getElementById(btn.dataset.copyTarget);
+    if (!target) return;
+    navigator.clipboard.writeText(target.innerText).then(() => {
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+
+</body>
+</html>

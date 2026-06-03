@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>落地：调试·监控·在线评估，与投产陷阱 · Agent 可观测性教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-mechanism.html">02 机制</a><span class="sep">—</span>
+    <a href="03-operations.html" class="current">03 落地</a><span class="sep">—</span>
+    <a href="04-tools-frontier.html">04 工具与前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03 · Operations</p>
+        <h1>落地：调试、监控、在线评估，与投产陷阱</h1>
+        <p class="recap">前两章把 trace 树的词汇和生成机制讲透了；这一章是拿这棵树做事——它不是被动看板，是驱动调试、监控、在线评估的闭环，以及投产时真正咬人的陷阱。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>拿到失败 trace 沿父子链定位是哪个 span 产出坏输入；<strong>中间状态</strong>（工具输出、检索上下文、路由决策）才是关键证据；replay 目前多是手动重建渲染过的 prompt 加参数。</li>
+          <li>说得出生产该报警什么（cost/run、p95 延迟与 TTFT、错误率、工具失败率），以及这几个数在 LLM 语境下和传统 APM 的含义差异。</li>
+          <li>认得"在线评估"这条 obs→eval 唯一接缝——外部 scorer 对采样生产 trace 异步打分、写回、提拔低分进离线集；不与 Reflexion（agent 推理时自评纠错）混淆。</li>
+          <li>识别投产四族陷阱，尤其<strong>推理链 PII 泄漏</strong>与<strong>朴素头部采样丢掉罕见 bug</strong> 这两条最隐蔽的失败模式。</li>
+        </ul>
+      </section>
+
+      <p>第二章解释了那棵 trace 树不是日志聚合、是 context propagation 造出来的因果结构。这一章的问题是：拿到一棵树之后，工程师到底做什么？文档给的答案是"打开看板"——本章要回答更深一层：一条 trace 摆在面前，怎么从它读出根因；该盯哪几个数能早于用户发现问题；哪条接缝把可观测性和 <a href="../agent-eval/index.html">eval</a> 连起来；以及哪些看起来合理的做法会在三个月后炸。</p>
+
+      <!-- ════════════════ §s31 根因调试 ════════════════ -->
+      <h2 id="s31"><span class="num">3.1</span>从一条失败 trace 做根因回溯</h2>
+
+      <p class="one-liner">面对一条 status=OK 却答错的 trace，根因不在叶子 span，在某个中间 span 的输出污染了后续所有决策。</p>
+
+      <div class="rationale">
+        <span class="label">为什么比文档深一层</span>
+        <p>文档教读者"点开 span 看属性"。根因调试的真正难点是：agent 的失败往往不是哪个 span 抛了异常，而是<strong>某个 span 产出了语义上坏的输出</strong>——工具返回错误价格、检索召回了无关政策条文、路由 LLM 选错了下一步——后续所有 span 都在这个错误前提上继续推进，直到最终输出，整棵树 status 全是 OK。只有把中间状态（工具输出、检索上下文、路由决策）都存进 span 的 events 或 attributes，才能沿父子链逐级审讯"这一步收到了什么、产出了什么"。</p>
+      </div>
+
+      <h3>沿父子链逐级回溯</h3>
+      <p>回溯从最终答复 span（根的直接子）开始，向上沿 <code>parent_span_id</code> 追溯，每一级检查三件事：</p>
+      <ol>
+        <li><strong>输入来自哪里</strong>：该 span 的输入是上一级哪个 span 的输出？若输入已经是错的，根因不在这里。</li>
+        <li><strong>中间状态是否存下来</strong>：工具输出、检索到的文档、路由决策用哪个工具，这些是编排层的关键状态。若没被记录进 span，这一层就是盲区。</li>
+        <li><strong>这个 span 的状态与实际输出是否一致</strong>：<code>status=OK</code> 只说明调用本身没抛异常，不说明输出语义正确。</li>
+      </ol>
+
+      <p>找到"第一个产出坏输出的 span"就是根因 span。从那里往下，所有 span 都只是在传播那个错误，修根因才能解决问题，修下游 span 是治标。</p>
+
+      <h3>差旅助理「成本翻 3 倍」案例</h3>
+      <p>用第二章介绍的差旅助理 agent 具体走一遍。用户看到账单：这次出差订票的 API 调用花费是过去平均值的 3.1 倍。trace 打开，<code>invoke_agent</code> 根 span 下有 9 个 <code>chat</code> span，正常运行只有 5 个。</p>
+
+      <p>沿 <code>parent_span_id</code> 从第 5 个 <code>chat</code> span 开始往上看：</p>
+      <ul>
+        <li>第 3 个 <code>chat</code> span 决定调用 <code>search_flights</code>——这个 <code>execute_tool</code> span 的 status 是 <code>ERROR</code>，<code>gen_ai.response.finish_reasons</code> 不在这里，但工具 span 的 <code>status.message</code> 记录了"航班 API 超时，返回 504"。</li>
+        <li>LLM 没有收到重试指令（路由决策 span 没有存下当时 LLM 的推理），却在随后 4 轮 <code>chat</code> span 里各有一次 <code>search_flights</code> 调用，每次都返回 504，每次 LLM 重新生成了一段新的 prompt 再试。</li>
+        <li>4 次额外 <code>chat</code> span 的 <code>gen_ai.usage.input_tokens</code> 加起来约等于原来 5 次运行的 token 总量——成本翻倍的原因找到了：<code>search_flights</code> 失败触发了 LLM 自发的重试循环，每次重试把整段对话历史再喂一遍，token 线性叠加。</li>
+      </ul>
+
+      <p>根因 span 是第一个失败的 <code>execute_tool: search_flights</code>。修法不是改 LLM prompt，而是在工具层加幂等重试上限，或在编排层注入明确的"已重试 N 次，中止"指令。</p>
+
+      <h3>Replay：手动重建中间状态</h3>
+      <p>Replay（"从这一步重跑"）在 agent 领域的现实是：因为 LLM 输出非确定，replay 不等于完全重现，而是<strong>手动重建</strong>——把存下来的 rendered prompt（完整渲染后的消息列表）+ 采样参数（temperature / seed）+ 工具响应原文，按顺序重新喂给模型，从那个 span 之后重新推进。</p>
+      <p>不存下 rendered prompt 和工具响应原文，replay 就无从做起。这正是第四节投产陷阱 D 族"可重建"的核心——非确定杀死复现，不存下逐字 rendered prompt 的系统在第 3 步之后就发散。</p>
+
+      <h3>Good vs bad run diffing</h3>
+      <p>另一个定位根因的手段是把一条失败 trace 和一条成功 trace（同类任务）并排对比：相同层级的 span，token 数差了多少、哪个工具输出在结构上不同、哪个 <code>chat</code> span 的 <code>gen_ai.response.finish_reasons</code> 从 <code>stop</code> 变成了 <code>length</code>（说明 LLM 在那里被截断）。这种 diffing 在 LangSmith / Langfuse 里都有 UI 支持；逻辑上等同于把两棵 span 树做结构性 diff，定位哪条边开始分叉。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>差旅助理的失败 trace 里，<code>search_flights</code> 工具 span 的 status 是 ERROR，但根 <code>invoke_agent</code> span 的 status 是 OK。工程师第一眼看 trace 列表时，会不会漏掉这条 trace？原因是什么，怎么防？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>漏掉的概率很高。trace 列表通常按根 span 的 status 筛选和排序，而根 span OK 说明整条 trace "完成了"——agent 最终给了用户一个答复。子 span 的 ERROR 被根 span 的 OK 掩盖，只有点进去才看得见。</p>
+          <p>防法有两条：① 在告警规则里加 <code>tool_failure_rate</code>（见 §3.2），只要任意子 span 出现 ERROR 就计入，不依赖根 span status。② 工具层出错时，编排逻辑应把错误事件也写进根 span 的 events，或把根 span status 设为 ERROR。这是"只记 what 不记 why"陷阱（§3.4 ⑦）的典型表现。</p>
+        </details>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 820 542" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="失败 trace 根因回溯图：差旅助理成本翻 3 倍案例，坏 span 高亮，重试循环标注">
+          <defs>
+            <marker id="tr-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="tr-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Root span -->
+          <rect x="20" y="20" width="240" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="40" text-anchor="middle" class="node-label">invoke_agent（根）</text>
+          <text x="140" y="58" text-anchor="middle" class="edge-label">status=OK · cost=3.1×</text>
+
+          <!-- chat 1: retrieve_policy -->
+          <rect x="20" y="102" width="230" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="120" text-anchor="middle" class="node-label">chat → retrieve_policy</text>
+          <text x="135" y="137" text-anchor="middle" class="edge-label">status=OK</text>
+          <line x1="140" y1="66" x2="135" y2="102" class="diagram-ink" marker-end="url(#tr-arrow)"/>
+
+          <!-- chat 2: LLM decides to search -->
+          <rect x="20" y="180" width="230" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="199" text-anchor="middle" class="node-label">chat（决定查航班）</text>
+          <text x="135" y="216" text-anchor="middle" class="edge-label">status=OK</text>
+          <line x1="135" y1="146" x2="135" y2="180" class="diagram-ink" marker-end="url(#tr-arrow)"/>
+
+          <!-- search_flights ROOT CAUSE — highlighted red -->
+          <rect x="20" y="258" width="230" height="46" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="135" y="278" text-anchor="middle" class="node-label-accent">execute_tool: search_flights</text>
+          <text x="135" y="295" text-anchor="middle" class="branch-label">status=ERROR · 504 超时</text>
+          <line x1="135" y1="224" x2="135" y2="258" class="diagram-accent" stroke-width="2" marker-end="url(#tr-red)"/>
+
+          <!-- Root cause label -->
+          <text x="262" y="282" class="branch-label">← 根因 span</text>
+
+          <!-- retry loop box -->
+          <rect x="310" y="180" width="480" height="300" rx="8" class="diagram-soft" fill="var(--vermilion-soft)"/>
+          <text x="550" y="204" text-anchor="middle" class="branch-label">重试循环（4 次额外 chat）</text>
+
+          <!-- retry chat spans (stacked) -->
+          <rect x="330" y="216" width="200" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="430" y="232" text-anchor="middle" class="node-label">chat（retry 1）</text>
+          <text x="430" y="248" text-anchor="middle" class="edge-label">全量历史重喂</text>
+
+          <rect x="330" y="270" width="200" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="430" y="286" text-anchor="middle" class="node-label">search_flights（retry 1）</text>
+          <text x="430" y="302" text-anchor="middle" class="edge-label">status=ERROR</text>
+
+          <rect x="330" y="324" width="200" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="430" y="340" text-anchor="middle" class="node-label">chat（retry 2）</text>
+          <text x="430" y="356" text-anchor="middle" class="edge-label">全量历史重喂</text>
+
+          <rect x="330" y="378" width="200" height="40" rx="5" class="diagram-ink node-fill"/>
+          <text x="430" y="394" text-anchor="middle" class="node-label">search_flights（retry 2）</text>
+          <text x="430" y="410" text-anchor="middle" class="edge-label">status=ERROR</text>
+
+          <text x="430" y="440" text-anchor="middle" class="edge-label">… retry 3 / 4 同上 …</text>
+
+          <!-- connect from root to retry box -->
+          <line x1="250" y1="281" x2="310" y2="281" class="diagram-accent" stroke-width="1.6" marker-end="url(#tr-red)"/>
+
+          <!-- token cost annotation -->
+          <rect x="560" y="226" width="210" height="60" rx="5" class="diagram-soft node-fill"/>
+          <text x="665" y="248" text-anchor="middle" class="node-label">token 成本</text>
+          <text x="665" y="265" text-anchor="middle" class="edge-label">4 次 × 全量历史</text>
+          <text x="665" y="280" text-anchor="middle" class="edge-label">≈ 正常 5 次总量</text>
+
+          <!-- summary box at bottom -->
+          <rect x="20" y="492" width="760" height="40" rx="5" class="diagram-soft node-fill"/>
+          <text x="400" y="508" text-anchor="middle" class="edge-label">根因：工具层无重试上限 → LLM 自发重试 → 每次全量历史 → token 线性叠加</text>
+          <text x="400" y="526" text-anchor="middle" class="edge-label">修法：工具层幂等重试上限 + 编排层注入"已重试 N 次，中止"指令</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>差旅助理"成本翻 3 倍"案例的失败 trace 根因回溯。朱红高亮的 <code>search_flights</code> span 是根因，右侧重试循环框内每次都把全量对话历史重喂给 LLM。<strong>注意</strong>：根 <code>invoke_agent</code> span status=OK——不看子 span 的工具失败率，这条 trace 根本不会进告警视野。</figcaption>
+      </figure>
+
+      <!-- ════════════════ §s32 生产监控 ════════════════ -->
+      <h2 id="s32"><span class="num">3.2</span>生产监控：该报警什么</h2>
+
+      <p class="one-liner">传统 APM 的四个黄金指标（延迟、流量、错误率、饱和度）在 LLM 世界全部变形，工程师需要一套新的基准数集。</p>
+
+      <div class="rationale">
+        <span class="label">为什么比文档深一层</span>
+        <p>文档告诉读者"监控 latency 和 token"。真正的难点是：这些数在 LLM 语境下的含义与传统服务完全不同。<strong>延迟的主体是外部 I/O</strong>（等 LLM 返回、等工具 API），不是 CPU——火焰图没用；<strong>错误率里最危险的一类不会抛异常</strong>（工具 504 后 LLM 自发重试，整条 trace status=OK）；<strong>成本</strong>不是 APM 的概念，而是每条 trace 的一等信号。如果没理解这些变形，把传统告警阈值搬过来就会产生大量误报和漏报。</p>
+      </div>
+
+      <h3>四条核心告警指标</h3>
+
+      <p><strong>① cost/run（每次运行的总成本）</strong>：用 <code>gen_ai.usage.input_tokens</code>/<code>output_tokens</code> 上卷到 trace 级后乘价格表计算。这是 APM 从没有的信号。告警阈值建议按历史 p90 × 2 设，超出即触发调查——差旅助理那次"成本翻 3 倍"在这里就能被抓住，不需要等用户投诉。<strong>注意</strong>：OTel GenAI semconv 不定义 <code>gen_ai.cost.*</code>，成本由各厂商在 ingestion 时自行计算（见第二章机制）；告警规则要在 backend 里写，不能靠 span 属性直接报。</p>
+
+      <p><strong>② 延迟 p95 与 TTFT</strong>：p95 端到端延迟衡量"最慢的那部分用户"体验。TTFT（time to first token，在 span 里是 <code>gen_ai.response.time_to_first_chunk</code>，v1.41.0 加入）衡量"用户等到第一个字"的感知延迟——流式场景里这个比总延迟更重要。这两个数的飙升通常指向：外部 API 变慢（工具超时叠加）、输入 token 数膨胀（全量历史重喂）、或检索层变慢（向量库冷启动）。火焰图对这三种原因都帮不上忙，只有 span 粒度的延迟才能定位到底是哪一跳慢了。</p>
+
+      <p><strong>③ error rate（异常错误率）</strong>：span 级 status=ERROR 的比率。但 §3.1 揭示了一个陷阱——工具失败不一定反映在根 span status 上。正确的做法是分两层报警：根 span error rate（trace 彻底失败）+ 任意子 span error rate（工具/检索层出了问题但 agent 试图恢复）。后者若高但前者低，恰恰说明 agent 在悄悄重试、用户不知道、但成本和延迟都在升。</p>
+
+      <p><strong>④ tool-failure rate（工具失败率）</strong>：<code>execute_tool</code> span 中 status=ERROR 的比率，按工具名分组（<code>search_flights</code>/<code>book_flight</code>/…）。这个数在传统 APM 里没有对应物，但对 agent 最有诊断价值——工具层是 agent 连接外部世界的边界，它的失败模式直接决定 agent 的重试行为和成本爆炸。告警粒度建议按具体工具名设阈值，不要只看总体。</p>
+
+      <table class="compare-table">
+        <caption>LLM 可观测性 vs 传统 APM · 四个黄金指标的变形</caption>
+        <thead>
+          <tr><th>传统 APM 指标</th><th>LLM 世界的变形</th><th>为什么不同</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>延迟（p99）</td>
+            <td>p95 端到端 + <strong>TTFT</strong></td>
+            <td>主体是外部 I/O（LLM/工具），不是 CPU；流式场景首 token 比总延迟更关键</td>
+          </tr>
+          <tr>
+            <td>错误率（5xx）</td>
+            <td><strong>根 span 错误率 + 子 span 工具失败率</strong></td>
+            <td>工具 504 后 LLM 自发重试，根 span 可能是 200 OK；语义失败不抛异常</td>
+          </tr>
+          <tr class="selected">
+            <td>（无）</td>
+            <td><strong>cost/run</strong></td>
+            <td>LLM token 是直接成本；重试循环、历史膨胀会让成本指数级上升</td>
+          </tr>
+          <tr>
+            <td>饱和度（CPU/内存）</td>
+            <td>（工具 API 的）<strong>下游限流率</strong></td>
+            <td>agent 的瓶颈在外部 API，不在本地进程；火焰图对此无能为力</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>采样策略与告警的关系</h3>
+      <p>这里需要预告 §3.4 会展开的陷阱：告警是建立在采样数据上的，如果采样策略选错（均匀 10% head sampling），工具失败率 22% 的实际问题在采样后只剩 9%，很可能低于阈值不触发。<strong>错误感知告警需要基于尾部采样</strong>（tail-based sampling，按 span 树最终 status 决定保留哪些 trace）——失败 trace 100% 保留，成功 trace 稀疏采样。这不是可观测性平台的默认配置，需要工程师主动设置。</p>
+
+      <!-- ════════════════ §s33 在线评估 ════════════════ -->
+      <h2 id="s33"><span class="num">3.3</span>在线评估：obs 与 eval 的唯一接缝</h2>
+
+      <p class="one-liner">在线评估是把生产 trace 采样后异步打分、写回、再提拔进离线集的闭环——它是可观测性流入 eval 的那条单向管道。</p>
+
+      <div class="rationale">
+        <span class="label">为什么这条接缝重要</span>
+        <p>可观测性记录"发生了什么"；eval（<a href="../agent-eval/index.html">agent-eval</a>）回答"这版比上版好吗"——两者的数据流本来是分开的。在线评估是唯一把两者连起来的机制：它在生产 trace 上跑 scorer，把分写回 trace，低分 trace 一键提拔进离线数据集。没有这条管道，离线集只能靠人工标注扩充，而生产里真正困难的 case 永远不会被发现。</p>
+      </div>
+
+      <h3>底层机制（比文档深一层）</h3>
+      <p>在线评估有五个步骤，每一步都有自己的工程考量：</p>
+      <ol>
+        <li><strong>采样生产 trace</strong>：不对全量 trace 打分——规模一大，scorer 本身就是成本。典型比例 1–10%，但要用<strong>分层采样</strong>：低分区域（过去 scorer 认为有问题的 trace）多采，高分区域少采。均匀采样在 bug 密度低时会漏掉几乎所有失败 trace。</li>
+        <li><strong>异步 scorer</strong>：scorer 在 trace 落库后<strong>异步</strong>运行，不阻塞热路径。scorer 可以是 LLM-as-judge（调另一个 LLM 评价当前 trace 的输出质量）、规则 scorer（检查订的航班是否在差旅政策的价格范围内）、或人工标注的 golden-answer 比对。多个 scorer 可并行跑，结果分别写回。</li>
+        <li><strong>把分写回 trace</strong>：scorer 的结果写成 trace 的 metadata 字段，可查询可聚合。Langfuse 把这个叫做 <code>score</code> 对象（带 <code>name</code>/<code>value</code>/<code>comment</code>），LangSmith 叫 <code>feedback</code>。写回后，低分 trace 可以在 UI 里用 score 字段过滤，直接跳到"这批 trace 里最差的那 5%"。</li>
+        <li><strong>低分提拔进离线集</strong>：一键把低分 trace 加进离线数据集，带上 scorer 的分和评论作为标注。下次迭代模型或 prompt 时，这批 case 进入回归集，防止下一版复现同样的失败。</li>
+        <li><strong>喂回 agent-eval</strong>：离线集里的 trace 经过 curated 成为固定 dataset，进入开发期的离线 eval 流程。这是可观测性流入 <a href="../agent-eval/index.html">agent-eval</a> 的那条管道——此后就交给 agent-eval 处理了，不在本章重讲。</li>
+      </ol>
+
+      <div class="callout insight">
+        <span class="label">区分两个易混概念</span>
+        <p><strong>在线评估（本节）</strong>：外部 scorer 对采样的生产 trace 异步打分，写回 trace 字段，供监控和数据集扩充使用。时机=运行结束后异步；主体=外部评估系统；目的=监控 + 发现 bad case。</p>
+        <p><strong>Reflexion / 运行期自纠</strong>（<a href="../agent-reasoning-patterns/index.html">agent-reasoning-patterns</a>）：agent 在推理时自己评自己来纠错，把失败翻译成语言教训写进记忆，下轮读回。时机=推理过程中；主体=agent 本身；目的=改善当次推理质量。</p>
+        <p>两者都用到"评分/判断"，但接入点、主体、目的完全不同。在面试或方案评审里，把在线评估说成 Reflexion（或反过来）是常见的混淆点。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 820 400" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="在线评估接缝闭环：生产 trace 采样后异步 scorer 打分，写回 trace，低分提拔进离线集，喂回 agent-eval">
+          <defs>
+            <marker id="oe-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="oe-soft" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- Production environment -->
+          <rect x="10" y="10" width="260" height="100" rx="8" class="diagram-soft"/>
+          <text x="140" y="30" text-anchor="middle" class="edge-label">生产环境</text>
+          <rect x="30" y="40" width="220" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="65" text-anchor="middle" class="node-label">agent 运行</text>
+          <text x="140" y="83" text-anchor="middle" class="edge-label">trace 落库（含中间状态）</text>
+
+          <!-- Trace store -->
+          <rect x="310" y="30" width="180" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="400" y="57" text-anchor="middle" class="node-label">Trace 存储</text>
+          <text x="400" y="75" text-anchor="middle" class="edge-label">所有 span 落库</text>
+          <line x1="250" y1="68" x2="310" y2="60" class="diagram-ink" marker-end="url(#oe-arrow)"/>
+          <text x="280" y="52" text-anchor="middle" class="edge-label">emit</text>
+
+          <!-- Sampling -->
+          <rect x="310" y="140" width="180" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="400" y="165" text-anchor="middle" class="node-label">分层采样</text>
+          <text x="400" y="183" text-anchor="middle" class="edge-label">1–10%，坏区多采</text>
+          <line x1="400" y1="90" x2="400" y2="140" class="diagram-ink" marker-end="url(#oe-arrow)"/>
+
+          <!-- Async scorer -->
+          <rect x="530" y="140" width="200" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="630" y="165" text-anchor="middle" class="node-label-accent">异步 scorer</text>
+          <text x="630" y="183" text-anchor="middle" class="edge-label">LLM-as-judge / 规则</text>
+          <line x1="490" y1="168" x2="530" y2="168" class="diagram-ink" marker-end="url(#oe-arrow)"/>
+          <text x="510" y="160" text-anchor="middle" class="edge-label">异步</text>
+
+          <!-- Score writeback -->
+          <line x1="630" y1="196" x2="630" y2="256" class="diagram-ink" marker-end="url(#oe-arrow)"/>
+          <rect x="530" y="258" width="200" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="630" y="282" text-anchor="middle" class="node-label">写回 score</text>
+          <text x="630" y="300" text-anchor="middle" class="edge-label">name/value/comment</text>
+          <line x1="530" y1="285" x2="490" y2="285" class="diagram-ink" marker-end="url(#oe-arrow)"/>
+          <text x="510" y="277" text-anchor="middle" class="edge-label">写回</text>
+          <!-- connect score writeback back to trace store -->
+          <line x1="400" y1="285" x2="400" y2="196" class="diagram-soft" marker-end="url(#oe-soft)"/>
+          <text x="415" y="245" class="edge-label">score 字段</text>
+
+          <!-- Low-score filter → dataset -->
+          <rect x="40" y="258" width="220" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="150" y="282" text-anchor="middle" class="node-label">低分提拔 → 离线集</text>
+          <text x="150" y="300" text-anchor="middle" class="edge-label">一键 export + 标注</text>
+          <line x1="310" y1="285" x2="260" y2="285" class="diagram-ink" marker-end="url(#oe-arrow)"/>
+          <text x="285" y="277" text-anchor="middle" class="edge-label">过滤</text>
+
+          <!-- Feed to agent-eval -->
+          <rect x="40" y="352" width="220" height="40" rx="6" class="diagram-soft node-fill"/>
+          <text x="150" y="372" text-anchor="middle" class="node-label">agent-eval（开发期回归）</text>
+          <line x1="150" y1="312" x2="150" y2="352" class="diagram-ink" marker-end="url(#oe-arrow)"/>
+          <text x="170" y="338" class="edge-label">喂回</text>
+
+          <!-- Reflexion: separate, dashed box on right -->
+          <rect x="522" y="340" width="286" height="52" rx="6" class="diagram-soft"/>
+          <text x="665" y="360" text-anchor="middle" class="node-label" fill="#A3A3A3">Reflexion（运行期自纠）</text>
+          <text x="665" y="378" text-anchor="middle" class="edge-label">≠ 在线评估 · 见 agent-reasoning-patterns</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>在线评估闭环：生产 trace → 分层采样 → 异步 scorer → score 写回 trace → 低分提拔进离线集 → 喂回 agent-eval。右下虚线框是常被混淆的 Reflexion，时机和主体都不同。<strong>注意</strong>：scorer 必须<strong>异步</strong>跑，同步跑等于给热路径加延迟；采样必须<strong>分层</strong>，均匀采样会漏掉几乎所有低频失败 case。</figcaption>
+      </figure>
+
+      <!-- ════════════════ §s34 投产陷阱 ════════════════ -->
+      <h2 id="s34"><span class="num">3.4</span>投产陷阱四族</h2>
+
+      <p class="one-liner">可观测性的陷阱不在"接不上"，在"接上了却在三个月后以另一种方式炸"——四族陷阱对应隐私、成本、可见性、可重建四个维度。</p>
+
+      <div class="rationale">
+        <span class="label">为什么列这四族</span>
+        <p>教科书通常只讲"加可观测性的好处"。真实情况是：一套天真搭建的可观测性系统本身会带来新的风险——trace 库变成了 GDPR 受管仓库、可观测性账单比服务本身更贵、采样策略把最需要看的 bug 丢掉、span 截断让事后复盘建立在残缺证据上。四族框架把 10 条具体陷阱归类，让工程师在设计阶段就能逐族检查。</p>
+      </div>
+
+      <h3>A 族 · 隐私</h3>
+      <p><strong>陷阱 ①：prompt/工具 I/O 逐字进第三方 SaaS</strong>。把 <code>gen_ai.input.messages</code>/<code>output.messages</code>（opt-in events）全量发给 LangSmith、Langfuse 这类 SaaS，等于把用户的每一条输入、agent 的每一段推理、工具返回的每一行数据，都送进了第三方服务器。如果业务涉及医疗、金融、法律，这等于在没有用户知情的情况下建了一个 GDPR/HIPAA 受管的数据仓库。修法：把含 PII 的 events 在 emit 前做 redaction，或只发脱敏版本；对敏感业务考虑自托管 backend。</p>
+
+      <p><strong>陷阱 ②：推理链 PII 泄漏（比 ① 更隐蔽）</strong>。大模型在 chain-of-thought / reasoning 里会把上下文里的 PII 自然地"用上"——哪怕最终输出已经干净，中间推理步骤里可能出现用户姓名、身份证号、地址。AgentLeak 类研究（EMNLP 2025）证明了这条泄漏路径：输出级脱敏抓不到推理链里的 PII，因为 reasoning tokens 在 v1.41.0 以 <code>reasoning.output_tokens</code> 形式记录在 span 里，若不对这部分单独处理，脱敏就是半截子工程。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 推理链 PII 泄漏</span>
+        <p>对生产 trace 做脱敏时，只对 <code>gen_ai.output.messages</code>（最终输出）做处理是不够的。带推理步骤的模型（o1/R1 类）的中间思维链同样可能包含 PII，且在 OTel semconv v1.41.0 里这部分以 <code>reasoning.output_tokens</code> 独立字段出现。对含 PII 业务的正确做法是：把 <code>gen_ai.input.messages</code>/<code>output.messages</code>/<code>reasoning</code> 相关 events 全部纳入脱敏管道，或直接禁用这三类 opt-in 捕获，改在日志层单独管理（自建私有存储）。</p>
+      </div>
+
+      <h3>B 族 · 成本</h3>
+      <p><strong>陷阱 ③：全量 prompt+completion 捕获在规模下爆炸</strong>。一万对话 × 5 轮 = 20 万次调用/天，单条 span 含完整 prompt 约 2KB+，一天约 400MB 纯 span 数据，进了按 GB 计费的 APM/observability 平台后，账单常涨 40–200%。可观测性系统的账单超过被观测服务的情况不罕见。修法：对 <code>gen_ai.input.messages</code>/<code>output.messages</code> 按采样率有选择地捕获（这两类本就是 opt-in），不需要调试的 trace 不存全文；检查 backend 的定价模型是否适合大体积 span。</p>
+
+      <h3>C 族 · 可见性</h3>
+      <p><strong>陷阱 ④：基数爆炸</strong>。把 user-id、url、prompt 文本当成 metric label（维度），唯一值超过 10 万后压垮时序数据库的索引，静默丢数据。高基数字段应当放进 span 的 <code>attributes</code>（可查询的键值对），不要放进 metric label。</p>
+
+      <p><strong>陷阱 ⑤：朴素头部采样丢掉罕见 bug</strong>。均匀 10% head sampling 把错误和成功按同比例丢掉——如果工具调用失败率本来只有 1%，采样后大概率一条错误 trace 都不剩，整个监控系统"看不见"这个问题，直到失败率涨到 10% 才可能进入采样。差旅助理案例里：<code>search_flights</code> 失败率 22%，经 10% 采样后 scorer 只能看到 9 条里约 2 条，远低于告警阈值。修法：错误 trace 100% 保留（tail-based sampling 按最终 status），成功 trace 按采样率稀疏保留。</p>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 朴素头部采样丢掉 bug</span>
+        <p>均匀 10% head sampling 是最常见的默认配置，也是生产中最常让团队"看不见问题"的原因。它把错误和成功按同一比例采样，而真正需要调查的失败 trace 恰恰是低频的——低到刚好被采样率丢掉。<strong>正确做法是尾部采样</strong>：先完整收集 trace，根据该 trace 最终 status（是否有 ERROR span、成本是否异常高）决定是否保留。大多数可观测性 SDK 需要工程师主动配置 tail sampler，默认不开。</p>
+      </div>
+
+      <p><strong>陷阱 ⑥：截断掩盖失败</strong>。多数 OTel SDK 对 span attributes 有默认大小限制（4–64KB），超出部分静默截断，不报错。复盘时看到的是"残缺"的 span——工具返回了 8KB 的数据，span 里只记录了前 4KB，后半段截断，关键的错误字段就在那后半段。修法：调整 SDK 的 <code>attribute_value_length_limit</code>，或把大体积内容改用 events 方式记录并显式设置截断策略。</p>
+
+      <p><strong>陷阱 ⑦：孤儿 span</strong>。异步执行、消息队列、跨进程的子 agent 没有正确传递 <code>traceparent</code>，产生的 span 没有 <code>parent_span_id</code>，和主 trace 断链，无法归入同一棵树。结果是：一次运行的完整执行图在 backend 里碎片化成多个孤立 span，无法整体复盘。修法：见第二章机制，context propagation 必须显式传递——每个异步/跨进程调用点都要提取并注入 <code>traceparent</code>。</p>
+
+      <p><strong>陷阱 ⑧：只记"what"不记"why"</strong>。记了最终输出（"agent 说了什么"）但没记决策状态（"LLM 为什么选这个工具""检索喂了哪些文档给 LLM""路由决策时的候选是什么"）。失败恰恰集中在编排层——不是输出错了，而是某个中间决策选错了。没有中间状态，根因调试（§3.1）就无从做起。修法：把工具选择原因、检索上下文、路由决策等中间状态写进对应 span 的 events 或 attributes。</p>
+
+      <h3>D 族 · 可重建</h3>
+      <p><strong>陷阱 ⑨：同步日志阻塞热路径</strong>。在 agent 的每个推理步骤里同步写日志，累计 10–50ms/步，多步工作流复合后总延迟显著上升。修法：用异步 span exporter（OTel SDK 默认提供 batch exporter），把 span 先缓冲在内存，定期批量发送，不阻塞热路径。</p>
+
+      <p><strong>陷阱 ⑩：非确定杀死复现</strong>。设了 temperature=0 / seed，以为能复现任意一步。现实是：LLM 在服务端可能做负载均衡，相同 seed 不保证逐字一致；工具 API 的响应也可能随时间变化（航班价格是实时的）。不把逐字 rendered prompt + 采样参数 + 工具响应全部存下来，多步工作流在第 3 步就发散，replay 形同虚设。修法：把完整 rendered prompt（非模板，是最终发给 LLM 的消息列表）和工具响应原文存进对应 span 的 events，这才是 replay 的基础材料。</p>
+
+      <figure>
+        <svg viewBox="0 0 820 440" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="投产陷阱四族因果图：A隐私 B成本 C可见性 D可重建，箭头指向后果">
+          <defs>
+            <marker id="trap-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="trap-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Title row: four tribe boxes -->
+          <!-- A: Privacy -->
+          <rect x="10" y="10" width="185" height="66" rx="7" class="diagram-ink node-fill"/>
+          <text x="102" y="33" text-anchor="middle" class="node-label">A 族 · 隐私</text>
+          <text x="102" y="51" text-anchor="middle" class="edge-label">① prompt 进三方 SaaS</text>
+          <text x="102" y="67" text-anchor="middle" class="edge-label">② 推理链 PII 泄漏</text>
+
+          <!-- B: Cost -->
+          <rect x="215" y="10" width="185" height="66" rx="7" class="diagram-ink node-fill"/>
+          <text x="307" y="33" text-anchor="middle" class="node-label">B 族 · 成本</text>
+          <text x="307" y="51" text-anchor="middle" class="edge-label">③ 全量捕获账单爆炸</text>
+          <text x="307" y="67" text-anchor="middle" class="edge-label"> </text>
+
+          <!-- C: Visibility -->
+          <rect x="420" y="10" width="185" height="66" rx="7" class="diagram-ink node-fill"/>
+          <text x="512" y="33" text-anchor="middle" class="node-label">C 族 · 可见性</text>
+          <text x="512" y="51" text-anchor="middle" class="edge-label">④⑤⑥⑦⑧ 数据质量</text>
+          <text x="512" y="67" text-anchor="middle" class="edge-label">采样丢 bug / 截断 / 孤儿</text>
+
+          <!-- D: Reproducibility -->
+          <rect x="625" y="10" width="185" height="66" rx="7" class="diagram-ink node-fill"/>
+          <text x="717" y="33" text-anchor="middle" class="node-label">D 族 · 可重建</text>
+          <text x="717" y="51" text-anchor="middle" class="edge-label">⑨ 同步日志阻塞</text>
+          <text x="717" y="67" text-anchor="middle" class="edge-label">⑩ 非确定杀死复现</text>
+
+          <!-- Consequence boxes: second row -->
+          <!-- A → compliance risk -->
+          <rect x="10" y="140" width="185" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="102" y="164" text-anchor="middle" class="node-label-accent">合规风险</text>
+          <text x="102" y="182" text-anchor="middle" class="edge-label">GDPR/HIPAA 受管</text>
+          <line x1="102" y1="76" x2="102" y2="140" class="diagram-ink" marker-end="url(#trap-arrow)"/>
+
+          <!-- B → budget explosion -->
+          <rect x="215" y="140" width="185" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="307" y="164" text-anchor="middle" class="node-label-accent">账单高于服务本身</text>
+          <text x="307" y="182" text-anchor="middle" class="edge-label">40–200% 观测成本</text>
+          <line x1="307" y1="76" x2="307" y2="140" class="diagram-ink" marker-end="url(#trap-arrow)"/>
+
+          <!-- C → invisible bugs -->
+          <rect x="420" y="140" width="185" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="512" y="164" text-anchor="middle" class="node-label-accent">bug 不可见</text>
+          <text x="512" y="182" text-anchor="middle" class="edge-label">低频失败完全丢失</text>
+          <line x1="512" y1="76" x2="512" y2="140" class="diagram-ink" marker-end="url(#trap-arrow)"/>
+
+          <!-- D → replay fails -->
+          <rect x="625" y="140" width="185" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="717" y="164" text-anchor="middle" class="node-label-accent">复现/调试失效</text>
+          <text x="717" y="182" text-anchor="middle" class="edge-label">多步后行为发散</text>
+          <line x1="717" y1="76" x2="717" y2="140" class="diagram-ink" marker-end="url(#trap-arrow)"/>
+
+          <!-- Common outcome: third row -->
+          <rect x="200" y="260" width="420" height="60" rx="8" class="diagram-soft node-fill"/>
+          <text x="410" y="286" text-anchor="middle" class="node-label">共同后果：可观测性系统本身成为新风险源</text>
+          <text x="410" y="306" text-anchor="middle" class="edge-label">上线三个月后炸——不是 agent 出问题，而是观测层出问题</text>
+          <line x1="102" y1="196" x2="200" y2="280" class="diagram-soft" marker-end="url(#trap-red)"/>
+          <line x1="307" y1="196" x2="300" y2="260" class="diagram-soft" marker-end="url(#trap-red)"/>
+          <line x1="512" y1="196" x2="480" y2="260" class="diagram-soft" marker-end="url(#trap-red)"/>
+          <line x1="717" y1="196" x2="620" y2="280" class="diagram-soft" marker-end="url(#trap-red)"/>
+
+          <!-- Mitigation line -->
+          <rect x="80" y="356" width="660" height="78" rx="6" class="diagram-soft node-fill"/>
+          <text x="410" y="378" text-anchor="middle" class="node-label">应对原则</text>
+          <text x="410" y="399" text-anchor="middle" class="edge-label">A：opt-in 捕获 + 脱敏推理链　　B：按采样有选择捕获全文</text>
+          <text x="410" y="419" text-anchor="middle" class="edge-label">C：尾部采样 + 限制 label 基数　　D：异步 exporter + 存逐字 prompt</text>
+          <line x1="410" y1="320" x2="410" y2="356" class="diagram-soft" marker-end="url(#trap-arrow)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>投产陷阱四族因果图：每族的具体陷阱指向对应后果，汇聚到共同结论——可观测性系统自身成为新的风险源。<strong>注意</strong>：C 族的"朴素头部采样"和 A 族的"推理链 PII 泄漏"是最隐蔽的两条，前者让 bug 在采样后消失、后者让脱敏流于形式，两者都不抛异常、不报警。</figcaption>
+      </figure>
+
+      <!-- Self-check -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写在纸上或编辑器里，再展开对照。直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>差旅助理案例里，<code>invoke_agent</code> 根 span status=OK，但真实发生了 <code>search_flights</code> 四次 504 重试。如果监控系统<strong>只</strong>按根 span status 触发告警，这个问题会被发现吗？说明原因，并给出正确的告警设计。</li>
+          <li>"在线评估"和"Reflexion 运行期自纠"都会对 agent 的输出做判断，但它们在<strong>时机、主体、目的</strong>三个维度上完全不同。分别说出这三个维度上两者的差异。</li>
+          <li>10% 均匀头部采样下，某工具的实际失败率是 3%。估算采样后每 1000 条 trace 里能观测到的失败 trace 数量，并解释为什么这是问题，以及应该用什么策略替代。</li>
+          <li>工程师在 span 里存下了完整的 <code>gen_ai.output.messages</code>，并对其做了输出级 PII 脱敏。说明这还不够的原因，以及还缺哪一类中间数据没有被脱敏覆盖。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>不会被发现。根 span status=OK 说明 agent 最终给了用户一个答复，监控系统按根 span status 触发的告警对此沉默。工具失败和重试循环全都发生在子 span 层级。<strong>正确的告警设计</strong>：分两层设独立告警——① 根 span error rate（trace 彻底失败，status=ERROR）；② <code>execute_tool</code> span error rate 按工具名分组（任意子 span 出现 ERROR 就计入，不依赖根 span）。后者若持续高而前者低，说明 agent 在悄悄重试、成本和延迟在升，用户还没感知到。</li>
+            <li>时机：在线评估在 trace 落库后<strong>异步</strong>运行，运行已结束；Reflexion 在 agent 推理<strong>过程中</strong>实时运行。主体：在线评估的主体是<strong>外部评估系统</strong>（另一个 LLM-as-judge 或规则 scorer）；Reflexion 的主体是 <strong>agent 本身</strong>（自己评自己）。目的：在线评估目的是<strong>监控 + 发现 bad case + 扩充离线数据集</strong>；Reflexion 的目的是<strong>改善当次推理质量</strong>（把失败翻译成语言教训，下轮读回）。</li>
+            <li>1000 条 trace × 10% 采样率 = 100 条进入采样；100 条 × 3% 实际失败率 ≈ 3 条失败 trace 能被看到。3 条很可能低于告警阈值，也很可能在统计上被当作噪声。问题在于：低频失败（1–5%）在均匀采样后变得极低频，无法触发任何基于计数的告警。<strong>替代策略</strong>：尾部采样（tail-based sampling）——先收集完整 trace，对包含 ERROR span 的 trace 100% 保留，对全部 OK 的 trace 按采样率稀疏保留。这保证每一条失败 trace 都进入观测视野，成功 trace 降采以控制存储成本。</li>
+            <li>带推理步骤的模型（o1/R1 类）在 chain-of-thought 中会使用上下文里的 PII。这部分推理链在 OTel semconv v1.41.0 里以 <code>reasoning.output_tokens</code> 相关字段独立存在，不在 <code>gen_ai.output.messages</code> 里。只对输出消息做脱敏，推理链里的 PII 完全没有被覆盖。正确做法是把 <code>gen_ai.input.messages</code>、<code>gen_ai.output.messages</code>、以及推理链相关 events 全部纳入脱敏管道，或直接禁用这三类 opt-in 捕获，改用私有存储单独管理。</li>
+          </ol>
+        </details>
+      </section>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/">OpenTelemetry · Semantic conventions for generative AI systems</a>——<code>gen_ai.usage.*</code>、<code>gen_ai.response.time_to_first_chunk</code>、<code>reasoning.output_tokens</code> 等属性的权威来源。</li>
+          <li><a href="https://langfuse.com/docs/scores/overview">Langfuse · Scores（在线评估写回）</a>——score 对象结构（name/value/comment）与低分 trace 提拔流程。</li>
+          <li><a href="https://docs.langchain.com/langsmith/evaluation/online-evaluators">LangSmith · Online evaluators</a>——采样生产 trace + 异步 scorer + feedback 写回的配置文档。</li>
+          <li><a href="https://opentelemetry.io/docs/concepts/sampling/">OpenTelemetry · Sampling</a>——head sampling vs tail-based sampling 原理与配置。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-mechanism.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 机制：trace 树怎么长出来</span>
+        </a>
+        <a href="04-tools-frontier.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 工具与前沿</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 根因回溯</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 生产监控</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 在线评估</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 投产陷阱</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

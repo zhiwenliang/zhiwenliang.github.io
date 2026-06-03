@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update the page title, breadcrumb, article, and TOC.
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAP 与 PACELC 权衡 · 分布式系统教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-foundations.html">01 为什么难</a><span class="sep">—</span>
+    <a href="02-time-order.html">02 时间与序</a><span class="sep">—</span>
+    <a href="03-consistency.html">03 一致性</a><span class="sep">—</span>
+    <a href="04-replication.html">04 复制</a><span class="sep">—</span>
+    <a href="05-partitioning.html">05 分区</a><span class="sep">—</span>
+    <a href="06-consensus.html">06 共识</a><span class="sep">—</span>
+    <a href="07-transactions.html">07 事务</a><span class="sep">—</span>
+    <a href="08-cap-tradeoffs.html" class="current">08 CAP权衡</a><span class="sep">—</span>
+    <a href="09-self-check.html">09 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+<header class="chapter-opener">
+  <p class="chapter-label">Chapter 08</p>
+  <h1>CAP、PACELC 与综合权衡</h1>
+  <p class="recap">前面七章分别拆解了分区故障根因（01）、时序与因果（02）、一致性谱系（03）、复制机制（04）、分区路由（05）、共识算法（06）、分布式事务（07）。这一章把这些机制收束成两个决策框架——CAP 与 PACELC——再把真实系统一一对号入座，并梳理截至 2026-06 的前沿进展：哪些是定论，哪些还在演变，哪些旧做法已被取代。</p>
+</header>
+
+<section class="schema-panel">
+  <p class="label">本章你将建立的 schema</p>
+  <ul>
+    <li>CAP 的精确表述与三大误解（"三选二"误导、"CA 系统"不存在、C ≠ ACID-C）</li>
+    <li>PACELC 把"正常态"下延迟/一致的取舍也纳入框架，补上 CAP 的盲区</li>
+    <li>etcd / Cassandra / Spanner 各自如何映射到 CP / AP / PC/EC，以及背后用到了哪几章的机制</li>
+    <li>截至 2026-06：哪些定论二十年不变、哪些近两年在动、哪些旧做法已被取代</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════
+     §8.1  CAP 定理：精确表述与三大误解
+     ═══════════════════════════════════════════════════════ -->
+<h2 id="s81"><span class="num">8.1</span><span>CAP 定理：精确表述与三大误解</span></h2>
+
+<p class="one-liner">当网络发生分区时，系统无法同时保证线性一致（C）与完全可用（A）——分区是环境事实，不是可选项。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要理解它</span>
+  <p>工程师在选型时常把"我需要 CA"写进 ADR，然后被面试官或同事追问"CA 系统是什么意思"时语塞。CAP 被误读的程度与它被引用的频率几乎等比——不精确地理解它，反而比不知道它更危险，因为它会产生错误的设计信心。</p>
+</div>
+
+<h3>精确表述</h3>
+<p>Eric Brewer 2000 年在 PODC 提出猜想；2002 年 Seth Gilbert 与 Nancy Lynch 给出形式证明。定理的准确表述是：<strong>在一个异步网络模型中，若节点间可能发生消息丢失（分区），则不存在任何算法能同时保证线性一致性（Linearizability）与全可用（Every non-failing node returns a response）。</strong></p>
+
+<p>这里的 C 是 <strong>线性一致性（linearizability）</strong>：任何读操作返回的值，必须是最近一次完成写操作之后的最新值，且所有操作的效果看起来仿佛在某个全局时间点瞬间发生（与第 03 章一致性谱系的最高档对应）。这不是 ACID 里的 C（Consistency），ACID-C 指数据满足应用约束，是应用语义层面的概念。</p>
+
+<h3>三大误解</h3>
+
+<div class="callout warning">
+  <span class="label">陷阱 1 · "三选二"误导</span>
+  <p>"从 C、A、P 里选两个"的表述把分区（P）当作可以主动放弃的属性。实际上分区是网络环境的客观事实——节点无法区分对端节点是宕机还是网络包丢失（01 章根因）。真正的取舍是：<strong>当分区发生时，系统选择保线性一致还是保可用</strong>。</p>
+</div>
+
+<div class="callout warning">
+  <span class="label">陷阱 2 · "CA 系统"不是分布式主张</span>
+  <p>单机 RDBMS（如单节点 PostgreSQL）在 CAP 意义上确实是 CA——它不需要处理网络分区。但一旦部署为分布式，节点间的网络就引入了分区可能性，"CA"的前提瓦解。所以"分布式 CA 系统"在 CAP 框架下没有意义——它只是一个回避了分布式属性的单节点系统。</p>
+</div>
+
+<div class="callout warning">
+  <span class="label">陷阱 3 · CAP-C ≠ ACID-C</span>
+  <p>CAP 的 C 是线性一致（最强一致）；ACID 的 C 是"事务执行后数据满足约束"（外键、唯一键等应用层不变量）。把两者混用会导致"我用了支持 ACID 事务的 MySQL 集群，所以我有 CAP 的 C"——这个推断是错误的，集群 MySQL 在分区时仍然要在可用性与线性一致之间取舍。</p>
+</div>
+
+<p>Brewer 本人在 2012 年的 <em>CAP Twelve Years Later</em>（IEEE Computer）中指出，取舍是细粒度的：系统可以按操作类型、甚至按子系统独立做 C vs A 决策，而不必全库统一。Cassandra 的可调一致性正是这个思路的工程实现。</p>
+
+<figure>
+  <svg viewBox="0 0 680 320" xmlns="http://www.w3.org/2000/svg"
+       role="img" aria-label="CAP 分区决策流程图：检测到分区后系统在 C 与 A 之间选择">
+    <defs>
+      <marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+      <marker id="arrow-vermilion" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+      </marker>
+    </defs>
+
+    <!-- Start ellipse -->
+    <ellipse cx="340" cy="36" rx="90" ry="24" class="diagram-ink node-fill"/>
+    <text x="340" y="41" text-anchor="middle" class="node-label">收到写 / 读请求</text>
+
+    <!-- Down arrow to diamond -->
+    <line x1="340" y1="60" x2="340" y2="90" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+
+    <!-- Decision diamond: partition? -->
+    <polygon points="340,90 470,155 340,220 210,155" class="diagram-ink node-fill"/>
+    <text x="340" y="151" text-anchor="middle" class="node-label">检测到</text>
+    <text x="340" y="168" text-anchor="middle" class="node-label">网络分区？</text>
+
+    <!-- No branch (right) -->
+    <line x1="470" y1="155" x2="560" y2="155" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="515" y="147" text-anchor="middle" class="edge-label">否</text>
+    <rect x="560" y="128" width="104" height="54" rx="6" class="diagram-ink node-fill"/>
+    <text x="612" y="151" text-anchor="middle" class="node-label">正常服务</text>
+    <text x="612" y="168" text-anchor="middle" class="edge-label">C + A 均满足</text>
+
+    <!-- Yes branch (down) -->
+    <line x1="340" y1="220" x2="340" y2="250" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="350" y="242" class="edge-label">是</text>
+
+    <!-- Second diamond: choose C or A -->
+    <polygon points="340,250 460,305 340,360 220,305" class="diagram-accent node-fill-accent"/>
+    <text x="340" y="301" text-anchor="middle" class="node-label-accent">选择优先级</text>
+    <text x="340" y="318" text-anchor="middle" class="edge-label">C vs A</text>
+
+    <!-- Choose C (left) -->
+    <line x1="220" y1="305" x2="100" y2="305" class="diagram-accent" marker-end="url(#arrow-vermilion)"/>
+    <text x="160" y="296" text-anchor="middle" class="branch-label">保 C</text>
+    <rect x="10" y="278" width="90" height="54" rx="6" class="diagram-ink node-fill"/>
+    <text x="55" y="302" text-anchor="middle" class="node-label">拒绝请求</text>
+    <text x="55" y="318" text-anchor="middle" class="edge-label">返回错误</text>
+
+    <!-- Choose A (right) -->
+    <line x1="460" y1="305" x2="560" y2="305" class="diagram-accent" marker-end="url(#arrow-vermilion)"/>
+    <text x="510" y="296" text-anchor="middle" class="branch-label">保 A</text>
+    <rect x="560" y="278" width="104" height="54" rx="6" class="diagram-ink node-fill"/>
+    <text x="612" y="302" text-anchor="middle" class="node-label">返回响应</text>
+    <text x="612" y="318" text-anchor="middle" class="edge-label">可能是旧值</text>
+  </svg>
+  <figcaption><span class="fig-num">图 8.1</span>分区期间的 C vs A 决策分支。<strong>注意</strong>：无分区时 C 与 A 可同时满足；分区是触发取舍的条件，不是系统属性。</figcaption>
+</figure>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>一个系统在分区时选择返回可能过时的数据（保 A），分区恢复后才做冲突解决——这是在 CAP 框架下选了什么？对比 ZooKeeper 在丢失多数派时拒绝所有写请求，又是选了什么？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>前者选 A（可用）：分区期间继续服务，牺牲线性一致，依赖后续反熵/冲突合并修复（Cassandra/Dynamo 的做法）。后者选 C（线性一致）：拒绝写以维护"leader 拥有最新状态"的不变量（ZooKeeper、etcd 的做法）。设计洞察：选 A 的系统必须有冲突解决机制（LWW、CRDT、Saga补偿等），这些成本在分区结束后才支付。</p>
+  </details>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     §8.2  PACELC：别忘了"平时"
+     ═══════════════════════════════════════════════════════ -->
+<h2 id="s82"><span class="num">8.2</span><span>PACELC：别忘了"平时"</span></h2>
+
+<p class="one-liner">分区时取 A vs C；无分区正常态下取 Latency vs Consistency——PACELC 把这两段都写进框架。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要它</span>
+  <p>CAP 只描述分区期间的取舍，但分区是低概率事件。系统 99.9% 的时间运行在正常态，这段时间里同步等待多副本确认（高一致）还是异步返回（低延迟）才是日常性能的决定因素。只看 CAP 会让工程师忽视正常态的代价。</p>
+</div>
+
+<h3>框架定义</h3>
+<p>Daniel Abadi 在 2012 年提出 PACELC（发音 "pass-elk"）：</p>
+<ul>
+  <li><strong>if Partition → A vs C</strong>（与 CAP 相同）</li>
+  <li><strong>else（无分区）→ Latency vs Consistency</strong></li>
+</ul>
+
+<p>"else"分支的机制是：要在多副本上写入并等待确认，则延迟上升但一致性更强；异步复制则延迟低但副本之间会有短暂不同步（第 04 章复制机制的直接体现）。换言之，<strong>正常态下延迟与一致是同一枚硬币的两面</strong>：强一致的代价是至少等待网络往返时间 × 复制因子。</p>
+
+<table class="compare-table">
+  <caption>PACELC 系统分类</caption>
+  <thead>
+    <tr>
+      <th>系统</th>
+      <th>分区时</th>
+      <th>正常态</th>
+      <th>PACELC 标记</th>
+      <th>本教程对应机制</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Dynamo / Cassandra</td>
+      <td>选 A（继续响应）</td>
+      <td>选 L（异步复制，低延迟）</td>
+      <td>PA/EL</td>
+      <td>04 无主 + 05 一致性哈希 + LWW</td>
+    </tr>
+    <tr>
+      <td>Riak（默认）</td>
+      <td>选 A</td>
+      <td>选 L</td>
+      <td>PA/EL</td>
+      <td>04 quorum + sloppy quorum</td>
+    </tr>
+    <tr class="selected">
+      <td>Spanner / CockroachDB</td>
+      <td>选 C（拒绝无多数派分区）</td>
+      <td>选 C（同步复制 + commit-wait）</td>
+      <td>PC/EC</td>
+      <td>06 Paxos/Raft + 07 2PC + 02 HLC/TrueTime</td>
+    </tr>
+    <tr>
+      <td>HBase / ZooKeeper</td>
+      <td>选 C</td>
+      <td>选 C</td>
+      <td>PC/EC</td>
+      <td>06 Raft（etcd 作为协调服务）</td>
+    </tr>
+    <tr>
+      <td>Cosmos DB</td>
+      <td>可调</td>
+      <td>可调（五档一致性）</td>
+      <td>PA/EL 到 PC/EC</td>
+      <td>03 一致性谱系全覆盖</td>
+    </tr>
+    <tr>
+      <td>MySQL（主从，半同步）</td>
+      <td>选 C（主宕时停写）</td>
+      <td>选 L（异步 / 半同步可选）</td>
+      <td>PC/EL</td>
+      <td>04 单主复制</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout insight">
+  <span class="label">类比 · 带边界</span>
+  <p>PACELC 像在 CAP 的"分区应急预案"之上加了一份"日常 SLA 合同"：应急预案决定灾时怎么做，日常合同决定平时付多少延迟换多少一致。边界在于：PACELC 仍是定性框架，它不量化"多少毫秒换多少一致"——这个量化需要具体的延迟测量与 SLO 设计。</p>
+</div>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>Cassandra 设置 <code>CONSISTENCY QUORUM</code>（R + W &gt; N）时，它的 PACELC 标记从 PA/EL 变成了什么？为什么延迟上升了？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>QUORUM 要求写入多数节点后才返回，正常态下从 EL 切到 EC（选一致而非低延迟）。延迟上升因为写请求需要等待 ⌈N/2⌉+1 个副本确认，多了至少一次网络往返。分区时因为 Cassandra 基于 gossip 而非强共识，仍然可以在多数派可达时工作，但若分区导致多数派不可达则写失败——此时它实际上也在保 C（在该分区内）。注意这与 etcd 的 CP 不同：etcd 用 Raft 的 leader 选举，失去多数派立即停写；Cassandra QUORUM 的"多数派"是客户端动态计算的，没有全局 leader。</p>
+  </details>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     §8.3  真实系统映射（把前七章机制对上号）
+     ═══════════════════════════════════════════════════════ -->
+<h2 id="s83"><span class="num">8.3</span><span>真实系统映射</span></h2>
+
+<p class="one-liner">CP 系统（etcd、HBase、Spanner）与 AP 系统（Cassandra、Dynamo）的底层机制恰好对应前六章的具体内容。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要映射</span>
+  <p>CAP/PACELC 标签本身不能告诉工程师"为什么"——etcd 为什么是 CP？答案在 Raft 的多数派提交规则（06 章）。Cassandra 为什么能可调？答案在无主 quorum（04）+ 一致性哈希（05）+ LWW（02/04）。把标签与机制绑定，才能做有依据的系统选型。</p>
+</div>
+
+<h3>CP 系阵营</h3>
+<p><strong>etcd / ZooKeeper</strong>：使用 Raft（etcd）或 ZAB（ZooKeeper）共识算法（06 章）。leader 持有最新日志；follower 收到 AppendEntries 后才更新状态机。失去多数派时 leader 选举无法完成，系统停止接受写请求——这是在保线性一致（CP）。etcd 是 Kubernetes 的控制面存储，强一致对集群状态管理不可妥协。</p>
+
+<p><strong>HBase</strong>：写操作走 WAL + MemStore，RegionServer 宕机时 ZooKeeper 检测（01 章故障检测）并触发 Region 迁移；分区期间 ZooKeeper 自身 CP 保证了 Region 元数据的一致性，因此 HBase 整体也是 CP。</p>
+
+<p><strong>Spanner</strong>：每个 Paxos 分组覆盖一个数据分片（06 章 Paxos）；跨分片事务用 2PC 协调（07 章）；全局外部一致时间戳靠 TrueTime（02 章 HLC 对应）。三层机制叠加，使 Spanner 在全球范围内维持 PC/EC——分区时拒绝写，正常态付 commit-wait 延迟换全局线性一致。</p>
+
+<h3>AP 系阵营</h3>
+<p><strong>Cassandra / Dynamo</strong>：无主架构，数据用一致性哈希分布到环上的虚拟节点（05 章），副本写入用 quorum 控制，但 quorum 是软约束——分区时降级到 sloppy quorum（04 章）继续写入 hinted handoff 节点，分区恢复后反熵（04 章）同步差异，冲突用 LWW 或向量时钟（02 章）解决。整个流程保了 A，牺牲了短暂的线性一致。</p>
+
+<p><strong>Riak</strong>：与 Dynamo 同源设计，支持 CRDT（03 章最终一致）作为内置数据类型，避免 LWW 的"后写者赢但早写者丢"问题。</p>
+
+<h3>可调系统</h3>
+<p><strong>Cassandra（QUORUM / LOCAL_QUORUM / ONE）</strong>：一致性级别是客户端每次请求时指定的——同一个集群，不同操作可以选不同的 C vs A 权重。这正是 Brewer 2012 年说的"细粒度取舍"。</p>
+
+<p><strong>Azure Cosmos DB</strong>：提供五档一致性（强一致 → 有界过期 → 会话 → 一致前缀 → 最终），覆盖 03 章一致性谱系的全部档位，且可按容器设置。</p>
+
+<figure>
+  <svg viewBox="0 0 680 360" xmlns="http://www.w3.org/2000/svg"
+       role="img" aria-label="真实系统在 CP 到 AP 谱上的位置及其核心机制标注">
+    <defs>
+      <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+    </defs>
+
+    <!-- Spectrum axis -->
+    <line x1="60" y1="60" x2="620" y2="60" class="diagram-ink" marker-end="url(#arr2)"/>
+    <text x="60" y="52" text-anchor="middle" class="node-label-accent">CP</text>
+    <text x="618" y="52" text-anchor="start" class="node-label">AP</text>
+    <text x="340" y="52" text-anchor="middle" class="edge-label">可调 / 折中</text>
+
+    <!-- CP systems group -->
+    <!-- etcd -->
+    <rect x="42" y="80" width="134" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+    <text x="109" y="103" text-anchor="middle" class="node-label-accent">etcd / ZooKeeper</text>
+    <text x="109" y="120" text-anchor="middle" class="edge-label">Raft/ZAB (§06)</text>
+
+    <!-- Spanner -->
+    <rect x="192" y="80" width="130" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+    <text x="257" y="103" text-anchor="middle" class="node-label-accent">Spanner</text>
+    <text x="257" y="120" text-anchor="middle" class="edge-label">Paxos+2PC+TrueTime</text>
+
+    <!-- HBase -->
+    <rect x="42" y="156" width="130" height="56" rx="6" class="diagram-ink node-fill"/>
+    <text x="107" y="179" text-anchor="middle" class="node-label">HBase</text>
+    <text x="107" y="196" text-anchor="middle" class="edge-label">ZK协调+WAL (§04)</text>
+
+    <!-- CockroachDB -->
+    <rect x="192" y="156" width="140" height="56" rx="6" class="diagram-ink node-fill"/>
+    <text x="262" y="179" text-anchor="middle" class="node-label">CockroachDB</text>
+    <text x="262" y="196" text-anchor="middle" class="edge-label">Raft+HLC (§06,§02)</text>
+
+    <!-- Tunable middle -->
+    <!-- Cassandra -->
+    <rect x="270" y="232" width="140" height="56" rx="6" class="diagram-ink node-fill"/>
+    <text x="340" y="255" text-anchor="middle" class="node-label">Cassandra</text>
+    <text x="340" y="272" text-anchor="middle" class="edge-label">quorum可调(§04,§05)</text>
+
+    <!-- Cosmos DB -->
+    <rect x="270" y="302" width="140" height="44" rx="6" class="diagram-ink node-fill"/>
+    <text x="340" y="321" text-anchor="middle" class="node-label">Cosmos DB</text>
+    <text x="340" y="336" text-anchor="middle" class="edge-label">五档一致性 (§03)</text>
+
+    <!-- AP systems -->
+    <!-- Dynamo/Riak -->
+    <rect x="492" y="80" width="148" height="56" rx="6" class="diagram-ink node-fill"/>
+    <text x="566" y="103" text-anchor="middle" class="node-label">Dynamo / Riak</text>
+    <text x="566" y="120" text-anchor="middle" class="edge-label">sloppy quorum+反熵</text>
+
+    <!-- Aurora DSQL -->
+    <rect x="492" y="156" width="148" height="56" rx="6" class="diagram-ink node-fill"/>
+    <text x="566" y="179" text-anchor="middle" class="node-label">Aurora DSQL</text>
+    <text x="566" y="196" text-anchor="middle" class="edge-label">HLC近似TrueTime(§02)</text>
+
+    <!-- Vertical connector lines to axis -->
+    <line x1="109" y1="80" x2="109" y2="64" class="diagram-soft"/>
+    <line x1="257" y1="80" x2="257" y2="64" class="diagram-soft"/>
+    <line x1="340" y1="232" x2="340" y2="64" class="diagram-soft"/>
+    <line x1="566" y1="80" x2="566" y2="64" class="diagram-soft"/>
+  </svg>
+  <figcaption><span class="fig-num">图 8.3</span>真实系统在 CP↔AP 谱上的位置及核心机制标注（§ 指本教程对应章节）。<strong>注意</strong>：Cassandra 与 Cosmos DB 位于中间——它们不是"两边都要"，而是"可以按请求选边站"。</figcaption>
+</figure>
+
+<!-- ═══════════════════════════════════════════════════════
+     §8.4  现状速览与前沿（截至 2026-06）
+     ═══════════════════════════════════════════════════════ -->
+<h2 id="s84"><span class="num">8.4</span><span>现状速览与前沿（截至 2026-06）</span></h2>
+
+<p class="one-liner">分布式系统理论核心二十年稳定；近两年的变化在实现层：更好的时钟、CRDT 主流化、旧算法复兴、租约 bug 批量暴露。</p>
+
+<div class="rationale">
+  <span class="label">为什么这一节值得深读</span>
+  <p>DDIA（2017）是工程师最常引用的参考，但它对 Spanner、CRDT、HLC 的描述已与 2025 年的现实有显著差距。搞清楚"哪些定论、哪些在动、哪些被取代"，可以避免把已淘汰的设计模式写进新系统。</p>
+</div>
+
+<h3>STABLE — 定论（二十年不变）</h3>
+
+<p><strong>理论核心稳定</strong>：Paxos（1998/2001 发表）、CAP（2000/2002 证明）、Raft（2014）三篇论文构成分布式系统理论脊梁，不会被推翻，只会被精化。</p>
+
+<p><strong>Spanner + TrueTime（2012，已 GA 超十年）</strong>：Spanner 论文（OSDI 2012）把全球外部一致（External Consistency）事务做成了工程现实——这与 2017 年 DDIA 写作时"Spanner 只有 Google 能做"的语气不同，今天它已作为 Cloud Spanner 公开商用。TrueTime 的核心思路是：把时钟不确定性**显式暴露**为区间 <code>[earliest, latest]</code>，而不是假装时钟精确。commit-wait 机制等待 <code>2ε</code>（ε 是当前不确定区间的上界，Google 数据中心实测约 7ms），确保提交时间戳在全球所有节点看来都是单调递增的。2025 年，Spanner/TrueTime 获 ACM SIGMOD Systems Award，是该领域最高系统荣誉之一。</p>
+
+<p><strong>HLC（Hybrid Logical Clocks）</strong>：CockroachDB 与 YugabyteDB 使用 HLC（02 章已介绍）实现近似 TrueTime 的语义，免去原子钟硬件。HLC 在物理时钟不回退时提供单调递增的因果时间戳，是普通数据中心的实用替代。</p>
+
+<p><strong>FoundationDB（2018 开源）</strong>：FoundationDB 的招牌是确定性模拟测试（DST, Deterministic Simulation Testing）——整个分布式系统在单进程内运行，网络、磁盘均为可控的模拟实现，注入故障后系统行为完全可重放。这使测试覆盖了生产环境中极难复现的竞态条件，是分布式系统测试工程的里程碑。</p>
+
+<p><strong>Redis Enterprise CRDT（Active-Active Geo-Replication）</strong>：Redis Enterprise 的多主地理复制基于 CRDT，允许多个区域同时写入同一 key，通过内置 CRDT 语义（计数器、集合、排序集等）自动合并，不产生冲突异常。这是 CRDT 从学术走向主流企业产品的代表。</p>
+
+<h3>IN FLUX — 近 1–2 年活跃演变（每条带日期）</h3>
+
+<p><strong>① TigerBeetle 与 VSR 复兴（2025-06）</strong>：TigerBeetle 是一款专为金融账务设计的高性能数据库，使用 1988 年的 Viewstamped Replication（VSR，Liskov &amp; Oki）而非 Raft 作为共识层。VSR 的主要差异：选主不依赖随机超时，而是基于 view change 协议的确定性选主，减少了 split-brain 窗口。2025-06，Jepsen 对 TigerBeetle 0.16.11 完成测试并验证其达到严格可串行化（Strict Serializability）。这标志着 VSR——一个在 Raft 流行后几乎被遗忘的协议——在性能优先场景下的复兴。与 DDIA 2017 心智模型的差异：DDIA 几乎未提 VSR；2025 年它已通过了工业级 Jepsen 验证。</p>
+
+<p><strong>② Amazon Aurora DSQL（2024-12 GA）</strong>：Aurora DSQL 是 AWS 2024 年 12 月正式发布的无服务器分布式 SQL 数据库，目标是在不使用 Google 原子钟硬件的前提下接近 Spanner 级别的全球一致性。实现路径：使用 EC2 精密硬件时钟（精度约百微秒）结合 HLC 构造有界时钟不确定区间，commit-wait 窗口相应更短。与 DDIA 2017 心智模型的差异：2017 年认为 Spanner 级全球一致需要原子钟，Aurora DSQL 证明高精度硬件时钟 + HLC 已可工程化替代。</p>
+
+<p><strong>③ CRDT 主流化：Automerge 3.0 + Yjs（2025-05）</strong>：Automerge 3.0（2025-05 发布）将底层切换到 Rust 实现并编译到 WASM，内存占用相比 2.x 降低约 10 倍，使其在浏览器端实际可用。Yjs 已成为实时协作编辑的事实标准（VS Code Live Share、Hocuspocus 等均基于它）。local-first 运动（Ink &amp; Switch 等研究团队主导）推动 CRDT 从"数据库内部机制"扩展到"应用层数据同步协议"。与 DDIA 2017 心智模型的差异：2017 年 CRDT 是"最终一致存储的高级选项"，2025 年它是前端实时协作的标准库。</p>
+
+<p><strong>④ Raft 租约 bug 批量暴露：LeaseGuard（arXiv 2025-12）</strong>：论文 <em>LeaseGuard: Lease-based Distributed Systems are Broken</em>（arXiv 2025-12）系统记录了 etcd、HashiCorp Raft、TiDB 等主流实现中普遍存在的租约（lease）相关 bug——核心问题是：Raft 的 leader lease 依赖物理时钟的单调性，而 NTP 调整或虚拟机时钟漂移会破坏这一假设，导致旧 leader 在 lease 未过期时继续提供陈旧读。这是 02 章"物理时钟不可靠"在真实系统中的集中体现。与 DDIA 2017 心智模型的差异：2017 年租约被视为有效的线性一致读优化；2025 年的测量表明大多数实现都有潜在的正确性漏洞。</p>
+
+<h3>SUPERSEDED — 旧做法已被取代</h3>
+
+<p><strong>纯 NTP 物理时钟给事务定序</strong>：早期分布式数据库（如早期 MySQL 集群）用 NTP 时间戳作为全局事务顺序的依据。NTP 精度约 1–100ms，在跨节点并发写入时会产生静默的顺序颠倒——写时间戳更大的事务实际先到，被错误地排在后面。今天的做法是 HLC（免原子钟）、TrueTime（有界不确定 + commit-wait）或向量时钟（纯逻辑）。</p>
+
+<p><strong>Naive 3PC 作为 2PC 的容错升级</strong>：3PC 在异步网络下仍然无法解决网络分区导致的阻塞（FLP 定理，01 章），且实现复杂度远高于 Raft-based 2PC。实践中，跨分片事务的协调者故障恢复已被基于 Raft 的协调组（如 TiDB 的 TiKV + PD）或 Saga 补偿（07 章）取代。</p>
+
+<p><strong>单区域 ACID 假设下的"全球规模"设计</strong>：2017 年前，"全球一致 SQL"意味着业务层手动分区、读写分离、跨区域复制延迟容忍。今天，Spanner、CockroachDB、YugabyteDB、Aurora DSQL 均已 GA，把全球分布式 ACID 事务做成了运维友好的商业服务。架构师无需再为"强一致 vs 跨区域延迟"二选一。</p>
+
+<div class="callout insight">
+  <span class="label">定论 vs 在动 vs 已过时</span>
+  <p>理论框架（CAP/PACELC/Raft/Paxos）是定论，学完可以放心使用二十年。具体实现（租约实现、时钟精度、CRDT 库版本）是在动的——LeaseGuard 提醒工程师即使使用 etcd 这样成熟的系统，也要理解其租约的时钟依赖假设。旧做法（NTP 定序、naive 3PC）是已过时的——如果面试或设计文档里还在用这些，是知识断层的信号。</p>
+</div>
+
+<figure>
+  <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg"
+       role="img" aria-label="技术三桶：STABLE / IN FLUX / SUPERSEDED 时间线分栏">
+    <defs>
+      <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+    </defs>
+
+    <!-- Column headers -->
+    <rect x="10" y="10" width="196" height="36" rx="4" class="diagram-ink node-fill"/>
+    <text x="108" y="33" text-anchor="middle" class="node-label">STABLE（定论）</text>
+
+    <rect x="242" y="10" width="196" height="36" rx="4" class="diagram-accent node-fill-accent"/>
+    <text x="340" y="33" text-anchor="middle" class="node-label-accent">IN FLUX（近 1–2 年）</text>
+
+    <rect x="474" y="10" width="196" height="36" rx="4" class="diagram-ink node-fill"/>
+    <text x="572" y="33" text-anchor="middle" class="node-label">SUPERSEDED（过时）</text>
+
+    <!-- Vertical dividers -->
+    <line x1="222" y1="10" x2="222" y2="290" class="diagram-soft"/>
+    <line x1="454" y1="10" x2="454" y2="290" class="diagram-soft"/>
+
+    <!-- STABLE items -->
+    <rect x="18" y="60" width="180" height="34" rx="4" class="diagram-ink node-fill"/>
+    <text x="108" y="74" text-anchor="middle" class="edge-label">Paxos 1998</text>
+    <text x="108" y="87" text-anchor="middle" class="edge-label">CAP 2000 · Raft 2014</text>
+
+    <rect x="18" y="106" width="180" height="34" rx="4" class="diagram-ink node-fill"/>
+    <text x="108" y="120" text-anchor="middle" class="edge-label">Spanner TrueTime 2012</text>
+    <text x="108" y="133" text-anchor="middle" class="edge-label">SIGMOD Award 2025</text>
+
+    <rect x="18" y="152" width="180" height="34" rx="4" class="diagram-ink node-fill"/>
+    <text x="108" y="166" text-anchor="middle" class="edge-label">HLC (CockroachDB)</text>
+    <text x="108" y="179" text-anchor="middle" class="edge-label">FoundationDB DST</text>
+
+    <rect x="18" y="198" width="180" height="34" rx="4" class="diagram-ink node-fill"/>
+    <text x="108" y="212" text-anchor="middle" class="edge-label">Redis CRDT</text>
+    <text x="108" y="225" text-anchor="middle" class="edge-label">Active-Active</text>
+
+    <!-- IN FLUX items -->
+    <rect x="250" y="60" width="180" height="34" rx="4" class="diagram-accent node-fill-accent"/>
+    <text x="340" y="74" text-anchor="middle" class="edge-label">TigerBeetle + VSR</text>
+    <text x="340" y="87" text-anchor="middle" class="edge-label">Jepsen 2025-06 ✓</text>
+
+    <rect x="250" y="106" width="180" height="34" rx="4" class="diagram-accent node-fill-accent"/>
+    <text x="340" y="120" text-anchor="middle" class="edge-label">Aurora DSQL</text>
+    <text x="340" y="133" text-anchor="middle" class="edge-label">GA 2024-12</text>
+
+    <rect x="250" y="152" width="180" height="34" rx="4" class="diagram-accent node-fill-accent"/>
+    <text x="340" y="166" text-anchor="middle" class="edge-label">Automerge 3.0 Rust</text>
+    <text x="340" y="179" text-anchor="middle" class="edge-label">2025-05 内存降 10×</text>
+
+    <rect x="250" y="198" width="180" height="34" rx="4" class="diagram-accent node-fill-accent"/>
+    <text x="340" y="212" text-anchor="middle" class="edge-label">LeaseGuard etcd bug</text>
+    <text x="340" y="225" text-anchor="middle" class="edge-label">arXiv 2025-12</text>
+
+    <!-- SUPERSEDED items -->
+    <rect x="482" y="60" width="180" height="34" rx="4" class="diagram-ink node-fill"/>
+    <text x="572" y="74" text-anchor="middle" class="edge-label">纯 NTP 事务定序</text>
+    <text x="572" y="87" text-anchor="middle" class="edge-label">→ HLC / TrueTime</text>
+
+    <rect x="482" y="106" width="180" height="34" rx="4" class="diagram-ink node-fill"/>
+    <text x="572" y="120" text-anchor="middle" class="edge-label">Naive 3PC</text>
+    <text x="572" y="133" text-anchor="middle" class="edge-label">→ Raft 协调 + Saga</text>
+
+    <rect x="482" y="152" width="180" height="34" rx="4" class="diagram-ink node-fill"/>
+    <text x="572" y="166" text-anchor="middle" class="edge-label">单区域 ACID 假设</text>
+    <text x="572" y="179" text-anchor="middle" class="edge-label">→ Spanner/DSQL GA</text>
+  </svg>
+  <figcaption><span class="fig-num">图 8.4</span>截至 2026-06 的技术三桶分类。<strong>注意</strong>：IN FLUX 列的变化集中在实现层（时钟、租约、CRDT 库），而非理论层——理论全在 STABLE 列。</figcaption>
+</figure>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>LeaseGuard（2025-12）记录了 etcd 的租约 bug，根因是什么章节的知识？修复方向是替换 NTP，还是改变 lease 的时钟依赖方式？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>根因是 02 章"物理时钟不可靠"：NTP 可能回拨或漂移，破坏 lease 依赖的单调性假设，让旧 leader 误认为自己的 lease 仍有效，提供陈旧读。修复方向不是替换 NTP（基础设施约束），而是改变 lease 的正确性依据——例如用单调时钟（CLOCK_MONOTONIC）而非壁钟（CLOCK_REALTIME），或在 lease 续期时加入 Raft log 版本检查，使 lease 有效性与 Raft term 绑定。</p>
+  </details>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     §8.5  把整张地图收起来
+     ═══════════════════════════════════════════════════════ -->
+<h2 id="s85"><span class="num">8.5</span><span>把整张地图收起来</span></h2>
+
+<p>八章内容从一个根因出发，逐层推演到权衡框架。</p>
+
+<p><strong>01 章（根因）</strong>确立了为什么分布式系统难：节点只能通过不可靠、延迟无上界的网络互相了解，无法区分"慢"与"死"——这是所有后续机制存在的理由。<strong>02 章（时序）</strong>回答了"没有可信全局时钟，如何建立顺序"：唯一客观顺序是因果序 happens-before；物理时钟用于事务定序会静默丢数据，所以需要 Lamport 时钟 / 向量时钟 / HLC。<strong>03 章（一致性谱系）</strong>把"一致性"拆成了七档，避免把线性一致与最终一致混为一谈，并引出 CRDT 作为无需协调的最终一致解法。</p>
+
+<p><strong>04 章（复制）</strong>和 <strong>05 章（分区）</strong>是"数据怎么分布"的两个维度：复制解决冗余与可用，分区解决规模与路由；两章合起来解释了 Cassandra 的架构——一致性哈希 + 虚拟节点 + quorum。<strong>06 章（共识）</strong>回答了"如何让多节点就一个值达成一致而不死锁"，Raft 是工程化答案；06 章的 leader + term + 多数派是 etcd 和 HBase 的基础。<strong>07 章（事务）</strong>把共识延伸到跨分片操作：2PC 是基础，Saga 是长流程补偿，幂等是"at-least-once 下 exactly-once"的工程解法。</p>
+
+<p>这一章（08）是收束：CAP 框架说分区时必须选边；PACELC 补上正常态的延迟/一致取舍；真实系统的 CP/AP/可调标签对应的是前六章的具体机制组合。前沿部分告诉工程师：理论已稳定，变化在实现——时钟精度、CRDT 库、租约正确性。</p>
+
+<p>第 09 章"自检与场景判别"提供跨章综合题，在给定系统约束时判别应选哪一层机制——是共识还是最终一致，是 LWW 还是 CRDT，是 2PC 还是 Saga。</p>
+
+<!-- ═══════════════════════════════════════════════════════
+     Self-check
+     ═══════════════════════════════════════════════════════ -->
+<section class="self-check" id="self-check">
+  <h2>自检</h2>
+  <ol>
+    <li>"三选二"为什么是对 CAP 的误解？分区不可避免，真正的取舍因此是什么？</li>
+    <li>PACELC 的"else"分支补上了 CAP 忽略的什么日常取舍？正常态下保高一致的代价是什么？</li>
+    <li>把 etcd、Cassandra、Spanner 各归到 CP 还是 AP，并各说出它用到了本教程哪些章的机制。</li>
+    <li>截至 2026，为什么"用纯 NTP 物理时钟给事务定序"已被取代？用什么取代了它？</li>
+  </ol>
+  <details>
+    <summary>展开参考答案</summary>
+    <p><strong>1.</strong>"三选二"把 P 当作可主动放弃的属性，实际上分区是网络环境事实（01 章根因），无法避免。真正的取舍是：当分区发生时，系统优先保线性一致（C，拒绝请求）还是保可用（A，返回可能旧值）。</p>
+    <p><strong>2.</strong> PACELC 的 else 分支补上了"无分区正常态下延迟 vs 一致"的取舍。正常态保高一致的代价是：写请求需要等待多副本同步确认，延迟至少增加一次跨副本网络往返（如 Spanner 的 commit-wait 约 14ms 全球延迟）。</p>
+    <p><strong>3.</strong> etcd → CP（Raft 06章，失去多数派停写）；Cassandra → AP（无主 quorum 04章 + 一致性哈希 05章 + LWW 02/04章，分区期间 sloppy quorum 继续写）；Spanner → CP 且 PC/EC（Paxos 06章 + 2PC 07章 + TrueTime 02章，全球外部一致）。</p>
+    <p><strong>4.</strong> NTP 精度约 1–100ms，在跨节点并发写入时产生静默顺序颠倒（02 章物理时钟问题）。取代方案：HLC（CockroachDB/YugabyteDB，免原子钟，单调递增因果时间戳）；TrueTime + commit-wait（Spanner，有界不确定区间，付延迟换全局有序）；向量时钟（纯逻辑，不依赖物理时间）。</p>
+  </details>
+</section>
+
+<!-- Challenge -->
+<div class="challenge">
+  <span class="label">进阶挑战 · 刚好够不着</span>
+  <h3>跨区域强一致 + 低延迟：CAP/PACELC 告诉你必然要付什么代价？</h3>
+  <p>一个跨区域、要求强一致事务、又想低延迟的系统，CAP/PACELC 告诉工程师必然要付什么代价？Spanner 与 Aurora DSQL 各自怎么把这个代价压到最小？</p>
+  <details>
+    <summary>提示（卡住再展开）</summary>
+    <p>这类系统是 PC/EC：分区时牺牲可用（选 C），正常态付延迟换一致（选 C 而非 L）。无法同时逃开两个 C 的代价——这是 PACELC 的数学约束，不是实现问题。Spanner 通过 TrueTime 把正常态延迟压到 commit-wait ≈ 2ε（约 14ms 跨大洲），而非等待对端确认；Aurora DSQL 通过高精度硬件时钟 + HLC 缩小不确定区间，实现类似效果而免原子钟。两者都是"承认延迟代价，然后工程上把那个代价压到尽可能小"——这是 PC/EC 系统唯一正确的优化方向。</p>
+  </details>
+</div>
+
+<!-- References -->
+<footer class="references">
+  <h3>参考文献</h3>
+  <ul>
+    <li>Brewer, E. "CAP Twelve Years Later: How the 'Rules' Have Changed." <em>IEEE Computer</em>, 2012.</li>
+    <li>Abadi, D. "Consistency Tradeoffs in Modern Distributed Database System Design: CAP is Only Part of the Story." <em>IEEE Computer</em>, 2012. (PACELC 论文)</li>
+    <li>Corbett, J. et al. "Spanner: Google's Globally Distributed Database." <em>OSDI</em>, 2012.</li>
+    <li>Kingsbury, K. "Jepsen: TigerBeetle 0.16.11." jepsen.io, 2025-06. (VSR 严格可串行化验证)</li>
+    <li>AWS. "How Aurora DSQL achieves high availability and fast transactions." AWS Database Blog, 2024-12. (Aurora DSQL 时钟机制)</li>
+    <li>Mao, Y. et al. "LeaseGuard: Lease-based Distributed Systems are Broken." arXiv, 2025-12. (Raft 租约 bug 系统记录)</li>
+  </ul>
+</footer>
+
+<!-- Chapter nav -->
+<nav class="chapter-nav">
+  <a href="07-transactions.html" class="prev">
+    <span class="label">上一章</span>
+    <span class="title">07 · 分布式事务</span>
+  </a>
+  <a href="09-self-check.html" class="next">
+    <span class="label">下一章</span>
+    <span class="title">09 · 自检与场景判别</span>
+  </a>
+</nav>
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+<li><a href="#s81" data-toc-target="s81">8.1 CAP 精确表述与三大误解</a></li>
+<li><a href="#s82" data-toc-target="s82">8.2 PACELC：别忘了"平时"</a></li>
+<li><a href="#s83" data-toc-target="s83">8.3 真实系统映射</a></li>
+<li><a href="#s84" data-toc-target="s84">8.4 现状速览与前沿</a></li>
+<li><a href="#s85" data-toc-target="s85">8.5 把整张地图收起来</a></li>
+<li><a href="#self-check" data-toc-target="self-check">自检</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

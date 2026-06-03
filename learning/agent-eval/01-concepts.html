@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 概念 · Agent Eval 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+.chapter-opener .meta-row {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html" class="current">01 概念</a><span class="sep">—</span>
+    <a href="02-methods.html">02 方法</a><span class="sep">—</span>
+    <a href="03-dataset-pipeline.html">03 数据集与流程</a><span class="sep">—</span>
+    <a href="04-tools-frontier.html">04 工具与前沿</a><span class="sep">—</span>
+    <a href="05-runtime-evaluator.html">05 运行期 Evaluator</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>核心概念：评什么，以及别把两个 eval 搞混</h1>
+        <p class="recap">index 给了全局地图——这章建立评测的词汇表：先分清两个 eval，再看为什么难，最后建立「评什么」的四层心智模型。</p>
+        <p class="meta-row"><strong>本章交付</strong>：A/B 之辨 + 三个结构性难点 + 评测对象的四层模型　|　<strong>带走的能力</strong>：对任何一句 eval 讨论，说出「这是四层里的哪一层，谈的是 A 还是 B」</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">读完本章，你的脑子里会多出这几条</p>
+        <ul>
+          <li>「eval」是一词两义：<strong>A 评测体系</strong>（开发期离线，量 agent 行不行）与 <strong>B 运行期 Evaluator</strong>（推理时在环，让单次输出更好）。本教程讲 A。</li>
+          <li>agent eval 比传统单元测试难，根因有三：<strong>非确定性</strong>、<strong>多步轨迹</strong>、<strong>开放式无唯一正解</strong>——这三点是后面所有方法的存在理由。</li>
+          <li>评测对象分四层：<strong>结果层 outcome</strong> / <strong>轨迹层 trajectory</strong> / <strong>组件层 component</strong> / <strong>安全合规层 safety</strong>。大多数人只评最外层，回归藏在里面三层。</li>
+        </ul>
+      </section>
+
+      <!-- ══════════════════════════════ §1.1 ══════════════════════════════ -->
+      <h2 id="ab"><span class="num">1.1</span><span>两个都叫「eval」的东西：评测体系 vs 运行期 Evaluator</span></h2>
+
+      <p class="one-liner">同一个词「eval」指两件事：A 是开发期量「行不行」的离线学科，B 是推理时让「这次输出」变好的在环组件。</p>
+
+      <p>翻开任意一篇 agent 文章、一段团队讨论或一个开源仓库，「eval」这个词会在两种完全不同的语境里出现，而二者共享技术却目的相反。把它们当成一回事，是这个领域最高频的概念混淆——后续每一章的术语都建立在这条分界线上，所以先钉死它。</p>
+
+      <h3>A = Eval（评测体系）</h3>
+      <p><strong>一句话定义</strong>：一套开发期、离线的工程纪律，用固定测试集 + 打分 + 回归报告，回答「这个 agent 到底行不行、改完有没有变差」。它跑在 CI 里，针对一份冻结的数据集，产物是分数和回归报告。改了 prompt、换了模型、调了检索参数之后跑一遍，看分数有没有掉——这是它的主战场。</p>
+
+      <h3>B = Evaluator（运行期组件）</h3>
+      <p><strong>一句话定义</strong>：agent 循环<em>内部</em>的一个推理时角色——「生成 → 批评 → 改进」，让<em>这一次</em>任务的输出更好。evaluator-optimizer、Reflexion、Self-RAG、CRAG 都属于这一类：模型先产出一版答案，再由一个评判角色指出问题，据此重写，迭代到满足标准为止。它<strong>每个任务都跑</strong>，目的不是统计 agent 的整体质量，而是抬高单次产出的下限。</p>
+
+      <div class="rationale">
+        <span class="label">为什么必须先分清</span>
+        <p>A 与 B 共用一项技术——「用模型给输出打分」（即后面会展开的 LLM-as-a-judge，让一个 LLM 充当裁判给另一个 LLM 的输出评分）。正因为技术同源，读者极易把「在 agent 里加一个反思步骤（B）」误当成「给 agent 建了评测（A）」。但 B 装得再好，CI 里依然没有任何一条用例在拦截回归——下次改坏了照样上线。A 的缺失不会被 B 补上。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 1.1 · A 评测体系 vs B 运行期 Evaluator</caption>
+        <thead>
+          <tr><th>维度</th><th>A · Eval 评测体系</th><th>B · 运行期 Evaluator</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>何时跑</td><td>开发期 / CI，离线，针对固定数据集</td><td>推理时，每次任务在 agent 循环里跑</td></tr>
+          <tr><td>目的</td><td>防回归、让迭代有据可依</td><td>提升这一次输出的质量</td></tr>
+          <tr><td>产物</td><td>分数 / 回归报告</td><td>一个更好的 answer</td></tr>
+          <tr class="selected"><td>本教程覆盖</td><td>主体——后续四章都在讲 A</td><td>只在此划界，正文不展开</td></tr>
+        </tbody>
+      </table>
+
+      <p>本教程从这里之后，「eval」一律指 A——评测体系。B 是它的近邻、技术上的表亲，但属于 agent 架构 / 推理模式的范畴，已在别处系统讲过：Reflexion 与 Self-RAG 的机制见 <a href="../agent-reasoning-patterns/index.html">agent-reasoning-patterns 教程</a>，evaluator-optimizer 作为一种工作流的成本权衡见 <a href="../agent-interview/03-agent-arch.html">agent-interview 的 evaluator-optimizer 章节</a>。本章把它放在视野里，是为了让读者每次遇到「eval」时都能先问一句：这是 A 还是 B。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="A 评测体系与 B 运行期 Evaluator 的对照：左侧离线循环，右侧在环循环，中间虚线分隔">
+          <defs>
+            <marker id="ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- divider -->
+          <line x1="360" y1="20" x2="360" y2="320" class="diagram-soft"/>
+
+          <!-- ===== LEFT: A 评测体系 ===== -->
+          <text x="170" y="34" text-anchor="middle" class="node-label" font-weight="700">A · 评测体系</text>
+          <text x="170" y="50" text-anchor="middle" class="edge-label">开发期 / 离线</text>
+
+          <!-- dataset -->
+          <rect x="100" y="66" width="140" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="170" y="91" text-anchor="middle" class="node-label">数据集</text>
+          <!-- run -->
+          <rect x="100" y="138" width="140" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="170" y="163" text-anchor="middle" class="node-label">跑 agent</text>
+          <!-- score -->
+          <rect x="100" y="210" width="140" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="170" y="235" text-anchor="middle" class="node-label">打分</text>
+          <!-- regress -->
+          <rect x="100" y="282" width="140" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="170" y="300" text-anchor="middle" class="node-label">回归报告</text>
+          <text x="170" y="315" text-anchor="middle" class="edge-label">跌了就拦</text>
+
+          <line x1="170" y1="106" x2="170" y2="138" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="170" y1="178" x2="170" y2="210" class="diagram-ink" marker-end="url(#ar-ink)"/>
+          <line x1="170" y1="250" x2="170" y2="282" class="diagram-ink" marker-end="url(#ar-ink)"/>
+
+          <!-- ===== RIGHT: B 运行期 Evaluator ===== -->
+          <text x="550" y="34" text-anchor="middle" class="node-label-accent">B · 运行期 Evaluator</text>
+          <text x="550" y="50" text-anchor="middle" class="edge-label">推理时 / 在环</text>
+
+          <!-- generate -->
+          <rect x="480" y="78" width="140" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="550" y="103" text-anchor="middle" class="node-label">生成草稿</text>
+          <!-- judge -->
+          <rect x="480" y="170" width="140" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="550" y="195" text-anchor="middle" class="node-label">评判 critique</text>
+          <!-- improve -->
+          <rect x="480" y="262" width="140" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="550" y="280" text-anchor="middle" class="node-label">改进重写</text>
+          <text x="550" y="295" text-anchor="middle" class="edge-label">→ 更好的 answer</text>
+
+          <line x1="550" y1="118" x2="550" y2="170" class="diagram-accent" marker-end="url(#ar-verm)"/>
+          <line x1="550" y1="210" x2="550" y2="262" class="diagram-accent" marker-end="url(#ar-verm)"/>
+          <!-- loop back: improve → generate, routed around left side -->
+          <path d="M 480 282 L 430 282 L 430 98 L 480 98" class="diagram-accent" marker-end="url(#ar-verm)"/>
+          <text x="430" y="194" text-anchor="middle" class="branch-label">迭代</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>A 在离线数据集上跑「数据集→打分→拦回归」，B 在每次任务里跑「生成→评判→改进」。<strong>注意</strong>：两侧都用「让模型打分」这项技术，但 A 的产物是分数（量整体），B 的产物是更好的答案（救单次）——时机与目的完全不同，别把 B 当成 A。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>某团队在 agent 里接了 Reflexion，让模型每次回答前先自我批评、重写一版。一个月后线上质量投诉变多了，他们却说「我们早就做了 eval」。问题出在哪？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>他们做的是 B（运行期 Evaluator），不是 A（评测体系）。Reflexion 抬高了单次输出的下限，但 CI 里没有任何固定用例在对比「这次改动 vs 上一版」——所以改坏了没有任何东西拦得住，质量回归只能等线上投诉暴露。</p>
+          <p>这正是必须分清 A/B 的实际代价：B 装得再漂亮，也替代不了 A 的回归防线。两者要分别建。</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §1.2 ══════════════════════════════ -->
+      <h2 id="why-hard"><span class="num">1.2</span><span>为什么 agent eval 比传统测试难</span></h2>
+
+      <p class="one-liner">传统单元测试靠「同输入→同输出→assertEqual」三件套，agent 把这三件套逐条打破。</p>
+
+      <p>传统软件测试为什么省心：函数确定（同输入必同输出）、输出是单点（一个返回值）、正确答案唯一（事先写死在断言里）。一句 <code>assertEqual(f(x), expected)</code> 绿了就是对，红了就是错。agent eval 难，恰恰因为它在这三个前提上各失守一处。逐条拆开，每个难点都直接决定了后面要引入什么方法。</p>
+
+      <h3>难点一 · 非确定性（同输入不同输出）</h3>
+      <p>采样温度、并发顺序、底层模型的随机性，让同一个输入跑两次可能得到不同输出。<code>assertEqual</code> 立刻失效：它假设输出是个固定值，而 agent 的输出是个<em>分布</em>。单跑一次的「通过」可能纯属运气，单跑一次的「失败」也可能只是这次采样不走运。机制层面看，这意味着对单次结果的判断本身带方差，要测的其实是「这个输入在多大比例下能成」。</p>
+      <div class="callout insight">
+        <span class="label">洞察 · 所以后面要……</span>
+        <p>非确定性逼出 <strong>pass^k</strong>（同一用例跑 k 次、要求全部通过的指标——衡量稳定性而非运气）。把「通过率」当成被测量，而不是把单次结果当成真值。详见第 02 章。</p>
+      </div>
+
+      <h3>难点二 · 多步轨迹（错可能在任何一环）</h3>
+      <p>agent 不是一次函数调用，而是一条链：planning → tool call → 观察结果 → reflect → 再决策……（trajectory，即一次任务里 agent 走过的完整步骤序列）。最终答案对，<em>不代表</em>过程对——它可能选错了工具却歪打正着，可能绕了五步弯路才到，也可能调了一个本不该调的破坏性操作然后侥幸没出事。只看最终答案的 outcome eval，对这整条链是<strong>瞎的</strong>。</p>
+      <div class="callout insight">
+        <span class="label">洞察 · 所以后面要……</span>
+        <p>多步逼出<strong>轨迹层</strong>评测（trace/span：把一次任务的每一步记录成可回放的结构化日志）——单独检查「工具选对没、步数有没有膨胀、有没有重复调用」。这是 §1.3 四层模型里最容易被漏掉的一层。</p>
+      </div>
+
+      <h3>难点三 · 开放式 · 无唯一正解（语义等价）</h3>
+      <p>一份会议简报、一段长文总结、一个开放式回答，根本没有 ground truth（标准答案）可比。更尖锐的是<strong>语义等价</strong>问题：用户问「法国首都是哪」，「Paris」和「法国的首都」都对，但作为字符串它们不相等。最朴素的 exact match（精确字符串匹配）会把语义完全正确的答案判成 0 分。机制层面，这说明「相等」必须在<em>语义空间</em>而非<em>字符空间</em>里判定，而字符串比较根本够不到语义空间。</p>
+      <div class="callout insight">
+        <span class="label">洞察 · 所以后面要……</span>
+        <p>开放式逼出 <strong>LLM-as-a-judge</strong>——用一个 LLM 按 rubric（评分细则）判断语义层面的对错与好坏，而不是比字符串。为什么 exact match 不够、judge 怎么搭，第 02 章展开。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="传统单元测试与 agent 评测的对照：上排确定单步可断言，下排非确定多步开放式">
+          <defs>
+            <marker id="fl-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="fl-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== TOP ROW: traditional unit test ===== -->
+          <text x="20" y="58" class="edge-label" font-weight="700">传统</text>
+          <rect x="92" y="36" width="96" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="140" y="63" text-anchor="middle" class="node-label">input</text>
+
+          <line x1="188" y1="58" x2="232" y2="58" class="diagram-ink" marker-end="url(#fl-ink)"/>
+
+          <rect x="232" y="36" width="96" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="280" y="63" text-anchor="middle" class="node-label">f(x)</text>
+          <text x="280" y="98" text-anchor="middle" class="edge-label">确定·单步</text>
+
+          <line x1="328" y1="58" x2="372" y2="58" class="diagram-ink" marker-end="url(#fl-ink)"/>
+
+          <rect x="372" y="36" width="120" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="432" y="63" text-anchor="middle" class="node-label">assertEqual</text>
+
+          <line x1="492" y1="58" x2="536" y2="58" class="diagram-ink" marker-end="url(#fl-ink)"/>
+
+          <rect x="536" y="36" width="150" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="611" y="58" text-anchor="middle" class="node-label">绿 / 红</text>
+          <text x="611" y="74" text-anchor="middle" class="edge-label">布尔·有唯一真值</text>
+
+          <!-- separator -->
+          <line x1="40" y1="150" x2="700" y2="150" class="diagram-soft"/>
+
+          <!-- ===== BOTTOM ROW: agent ===== -->
+          <text x="20" y="232" class="edge-label" font-weight="700" fill="#B73B2F">Agent</text>
+          <rect x="92" y="210" width="96" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="140" y="237" text-anchor="middle" class="node-label">input</text>
+
+          <line x1="188" y1="232" x2="232" y2="232" class="diagram-accent" marker-end="url(#fl-verm)"/>
+
+          <rect x="232" y="200" width="150" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="307" y="227" text-anchor="middle" class="node-label">非确定·多步</text>
+          <text x="307" y="245" text-anchor="middle" class="edge-label">plan→tool→reflect</text>
+
+          <line x1="382" y1="232" x2="426" y2="232" class="diagram-accent" marker-end="url(#fl-verm)"/>
+
+          <rect x="426" y="210" width="120" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="486" y="237" text-anchor="middle" class="node-label">开放输出</text>
+
+          <line x1="546" y1="232" x2="590" y2="232" class="diagram-accent" marker-end="url(#fl-verm)"/>
+
+          <rect x="590" y="200" width="110" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="645" y="227" text-anchor="middle" class="node-label">比上版好吗</text>
+          <text x="645" y="245" text-anchor="middle" class="edge-label">无唯一真值</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>上排是传统测试的「确定·单步·有唯一真值」，每个箭头都能断言；下排 agent 三处全变红——非确定、多步、开放。<strong>注意</strong>：终点从「绿/红」的布尔判定退化成「比上版好吗」的程度判断，这正是 agent eval 全部方法的起点。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>用 exact match 给「Paris」和参考答案「法国的首都」打分，会得到几分？这暴露了什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>0.0。exact match 比的是字符串，两个字符串不相等，哪怕语义完全等价也判 0 分。</p>
+          <p>它暴露的是：开放式任务的「相等」必须在语义空间判定，字符比较够不到那一层。这是后面引入 LLM-as-a-judge 的直接动机——把判分从「字符是否一致」抬到「意思是否一致」。（具体怎么判，第 02 章展开。）</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §1.3 ══════════════════════════════ -->
+      <h2 id="layers"><span class="num">1.3</span><span>评什么：四层模型</span></h2>
+
+      <p class="one-liner">评测对象从外到里分四层：结果 outcome → 轨迹 trajectory → 组件 component → 安全 safety；越外层越省事，回归越藏在里面。</p>
+
+      <p>「agent eval」听起来像单一动作，其实它在问四个不同层次的问题。这套四层模型是本章承重的心智框架——读者带走它之后，任何一句 eval 讨论都能被归位：这是在评结果、评轨迹、评某个组件，还是评安全合规。四层从外（最终任务）到里（每个零件、每条红线）逐层收紧。</p>
+
+      <h3>第一层 · 结果层 outcome</h3>
+      <p><strong>一句话定义</strong>：最终任务到底成没成（端到端 pass/fail）。<strong>为什么需要它</strong>：这是用户唯一直接感知的东西——任务没完成，过程再漂亮也是失败。<strong>底层机制</strong>：通常落成一个二元或标量信号（成功率、任务完成率），最省事也最粗——它把整条链压扁成一个点，<em>答案对不代表过程对</em>，所有内部代价都被它吞掉看不见。<strong>例子</strong>：「订机票」agent，最后订到了正确的票 = pass。至于它中途查了三次错误航班、调了八次 API，outcome 一概不记。</p>
+
+      <h3>第二层 · 轨迹层 trajectory</h3>
+      <p><strong>一句话定义</strong>：过程对不对——走的每一步合不合理。<strong>为什么需要它</strong>：outcome 只看终点，轨迹层看的是<em>怎么到的终点</em>，这里藏着 outcome 永远照不到的成本与隐患。常评的维度：</p>
+      <ul>
+        <li><strong>tool-selection correctness</strong>（工具选择正确性）：每一步选对了工具、且参数对吗？</li>
+        <li><strong>step count / step-efficiency</strong>（步数 / 步效率）：最优步数 ÷ 实际步数，绕路越多越低。</li>
+        <li><strong>redundancy</strong>（冗余）：有没有重复调用同一个工具拿同样的结果。</li>
+        <li><strong>latency</strong>（延迟）与 <strong>cost</strong>（成本，常以 tokens/run 计）：跑完一次花了多少时间、多少 token。</li>
+      </ul>
+      <div class="callout insight">
+        <span class="label">洞察 · outcome 看不见的成本回归</span>
+        <p>换一个底层模型后，<strong>outcome 可能纹丝不动</strong>（成功率还是 92%），但同一批任务的轨迹从平均 3 步膨胀到 10 步——token 成本和延迟翻了三倍。这是一次真实的<em>成本回归</em>，而只看 outcome 的评测对它完全失明。生产级日志（Anthropic 等会逐用例记录 <code>n_turns</code> / <code>n_toolcalls</code> / <code>n_tokens</code>）的意义正在于此：让轨迹膨胀变成可观测、可回归的量。</p>
+      </div>
+
+      <h3>第三层 · 组件层 component</h3>
+      <p><strong>一句话定义</strong>：把 agent 拆开，对其中某个零件单独评分。<strong>为什么需要它</strong>：结果或轨迹出问题时，得知道是<em>哪个零件</em>坏了——是检索捞错了，还是路由分错了，还是记忆读串了。<strong>底层机制</strong>：给被测组件固定上下游，只量它这一段的输入输出质量。最常见的是 <strong>RAG 检索</strong>（检索增强生成：先检索资料、再让模型据此作答），它的四个 de-facto 标准指标来自 <a href="https://docs.ragas.io/">Ragas</a> 这套库：</p>
+      <ul>
+        <li><strong>faithfulness</strong>（忠实度）：答案有没有脱离检索到的内容自行编造（即有没有幻觉）。</li>
+        <li><strong>context precision</strong>（上下文精确率）：召回回来的资料，相关的占多少。</li>
+        <li><strong>context recall</strong>（上下文召回率）：该被召回的相关资料，召回全了吗。</li>
+        <li><strong>answer relevancy</strong>（答案相关性）：答案切不切题、有没有跑偏。</li>
+      </ul>
+      <p>路由（选对了下游分支吗）、记忆（读写的上下文对吗）同理，都可以拆成独立组件来评。RAG 这几个指标的完整定义与计算方式，见 <a href="../rag/03-quality.html">rag 教程的质量章</a>。</p>
+
+      <h3>第四层 · 安全合规层 safety</h3>
+      <p><strong>一句话定义</strong>：输出有没有越过红线。<strong>为什么需要它</strong>：前三层都在量「好不好用」，这一层量「能不能放出去」——一个又快又准的 agent，若会泄露敏感词或不遵守指令格式，照样不能上线。<strong>底层机制</strong>：通常是一组独立的拦截式检查，与质量分并列而非混算。常评：幻觉率、毒性（toxicity）、格式合规（输出符不符合约定的 JSON/结构）、指令遵循（instruction following，有没有照系统提示的约束办事）、敏感词处理。<strong>例子</strong>：要求只输出 JSON 的接口，agent 多吐了一段寒暄——质量也许不差，但格式合规这一层判不合格。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="评测对象的四层嵌套模型：结果层在最外，依次包住轨迹层、组件层、安全层">
+          <!-- Layer 1 outcome (outermost) -->
+          <rect x="40" y="30" width="560" height="300" rx="8" class="diagram-ink node-fill"/>
+          <text x="320" y="52" text-anchor="middle" class="node-label">结果层 outcome</text>
+          <text x="320" y="68" text-anchor="middle" class="edge-label">端到端成没成·最粗</text>
+
+          <!-- Layer 2 trajectory -->
+          <rect x="80" y="86" width="480" height="226" rx="8" class="diagram-ink node-fill"/>
+          <text x="320" y="108" text-anchor="middle" class="node-label">轨迹层 trajectory</text>
+          <text x="320" y="124" text-anchor="middle" class="edge-label">选工具·步效率·冗余·成本</text>
+
+          <!-- Layer 3 component (highlighted) -->
+          <rect x="120" y="142" width="400" height="118" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="320" y="164" text-anchor="middle" class="node-label-accent">组件层 component</text>
+          <text x="320" y="180" text-anchor="middle" class="edge-label">RAG 指标住在这层</text>
+          <text x="320" y="200" text-anchor="middle" class="edge-label">faithfulness · context recall/precision</text>
+          <text x="320" y="216" text-anchor="middle" class="edge-label">answer relevancy · 路由 · 记忆</text>
+
+          <!-- Layer 4 safety (innermost) -->
+          <rect x="220" y="266" width="200" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="320" y="291" text-anchor="middle" class="node-label">安全合规层 safety</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>四层从外到里嵌套：结果层包住轨迹层，轨迹层包住组件层与安全层。<strong>注意</strong>：大多数人只评最外层 outcome，而成本膨胀、检索编造、格式越线这三类回归全藏在里面三层——朱红高亮的组件层正是 RAG 指标的落点。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 1.3 · 四层 → 典型指标 → 何时该评它</caption>
+        <thead>
+          <tr><th>层</th><th>典型指标</th><th>何时该评它</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>结果层 outcome</td><td>成功率 / 任务完成率 / 端到端 pass-fail</td><td>任何 agent 的第一道线——先确认到底成不成</td></tr>
+          <tr><td>轨迹层 trajectory</td><td>tool-selection correctness、step-efficiency、redundancy、latency、cost(tokens/run)</td><td>换模型 / 改 prompt 后，outcome 没变也要查轨迹有没有膨胀</td></tr>
+          <tr class="selected"><td>组件层 component</td><td>faithfulness、context precision/recall、answer relevancy（RAG）；路由 / 记忆同理</td><td>结果或轨迹出错、要定位是哪个零件坏了</td></tr>
+          <tr><td>安全合规层 safety</td><td>幻觉率、毒性、格式合规、指令遵循、敏感词</td><td>上线前的放行检查——质量再高也得过这关</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">失败模式</span>
+        <p>最常见的失败模式是「只建了结果层就以为评测做完了」。outcome 全绿、用户却在抱怨变慢变贵，或偶尔蹦出编造的事实——因为成本回归藏在轨迹层、编造藏在组件层的 faithfulness、越线藏在安全层。一份只有 outcome 的评测，对这三类问题天生失明。</p>
+      </div>
+
+      <!-- ══════════════════════════════ self-check ══════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>用一句话各自说清 A（评测体系）和 B（运行期 Evaluator）：它们何时跑、产物分别是什么？</li>
+          <li>传统单元测试的「同输入→同输出→assertEqual」三件套，被 agent 在哪三处分别打破？</li>
+          <li>四层模型从外到里依次是哪四层？RAG 的 faithfulness 属于哪一层？</li>
+          <li>一个 agent 最终答案对了，为什么仍可能给它判负分？这属于哪一层的评测在起作用？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><strong>A</strong>：开发期 / CI 离线跑、针对固定数据集，产物是分数 / 回归报告，目的是防回归。<strong>B</strong>：推理时每次任务在 agent 循环里跑，产物是一个更好的 answer，目的是提升单次输出。同源技术是「用模型打分」，但时机与目的相反。</li>
+            <li>① 非确定性——同输入不同输出，输出是分布不是单点；② 多步轨迹——不是单次函数调用，最终答案对不代表过程对；③ 开放式无唯一正解——没有 ground truth，且语义等价（「Paris」≡「法国的首都」）让 exact match 失效。</li>
+            <li>从外到里：结果层 outcome → 轨迹层 trajectory → 组件层 component → 安全合规层 safety。faithfulness 属于<strong>组件层</strong>（RAG 检索组件的指标）。</li>
+            <li>因为最终答案对只是<strong>结果层</strong>通过；但它可能绕了五步弯路、多花 5× token，或重复调用工具——这些由<strong>轨迹层</strong>评测捕捉，outcome 对它失明。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给四层各举一个「只有这层才抓得到」的真实失败</h3>
+        <p>挑一个你熟悉的 agent（写代码的、查资料的、客服的都行）。为四层中的<em>每一层</em>各编一个具体失败场景，要求：这个失败<strong>恰好只有那一层的评测能抓到</strong>，换成相邻层就漏掉。比如「结果对、但轨迹层抓到它绕了路」。四个场景写完，你就验证了自己真的能把任意失败归位到正确的层。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>从「哪一层对这个失败失明」反推往往更快：先想一个 outcome 看不见的失败（→轨迹或更里），再想一个连轨迹也看不见、要拆组件才现形的失败（→组件，例如检索召回了相关文档但答案却编造，这是 faithfulness），最后想一个三层都判「好用」、却不能上线的失败（→安全，例如格式越线或泄露敏感词）。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://docs.ragas.io/en/stable/concepts/metrics/">Ragas · Metrics</a>（RAG 组件层指标 faithfulness / context precision / context recall / answer relevancy 的权威定义）</li>
+          <li><a href="https://www.anthropic.com/engineering/building-effective-agents">Anthropic · Building Effective Agents</a>（evaluator-optimizer 工作流——B 的出处，划清 A/B 边界）</li>
+          <li><a href="https://arxiv.org/abs/2303.11366">Reflexion: Language Agents with Verbal Reinforcement Learning</a>（Shinn 等，2023——运行期 Evaluator B 的代表）</li>
+          <li><a href="https://huggingface.co/spaces/lmsys/mt-bench">MT-Bench / LMSYS</a>（多轮 agent 评测与轨迹维度的常见来源）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="index.html">
+          <span class="label">← 上一章</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a class="next" href="02-methods.html">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 方法</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#ab" data-toc-target="ab">1.1 两个 eval：A vs B</a></li>
+        <li><a href="#why-hard" data-toc-target="why-hard">1.2 为什么更难</a></li>
+        <li><a href="#layers" data-toc-target="layers">1.3 评什么：四层模型</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测 &amp; 挑战</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

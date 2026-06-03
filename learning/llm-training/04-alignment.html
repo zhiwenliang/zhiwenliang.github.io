@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>偏好优化与对齐 · 大模型训练教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:#FFFFFF; --bg-soft:#FAFAFA; --bg-edge:#F4F4F4; --ink:#0A0A0A; --ink-soft:#525252;
+  --ink-faint:#A3A3A3; --rule:#E5E5E5; --vermilion:#B73B2F; --vermilion-soft:rgba(183,59,47,0.06);
+  --code-string:#2D6A4F; --code-number:#8B6914; --code-fn:#2C3E50;
+  --sans:'Noto Sans SC',-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono','Menlo',monospace; --measure:880px; --page-max:1280px; --line:1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15.5px; line-height:var(--line); font-feature-settings:"kern","liga"; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+main { position: relative; }
+.progress-bar { position:fixed; top:0; left:0; height:2px; width:0; background:var(--vermilion); z-index:100; transition:width 80ms linear; }
+.learning-path { max-width:var(--page-max); margin:0 auto; padding:16px 40px 0; font-family:var(--mono); font-size:11px; letter-spacing:0.04em; color:var(--ink-faint); }
+.learning-path a { color:var(--ink-faint); text-decoration:none; padding:2px 0; margin:0 4px; }
+.learning-path a:first-child { margin-left:0; }
+.learning-path .sep { color:var(--ink-faint); margin:0 2px; user-select:none; }
+.learning-path .current { color:var(--vermilion); font-weight:700; }
+.page { display:grid; grid-template-columns:minmax(0,1fr) 200px; gap:48px; max-width:var(--page-max); margin:0 auto; padding:24px 40px 80px; }
+@media (max-width:1080px) { .page { grid-template-columns:1fr; gap:0; padding:16px 24px 64px; } .toc-sidebar { display:none; } }
+article { max-width:var(--measure); min-width:0; }
+.chapter-opener { padding:24px 0 16px; border-bottom:1px solid var(--rule); margin-bottom:24px; }
+.chapter-opener .chapter-label { font-family:var(--mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 8px; font-weight:500; }
+.chapter-opener h1 { font-family:var(--sans); font-weight:700; font-size:30px; line-height:1.2; margin:0 0 12px; letter-spacing:-0.01em; color:var(--ink); }
+.chapter-opener .recap { font-size:14px; color:var(--ink-soft); margin:0; max-width:640px; }
+@media (max-width:640px) { .chapter-opener h1 { font-size:24px; } }
+.schema-panel { border-left:2px solid var(--ink); padding:4px 0 4px 16px; margin:16px 0 32px; }
+.schema-panel .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 8px; font-weight:500; }
+.schema-panel ul { list-style:none; padding:0; margin:0; }
+.schema-panel li { padding:4px 0; font-size:14.5px; line-height:1.55; color:var(--ink); }
+.schema-panel li::before { content:"—  "; color:var(--ink-faint); }
+article p, article li { font-size:15.5px; line-height:var(--line); color:var(--ink); margin:0.9em 0; }
+article strong { font-weight:600; color:var(--ink); }
+article em { font-style:italic; color:var(--ink); }
+article :not(pre) > code { font-family:var(--mono); font-size:0.88em; background:var(--bg-soft); padding:1px 5px; border-radius:2px; color:var(--vermilion); border:1px solid var(--rule); }
+article a { color:var(--ink); text-decoration:underline; text-decoration-color:var(--ink-faint); text-underline-offset:2px; text-decoration-thickness:1px; transition:color 150ms, text-decoration-color 150ms; }
+article a:hover { color:var(--vermilion); text-decoration-color:var(--vermilion); }
+article h2 { font-family:var(--sans); font-weight:700; font-size:22px; line-height:1.3; margin:36px 0 8px; padding-top:16px; border-top:1px solid var(--rule); letter-spacing:-0.005em; }
+article h2 .num { font-family:var(--mono); font-weight:500; font-size:15px; color:var(--ink-faint); margin-right:10px; }
+article h3 { font-family:var(--sans); font-weight:600; font-size:16px; margin:20px 0 8px; color:var(--ink); }
+article .one-liner { font-size:16px; line-height:1.55; color:var(--ink); font-weight:500; margin:8px 0 18px; padding-left:12px; border-left:2px solid var(--ink-faint); }
+article .rationale { background:var(--bg-soft); padding:12px 16px; border-left:2px solid var(--ink-soft); margin:16px 0; font-size:14.5px; }
+article .rationale > .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:500; margin-bottom:4px; display:block; }
+article .rationale p { margin:4px 0; }
+.code-block { margin:16px 0; border:1px solid var(--rule); border-radius:3px; overflow:hidden; background:var(--bg-soft); }
+.code-block .header { display:flex; align-items:center; justify-content:space-between; padding:6px 12px; background:var(--bg-edge); border-bottom:1px solid var(--rule); font-family:var(--mono); font-size:11px; color:var(--ink-soft); }
+.code-block .header .filename { font-weight:500; }
+.code-block .header .lang { color:var(--ink-faint); text-transform:uppercase; font-weight:500; font-size:10px; }
+.code-block .header .copy { border:none; background:transparent; font-family:var(--mono); font-size:10px; color:var(--ink-soft); cursor:pointer; padding:2px 6px; letter-spacing:0.05em; text-transform:uppercase; transition:color 150ms; }
+.code-block .header .copy:hover { color:var(--vermilion); }
+.code-block .header .copy.copied { color:var(--vermilion); }
+.code-block pre { margin:0; padding:14px 16px; overflow-x:auto; font-family:var(--mono); font-size:13px; line-height:1.6; color:var(--ink); background:var(--bg-soft); }
+.code-block pre code { background:none; padding:0; color:inherit; border:none; font-weight:400; }
+.token.keyword, .token.boolean, .token.constant { color:var(--vermilion); font-weight:500; }
+.token.string, .token.char { color:var(--code-string); }
+.token.number { color:var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color:var(--ink-faint); font-style:italic; }
+.token.function { color:var(--code-fn); font-weight:500; }
+.token.class-name { color:var(--ink); font-weight:700; }
+.token.operator, .token.punctuation { color:var(--ink-soft); }
+.token.builtin { color:var(--vermilion); }
+.token.property { color:var(--ink); }
+.token.tag, .token.attr-name { color:var(--code-fn); }
+.token.attr-value { color:var(--code-string); }
+.annotations { margin:10px 0 18px; font-size:14px; color:var(--ink-soft); }
+.annotations .line-ref { font-family:var(--mono); font-size:11px; background:var(--bg-soft); border:1px solid var(--rule); padding:1px 6px; border-radius:2px; margin-right:4px; color:var(--vermilion); font-weight:500; }
+.predict { margin:16px 0; padding:12px 16px; background:var(--bg-soft); border-left:2px solid var(--vermilion); border-radius:2px; }
+.predict > .question-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--vermilion); font-weight:500; margin:0 0 4px; display:block; }
+.predict p { margin:4px 0; color:var(--ink); }
+details { margin:10px 0 0; border-top:1px dashed var(--rule); padding-top:10px; }
+details > summary { cursor:pointer; list-style:none; font-family:var(--mono); font-size:11px; color:var(--ink-soft); letter-spacing:0.04em; padding:4px 0; transition:color 150ms; user-select:none; display:flex; align-items:center; gap:6px; }
+details > summary::-webkit-details-marker { display:none; }
+details > summary::before { content:"▸"; display:inline-block; color:var(--ink-faint); transition:transform 200ms, color 150ms; font-size:9px; }
+details[open] > summary::before { transform:rotate(90deg); color:var(--vermilion); }
+details > summary:hover { color:var(--vermilion); }
+details > summary:hover::before { color:var(--vermilion); }
+details > *:not(summary) { margin-top:8px; padding-left:14px; border-left:1px solid var(--rule); }
+.callout { margin:16px 0; padding:10px 16px; border-left:2px solid var(--ink-soft); background:var(--bg-soft); font-size:14.5px; }
+.callout .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:var(--ink-soft); margin:0 0 4px; display:block; }
+.callout p { margin:4px 0; }
+.callout.warning { border-left-color:var(--vermilion); background:var(--vermilion-soft); }
+.callout.warning .label { color:var(--vermilion); }
+.callout.tip { border-left-color:var(--ink-soft); }
+.callout.example { border-left-color:var(--ink-soft); }
+.callout.insight { border-left-color:var(--ink-soft); }
+.compare-table { margin:20px 0; width:100%; border-collapse:collapse; font-size:14px; }
+.compare-table caption { text-align:left; font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); padding:0 0 8px; font-weight:500; }
+.compare-table thead th { text-align:left; font-family:var(--sans); font-weight:600; font-size:13px; color:var(--ink); padding:8px 10px; border-bottom:1px solid var(--ink); }
+.compare-table tbody td { padding:8px 10px; border-bottom:1px solid var(--rule); vertical-align:top; line-height:1.5; }
+.compare-table tbody tr.selected td { font-weight:500; }
+.compare-table tbody tr.selected td:first-child { border-left:2px solid var(--vermilion); padding-left:8px; color:var(--vermilion); position:relative; }
+figure { margin:24px 0; }
+figure svg { display:block; margin:0 auto; max-width:100%; height:auto; }
+figcaption { font-family:var(--sans); font-size:13px; color:var(--ink-soft); text-align:center; margin-top:10px; line-height:1.5; }
+figcaption .fig-num { font-family:var(--mono); font-weight:600; color:var(--vermilion); margin-right:6px; font-size:11px; letter-spacing:0.04em; }
+.self-check { margin:32px 0 20px; border-top:1px solid var(--ink); padding-top:20px; }
+.self-check h2 { border:none; padding-top:0; margin-top:0; font-size:18px; }
+.self-check ol { padding-left:22px; }
+.self-check ol li { margin:10px 0; padding-left:4px; }
+.self-check ol li::marker { font-family:var(--mono); color:var(--ink-faint); font-weight:500; font-size:13px; }
+.challenge { margin:24px 0; padding:14px 18px; background:var(--bg-soft); border-left:2px solid var(--vermilion); border-radius:2px; }
+.challenge .label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; font-weight:700; color:var(--vermilion); margin:0 0 8px; display:block; }
+.challenge h3 { margin-top:0; font-size:15px; }
+.references { margin:32px 0 16px; padding-top:16px; border-top:1px solid var(--rule); }
+.references h3 { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); font-weight:500; margin:0 0 8px; }
+.references ul { padding-left:16px; }
+.references li { font-size:13.5px; line-height:1.55; color:var(--ink-soft); }
+.references li a { color:var(--ink); }
+.chapter-nav { margin-top:28px; padding-top:16px; border-top:1px solid var(--rule); display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.chapter-nav a { display:block; padding:12px 14px; border:1px solid var(--rule); text-decoration:none; color:var(--ink); transition:border-color 150ms; }
+.chapter-nav a:hover { border-color:var(--vermilion); }
+.chapter-nav a.next { text-align:right; }
+.chapter-nav .label { display:block; font-family:var(--mono); font-size:10px; letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:2px; }
+.chapter-nav .title { font-weight:500; font-size:14px; }
+.toc-sidebar { position:sticky; top:24px; align-self:start; padding-top:24px; font-family:var(--mono); font-size:11px; line-height:1.55; max-height:calc(100vh - 48px); overflow-y:auto; }
+.toc-sidebar .toc-label { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); font-weight:500; margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+.toc-sidebar ul { list-style:none; padding:0; margin:0; }
+.toc-sidebar li { margin:2px 0; }
+.toc-sidebar a { display:block; padding:3px 0 3px 10px; color:var(--ink-soft); text-decoration:none; border-left:2px solid transparent; transition:all 150ms; font-size:11px; }
+.toc-sidebar a:hover { color:var(--ink); }
+.toc-sidebar a.active { color:var(--vermilion); border-left-color:var(--vermilion); font-weight:500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation:fade-in 400ms cubic-bezier(0.2,0.7,0.3,1) both; }
+  .schema-panel { animation:fade-in 400ms 100ms cubic-bezier(0.2,0.7,0.3,1) both; }
+}
+@keyframes fade-in { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+.diagram-ink { stroke:var(--ink); fill:none; stroke-width:1.4; stroke-linecap:round; stroke-linejoin:round; }
+.diagram-accent { stroke:var(--vermilion); fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+.diagram-soft { stroke:var(--ink-faint); fill:none; stroke-width:1.1; stroke-dasharray:3 3; }
+.node-fill { fill:var(--bg); }
+.node-fill-accent { fill:var(--vermilion-soft); }
+.node-label { font-family:var(--sans); font-size:13px; font-weight:500; fill:var(--ink); }
+.node-label-accent { font-family:var(--sans); font-size:13px; font-weight:700; fill:var(--vermilion); }
+.edge-label { font-family:var(--mono); font-size:11px; fill:var(--ink-soft); paint-order:stroke; stroke:var(--bg); stroke-width:4px; stroke-linejoin:round; }
+.branch-label { font-family:var(--mono); font-size:11px; font-weight:700; fill:var(--vermilion); paint-order:stroke; stroke:var(--bg); stroke-width:4px; stroke-linejoin:round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-overview.html">01 全景</a><span class="sep">—</span>
+    <a href="02-pretraining.html">02 预训练</a><span class="sep">—</span>
+    <a href="03-sft.html">03 SFT</a><span class="sep">—</span>
+    <a href="04-alignment.html" class="current">04 对齐</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>偏好优化与对齐</h1>
+        <p class="recap">上一章用 SFT 把模型调成"会回答"，但没解决"怎样算回答得好"。这一章是后训练第二步——用人类偏好把模型推向更有用、无害的回答；并一路走到 2025 年推理模型把"训练"重心搬到后训练的前沿。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>怎么把"哪个回答更好"这种模糊偏好，变成一个标量奖励、再变成梯度</li>
+          <li>RLHF/PPO 为什么要 4 个模型、KL 惩罚为什么不能省，以及 DPO 如何把这套 RL 消成一个分类 loss</li>
+          <li>2025 前沿 RLVR + GRPO + 推理模型，以及它们如何动摇了"后训练不增加能力"这条 §1.3 的分界</li>
+        </ul>
+      </section>
+
+      <!-- §4.1 -->
+      <h2 id="s41"><span class="num">4.1</span><span>把"偏好"变成"奖励"</span></h2>
+
+      <p class="one-liner">对齐的第一步：把无法求导的人类判断，经由成对比较→奖励模型，变成一个标量分数。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>SFT 教会了模型回答问题，却没有教模型"哪种回答更好"。"有用、无害、真实"这三个目标，任何一个都无法直接写成 loss——它们不是可以对着词表做交叉熵的东西。对齐阶段的工程本质，就是把这些模糊判断翻译成标量，再接回梯度下降的轨道。</p>
+      </div>
+
+      <h3>为什么用成对比较而非绝对打分</h3>
+
+      <p>最直观的想法是让标注员给每个回答打分（1–10 分）。现实中这个方案的信噪比很低：不同标注员对"8 分"的标准各不相同，同一个标注员在不同时间对同一条回答也会打出不同分数。成对比较（"A 和 B 哪个更好"）则稳定得多——人对相对优劣的判断远比绝对量化更一致，且标注速度更快，每条对比平均成本更低。</p>
+
+      <p>InstructGPT（OpenAI，2022）把这个方案系统化：给标注员看同一个 prompt 的 K 个回答，让他们两两排序，得到 <code>C(K,2)</code> 个偏好对。每个偏好对的形式是 <code>(x, y_w, y_l)</code>——同一个问题 <code>x</code>、被选中的 chosen 回答 <code>y_w</code>、被拒绝的 rejected 回答 <code>y_l</code>。</p>
+
+      <h3>Bradley-Terry 模型：偏好的概率化</h3>
+
+      <p>给定两个回答，Bradley-Terry 模型把"chosen 更好"这件事建模为：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:15px; padding:12px 0;">
+        P(y<sub>w</sub> ≻ y<sub>l</sub> | x) = σ(r(x, y<sub>w</sub>) − r(x, y<sub>l</sub>))
+      </p>
+
+      <p>其中 <code>r(x, y)</code> 是奖励函数，<code>σ</code> 是 sigmoid。这个公式有一个关键结论：<strong>只有奖励的差值有意义</strong>。把所有回答的奖励同时加上一个常数 C，概率分布丝毫不变——奖励的绝对值没有语义，只有相对大小有语义。这一点在后面 DPO 的推导中会再次出现。</p>
+
+      <h3>奖励模型（Reward Model，RM）的训练</h3>
+
+      <p>奖励模型从上一章的 SFT checkpoint 出发（这是 RL 训练的起点，也是参考模型的来源）。把语言模型最后一层的"词表输出头"换成一个输出单个标量的线性层，其余参数继续作为特征提取器。训练目标是最大化 log-likelihood of Bradley-Terry：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:15px; padding:12px 0;">
+        L<sub>RM</sub> = −log σ(r(x, y<sub>w</sub>) − r(x, y<sub>l</sub>))
+      </p>
+
+      <p>奖励模型只训练约 1 个 epoch。训得更久会过拟合偏好数据集——模型开始记住"这条数据里哪个答案被标注员喜欢"而非学到泛化的偏好规律。过拟合的后果在 §4.2 会直接成为一个系统性风险：后续 RL 优化时，策略模型会找到这些过拟合出的漏洞并加以利用（reward hacking）。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="偏好对经过同一个奖励模型产生两个标量分数，再经 sigmoid 得到偏好概率">
+          <defs>
+            <marker id="al-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="al-ar-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- chosen 回答 box -->
+          <rect x="20" y="40" width="190" height="52" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="115" y="61" text-anchor="middle" class="node-label-accent">chosen 回答 y_w</text>
+          <text x="115" y="80" text-anchor="middle" class="edge-label">标注员选中的</text>
+
+          <!-- rejected 回答 box -->
+          <rect x="20" y="140" width="190" height="52" rx="4" class="diagram-ink node-fill"/>
+          <text x="115" y="161" text-anchor="middle" class="node-label">rejected 回答 y_l</text>
+          <text x="115" y="180" text-anchor="middle" class="edge-label">标注员淘汰的</text>
+
+          <!-- 同一个 prompt x -->
+          <text x="115" y="232" text-anchor="middle" class="edge-label">同一个 prompt x</text>
+
+          <!-- RM box -->
+          <rect x="300" y="90" width="160" height="60" rx="4" class="diagram-ink node-fill"/>
+          <text x="380" y="115" text-anchor="middle" class="node-label">奖励模型</text>
+          <text x="380" y="133" text-anchor="middle" class="edge-label">RM (from SFT ckpt)</text>
+
+          <!-- connector lines from chosen/rejected to RM box edges -->
+          <line x1="210" y1="66" x2="300" y2="100" class="diagram-accent" marker-end="url(#al-ar-acc)"/>
+          <line x1="210" y1="166" x2="300" y2="140" class="diagram-ink" marker-end="url(#al-ar)"/>
+
+          <!-- RM → scalars -->
+          <line x1="460" y1="110" x2="530" y2="80" class="diagram-accent" marker-end="url(#al-ar-acc)"/>
+          <line x1="460" y1="130" x2="530" y2="160" class="diagram-ink" marker-end="url(#al-ar)"/>
+
+          <!-- scalar boxes -->
+          <rect x="530" y="54" width="100" height="44" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="580" y="74" text-anchor="middle" class="node-label-accent">r_w</text>
+          <text x="580" y="90" text-anchor="middle" class="edge-label">chosen 得分</text>
+
+          <rect x="530" y="138" width="100" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="580" y="158" text-anchor="middle" class="node-label">r_l</text>
+          <text x="580" y="174" text-anchor="middle" class="edge-label">rejected 得分</text>
+
+          <!-- arrows to sigma -->
+          <line x1="630" y1="76" x2="680" y2="112" class="diagram-accent" marker-end="url(#al-ar-acc)"/>
+          <line x1="630" y1="160" x2="680" y2="140" class="diagram-ink" marker-end="url(#al-ar)"/>
+
+          <!-- sigma result -->
+          <rect x="680" y="100" width="60" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="710" y="118" text-anchor="middle" class="node-label">σ(Δr)</text>
+          <text x="710" y="134" text-anchor="middle" class="edge-label">P(更好)</text>
+
+          <!-- loss annotation -->
+          <text x="380" y="200" text-anchor="middle" class="edge-label">loss = −log σ(r_w − r_l)，驱使 r_w &gt; r_l</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.1</span>偏好对经同一个奖励模型得到两个标量，差值经 sigmoid 变为概率。<strong>注意</strong>：两条路径共用同一个 RM——奖励的绝对值无意义，只有差值驱动 loss，整体平移不改变任何梯度。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 4.1 · 对齐信号的三种采集方式</caption>
+        <thead>
+          <tr><th>方式</th><th>怎么拿信号</th><th>主要问题</th><th>适用场景</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>写死规则</td>
+            <td>正则/关键词过滤，内容审核列表</td>
+            <td>规则覆盖不了细粒度风格与有用性；容易被绕过</td>
+            <td>安全硬限制（作为补充层）</td>
+          </tr>
+          <tr>
+            <td>绝对打分</td>
+            <td>标注员对单条回答打 1–10 分</td>
+            <td>标注员间方差大；同一人前后不一致；分数语义模糊</td>
+            <td>粗粒度质量筛选</td>
+          </tr>
+          <tr class="selected">
+            <td>成对偏好比较</td>
+            <td>标注员对两个回答选优劣</td>
+            <td>只捕捉相对偏好，无法直接量化"好多少"</td>
+            <td>RLHF/DPO 主流信号，便宜且一致性高</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · RLAIF 与 Constitutional AI</span>
+        <p>Anthropic 在 Constitutional AI（2022-12）中提出用 AI 模型替代人类标注员生成偏好信号：先让模型按一套"宪法"原则自行批评并修订回答，再用 AI 偏好反馈训练奖励模型（RLAIF）。截至 2026-06，合成偏好数据已成为主流配方的一部分，大幅降低了人工标注成本——但继承了 AI 生成器的长度偏置和风格偏置，§4.4 会再次讨论这个问题。</p>
+      </div>
+
+      <!-- §4.2 -->
+      <h2 id="s42"><span class="num">4.2</span><span>RLHF / PPO：4 个模型一起转</span></h2>
+
+      <p class="one-liner">PPO 把奖励模型的分数接入策略梯度，同时用 KL 惩罚把策略锚在 SFT 附近，防止它为高分钻空子。</p>
+
+      <h3>优化目标</h3>
+
+      <p>RLHF 的训练目标，写成数学形式是：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:15px; padding:12px 0;">
+        max<sub>π<sub>θ</sub></sub>  E<sub>x,y~π<sub>θ</sub></sub>[ r(x, y) ] − β · KL( π<sub>θ</sub> ‖ π<sub>ref</sub> )
+      </p>
+
+      <p>逐项拆解：</p>
+      <ul>
+        <li><strong>r(x, y)</strong>：奖励模型对策略当前回答的评分——越高越好。</li>
+        <li><strong>KL(π<sub>θ</sub> ‖ π<sub>ref</sub>)</strong>：当前策略和参考模型（冻结的 SFT checkpoint）之间的 KL 散度——衡量策略偏离 SFT 基线有多远。</li>
+        <li><strong>β</strong>：KL 惩罚系数，控制两个目标的权衡。β 大则策略保守，β 小则策略激进。</li>
+      </ul>
+
+      <h3>为什么 KL 惩罚不能省</h3>
+
+      <p>去掉 KL 项，优化目标变成纯粹的"最大化 r(x, y)"。奖励模型是一个神经网络，在训练数据分布之外它的预测不可信。策略模型通过在线采样不断探索新的回答——一旦没有约束，它会迅速发现奖励模型的"漏洞"：某些对人类毫无意义、甚至是乱码的输出，却能获得很高的 RM 分数。</p>
+
+      <p>Gao 等人（2023，"Scaling Laws for Reward Model Overoptimization"）在受控实验中量化了这个过程：随着 KL 散度增大，代理奖励（RM 打分）持续上升，但黄金奖励（真实人类评估）先升后降，最终深入负区间。这个现象称为 <strong>reward hacking</strong>（奖励欺骗），也是 Goodhart 定律在 RL 中的具体表现：当一个测量指标变成了优化目标，它就不再是一个好的测量指标。<strong>KL 惩罚把策略锚在 SFT checkpoint 附近，本质上是用"别跑太远"来间接保证策略不会落入 RM 的盲区。</strong></p>
+
+      <h3>显存里的 4 个模型</h3>
+
+      <p>PPO 训练需要同时维持 4 个模型（参见图 4.2）：</p>
+
+      <ul>
+        <li><strong>策略模型（actor/policy π<sub>θ</sub>）</strong>：正在被训练的目标模型，每步产生回答、接收梯度更新。</li>
+        <li><strong>参考模型（reference π<sub>ref</sub>）</strong>：冻结的 SFT checkpoint，用于计算 KL 散度。不更新参数，只做前向推断。</li>
+        <li><strong>奖励模型（reward model r）</strong>：冻结，对策略回答打分。不更新参数，只做前向推断。</li>
+        <li><strong>价值模型（critic/value V）</strong>：估计当前状态的期望未来奖励（即 PPO 的基线/baseline），用于计算优势（advantage）。<strong>价值模型不等于奖励模型</strong>——奖励模型给出即时奖励 r(x, y)，价值模型给出状态价值估计 V(s)；二者功能不同，通常也是分开的网络。这是 PPO 中最常见的混淆之一。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 为什么需要 critic</span>
+        <p>朴素的 REINFORCE 算法用"整条轨迹的总奖励"作为梯度权重，方差极大——同一条轨迹每次采样结果不同，梯度噪声大到难以收敛。PPO 用 critic 估出基线 V(s)，只用"实际奖励 − 基线"（即 advantage）来加权梯度，大幅降低方差。这是 actor-critic 架构存在的根本理由。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 400" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="PPO 四模型回路：中心策略模型，上参考模型，右奖励模型，下价值模型，左 PPO 更新">
+          <defs>
+            <marker id="al-ppo-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="al-ppo-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Center: 策略模型 -->
+          <rect x="260" y="158" width="200" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="184" text-anchor="middle" class="node-label-accent">策略模型</text>
+          <text x="360" y="202" text-anchor="middle" class="edge-label">actor / policy π_θ</text>
+          <text x="360" y="216" text-anchor="middle" class="edge-label">（在训，接收梯度）</text>
+
+          <!-- Top: 参考模型 -->
+          <rect x="260" y="20" width="200" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="45" text-anchor="middle" class="node-label">参考模型</text>
+          <text x="360" y="63" text-anchor="middle" class="edge-label">frozen SFT ckpt · 算 KL</text>
+
+          <!-- Right: 奖励模型 -->
+          <rect x="548" y="158" width="152" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="624" y="183" text-anchor="middle" class="node-label">奖励模型</text>
+          <text x="624" y="201" text-anchor="middle" class="edge-label">frozen · 打分 r(x,y)</text>
+
+          <!-- Bottom: 价值模型 -->
+          <rect x="260" y="320" width="200" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="345" text-anchor="middle" class="node-label">价值模型</text>
+          <text x="360" y="363" text-anchor="middle" class="edge-label">critic · 估基线 V(s)</text>
+
+          <!-- Left: PPO 更新 -->
+          <rect x="20" y="158" width="148" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="94" y="183" text-anchor="middle" class="node-label">PPO 更新</text>
+          <text x="94" y="201" text-anchor="middle" class="edge-label">梯度 → actor</text>
+
+          <!-- Arrow: center → top (策略 → 参考，算KL) -->
+          <line x1="360" y1="158" x2="360" y2="80" class="diagram-ink" marker-end="url(#al-ppo-ar)"/>
+          <text x="372" y="124" class="edge-label" text-anchor="start">KL 散度</text>
+
+          <!-- Arrow: top → center (KL 惩罚回传) -->
+          <!-- implicit, handled by text annotation -->
+
+          <!-- Arrow: center → right (策略 → 奖励模型，送回答) -->
+          <line x1="460" y1="190" x2="548" y2="190" class="diagram-ink" marker-end="url(#al-ppo-ar)"/>
+          <text x="494" y="184" class="edge-label" text-anchor="middle">回答 y</text>
+
+          <!-- Arrow: right → center feedback (r 分数) -->
+          <line x1="548" y1="210" x2="460" y2="210" class="diagram-ink" marker-end="url(#al-ppo-ar)"/>
+          <text x="494" y="224" class="edge-label" text-anchor="middle">奖励 r</text>
+
+          <!-- Arrow: center → bottom (策略 → 价值模型) -->
+          <line x1="360" y1="222" x2="360" y2="320" class="diagram-ink" marker-end="url(#al-ppo-ar)"/>
+          <text x="372" y="278" class="edge-label" text-anchor="start">状态 s</text>
+
+          <!-- Arrow: bottom → center feedback (V 估值) -->
+          <line x1="340" y1="320" x2="340" y2="222" class="diagram-ink" marker-end="url(#al-ppo-ar)"/>
+          <text x="296" y="278" class="edge-label" text-anchor="middle">基线 V(s)</text>
+
+          <!-- Arrow: center → left (advantage → PPO) -->
+          <line x1="260" y1="190" x2="168" y2="190" class="diagram-accent" marker-end="url(#al-ppo-acc)"/>
+          <text x="208" y="184" class="edge-label" text-anchor="middle">advantage</text>
+
+          <!-- Arrow: left → center (更新梯度) -->
+          <line x1="168" y1="210" x2="260" y2="210" class="diagram-accent" marker-end="url(#al-ppo-acc)"/>
+          <text x="208" y="224" class="edge-label" text-anchor="middle">∇θ</text>
+
+          <!-- frozen label top-right corner -->
+          <text x="544" y="148" class="edge-label" text-anchor="end" style="fill:var(--ink-faint);">冻结 ×2</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.2</span>PPO 四模型回路：策略模型居中，四根辐射分别连参考/奖励/价值/更新器。<strong>注意</strong>：奖励模型和参考模型都是冻结的（不更新参数），只有策略模型和价值模型（critic）接受梯度——但二者的 loss 来源不同，价值模型优化价值估计误差，策略模型优化 advantage 加权的策略梯度。</figcaption>
+      </figure>
+
+      <h3>PPO 为什么难</h3>
+
+      <p>PPO 在实践中以"难调"著称，根源有三：</p>
+
+      <ul>
+        <li><strong>超参多且相互纠缠</strong>：β（KL 系数）、clip ratio（PPO 的 ε）、GAE λ、mini-batch 大小、rollout 长度、critic 学习率……前后端约 10 个超参，改一个其余的最优值都会随之漂移。</li>
+        <li><strong>在线采样导致数据分布持续变化</strong>：每步策略更新后，下一步的采样分布就变了，无法像 SFT 那样对静态数据集多次迭代。</li>
+        <li><strong>训练容易不稳/崩溃</strong>：奖励塌缩（所有回答得分趋同）、KL 爆炸（策略迅速偏离参考模型）、critic 发散——三种失败模式各不相同，诊断困难。</li>
+      </ul>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>PPO 训练中，如果把 β 设成 0（去掉 KL 惩罚），同时奖励模型已经轻度过拟合，最终策略会收敛到什么状态？奖励模型打出的分数和真实人类评分会呈现什么走势？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>策略会迅速发现奖励模型的"盲区"：某些重复特定 token 的输出、或语法奇异的乱码序列，可能恰好在过拟合的 RM 上得到极高分。代理奖励（RM 打分）持续攀升，真实人类评分却急剧下降。Gao 2023 的实验直接量化了这条曲线的分叉——KL 散度超过某个阈值后，代理与黄金之间的相关性几乎归零。</p>
+        </details>
+      </div>
+
+      <!-- §4.3 -->
+      <h2 id="s43"><span class="num">4.3</span><span>DPO：把 RL 消成一个分类 loss</span></h2>
+
+      <p class="one-liner">DPO（Direct Preference Optimization，2023）发现带 KL 约束的 RLHF 存在闭式解——奖励函数可以用策略本身表示，从而绕过奖励模型和 RL 回路。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>PPO 的四模型框架工程复杂、训练不稳。如果"同一个偏好数据"能直接训策略模型、不需要先训一个奖励模型、不需要 RL 采样循环，整个流程就简化成普通的监督学习。DPO 的贡献在于证明：在 Bradley-Terry 偏好模型和 KL 约束的前提下，这个简化确实成立。</p>
+      </div>
+
+      <h3>闭式解的推导思路</h3>
+
+      <p>带 KL 约束的 RLHF 优化问题（最大化 r − β·KL）有一个已知的最优策略形式：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:14px; padding:10px 0;">
+        π*(y | x) ∝ π<sub>ref</sub>(y | x) · exp( r(x, y) / β )
+      </p>
+
+      <p>对两边取对数，解出 r(x, y)：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:14px; padding:10px 0;">
+        r(x, y) = β · log( π(y | x) / π<sub>ref</sub>(y | x) ) + β · log Z(x)
+      </p>
+
+      <p>其中 <code>Z(x)</code> 是归一化常数（partition function），只与 prompt x 有关，与 y 无关。把这个 r 代入 Bradley-Terry 公式，计算偏好对的概率：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:14px; padding:10px 0;">
+        P(y<sub>w</sub> ≻ y<sub>l</sub> | x) = σ( r(x,y<sub>w</sub>) − r(x,y<sub>l</sub>) )
+      </p>
+
+      <p>因为 r 中含有 <code>β · log Z(x)</code>，而 Z(x) 与 y 无关，在"偏好差"里它恰好抵消。最终得到只依赖策略和参考模型的 DPO loss：</p>
+
+      <h3>DPO Loss（Python 伪代码）</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">dpo_loss.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="dpo-code">复制</button>
+        </div>
+        <pre id="dpo-code"><code class="language-python">import torch
+import torch.nn.functional as F
+
+def dpo_loss(
+    policy_logprobs_chosen,    # log π_θ(y_w | x) — scalar per example
+    policy_logprobs_rejected,  # log π_θ(y_l | x) — scalar per example
+    ref_logprobs_chosen,       # log π_ref(y_w | x) — frozen, no grad
+    ref_logprobs_rejected,     # log π_ref(y_l | x) — frozen, no grad
+    beta: float = 0.1,
+):
+    """
+    L_DPO = -E[ log σ( β·log(π_θ(y_w)/π_ref(y_w))
+                      - β·log(π_θ(y_l)/π_ref(y_l)) ) ]
+
+    HTML note: &lt; &gt; avoided — all comparisons use variable names only.
+    """
+    # Implicit reward for chosen and rejected
+    # r_implicit(x, y) = β * (log π_θ(y|x) - log π_ref(y|x))
+    reward_chosen   = beta * (policy_logprobs_chosen   - ref_logprobs_chosen)
+    reward_rejected = beta * (policy_logprobs_rejected - ref_logprobs_rejected)
+
+    # Bradley-Terry log-likelihood: log σ(r_w - r_l)
+    logits = reward_chosen - reward_rejected          # shape: [batch]
+    loss   = -F.logsigmoid(logits).mean()            # scalar
+
+    return loss</code></pre>
+      </div>
+
+      <p>代码中的核心结构直接对应公式：<code>reward_chosen - reward_rejected</code> 就是"偏好差"，<code>-F.logsigmoid(...)</code> 就是负对数似然。整个训练没有奖励模型的前向传播，没有 rollout 采样，没有价值网络——只有两个模型的对数概率做减法再过一个 sigmoid。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · "语言模型本身就是隐式奖励模型"</span>
+        <p>DPO 的深层含义：一旦给定参考模型 π<sub>ref</sub>，策略模型 π<sub>θ</sub> 就隐式地定义了一个奖励函数——r(x, y) = β · log(π<sub>θ</sub>/π<sub>ref</sub>)。训练 DPO 等价于在偏好数据上训练这个隐式奖励模型，只是不需要把它显式实例化成一个单独的网络。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 4.2 · PPO vs DPO 核心对比</caption>
+        <thead>
+          <tr><th>维度</th><th>RLHF / PPO</th><th>DPO</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>显存中模型数</td>
+            <td>4（策略/参考/奖励/价值）</td>
+            <td>2（策略/参考）</td>
+          </tr>
+          <tr>
+            <td>训练稳定性</td>
+            <td>容易不稳；需调 ~10 超参</td>
+            <td>稳定，接近普通分类训练</td>
+          </tr>
+          <tr>
+            <td>数据使用方式</td>
+            <td>在线（on-policy）：策略自己采样</td>
+            <td>离线（off-policy）：直接用静态偏好对</td>
+          </tr>
+          <tr>
+            <td>能力天花板</td>
+            <td>在线探索可发现训练分布外改进</td>
+            <td>受限于静态数据集覆盖范围</td>
+          </tr>
+          <tr>
+            <td>工程复杂度</td>
+            <td>高：需 RL 训练框架、rollout、critic</td>
+            <td>低：可直接在 SFT 框架上改</td>
+          </tr>
+          <tr>
+            <td>截至 2026-06 实践</td>
+            <td>前沿大厂保留（Llama 4）</td>
+            <td>多数团队默认对齐方法</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>两种方法没有绝对优劣，选择取决于场景：PPO 在线探索能发现静态数据集里没有的改进路径，在能力极限处更强；DPO 在工程资源受限、偏好数据充足时是更实用的默认选项。</p>
+
+      <!-- §4.4 -->
+      <h2 id="s44"><span class="num">4.4</span><span>DPO 的陷阱：别只学优点</span></h2>
+
+      <p class="one-liner">DPO 的简洁来自若干隐含假设——打破任何一个，失败模式就会出现。</p>
+
+      <h3>概率漂移（Likelihood Displacement）</h3>
+
+      <p>DPO 的优化目标是拉大 chosen 和 rejected 之间的"隐式奖励差"。一种满足这个目标但并不理想的解法是：同时压低 chosen 和 rejected 的概率，只要压 rejected 更多，差值就为正。</p>
+
+      <p>实证研究发现，DPO 训练后策略模型对 chosen 回答的绝对对数概率经常下降——chosen 的概率被压低了，只是被压得比 rejected 少一些。这产生一个副作用：策略的概率质量向训练数据覆盖之外漂移，分布外回答（有时是风格奇怪的回答）的相对概率意外上升。</p>
+
+      <h3>离线天花板</h3>
+
+      <p>DPO 是离线方法：它只能在已有的偏好对上优化，无法纠正偏好数据集里从未出现过的失败模式。PPO 的在线采样理论上能探索任意新回答。在数学/代码推理等需要"发现新解法"的场景，离线 DPO 的天花板明显低于在线方法。</p>
+
+      <h3>对参考模型和 β 敏感</h3>
+
+      <p>DPO 的隐式奖励是相对于 π<sub>ref</sub> 定义的。如果参考模型选得不好（例如用质量较低的 SFT checkpoint），或者 β 设置不当（太小则策略漂移过快，太大则偏好信号过弱），训练结果都会大幅退化。</p>
+
+      <h3>继承合成裁判偏置</h3>
+
+      <p>当偏好数据由另一个 LLM 生成（RLAIF/合成裁判），DPO 会继承该模型的偏置：长度偏好（更长的回答被选中）、风格一致性偏好（和裁判模型风格相似的回答得分更高）。这些偏置在 PPO 中同样存在，但在 DPO 中因为无法用在线探索纠正而更难消除。</p>
+
+      <h3>主要变体（一句话）</h3>
+
+      <ul>
+        <li><strong>IPO</strong>（Identity Preference Optimization）：在损失中加入正则项，抗噪更强，防止过拟合到噪声偏好标注。</li>
+        <li><strong>SimPO</strong>：去掉参考模型，用输出长度归一化的平均对数概率作为隐式奖励，简化显存需求。</li>
+        <li><strong>KTO</strong>：用二元反馈（好/坏，不需要配对），不要求偏好对，数据收集更容易。</li>
+        <li><strong>ORPO</strong>：把 SFT loss 和偏好 loss 合并成一个，单次训练同时完成指令跟随和偏好对齐。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · DPO 不是"免费的午餐"</span>
+        <p>DPO 消除了 RL 的工程复杂度，但没有消除偏好学习本身的困难。<strong>概率漂移、离线天花板、参考模型敏感性</strong>三个问题在每个严肃的对齐项目中都需要被显式处理。在数据量充足、场景不需要在线探索时，DPO 是高效的默认选项；在需要推进能力边界时，在线方法（PPO 或 §4.5 的 GRPO）仍是更强的选择。</p>
+      </div>
+
+      <!-- §4.5 -->
+      <h2 id="s45"><span class="num">4.5</span><span>前沿：从"对齐"到"推理"（截至 2026-06）</span></h2>
+
+      <p class="one-liner">RLVR 把奖励来源从"人类偏好"换成"可验证答案的正确性"，开启了后训练推理能力激发的新范式。</p>
+
+      <h3>范式转变：验证器替代偏好</h3>
+
+      <p>经典 RLHF 的奖励来自人类偏好——主观、昂贵、难以扩展到高难度推理任务。RLVR（RL with Verifiable Rewards）的思路是：在数学、代码等存在客观正确答案的领域，直接用确定性验证器判断"答案对/错"作为奖励信号，不再学习一个偏好奖励模型。</p>
+
+      <p>两个关键时间节点：</p>
+      <ul>
+        <li><strong>OpenAI o1（2024-09）</strong>：首次在产品层面展示长链思维（long CoT）+ test-time compute（推理时想更久 → 更准）的能力，但未公开技术细节。</li>
+        <li><strong>DeepSeek-R1（2025-01，arxiv 2501.12948）</strong>：完整公开 RLVR 训练流程，并报告了纯 RL 从 base 起（R1-Zero）无 SFT 冷启动即涌现自行纠错行为的实验。</li>
+      </ul>
+
+      <p>R1-Zero 的"涌现"指：仅用可验证奖励 RL，未给任何链式思维示例，模型自发学会了在回答前先做推理、再自行纠正。这个行为在 base 模型上是不存在的——RLVR 把它激发了出来。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 经典 RLHF vs RLVR 的方向差异</span>
+        <p>经典 RLHF 的目标是<strong>行为对齐</strong>：让模型更有用、更无害、格式更好。RLVR 的目标是<strong>能力激发</strong>：让模型在可验证域（数学/代码/逻辑）的推理成功率更高。二者用同一套 RL 框架，但奖励来源和优化方向根本不同——这也是为什么 RLVR 开始动摇 §1.3 的"后训练不增加能力"分界线。</p>
+      </div>
+
+      <h3>GRPO：砍掉价值网络</h3>
+
+      <p>GRPO（Group Relative Policy Optimization）由 DeepSeek 提出（DeepSeekMath，2024，arxiv 2402.03300），并用于 DeepSeek-V3（2024-12）和 DeepSeek-R1（2025-01）。核心设计：<strong>去掉 PPO 的 critic/价值网络</strong>，改用组内多次采样的相对奖励作为基线。</p>
+
+      <p>具体做法：对同一个 prompt x，采样 G 个回答 {y<sub>1</sub>, …, y<sub>G</sub>}，分别打分 {r<sub>1</sub>, …, r<sub>G</sub>}。每个回答的优势（advantage）定义为：</p>
+
+      <p style="text-align:center; font-family:var(--mono); font-size:14px; padding:10px 0;">
+        A<sub>i</sub> = ( r<sub>i</sub> − mean({r<sub>j</sub>}) ) / std({r<sub>j</sub>})
+      </p>
+
+      <p>组内均值替代了 PPO 的 critic 估计，组内标准差做归一化。省去价值网络意味着：</p>
+      <ul>
+        <li>显存从 4 个模型降到 2–3 个（策略 + 参考，RLVR 有时无需 reference model）。</li>
+        <li>省去 ~40–60% 的显存开销（价值网络通常与策略网络等大）。</li>
+        <li>超参数量减少，训练更稳定。</li>
+      </ul>
+
+      <p>GRPO 的后继是 <strong>DAPO</strong>（2025），针对长链思维训练中的熵塌缩问题（策略过早收敛到单一输出模式）做了修正。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="PPO vs GRPO 两栏对比：左侧 PPO 含 actor + critic，右侧 GRPO 含 actor + 组内采样，无 critic">
+          <defs>
+            <marker id="al-cmp-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="al-cmp-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- divider -->
+          <line x1="380" y1="20" x2="380" y2="300" class="diagram-soft"/>
+
+          <!-- Left column: PPO -->
+          <text x="190" y="24" text-anchor="middle" class="node-label" style="font-weight:700;">PPO</text>
+
+          <!-- actor PPO -->
+          <rect x="60" y="44" width="260" height="52" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="190" y="68" text-anchor="middle" class="node-label-accent">策略模型 (actor)</text>
+          <text x="190" y="86" text-anchor="middle" class="edge-label">接收梯度，在线采样</text>
+
+          <!-- arrow down PPO -->
+          <line x1="190" y1="96" x2="190" y2="144" class="diagram-ink" marker-end="url(#al-cmp-ar)"/>
+          <text x="202" y="126" class="edge-label" text-anchor="start">采样 y</text>
+
+          <!-- critic PPO -->
+          <rect x="60" y="144" width="260" height="52" rx="4" class="diagram-ink node-fill"/>
+          <text x="190" y="168" text-anchor="middle" class="node-label">价值模型 (critic)</text>
+          <text x="190" y="186" text-anchor="middle" class="edge-label">估 V(s)，减方差</text>
+
+          <!-- critic → actor feedback -->
+          <line x1="60" y1="170" x2="60" y2="70" class="diagram-ink" marker-end="url(#al-cmp-ar)"/>
+          <text x="16" y="124" class="edge-label" text-anchor="middle">基线</text>
+
+          <!-- PPO reward -->
+          <rect x="60" y="236" width="260" height="44" rx="4" class="diagram-soft node-fill"/>
+          <text x="190" y="260" text-anchor="middle" class="node-label">奖励模型 (frozen)</text>
+          <text x="190" y="276" text-anchor="middle" class="edge-label">r(x, y)，单条打分</text>
+
+          <line x1="190" y1="196" x2="190" y2="236" class="diagram-ink" marker-end="url(#al-cmp-ar)"/>
+
+          <!-- Right column: GRPO -->
+          <text x="570" y="24" text-anchor="middle" class="node-label" style="font-weight:700;">GRPO</text>
+
+          <!-- actor GRPO -->
+          <rect x="440" y="44" width="260" height="52" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="570" y="68" text-anchor="middle" class="node-label-accent">策略模型 (actor)</text>
+          <text x="570" y="86" text-anchor="middle" class="edge-label">接收梯度，在线采样</text>
+
+          <!-- arrow down GRPO -->
+          <line x1="570" y1="96" x2="570" y2="144" class="diagram-ink" marker-end="url(#al-cmp-ar)"/>
+          <text x="582" y="126" class="edge-label" text-anchor="start">采样 G 个 y</text>
+
+          <!-- group sampling box -->
+          <rect x="440" y="144" width="260" height="52" rx="4" class="diagram-ink node-fill"/>
+          <text x="570" y="164" text-anchor="middle" class="node-label">组内采样 · 组均值基线</text>
+          <text x="570" y="182" text-anchor="middle" class="edge-label">A_i = (r_i − mean) / std</text>
+
+          <!-- group → actor feedback -->
+          <line x1="700" y1="170" x2="700" y2="70" class="diagram-ink" marker-end="url(#al-cmp-ar)"/>
+          <text x="716" y="124" class="edge-label" text-anchor="start">优势</text>
+
+          <!-- GRPO reward -->
+          <rect x="440" y="236" width="260" height="44" rx="4" class="diagram-soft node-fill"/>
+          <text x="570" y="256" text-anchor="middle" class="node-label">验证器 / 奖励模型</text>
+          <text x="570" y="272" text-anchor="middle" class="edge-label">r_i，对 G 条同时打分</text>
+
+          <line x1="570" y1="196" x2="570" y2="236" class="diagram-ink" marker-end="url(#al-cmp-ar)"/>
+
+          <!-- "无价值模型" label -->
+          <rect x="448" y="305" width="248" height="10" rx="2" style="fill:var(--vermilion-soft);stroke:none;"/>
+          <text x="572" y="314" text-anchor="middle" class="branch-label">无 critic，省 40–60% 显存</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4.3</span>PPO 与 GRPO 的核心差异：价值模型（critic）被删除，组内多次采样的相对奖励充当基线。<strong>注意</strong>：左侧 PPO 有独立 critic 网络（通常与 actor 等大），右侧 GRPO 的"基线"由同一批采样的均值在线计算，无额外参数——这是 GRPO 省显存的来源。</figcaption>
+      </figure>
+
+      <h3>蒸馏：把 RLVR 的成果传递给小模型</h3>
+
+      <p>DeepSeek-R1 训练完成后，团队用 R1 生成约 80 万条推理轨迹（包含完整的思维链过程），再用纯 SFT 把这些轨迹蒸馏进更小的模型。结果：<strong>R1-Distill-Qwen-1.5B 在 MATH 基准上超过了 GPT-4o</strong>——一个 15 亿参数的蒸馏模型，没有自己做 RL，没有使用专有数据，只靠从 R1 那里学到的推理轨迹。</p>
+
+      <p>这个结果说明：<strong>蒸馏在"引入真正新能力"上，比直接对小模型做 RLVR 更有效</strong>。RLVR 擅长激发模型已经具备但尚未被充分表达的能力；而蒸馏则是从更强的教师模型那里借来它本来没有的推理路径。</p>
+
+      <table class="compare-table">
+        <caption>表 4.3 · 2026 后训练算法全景</caption>
+        <thead>
+          <tr><th>算法</th><th>何时用</th><th>特点</th><th>显存/信号</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>RLHF / PPO</td>
+            <td>需要在线探索、推进能力边界；前沿大厂有充足算力</td>
+            <td>在线采样，能探索分布外改进；4 模型，超参多，不稳</td>
+            <td>4 模型；偏好 RM 打分</td>
+          </tr>
+          <tr>
+            <td>DPO（及变体）</td>
+            <td>资源受限、偏好数据充足；工程团队需要稳定可复现</td>
+            <td>离线，稳定，接近普通分类训练；受限于静态数据覆盖</td>
+            <td>2 模型；静态偏好对</td>
+          </tr>
+          <tr class="selected">
+            <td>GRPO / RLVR</td>
+            <td>数学/代码等可验证域；无需大量人工偏好标注</td>
+            <td>无 critic，省显存；组内采样基线；可验证奖励信号稳定</td>
+            <td>2–3 模型；确定性验证器</td>
+          </tr>
+          <tr>
+            <td>蒸馏（SFT from strong model）</td>
+            <td>小模型想获得大模型推理能力；算力受限</td>
+            <td>无 RL；直接 SFT 训推理轨迹；效果常超过直接 RLVR 小模型</td>
+            <td>1 模型；教师模型生成数据</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:14px; color:var(--ink-soft); margin-top:8px;">
+        <strong>推荐栈（截至 2026-06）</strong>：可验证域（数学/代码）→ SFT 冷启动 → GRPO/RLVR；一般指令跟随 → SFT → DPO；资源充足且需要推进边界 → SFT → PPO；小模型获取大模型推理能力 → 从强模型蒸馏。
+      </p>
+
+      <!-- §4.6 -->
+      <h2 id="s46"><span class="num">4.6</span><span>激发还是教会？回访 §1.3（截至 2026-06）</span></h2>
+
+      <p class="one-liner">RLVR 让"后训练不增加能力"这条经典分界在 2025–26 被重新审视——但审视的结果是标注了日期，而非推翻。</p>
+
+      <p>在<a href="01-overview.html#s13">§1.3 能力 vs 对齐</a>中，贯穿全书的分界线是：能力（知识、推理、语言）几乎全部来自预训练，后训练几乎不增加新能力，只是把已有能力对齐成人类想要的行为。第 3 章的 SFT checkpoint 正是这条"行为对齐"的起点，也是本章 RL 训练的起始状态。</p>
+
+      <p>RLVR 推理 RL（DeepSeek-R1，2025-01；OpenAI o1，2024-09）在基准上展示了预训练基座模型所没有的长链推理行为——这直接挑战了那条分界线。问题是：<strong>RLVR 是真的给模型"教会了新能力"，还是把它本来就有的潜在能力"激发"出来了？</strong></p>
+
+      <h3>pass@k 证据</h3>
+
+      <p>arxiv 2504.13837（NeurIPS 2025）通过 pass@k 实验系统回答了这个问题：</p>
+
+      <ul>
+        <li><strong>小 k（pass@1）</strong>：RLVR 微调后的模型明显优于同等大小的 base 模型。</li>
+        <li><strong>大 k（pass@k，k 足够大）</strong>：base 模型的覆盖率（能给出正确答案的比例）反而更高或持平——base 模型的解题能力上限并没有被 RLVR 抬高。</li>
+      </ul>
+
+      <p>这个模式的解读：<strong>RLVR 主要提升的是采样可靠性和效率</strong>（用更少的采样次数更稳定地命中正确答案），而非能力天花板。那些推理路径，base 模型本来就能走到——RLVR 做的是把这些路径的出现概率分布"磨锋利"，让好路径的概率更高、差路径的概率更低。</p>
+
+      <h3>诚实的边界标注</h3>
+
+      <p>截至 2026-06，对这个问题最诚实的答案是：</p>
+      <ul>
+        <li>经典分界（后训练不增加能力）对 <strong>SFT 和 RLHF 行为对齐</strong>成立——几乎所有文献都一致。</li>
+        <li>RLVR 推理 RL 是一个有意义的例外，但当前方法仍更像"把已有能力的概率分布磨锋利"，而不是真正的能力注入。</li>
+        <li><strong>真正引入新能力</strong>的手段更多靠蒸馏（从更强的教师模型借推理路径），而非 RLVR 本身。</li>
+        <li>§1.5 的地图表（RLHF/PPO/DPO/RLVR 各行）现在可以完整填写——每一行的 loss、信号来源、模型数，在本章都已经讲清楚了。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 分界的价值在于"被标注了日期"</span>
+        <p>§1.3 的分界没有被推翻，而是被加上了时间戳：经典 RLHF/DPO 范围内，它完全成立；在 RLVR 的可验证推理域，它的边界开始松动但尚未崩溃；在蒸馏面前，它需要区分"能力的载体来自哪里"。<strong>一个清晰的框架被新证据划定了边界，这正是深度理解的标志——不是"经典结论错了"，而是"经典结论在哪里适用、在哪里需要加注脚"。</strong></p>
+      </div>
+
+      <!-- Self-check -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color:var(--ink-soft); font-style:italic; font-size:15px;">先合上答案，把能想到的写在纸上或编辑器里，再展开对照。</p>
+        <ol>
+          <li>RLHF 里 KL 惩罚（β·KL）为什么不能去掉？去掉后会发生什么？（提示：奖励模型是个有限神经网络，有盲区。）</li>
+          <li>DPO 怎么做到不训奖励模型？用一句话说出闭式解的核心洞察。</li>
+          <li>GRPO 相比 PPO 省掉了哪个模型？用什么来代替它的作用？省下的是什么量级的显存？</li>
+          <li>（设计题）经典观点说"后训练不增加能力"。2025 年的 pass@k 实验是支持还是反对这个观点？它把 RLVR 的作用重新定义成了什么？如果你要给一个开源 7B 模型引入数学推理能力，RLVR 和蒸馏各自能做到什么、做不到什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>奖励模型是在有限偏好数据上训出的网络，训练集之外它的预测不可靠。去掉 KL 约束，策略在 RL 优化中会找到 RM 的盲区漏洞：某些对人类无意义的输出（重复 token、语法异常）能得到极高的 RM 分数。策略最终塌成"对 RM 高分、对人类无用"的状态（reward hacking）。Gao 2023 量化了这个过程：代理奖励（RM 分）持续上升，黄金奖励（真实人类评估）先升后深度下降。KL 惩罚把策略锚在 SFT checkpoint 附近，阻止它漂入 RM 的不可信区域。</li>
+            <li>带 KL 约束的 RLHF 最优策略存在闭式形式：π*(y|x) ∝ π_ref(y|x)·exp(r(x,y)/β)。解出奖励：r = β·log(π/π_ref) + β·logZ(x)。把这个 r 代入 Bradley-Terry，偏好差里 logZ(x) 抵消，得到只依赖策略和参考模型对数概率的 loss。核心洞察：<strong>语言模型本身就是隐式奖励模型</strong>，不需要把奖励函数单独实例化为一个网络。</li>
+            <li>GRPO 省掉了价值模型（critic）。在 PPO 中 critic 用于估计基线 V(s) 来降低梯度方差；GRPO 改用同一个 prompt 的 G 次采样的组内均值作为基线，组内标准差做归一化，在线计算无需额外参数。价值网络通常与策略网络等大，省掉它意味着约 40–60% 的显存减少（从 4 个模型缩到 2–3 个）。</li>
+            <li>pass@k 实验（arxiv 2504.13837，NeurIPS 2025）的结论：小 k 时 RLVR 明显优于 base；大 k 时 base 覆盖率持平或更高——RLVR 没有抬高能力天花板。这<strong>大体支持</strong>"后训练不增加能力"的经典观点，同时把 RLVR 的作用重新定义为"提升采样可靠性/把已有能力的分布磨锋利"，而非引入新能力。对 7B 模型：RLVR 能把它已有的数学推理路径的出现概率磨高（pass@1 提升显著），但受限于 base 模型的能力天花板——RLVR 激发不了它本来不会的解题路径；蒸馏（从 R1 这类强模型取推理轨迹做 SFT）能把 base 模型本来没有的推理路径借过来，在能力上限上更有突破，但质量受限于教师模型生成数据的覆盖范围。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>为"数学解题助手"选对齐方案</h3>
+        <p>把一个开源 base 模型对齐成数学解题助手，手上有充足算力但人类偏好标注预算极少。PPO-RLHF / DPO / RLVR-GRPO 选哪条？为什么 RLVR 在这个场景特别合适，而在"写得更有共情"这种场景又会失灵？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>数学答案有确定性对错——验证器可以在无需人类标注的情况下给出奖励信号。这让 RLVR/GRPO 在这个场景几乎是"免标注成本"的选择：规则验证器判断答案是否正确，不需要偏好对、不需要奖励模型。PPO-RLHF 和 DPO 都需要偏好数据（"A 和 B 哪个解法更好"），而数学题的好坏本可以直接由正确性决定，绕过偏好收集是 RLVR 的核心优势。</p>
+          <p>"写得更有共情"没有可验证的客观标准——没有一个函数能判断"这句话是否足够有共情"。RLVR 在这里失灵，因为它依赖的确定性验证器在这个场景不存在。只能退回偏好型信号（人类或 AI 裁判判断 A 比 B 更有共情），也就是 RLHF 或 DPO 的领域。这个场景的分界，正是"可验证域 vs 主观偏好域"的分界线。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2203.02155">InstructGPT（OpenAI，2022）</a>——RLHF 三阶段流水线完整公开描述，奖励模型与 PPO 对齐的原始论文</li>
+          <li><a href="https://arxiv.org/abs/2305.18290">DPO: Your Language Model is Secretly a Reward Model（Rafailov et al., 2023）</a>——DPO 原论文，从闭式解推导到 loss 的完整推导</li>
+          <li><a href="https://arxiv.org/abs/2210.10760">Scaling Laws for Reward Model Overoptimization（Gao et al., 2023）</a>——量化 KL 散度与奖励欺骗关系的关键实证研究</li>
+          <li><a href="https://arxiv.org/abs/2402.03300">DeepSeekMath（DeepSeek，2024）</a>——GRPO 算法原始论文，组内采样基线设计</li>
+          <li><a href="https://arxiv.org/abs/2501.12948">DeepSeek-R1（DeepSeek，2025-01）</a>——RLVR 推理 RL 完整流程公开，R1-Zero 纯 RL 涌现自纠错，蒸馏实验</li>
+          <li><a href="https://arxiv.org/abs/2504.13837">Does RL Really Incentivize Reasoning Beyond the Base Model?（arxiv 2504.13837，NeurIPS 2025）</a>——pass@k 实验，RLVR 提升采样可靠性而非能力天花板的实证</li>
+          <li><a href="https://arxiv.org/abs/2212.08073">Constitutional AI（Anthropic，2022）</a>——RLAIF，AI 按宪法原则生成偏好信号</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-sft.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · SFT：从"续写"到"回答"</span>
+        </a>
+        <a href="05-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 综合自测</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s41" data-toc-target="s41">4.1 把偏好变成奖励</a></li>
+        <li><a href="#s42" data-toc-target="s42">4.2 RLHF / PPO</a></li>
+        <li><a href="#s43" data-toc-target="s43">4.3 DPO：消成分类 loss</a></li>
+        <li><a href="#s44" data-toc-target="s44">4.4 DPO 的陷阱</a></li>
+        <li><a href="#s45" data-toc-target="s45">4.5 RLVR + GRPO 前沿</a></li>
+        <li><a href="#s46" data-toc-target="s46">4.6 激发还是教会？</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+</script>
+
+</body>
+</html>

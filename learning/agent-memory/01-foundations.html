@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>基础与边界 · Agent 记忆系统教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-foundations.html" class="current">01 基础</a><span class="sep">—</span>
+    <a href="02-lifecycle.html">02 生命周期</a><span class="sep">—</span>
+    <a href="03-architecture.html">03 架构</a><span class="sep">—</span>
+    <a href="04-landscape.html">04 落地</a><span class="sep">—</span>
+    <a href="05-self-check.html">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">01 · 基础与边界</p>
+        <h1>记忆是什么，不是什么</h1>
+        <p class="recap">Agent 要跨会话、跨任务保持连续性，而 context window 做不到——它每次会话清空、容量有界、被动堆积。这一章先划清记忆到底<em>是</em>什么、<em>不是</em>什么：它和 context window 的关系、和 RAG 的关系，以及记忆内部分成哪几类。把这条边界钉住，后面四章讲的写入、治理、分层、选型才有地基。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章建立的认知框架</p>
+        <ul>
+          <li>context window 是 agent 的<strong>工作记忆（working memory）</strong>——一块易失、有界、会话间清空的暂存区，不是知识的归宿。</li>
+          <li>RAG 和 agent memory 的分界线不是向量检索，而是那条<strong>由 agent 自己掌控的写入路径</strong>：RAG 只读、无状态；memory 是写入→治理→读取的闭环。</li>
+          <li>记忆按 CoALA 分四类（working / episodic / semantic / procedural），再叠一条正交的<strong>表示轴</strong>（文本 vs 参数）——四类不是四个数据库，working memory 就是 context window 本身。</li>
+        </ul>
+      </section>
+
+      <!-- ════════════════════ s11 ════════════════════ -->
+      <h2 id="s11"><span class="num">1.1</span>为什么需要记忆</h2>
+
+      <p class="one-liner">Context window 是 agent 的工作记忆——被动接收、容量有界、每次会话从零开始；它能装下"此刻在想什么"，却装不下"这个用户三周前告诉过我什么"。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一个 agent 要在真实业务里有用，得跨越三种"间隔"保持连续：跨<strong>会话</strong>（今天的对话接得上上周的）、跨<strong>任务</strong>（debug 任务里学到的项目约定，能用在下一个 feature 任务）、跨<strong>用户身份</strong>（记住"这个客户的部署是 MySQL 不是 Postgres"）。context window 在每一种间隔处都断开：会话一结束，窗口里的 token 全部丢弃，下一次启动是一张白纸。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：context window 的本质是一次 LLM 前向推理的<em>输入缓冲区</em>。模型本身是无状态函数——给定一段 token 序列，输出下一个 token 的分布；它不保留任何调用间的状态。所谓"对话记忆"完全是<strong>应用层每轮把历史重新拼进输入</strong>制造出来的错觉。窗口容量（比如 200K token）是这个缓冲区的物理上界；填满之后要么截断、要么报错。于是窗口有三个出厂属性：<strong>易失</strong>（推理结束即弃）、<strong>有界</strong>（token 数封顶）、<strong>会话间清空</strong>（无跨会话的持久层）。这三条决定了它只能当工作记忆，当不了长期记忆。</p>
+
+      <div class="callout insight">
+        <span class="label">长上下文 ≠ 记忆</span>
+        <p>"把窗口做到 1M token，不就等于有记忆了吗？"——这是最常见的误判。更大的窗口只是把易失缓冲区<em>加宽</em>，并没有给它加上跨会话的持久层，也没有给 agent 一条"决定记什么、改什么、忘什么"的控制路径。第 4 章会引用 BEAM（ICLR 2026）的实证：把同样的信息塞进长上下文 vs 放进结构化记忆，随着 token 规模增大，两者的差距<em>变大</em>而非缩小——长上下文不是记忆的替代品。这条会在 1.2 节讲透。</p>
+      </div>
+
+      <h3>没有记忆的三个后果</h3>
+      <p>把记忆从 agent 上拿掉，会稳定地出现三种退化，每一种都直接对应一个业务痛点：</p>
+      <ol>
+        <li><strong>每次会话重新解释一切</strong>。用户每次都要把背景（"我的栈是 A、约束是 B、上次结论是 C"）重新喂一遍；agent 无法承接昨天的进度。开发成本和用户负担都线性堆高。</li>
+        <li><strong>没有个性化</strong>。agent 学不会"这个用户偏好 Python、对花生过敏、习惯简短回答"。每个用户拿到的都是同一张出厂面孔，调教过的偏好下次归零。</li>
+        <li><strong>无法从过去的失败中学习</strong>。"上次试 X 方案踩了空，这次换 Y"——这种经验需要把失败轨迹存下来、下次检索回来。没有 episodic memory，agent 会在同一个坑里反复跌倒。</li>
+      </ol>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个客服 agent 接入了 RAG，能检索完整的产品手册和退款政策文档。某用户三周前在对话里说过"我用的是企业版套餐"。今天他问"我这个套餐能退吗？"——agent 答得上来吗？为什么？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>答不上来。RAG 能检索<strong>文档</strong>（退款政策怎么写），但"这个用户用企业版"是三周前对话里产生的<em>会话事实</em>，从来没被写进任何可检索的存储——RAG 没有写入路径，不会把用户说过的话沉淀下来。除非系统在那次对话时主动把"用户=企业版"作为一条记忆<strong>写入</strong>，否则今天检索手册时它根本不在候选集里。这正是 RAG 和 memory 的分界：缺的不是检索能力，是写入路径。下一节展开。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════ s12 ════════════════════ -->
+      <h2 id="s12"><span class="num">1.2</span>记忆 / 上下文 / RAG 的边界</h2>
+
+      <p class="one-liner">三者的真正分界线只有一条：<strong>有没有一条由 agent 自己掌控的写入路径</strong>。context window 只读不写也不持久；RAG 只读外部知识、无状态；只有 agent memory 同时拥有写入、治理、读取，构成闭环。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>这三个词在工程对话里经常被当成可互换的"给模型更多信息的办法"，于是出现两类错误决策：以为"上长上下文"就解决了记忆需求，或以为"接了 RAG"就等于 agent 有记忆。两者都会在跨会话个性化、从失败中学习这类需求上直接失效。把边界讲清楚，选型时才知道手上的方案缺的是哪一块。这一节是整章——也是整篇教程——的核心。</p>
+      </div>
+
+      <h3>三者逐一拆开</h3>
+      <p><strong>context window = 仅工作记忆</strong>。它是被动的：应用喂什么它装什么，自己不决定去留。它是易失的：推理结束即清。它是会话间清空的：没有跨会话的持久层。它回答的问题是"<em>此刻输入里有什么</em>"。</p>
+
+      <p><strong>RAG = 只读、无状态的检索</strong>。给定同一个 query，RAG 总是去同一个（基本不变的）文档库里捞最相似的片段，结果<em>与对话历史无关</em>——它不知道、也不在乎这个用户之前说过什么。关键在于：<strong>RAG 没有写入路径</strong>。它不会因为 agent 在对话中学到了新事实就把这条事实沉淀进库里；语料的更新是离线的、批量的，由数据管道而非 agent 在交互中驱动。RAG 回答的问题是"<em>文档里写了什么</em>"。</p>
+
+      <p><strong>agent memory = 写入→治理→读取的完整闭环</strong>，且与 agent 的感知/行动耦合。它独有的那条边是<strong>写入路径</strong>：agent 自己决定哪些交互值得记下来、哪条旧记忆该被新事实覆盖或删除（即<em>自编辑 self-editing</em>）。记下来的东西跨会话持久，并随时间<strong>演化</strong>（旧事实失效、被更正、被合并）。它回答的问题是"<em>agent 学到了什么</em>"。</p>
+
+      <p><strong>底层机制（比文档深一层）</strong>：把 RAG 和 memory 摆在同一张流程图上，读取那一段几乎一模一样——都是"embedding → 向量检索 → 把命中片段拼进 context"。所以 <strong>RAG 是 agent memory「读取」步骤的一个子集</strong>。真正缺的两块在读取之前和之外：① 一条<strong>写入路径</strong>，把交互中产生的新事实主动沉淀进存储；② 一个<strong>治理层</strong>，负责去重、冲突消解、遗忘，让存储不会随时间腐烂成一堆互相矛盾的陈旧条目。Letta 团队的措辞最精炼：RAG 是 <em>reactive retrieval</em>（被动检索），agent memory 是 <em>agent-managed editable state</em>（agent 托管的可编辑状态）。差别不在向量检索本身，而在那条"谁能写、谁来治理"的路径——这是本章的门槛所在，记牢它，后面所有架构和选型都从这条线长出来。</p>
+
+      <figure>
+        <svg viewBox="0 0 880 430" role="img" aria-labelledby="fig11-title">
+          <title id="fig11-title">context window、RAG、agent memory 三者边界对比，突出写入路径是 memory 独有</title>
+          <defs>
+            <marker id="arrow-ink-11" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M1,1 L8,4.5 L1,8" class="diagram-ink" fill="none"/>
+            </marker>
+            <marker id="arrow-acc-11" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M1,1 L9,5 L1,9" class="diagram-accent" fill="none"/>
+            </marker>
+          </defs>
+
+          <!-- ===== Panel A: context window ===== -->
+          <text x="135" y="28" text-anchor="middle" class="node-label" font-weight="700">context window</text>
+          <text x="135" y="46" text-anchor="middle" class="edge-label" stroke="none">= 仅工作记忆</text>
+          <!-- LLM box -->
+          <rect x="55" y="62" width="160" height="56" rx="4" class="node-fill diagram-ink"/>
+          <text x="135" y="86" text-anchor="middle" class="node-label">LLM 推理</text>
+          <text x="135" y="104" text-anchor="middle" class="edge-label" stroke="none">无状态前向</text>
+          <!-- input buffer -->
+          <rect x="55" y="150" width="160" height="44" rx="4" class="node-fill diagram-ink"/>
+          <text x="135" y="170" text-anchor="middle" class="node-label">输入缓冲区</text>
+          <text x="135" y="186" text-anchor="middle" class="edge-label" stroke="none">易失·有界</text>
+          <line x1="135" y1="150" x2="135" y2="120" class="diagram-ink" marker-end="url(#arrow-ink-11)"/>
+          <text x="135" y="138" text-anchor="middle" class="edge-label">每轮重拼</text>
+          <!-- clears -->
+          <text x="135" y="232" text-anchor="middle" class="edge-label" stroke="none" fill="#A3A3A3">会话结束 → 全部清空</text>
+          <line x1="68" y1="210" x2="202" y2="210" class="diagram-soft"/>
+
+          <!-- ===== Panel B: RAG ===== -->
+          <text x="440" y="28" text-anchor="middle" class="node-label" font-weight="700">RAG</text>
+          <text x="440" y="46" text-anchor="middle" class="edge-label" stroke="none">= 只读·无状态检索</text>
+          <!-- query -->
+          <rect x="360" y="62" width="160" height="40" rx="4" class="node-fill diagram-ink"/>
+          <text x="440" y="86" text-anchor="middle" class="node-label">query</text>
+          <!-- doc store -->
+          <rect x="360" y="150" width="160" height="48" rx="4" class="node-fill diagram-ink"/>
+          <text x="440" y="172" text-anchor="middle" class="node-label">文档库（只读）</text>
+          <text x="440" y="188" text-anchor="middle" class="edge-label" stroke="none">离线批量更新</text>
+          <!-- read arrow down -->
+          <line x1="425" y1="150" x2="425" y2="104" class="diagram-ink" marker-end="url(#arrow-ink-11)"/>
+          <text x="398" y="130" text-anchor="middle" class="edge-label">检索</text>
+          <!-- return arrow up -->
+          <line x1="455" y1="102" x2="455" y2="148" class="diagram-ink" marker-end="url(#arrow-ink-11)"/>
+          <text x="478" y="130" text-anchor="middle" class="edge-label">命中</text>
+          <!-- NO write path — explicit -->
+          <line x1="372" y1="232" x2="508" y2="232" class="diagram-soft"/>
+          <text x="440" y="250" text-anchor="middle" class="edge-label" stroke="none" fill="#A3A3A3">无写入路径 ✕</text>
+
+          <!-- ===== Panel C: agent memory ===== -->
+          <text x="745" y="28" text-anchor="middle" class="node-label-accent">agent memory</text>
+          <text x="745" y="46" text-anchor="middle" class="edge-label" stroke="none">= 写入·治理·读取闭环</text>
+          <!-- agent -->
+          <rect x="665" y="62" width="160" height="40" rx="4" class="node-fill-accent diagram-accent"/>
+          <text x="745" y="86" text-anchor="middle" class="node-label-accent">agent</text>
+          <!-- store -->
+          <rect x="665" y="150" width="160" height="48" rx="4" class="node-fill diagram-ink"/>
+          <text x="745" y="172" text-anchor="middle" class="node-label">记忆存储</text>
+          <text x="745" y="188" text-anchor="middle" class="edge-label" stroke="none">跨会话持久·演化</text>
+          <!-- read down (same as RAG) -->
+          <line x1="700" y1="150" x2="700" y2="104" class="diagram-ink" marker-end="url(#arrow-ink-11)"/>
+          <text x="676" y="130" text-anchor="middle" class="edge-label">读取</text>
+          <!-- WRITE PATH — accent, the unique edge -->
+          <line x1="790" y1="102" x2="790" y2="148" class="diagram-accent" marker-end="url(#arrow-acc-11)"/>
+          <text x="812" y="130" text-anchor="middle" class="branch-label">写入</text>
+
+          <!-- governance loop annotation -->
+          <path d="M665,174 C628,174 628,210 665,210" class="diagram-accent" fill="none" marker-end="url(#arrow-acc-11)"/>
+          <text x="612" y="196" text-anchor="middle" class="branch-label">治理</text>
+          <line x1="665" y1="210" x2="757" y2="210" class="diagram-soft"/>
+
+          <!-- bottom caption strip -->
+          <text x="745" y="250" text-anchor="middle" class="branch-label" stroke="none">写入路径 = memory 独有</text>
+
+          <!-- divider lines between panels -->
+          <line x1="290" y1="60" x2="290" y2="260" class="diagram-soft"/>
+          <line x1="595" y1="60" x2="595" y2="260" class="diagram-soft"/>
+
+          <!-- shared takeaway band -->
+          <rect x="55" y="300" width="770" height="96" rx="4" class="node-fill diagram-soft"/>
+          <text x="72" y="324" class="node-label" font-weight="700">读取那一段，RAG 和 memory 几乎一样</text>
+          <text x="72" y="346" class="edge-label" stroke="none">都是 embedding → 向量检索 → 拼进 context。所以 RAG ⊂ memory 的「读取」步骤。</text>
+          <text x="72" y="370" class="node-label-accent" font-size="13">memory 多出来的两块在读取之外：</text>
+          <text x="72" y="388" class="branch-label" stroke="none">① agent 掌控的写入路径（自编辑）　② 治理层（去重·冲突消解·遗忘）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>三者并列：context window 只有易失缓冲区，RAG 只有"检索—命中"的只读环，agent memory 在读取之外多出一条朱红色的<em>写入路径</em>和一个治理回环。<strong>注意</strong>：唯一真正的分界不是有没有向量检索（RAG 和 memory 都有），而是那条朱红的写入路径——它是 memory 独有的那条边，也是判断"你接的到底是 RAG 还是 memory"的唯一标准。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>三者边界 · 一眼对照</caption>
+        <thead>
+          <tr><th>维度</th><th>context window</th><th>RAG</th><th>agent memory</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>本质</td>
+            <td>易失输入缓冲区</td>
+            <td>只读检索管道</td>
+            <td>写入→治理→读取闭环</td>
+          </tr>
+          <tr>
+            <td>状态</td>
+            <td>会话内·会话间清空</td>
+            <td>无状态（query 无关历史）</td>
+            <td>跨会话持久·随时间演化</td>
+          </tr>
+          <tr class="selected">
+            <td>写入路径</td>
+            <td>无（被动喂入）</td>
+            <td>无（语料离线更新）</td>
+            <td>有 · agent 自己掌控（自编辑）</td>
+          </tr>
+          <tr>
+            <td>治理层</td>
+            <td>无</td>
+            <td>无</td>
+            <td>有（去重·冲突消解·遗忘）</td>
+          </tr>
+          <tr>
+            <td>回答的问题</td>
+            <td>此刻输入里有什么</td>
+            <td>文档里写了什么</td>
+            <td>agent 学到了什么</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout tip">
+        <span class="label">类比（带失效边界）</span>
+        <p>把 agent 类比成一个程序员：<strong>context window</strong> 是他此刻脑子里的工作记忆——手头正在想的几行代码，下班即忘。<strong>RAG</strong> 是公司的 wiki／官方文档——随时能查，但 wiki 不会因为他今天调试出一个结论就自动更新。<strong>agent memory</strong> 是他自己的工程笔记本——他<em>主动</em>决定记下"这个客户用 MySQL""上次那个方案行不通"，过段时间还会回头划掉过时的条目。</p>
+        <p><strong>失效边界</strong>：这个类比会在"治理"上误导。真人的笔记本靠人脑隐式去重和判断新旧；agent memory 的治理是<em>显式工程步骤</em>——要专门写抽取、冲突消解、遗忘策略，没有这层，笔记本会迅速烂成一堆自相矛盾的便利贴。这正是第 2 章五个环节要解决的问题。</p>
+      </div>
+
+      <h3>场景走查：同一句话，三套系统各做什么</h3>
+      <p>用户在对话里说："我上周把数据库从 Postgres 迁到了 MySQL。"看三套系统各自的反应：</p>
+      <ul>
+        <li><strong>纯 context window</strong>：这句话留在当前窗口里，本轮对话能用上。会话一结束，丢弃。下次他再来，agent 不知道有过迁移这回事。</li>
+        <li><strong>纯 RAG</strong>：这句话<em>什么也没触发</em>——RAG 只在被 query 时去文档库检索，它没有"把用户刚说的话存下来"的入口。产品手册里若写着"默认 Postgres"，下次检索还会把过时信息捞回来。</li>
+        <li><strong>agent memory</strong>：写入路径被触发——agent 把"用户的数据库 = MySQL（更新于本周）"作为一条记忆写入，并在治理时<em>覆盖</em>掉旧的"= Postgres"（这正是第 2 章 recency-wins 冲突消解）。三周后他问"我的库支持这个特性吗"，检索回来的是 MySQL，不是 Postgres。</li>
+      </ul>
+
+      <!-- ════════════════════ s13 ════════════════════ -->
+      <h2 id="s13"><span class="num">1.3</span>四类记忆（CoALA）</h2>
+
+      <p class="one-liner">CoALA 框架把 agent 记忆分成四类——working、episodic、semantic、procedural——按"信息以什么形态、为什么目的存在"来切；其中 working memory 不是一个独立的库，<strong>它就是 context window 本身</strong>。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"记忆"是个太粗的词。一个 agent 要记的东西性质差别很大：当前推理的草稿、过去的具体经历、抽象的事实、可复用的技能——它们的存储介质、保留时长、检索方式、治理策略全都不同。CoALA（Cognitive Architectures for Language Agents，arXiv 2309.02427）借认知科学的分类把它们拆开，给后面"每类怎么存、怎么取、怎么忘"提供了挂钩。不分类，就会把"用户的姓名"和"上次失败的轨迹"塞进同一个桶，用同一套 TTL 和检索逻辑——必然两头不讨好。</p>
+      </div>
+
+      <h3>四类逐一定义 + agent 实例</h3>
+
+      <p><strong>① Working memory（工作记忆）</strong></p>
+      <p class="one-liner">当前决策循环里的活跃信息——"此刻装进 context window 的东西"。</p>
+      <p>实例：最近几轮对话 + 一次 ReAct 循环里的中间推理草稿（thought / action / observation）。一个正在执行多步任务的 agent，把"当前子目标、刚调用的工具返回了什么、下一步打算干嘛"全放在这里。</p>
+      <div class="callout warning">
+        <span class="label">关键澄清</span>
+        <p>working memory <strong>不是第四个数据库</strong>，它就是 <strong>context window 本身</strong>。工程师最常见的误解，是把这四类想象成四个并排的存储引擎、各配一张表。实际上只有后三类（episodic / semantic / procedural）是<em>外部</em>持久存储；working memory 是那块易失的、当前推理用的窗口——也就是 1.1 节讲的输入缓冲区。后三类记忆被检索出来后，正是被<em>装进</em> working memory（context window）才能被模型用上。记牢这条，第 3 章"分层上下文"才不会读拧。</p>
+      </div>
+
+      <p><strong>② Episodic memory（情景记忆）</strong></p>
+      <p class="one-liner">具体过往经历的记录——发生过的事，带时间和情境。</p>
+      <p>实例：工具调用历史、对话轮次、观察结果这类<em>可检索的轨迹</em>。最典型的是"上次试 X 方案失败了"——把那条完整的失败经历（当时的输入、采取的动作、得到的报错）存下来，下次遇到相似情境检索回来，避免重蹈覆辙。episodic memory 是 agent "从过去失败中学习"的物理载体。</p>
+
+      <p><strong>③ Semantic memory（语义记忆）</strong></p>
+      <p class="one-liner">抽象的、去情境化的事实与知识——剥离了"何时何地学到"的纯结论。</p>
+      <p>实例：存下的用户事实——"偏好 Python""对花生过敏""数据库是 MySQL"。注意它和 episodic 的区别：episodic 记的是"<em>在 5 月 12 日的对话里，用户说他对花生过敏</em>"（带情境的事件）；semantic 记的是"<em>用户对花生过敏</em>"（抽掉情境的事实）。第 2 章的写入抽取，很大程度就是把 episodic 的原始轨迹蒸馏成 semantic 的原子事实。</p>
+
+      <p><strong>④ Procedural memory（程序记忆）</strong></p>
+      <p class="one-liner">可复用的技能与做法——"怎么做"而非"是什么"。</p>
+      <p>实例：学到的工具定义、存下来的可复用计划（plan）。但这里有个最容易被漏掉的部分：</p>
+      <div class="callout warning">
+        <span class="label">关键澄清</span>
+        <p>procedural memory <strong>包含 LLM 的权重本身</strong>。模型在预训练／微调里学到的"怎么写 SQL、怎么调用 API、怎么做多步推理"，是<em>隐式</em>编码在权重里的程序记忆——它不在任何外部存储里，却实实在在是 agent "会做事"的来源。所以 procedural memory = <strong>隐式（LLM 权重）+ 显式（agent 代码 / 工具定义 / 存下的计划）</strong>，不只是"存下来的技能清单"。这条直接引出 1.4 节的表示轴：权重里的记忆是<em>参数化</em>的，外部存的是<em>文本</em>的。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个编程 agent 在帮你修 bug 时，记住了三件事：(a) 当前这个函数报了 NullPointerException，(b) 这个项目统一用 4 空格缩进、不用 tab，(c) 三天前它试过用反射绕过这个问题、结果引入了性能回归。把这三件事分别归到 CoALA 的哪一类？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>(a) <strong>working memory</strong>——当前决策循环正在处理的活跃信息，就在 context window 里，任务一结束就该清掉。<br>
+          (b) <strong>semantic memory</strong>——一条去情境化的项目事实（"本项目用 4 空格"），跨任务复用，不关心是哪次学到的。<br>
+          (c) <strong>episodic memory</strong>——一条带时间和情境的具体经历（"三天前试反射 → 性能回归"），用来"从过去失败学习"。<br>
+          顺带：agent 本身"会读 stack trace、会改代码"的能力属于 <strong>procedural memory</strong>（主要在 LLM 权重里，隐式）。一道题里就能同时踩到四类——它们性质不同，所以该用不同的存储和保留策略，这正是分类的意义。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════ s14 ════════════════════ -->
+      <h2 id="s14"><span class="num">1.4</span>表示轴：文本 vs 参数</h2>
+
+      <p class="one-liner">CoALA 的四类是按"记什么"切的；表示轴是另一条正交的维度，按"记在哪种介质里"切——记忆要么是外部存储里的<strong>文本（textual / non-parametric）</strong>，要么是被微调进模型权重的<strong>参数（parametric）</strong>。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>四类记忆回答"这条信息是什么性质"，但没回答"它物理上存在哪、长什么样"。同一条 semantic 事实，可以是向量库里的一行文本，也可以是被微调进权重的一个隐式倾向；同一类 procedural 技能，可以是一段存下来的 plan（文本），也可以是模型权重里学到的能力（参数）。这条轴和四类<em>正交</em>——把它单独拎出来，才能解释为什么"文件即记忆"和"微调即记忆"是两条根本不同的技术路线，各有各的代价。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：两种表示的代价结构完全相反。<strong>文本记忆</strong>存在外部（文件、向量库、知识图谱），是<em>显式</em>的——可读、可审计、可逐条增删改，但每次用上都要把它<strong>塞进 context window</strong>，于是受 token 上限硬约束：记得越多，单次推理能调进来的越少，且要靠检索来选。<strong>参数记忆</strong>把信息<em>微调进权重</em>，是<em>隐式</em>的——容量上几乎"无限长"（不占 context），调用时也不花 token，但它<strong>有损</strong>（信息被压进权重，无法逐条取出或精确删除）、不可解释、更新代价高（要重新训练）。一句话：文本记忆贵在<em>运行时 token</em>、强在<em>可控</em>；参数记忆贵在<em>训练</em>、强在<em>容量与零 token 调用</em>。生产系统里绝大多数 agent memory 走文本路线——正因为可审计、可逐条治理，而这恰是第 2 章治理层的前提。</p>
+
+      <figure>
+        <svg viewBox="0 0 880 470" role="img" aria-labelledby="fig12-title">
+          <title id="fig12-title">CoALA 四类记忆概念图，中心为 agent memory，叠加文本 vs 参数表示轴</title>
+          <defs>
+            <marker id="arrow-ink-12" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M1,1 L8,4.5 L1,8" class="diagram-ink" fill="none"/>
+            </marker>
+          </defs>
+
+          <!-- center hub -->
+          <rect x="365" y="200" width="150" height="56" rx="6" class="node-fill-accent diagram-accent"/>
+          <text x="440" y="223" text-anchor="middle" class="node-label-accent">agent memory</text>
+          <text x="440" y="242" text-anchor="middle" class="edge-label" stroke="none">CoALA 四类</text>
+
+          <!-- ===== Node 1: working (top) ===== -->
+          <rect x="350" y="56" width="180" height="58" rx="4" class="node-fill diagram-ink"/>
+          <text x="440" y="79" text-anchor="middle" class="node-label">working memory</text>
+          <text x="440" y="97" text-anchor="middle" class="edge-label" stroke="none">当前循环的活跃信息</text>
+          <text x="440" y="110" text-anchor="middle" class="branch-label" stroke="none" font-size="10">= context window 本身</text>
+          <line x1="440" y1="114" x2="440" y2="198" class="diagram-ink" marker-end="url(#arrow-ink-12)"/>
+          <text x="478" y="160" text-anchor="middle" class="edge-label">易失·活跃</text>
+
+          <!-- ===== Node 2: episodic (left) ===== -->
+          <rect x="55" y="200" width="170" height="58" rx="4" class="node-fill diagram-ink"/>
+          <text x="140" y="223" text-anchor="middle" class="node-label">episodic memory</text>
+          <text x="140" y="241" text-anchor="middle" class="edge-label" stroke="none">具体经历·带情境</text>
+          <text x="140" y="253" text-anchor="middle" class="edge-label" stroke="none" font-size="10">"上次试 X 失败了"</text>
+          <line x1="225" y1="228" x2="363" y2="228" class="diagram-ink" marker-end="url(#arrow-ink-12)"/>
+          <text x="294" y="220" text-anchor="middle" class="edge-label">检索轨迹</text>
+
+          <!-- ===== Node 3: semantic (right) ===== -->
+          <rect x="655" y="200" width="170" height="58" rx="4" class="node-fill diagram-ink"/>
+          <text x="740" y="223" text-anchor="middle" class="node-label">semantic memory</text>
+          <text x="740" y="241" text-anchor="middle" class="edge-label" stroke="none">去情境化的事实</text>
+          <text x="740" y="253" text-anchor="middle" class="edge-label" stroke="none" font-size="10">"用户=MySQL"</text>
+          <line x1="655" y1="228" x2="517" y2="228" class="diagram-ink" marker-end="url(#arrow-ink-12)"/>
+          <text x="586" y="220" text-anchor="middle" class="edge-label">事实召回</text>
+
+          <!-- ===== Node 4: procedural (bottom) ===== -->
+          <rect x="350" y="344" width="180" height="58" rx="4" class="node-fill diagram-ink"/>
+          <text x="440" y="367" text-anchor="middle" class="node-label">procedural memory</text>
+          <text x="440" y="385" text-anchor="middle" class="edge-label" stroke="none">可复用技能·怎么做</text>
+          <text x="440" y="397" text-anchor="middle" class="branch-label" stroke="none" font-size="10">含 LLM 权重本身</text>
+          <line x1="440" y1="344" x2="440" y2="258" class="diagram-ink" marker-end="url(#arrow-ink-12)"/>
+          <text x="478" y="305" text-anchor="middle" class="edge-label">技能复用</text>
+
+          <!-- ===== orthogonal representation axis ===== -->
+          <rect x="55" y="424" width="770" height="36" rx="4" class="node-fill diagram-soft"/>
+          <text x="72" y="446" class="edge-label" stroke="none" font-weight="700" fill="#525252">正交轴 · 表示</text>
+          <line x1="180" y1="442" x2="430" y2="442" class="diagram-soft"/>
+          <text x="305" y="438" text-anchor="middle" class="edge-label" stroke="none">文本 textual：外部·可读·受 token 限</text>
+          <text x="305" y="455" text-anchor="middle" class="edge-label" stroke="none" font-size="10">⟵ 生产主流 ⟶</text>
+          <text x="630" y="446" text-anchor="middle" class="edge-label" stroke="none">参数 parametric：权重·无限长·有损不可逐条删</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>四类记忆以中心 agent memory 为枢纽：working memory 在顶部，注明"= context window 本身"；procedural 在底部，注明"含 LLM 权重本身"；底部灰条是与四类<em>正交</em>的表示轴。<strong>注意</strong>：四类按"记什么"分，表示轴按"记在哪种介质"分——它们相互独立。任何一类记忆都能落在表示轴的某一侧；生产系统绝大多数走<em>文本</em>一侧，因为只有文本记忆能被逐条治理（第 2 章的前提）。</figcaption>
+      </figure>
+
+      <div class="callout tip">
+        <span class="label">类比（带失效边界）</span>
+        <p>文本记忆像<strong>翻字典</strong>——每个词条明明白白写在纸上，能查、能划掉、能改，但查的时候得把书翻开占着手（占 context）。参数记忆像<strong>母语直觉</strong>——你说中文不用查任何表，张口就来（零 token），但你也说不清某个语感"存"在脑子哪一格，更没法精确删掉某一条。</p>
+        <p><strong>失效边界</strong>：这个类比会让人以为两者非此即彼。实际生产 agent 常常<em>同时</em>用——参数记忆（模型权重）提供基础能力，文本记忆（外部存储）提供可治理的个性化事实。本教程聚焦后者：因为可写、可治理、可审计的那条路，才是 1.2 节定义的"agent memory"的主战场。</p>
+      </div>
+
+      <!-- ════════════════════ self-check ════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>同事说："我把窗口升到 1M token 了，等于给 agent 加了记忆。" 用一句话指出他混淆了什么，并说出 agent memory 比"更大的 context"多出来的<strong>那一条边</strong>是什么。
+            <details><summary>参考答案</summary>
+            <p>他把"工作记忆的容量"当成了"记忆"。更大的窗口只是把易失缓冲区加宽，仍然<em>会话间清空、被动喂入</em>。agent memory 多出来的那条边是<strong>由 agent 自己掌控的写入路径</strong>（自编辑）+ 一个治理层——让信息能跨会话持久并演化。容量大小和这条边是两回事。</p>
+            </details>
+          </li>
+          <li>RAG 和 agent memory 在"读取"步骤上几乎一样，为什么不能说"接了 RAG 就等于有记忆"？
+            <details><summary>参考答案</summary>
+            <p>因为 RAG 只是 agent memory「读取」步骤的子集，缺两块：① <strong>写入路径</strong>——RAG 不会把交互中产生的新事实主动沉淀进库（语料是离线批量更新）；② <strong>治理层</strong>——RAG 不做去重、冲突消解、遗忘。所以 RAG 回答"文档里写了什么"，而 memory 回答"agent 学到了什么"。差别不在向量检索，在那条写入+治理的路径。</p>
+            </details>
+          </li>
+          <li>把下面三条信息分别归到 CoALA 四类，并指出哪一条"根本不在外部数据库里"：(a) 最近三轮对话；(b) 用户"对花生过敏"这条事实；(c) 模型"会写 SQL"的能力。
+            <details><summary>参考答案</summary>
+            <p>(a) <strong>working memory</strong>——就是 context window 本身，易失。<br>(b) <strong>semantic memory</strong>——去情境化的事实，外部存储里的一条文本。<br>(c) <strong>procedural memory</strong>，且<em>隐式编码在 LLM 权重里</em>——这就是"根本不在外部数据库里"的那条，对应表示轴的<strong>参数（parametric）</strong>一侧。</p>
+            </details>
+          </li>
+          <li>"四类记忆"和"文本 vs 参数表示轴"是什么关系？举一个落在不同表示侧的同类记忆例子。
+            <details><summary>参考答案</summary>
+            <p>两者<strong>正交</strong>：四类按"记什么"分，表示轴按"记在哪种介质"分。例：procedural memory（同一类）既可以是外部存下来的一段可复用 plan（<em>文本</em>侧），也可以是微调进模型权重的一项能力（<em>参数</em>侧）。任何一类记忆都能落在表示轴的任一侧。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>给"写入路径"画一条最小的工程边界</h3>
+        <p>1.2 节说写入路径是 memory 独有的那条边。现在反向逼问：假设给一个纯 RAG 系统加一个旁路——每轮对话结束后，用一次 LLM 调用把"用户说过的新事实"抽出来、追加写进同一个向量库。<strong>这样它就变成 agent memory 了吗？</strong> 列出它仍然<em>缺</em>什么才算真正的闭环。</p>
+        <details>
+          <summary>展开思路</summary>
+          <p>加了"抽取+追加写"确实补上了写入路径的<em>入口</em>，但还<strong>不构成闭环</strong>，至少缺治理层的三件事：① <strong>冲突消解</strong>——新事实"用户=MySQL"和旧事实"用户=Postgres"会<em>并存</em>，检索时两条一起被捞回来，自相矛盾（第 2 章 recency-wins 就是解这个）；② <strong>去重 / 实体归一</strong>——同一实体的多种表面形式会碎片化，每次检索要跨表面形式扇出；③ <strong>遗忘</strong>——只追加不删除，库会无界膨胀，且过时事实永远不会消失。所以"能写"只是必要条件，"写入后还能治理"才是 agent memory 的完整定义。这道题正是第 2 章五个环节的动机——可顺着 <a href="02-lifecycle.html#s21">写入(#s21)</a> 和 <a href="02-lifecycle.html#s24">遗忘(#s24)</a> 往下读。</p>
+        </details>
+      </div>
+
+      <section class="references">
+        <h3>参考来源</h3>
+        <ul>
+          <li>Sumers, Yao, Narasimhan, Griffiths. <a href="https://arxiv.org/abs/2309.02427">Cognitive Architectures for Language Agents (CoALA)</a>. arXiv:2309.02427, 2023-09 ——四类记忆（working/episodic/semantic/procedural）的来源框架。</li>
+          <li>Packer et al. <a href="https://arxiv.org/abs/2310.08560">MemGPT: Towards LLMs as Operating Systems</a>. arXiv:2310.08560, 2023-10 ——把 context 当易失"内存"、外部存储当"磁盘"的视角，第 3 章详解。</li>
+          <li>Zhang et al. <a href="https://arxiv.org/abs/2404.13501">A Survey on the Memory Mechanism of Large Language Model based Agents</a>. arXiv:2404.13501, 2024-04 ——记忆机制综述，含文本 vs 参数表示轴的系统梳理。</li>
+        </ul>
+      </section>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="index.html">
+          <span class="label">← 上一页</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a class="next" href="02-lifecycle.html">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 记忆生命周期</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s11" data-toc-target="s11">1.1 为什么需要记忆</a></li>
+        <li><a href="#s12" data-toc-target="s12">1.2 记忆 / 上下文 / RAG 的边界</a></li>
+        <li><a href="#s13" data-toc-target="s13">1.3 四类记忆（CoALA）</a></li>
+        <li><a href="#s14" data-toc-target="s14">1.4 表示轴：文本 vs 参数</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测 · 挑战</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方法：怎么产出一个分数 · Agent Eval 评测教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-methods.html" class="current">02 方法</a><span class="sep">—</span>
+    <a href="03-dataset-pipeline.html">03 数据集与流程</a><span class="sep">—</span>
+    <a href="04-tools-frontier.html">04 工具与前沿</a><span class="sep">—</span>
+    <a href="05-runtime-evaluator.html">05 运行期 Evaluator</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>方法：怎么产出一个分数，以及凭什么相信它</h1>
+        <p class="recap">上一章建立了『评什么』的四层模型——这章解决『怎么评』：在有/没有标准答案两种情形下产出分数，并回答一个常被跳过的问题：判分器本身可信吗？</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>答案空间是否封闭，决定了用 reference-based 还是 LLM-as-a-judge——前者测词汇重叠、后者测语义质量。</li>
+          <li>judge 有 position / verbosity / self-enhancement 三大可命名偏差，每个都有对应的缓解手段；但最危险的偏差是 judge 与 generator 共享的盲点。</li>
+          <li>一个 judge 在对人工标注的 golden set 用 Cohen's κ 校准过之前不可信；它的上限是人与人之间的一致率。</li>
+        </ul>
+      </section>
+
+      <p>这一章是把第 1 章的「评什么」翻译成「怎么评」的一章。第 1 章把要测的东西分成<a href="01-concepts.html#layers">四层模型</a>——其中 <strong>outcome 层</strong>（任务最终成没成）和 <strong>component 层</strong>（单步检索 / 单次工具调用对不对）正是本章方法各自落地的地方：有客观答案的 outcome 与 component 信号用 reference-based 打分，开放式的 outcome 质量用 LLM-as-a-judge。本章先讲两类打分方法本身，再用一整节讲一个常被跳过的问题——<strong>判分器自己可信吗</strong>。读者读完应当能为一个任务挑出打分方法，同时能说出「在我拿这个 judge 对着人类校准过之前，我不信它」。</p>
+
+      <!-- ════════════════════════ 2.1 ════════════════════════ -->
+      <h2 id="reference-based"><span class="num">2.1</span><span>有标准答案时：reference-based 打分</span></h2>
+
+      <p class="one-liner">reference-based 打分把模型输出和一个已知的「正确答案」（reference）做机械比对，给出一个不需要任何模型来评判的客观分数。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>当任务有唯一或近乎唯一的正确答案时，引入一个 LLM judge 既贵又引入噪声。reference-based 打分是确定性的、可复现的、零成本的——同一对（输出，答案）今天和明天算出来的分一模一样。这正是 <a href="01-concepts.html#layers">第 1 章 component 层</a>那些「单步对不对」的信号，以及 outcome 层里有标准答案的任务，首选的度量方式。</p>
+      </div>
+
+      <h3>四种主力做法</h3>
+
+      <p><strong>exact match（精确匹配）</strong>：输出字符串与答案逐字符相等才算对，否则算错。抽取式问答、分类标签、枚举型字段用它。它最严格——「Paris」和「Paris.」（多一个句点）都算错，所以通常配一层归一化（去标点、统一大小写、去首尾空格）。</p>
+
+      <p><strong>F1（token overlap，词级重叠）</strong>：把输出和答案都切成 token 集合，<code>precision</code> = 命中的 token 占输出的比例，<code>recall</code> = 命中的 token 占答案的比例，F1 是两者的调和平均。它比 exact match 宽容：答案是「the capital of France」、输出是「capital of France」时 exact match 给 0，F1 仍给高分。SQuAD 等抽取式 QA 基准的标准指标就是 exact match + F1 并列。</p>
+
+      <p><strong>状态比对（state comparison）</strong>：当任务的产物是一个可枚举的状态——数据库被改成什么样、文件系统里多了哪些文件、购物车里最终有哪几件商品——就不比文本，直接比对执行后的<strong>世界状态</strong>是否等于期望状态。这是 agent 任务里最贴近 outcome 层的客观信号：不管 agent 中间怎么绕，只看终局状态对不对。</p>
+
+      <p><strong>code：跑测试就是最干净的 eval</strong>。当模型输出的是代码，最干净的判分不是比对文本，而是<strong>把测试跑一遍</strong>——通过 / 不通过是一个完全客观的二元信号，不需要任何人或模型来解读。代码生成的事实标准基准（HumanEval、MBPP、SWE-bench）全部用执行单元测试来打分。这也是为什么「能转成代码 + 测试」的任务，eval 设计上是最幸运的。</p>
+
+      <h3>BLEU 与 ROUGE：n-gram 时代的两个遗产</h3>
+
+      <p>在 LLM judge 出现之前，机器翻译和摘要靠两个 n-gram 重叠指标打分，今天仍会在论文里遇到：</p>
+      <ul>
+        <li><strong>BLEU</strong>（n-gram precision，偏<em>精确率</em>）：机器翻译指标。看译文里的 n-gram（连续 n 个词）有多少能在参考译文里找到，再乘一个对过短译文的惩罚。核心是 precision——「生成的词组里，有多少在参考译文里也出现」。</li>
+        <li><strong>ROUGE</strong>（n-gram recall，偏<em>召回率</em>）：摘要指标。反过来看参考摘要里的 n-gram 有多少被生成摘要覆盖到。核心是 recall——「参考摘要里该覆盖的要点，被盖住了多少」。</li>
+      </ul>
+
+      <div class="rationale">
+        <span class="label">底层机制 · 深一层：这些方法测的全是「表层词汇重叠」</span>
+        <p>exact match、F1、BLEU、ROUGE 看似各异，机制其实同一个：<strong>把语言当成 token 的袋子或序列，数重合</strong>。它们完全不理解语义。后果是<strong>语义等价问题</strong>——「Paris」和「法国首都」指同一个实体，但 token 零重合，F1 给 <code>0.0</code>；一句被同义改写、意思完全没变的回答，会因为换了词而被狠狠惩罚。reference 漏列了一个等价的正确答案，正确输出照样得 0。所以这类方法只在<strong>答案空间封闭</strong>时才有效：抽取式 QA（答案是原文里的一个片段）、分类（标签集有限）、代码（行为由测试定义）。一旦答案可以有无穷多种正确的表达方式——开放式问答、摘要质量、对话得体性——词汇重叠就和真实质量脱钩了。这条裂缝正是下一节 LLM-as-a-judge 存在的全部理由。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="语义等价问题：意思相同但用词不同的两个答案经过 token 重叠打分得到 0.0；答案空间封闭时词汇重叠才与质量挂钩，开放时脱钩">
+          <defs>
+            <marker id="arrowSem" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- two equivalent answers -->
+          <rect x="30" y="42" width="170" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="61" text-anchor="middle" class="node-label" font-size="13">输出：法国首都</text>
+          <text x="115" y="78" text-anchor="middle" class="edge-label">语义 = 答案</text>
+          <rect x="30" y="150" width="170" height="44" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="169" text-anchor="middle" class="node-label" font-size="13">答案：Paris</text>
+          <text x="115" y="186" text-anchor="middle" class="edge-label">token 零重合</text>
+
+          <!-- token-overlap scorer -->
+          <rect x="278" y="86" width="164" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="112" text-anchor="middle" class="node-label-accent" font-size="13">token 重叠打分</text>
+          <text x="360" y="131" text-anchor="middle" class="edge-label">F1 / BLEU / EM</text>
+          <line x1="200" y1="64" x2="278" y2="104" class="diagram-ink" marker-end="url(#arrowSem)"/>
+          <line x1="200" y1="172" x2="278" y2="132" class="diagram-ink" marker-end="url(#arrowSem)"/>
+
+          <!-- score output 0.0 -->
+          <rect x="520" y="86" width="170" height="64" rx="6" class="diagram-ink node-fill"/>
+          <text x="605" y="112" text-anchor="middle" class="node-label-accent" font-size="16">F1 = 0.0</text>
+          <text x="605" y="133" text-anchor="middle" class="edge-label">同义却判全错</text>
+          <line x1="442" y1="118" x2="520" y2="118" class="diagram-ink" marker-end="url(#arrowSem)"/>
+
+          <!-- the boundary annotation -->
+          <text x="360" y="222" text-anchor="middle" class="branch-label" font-size="12">答案空间封闭 → 重叠≈质量　|　开放 → 脱钩</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>「法国首都」和「Paris」语义完全等价，但两者无共享 token，token 重叠打分器判 <code>F1 = 0.0</code>。<strong>注意</strong>：这类指标测的是字面重合、不是语义；底部那行边界条件是它们的适用范围——只有答案空间封闭（标签、片段、代码）时词汇重叠才约等于质量，一旦答案能有无穷种说法就彻底脱钩。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 2.1 · reference-based 方法：测什么 / 何时有效 / 何时失效</caption>
+        <thead>
+          <tr><th>方法</th><th>测的是什么</th><th>何时有效</th><th>何时失效</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>exact match</td><td>归一化后逐字符相等</td><td>分类标签、枚举字段、短抽取答案</td><td>答案有多种合法表述（同义、改写、格式差异）</td></tr>
+          <tr><td>F1（token overlap）</td><td>输出与答案的 token 集合重合度</td><td>抽取式 QA、答案是原文片段</td><td>「Paris」vs「法国首都」——同义但 token 不重合，给 0.0</td></tr>
+          <tr class="selected"><td>状态比对 / code 测试</td><td>执行后的世界状态 / 测试通过与否</td><td>agent 终局状态可枚举；输出是代码</td><td>产物无法转成可断言的状态或测试（如「写一段有感染力的文案」）</td></tr>
+          <tr><td>BLEU（n-gram precision）</td><td>译文 n-gram 在参考里的精确率</td><td>机器翻译、有参考译文</td><td>开放生成；与人类判断相关性弱</td></tr>
+          <tr><td>ROUGE（n-gram recall）</td><td>参考要点被生成覆盖的召回率</td><td>抽取式 / 短摘要</td><td>抽象式摘要——换一种说法盖住要点也被扣分</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个客服 agent 被问「你们支持退货吗」。golden answer 写的是「支持，30 天内无理由退货」，agent 答的是「可以的，下单后一个月内都能退」。用 F1 打分会得到什么？这说明 reference-based 在客服场景的什么局限？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>F1 会很低：两句话语义几乎等价，但共享的 token 很少（「退」算一个，其余几乎不重合，「30 天」和「一个月」连数字都对不上）。客服回答是<strong>开放式</strong>的——同一个正确意思有无数种说法，答案空间不封闭。</p>
+          <p>这正是表 2.1 最后两行揭示的失效区：词汇重叠和语义质量脱钩。这种任务不该用 reference-based，得交给下一节的 LLM-as-a-judge——让一个会读语义的模型来判「这个回答在事实上对不对、得不得体」。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════ 2.2 ════════════════════════ -->
+      <h2 id="llm-judge"><span class="num">2.2</span><span>没标准答案时：LLM-as-a-judge</span></h2>
+
+      <p class="one-liner">LLM-as-a-judge（用大模型当裁判）让一个 LLM 按给定标准去评判另一个模型的输出，把「读懂语义再打分」这件人类才会做的事自动化。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>开放式输出——摘要、对话、长文回答、agent 的最终交付——没有唯一正确答案，reference-based 在这里失效（§2.1）。靠人工逐条评是金标准但慢且贵，跑不动 CI、扛不住每天上千条回归。LLM-as-a-judge 是开放式打分的主力方法：它能读懂语义、按 rubric 给出可解释的判断，且能规模化。代价和偏差是后两节的主题。</p>
+      </div>
+
+      <p>用 LLM 当裁判有三种模式，区别在于<strong>喂给 judge 什么、要它吐出什么形状的结果</strong>。三种模式的可扩展性、信号粒度、对噪声的敏感度各不相同。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="LLM-as-a-judge 三种模式并排：pointwise 单个输出进、出一个分数；pairwise 两个输出进、出谁更好；reference-guided 输出加标准答案进、出一个分数">
+          <defs>
+            <marker id="arrowJ" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrowJa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== Column 1: pointwise ===== -->
+          <text x="118" y="26" text-anchor="middle" class="node-label" font-weight="700">pointwise</text>
+          <text x="118" y="42" text-anchor="middle" class="edge-label">O(n) · 可扩展</text>
+          <!-- input -->
+          <rect x="52" y="58" width="132" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="118" y="83" text-anchor="middle" class="node-label" font-size="12">1 个输出</text>
+          <line x1="118" y1="98" x2="118" y2="128" class="diagram-ink" marker-end="url(#arrowJ)"/>
+          <!-- judge -->
+          <rect x="52" y="128" width="132" height="42" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="118" y="154" text-anchor="middle" class="node-label-accent" font-size="12">judge + rubric</text>
+          <line x1="118" y1="170" x2="118" y2="200" class="diagram-ink" marker-end="url(#arrowJ)"/>
+          <!-- output -->
+          <rect x="52" y="200" width="132" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="118" y="225" text-anchor="middle" class="node-label" font-size="12">分数 1–5</text>
+
+          <!-- ===== Column 2: pairwise ===== -->
+          <text x="380" y="26" text-anchor="middle" class="node-label" font-weight="700">pairwise</text>
+          <text x="380" y="42" text-anchor="middle" class="edge-label">O(n²) · 信号最细</text>
+          <!-- inputs A, B -->
+          <rect x="300" y="58" width="68" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="334" y="83" text-anchor="middle" class="node-label" font-size="12">输出 A</text>
+          <rect x="392" y="58" width="68" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="426" y="83" text-anchor="middle" class="node-label" font-size="12">输出 B</text>
+          <line x1="334" y1="98" x2="362" y2="126" class="diagram-ink" marker-end="url(#arrowJ)"/>
+          <line x1="426" y1="98" x2="398" y2="126" class="diagram-ink" marker-end="url(#arrowJ)"/>
+          <!-- judge -->
+          <rect x="314" y="128" width="132" height="42" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="154" text-anchor="middle" class="node-label-accent" font-size="12">judge 比较</text>
+          <line x1="380" y1="170" x2="380" y2="200" class="diagram-ink" marker-end="url(#arrowJ)"/>
+          <!-- output -->
+          <rect x="314" y="200" width="132" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="380" y="225" text-anchor="middle" class="node-label" font-size="12">A 赢 / B 赢 / 平</text>
+
+          <!-- ===== Column 3: reference-guided ===== -->
+          <text x="642" y="26" text-anchor="middle" class="node-label" font-weight="700">reference-guided</text>
+          <text x="642" y="42" text-anchor="middle" class="edge-label">有客观解时可用</text>
+          <!-- inputs output + gold -->
+          <rect x="562" y="58" width="68" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="596" y="83" text-anchor="middle" class="node-label" font-size="12">输出</text>
+          <rect x="654" y="58" width="68" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="688" y="83" text-anchor="middle" class="node-label-accent" font-size="12">gold</text>
+          <line x1="596" y1="98" x2="624" y2="126" class="diagram-ink" marker-end="url(#arrowJ)"/>
+          <line x1="688" y1="98" x2="660" y2="126" class="diagram-accent" marker-end="url(#arrowJa)"/>
+          <!-- judge -->
+          <rect x="576" y="128" width="132" height="42" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="642" y="154" text-anchor="middle" class="node-label-accent" font-size="12">judge 对照</text>
+          <line x1="642" y1="170" x2="642" y2="200" class="diagram-ink" marker-end="url(#arrowJ)"/>
+          <!-- output -->
+          <rect x="576" y="200" width="132" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="642" y="225" text-anchor="middle" class="node-label" font-size="12">分数（更可靠）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>三种模式的差别全在「喂什么进 judge」：pointwise 只看一个输出、pairwise 看两个、reference-guided 额外塞进一份 gold answer（红色那根输入）。<strong>注意</strong>：pointwise 出绝对分、pairwise 出相对胜负——这就是 pairwise 信号更细但要 O(n²) 次比较的根源；而 reference-guided 多出的那根 gold 输入，是它可靠性更高的全部来源。</figcaption>
+      </figure>
+
+      <h3>pointwise：按 rubric 给单个输出打分</h3>
+      <p>给 judge 一个输出加一份评分准则（rubric），要它输出一个绝对分（如 1–5）。优点是 <strong>O(n)</strong>——n 个输出评 n 次，线性扩展，能直接跑 CI、能给单条样本一个可记录的分数。代价是<strong>绝对分会漂移</strong>：同一个 judge 在不同批次、不同 prompt 措辞下对「4 分」的理解会变；而且它<strong>抓不住小差距</strong>——两个质量明显有别的回答会双双被打成 4 分，因为绝对刻度太粗。</p>
+
+      <h3>pairwise：A/B 谁更好</h3>
+      <p>给 judge 两个输出，只问「哪个更好」。优点是<strong>信号最细</strong>——人类对「A 比 B 好」的判断远比对「A 值几分」的判断稳定，相对偏好天然消除了绝对刻度的漂移。Chatbot Arena 的排行榜就建立在海量 pairwise 对战上。代价有两个：一是 <strong>O(n²)</strong>，n 个候选两两比较要 ~n² 次调用，贵；二是<strong>对顺序敏感</strong>——judge 会系统性偏爱排在前面的那个（position bias，§2.3）。</p>
+
+      <h3>reference-guided：把 gold answer 塞进 prompt</h3>
+      <p>在 pointwise 或 pairwise 的基础上，额外把一份标准答案（gold answer）放进 judge 的 prompt，让它「对照着这份正确答案来评」。它<strong>只在任务有客观解时可用</strong>——数学题、有标准步骤的推理题、有正确事实的问答。一旦可用，它能<strong>大幅提升可靠性</strong>：Zheng 等人（MT-Bench）发现，对数学 / 推理这类题，给 judge 提供参考答案能把 judge 的失败率显著压下来，因为 judge 不必自己重新推一遍正确答案——它只要做对照。</p>
+
+      <div class="rationale">
+        <span class="label">带来的代价</span>
+        <p>模式越细、信号越好，调用就越贵。pointwise 是 O(n) 的线性成本；pairwise 是 <strong>O(n²)</strong>——10 个模型两两对战要 ~45 场，100 个就要 ~4950 场，成本平方级膨胀，所以实践中常用 Elo / Bradley-Terry 之类的采样和排序技巧来减少必须真打的场次。reference-guided 的代价不在调用次数，而在<strong>前置成本</strong>：得先有一份可信的 gold answer——而准备 gold answer 本身就要人工，这把成本推回到了人工标注那一侧。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队要给一个开放式写作 agent 做<strong>每日回归</strong>：每天跑 500 条 prompt，看今天的版本有没有比昨天差。pointwise 还是 pairwise 更合适？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>回归的本质是「今天 vs 昨天」的相对比较，这正是 <strong>pairwise</strong> 的强项——把今天的输出和昨天的输出 A/B 对比，judge 判哪个更好，直接得到「变好 / 变差」的细粒度信号，绕开了绝对分漂移。而且回归是「新旧两两比」，不是「n 个候选互比」，没有 O(n²) 爆炸——每条 prompt 只比 1 对，总共 500 场，成本可控。</p>
+          <p>如果用 pointwise，今天打 4.1、昨天打 4.0，这 0.1 的差会淹没在 judge 自身的漂移噪声里，根本说不清是真退化还是 judge 抖动。代价提醒：pairwise 别忘了 §2.3 的 position bias——A/B 顺序要交换。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════ 2.3 ════════════════════════ -->
+      <h2 id="judge-bias"><span class="num">2.3</span><span>judge 的三大偏差与缓解</span></h2>
+
+      <p class="one-liner">LLM judge 不是中立的尺子——它有三种可命名、可测量、可缓解的系统性偏差：偏爱靠前的答案、偏爱更长的答案、偏爱自己模型家族的答案。</p>
+
+      <p>Zheng 等人（MT-Bench / Chatbot Arena，2023）系统地测了这三种偏差。把它们当成 judge 的「已知故障模式」——每一个都有对应的工程缓解。</p>
+
+      <h3>position bias：偏爱第一个答案</h3>
+      <p>在 pairwise 模式下，judge 会系统性地偏向<strong>排在前面</strong>的那个答案，即使两个答案质量相当。把同一对答案交换位置再问一遍，judge 有相当比例会改口——说明它判的部分是「位置」而不是「质量」。</p>
+      <div class="callout tip">
+        <span class="label">缓解 · 硬一致性闸门</span>
+        <p>交换 A/B 顺序各判一次，<strong>只有两个顺序都判同一个赢，才算它真赢；否则记平局</strong>。这是一个硬一致性闸门，不是把两次分数简单平均——平均会让一个「正着判赢、反着判输」的位置噪声蒙混成 0.5 的弱胜，而闸门直接把它判成平局，逼 judge 用质量而非位置说话。</p>
+      </div>
+
+      <h3>verbosity / length bias：偏爱更长的答案</h3>
+      <p>judge 倾向于给<strong>更长</strong>的答案打更高分，即使多出来的内容只是冗余填充、没有增加任何信息。Eugene Yan 的实测里，把一个答案用等价但啰嗦的方式重写、内容实质不变，judge 仍有 <strong>超过 90%</strong> 的概率偏好那个更长的版本。不同模型抵抗力不同——<strong>GPT-4 在这项上抵抗得最好</strong>，但没有模型完全免疫。</p>
+
+      <h3>self-enhancement bias：偏爱自己家族的输出</h3>
+      <p>judge 会偏爱<strong>自己模型家族</strong>生成的输出，哪怕输出是匿名呈现的。Zheng 等人测得：<strong>Claude-v1 给自己家族的输出 +25% 胜率，GPT-4 给自己 +10%</strong>——即使评测时去掉了任何「这是谁写的」的标识。这意味着用某模型当 judge 去评它自己家族的 generator，分数会系统性虚高。</p>
+      <div class="callout tip">
+        <span class="label">缓解 · 换家族 + 用更强模型</span>
+        <p>两条手段：① judge 用<strong>与被测 generator 不同家族</strong>的模型，断开自我偏爱的通路；② judge 尽量用<strong>能力更强</strong>的模型——更强的 judge 对所有偏差的抵抗力都更好，与人类的一致率也更高。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 三大偏差 · 表现 · 实测幅度 · 缓解</caption>
+        <thead>
+          <tr><th>偏差</th><th>表现</th><th>实测幅度</th><th>缓解</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>position bias</td><td>偏爱排在前面的答案</td><td>交换顺序后相当比例改口</td><td>交换 A/B 双判，双赢才算赢，否则平局</td></tr>
+          <tr><td>verbosity / length bias</td><td>偏爱更长的答案，哪怕是冗余填充</td><td>&gt;90% 偏好被填充但等价的答案（GPT-4 抵抗最好）</td><td>rubric 显式要求简洁；控制长度变量；用 GPT-4 级 judge</td></tr>
+          <tr><td>self-enhancement bias</td><td>偏爱自己模型家族的输出</td><td>Claude-v1 +25% / GPT-4 +10% 自我胜率（即使匿名）</td><td>用不同家族的 judge；用更强的 judge</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">最危险的偏差不在这张表里</span>
+        <p>position / verbosity / self-enhancement 三种偏差都能命名、能测、能缓解。真正危险的是第四种——<strong>judge 和 generator 共享的盲点</strong>。当 judge 和 generator 来自同一个家族、在相近的数据上训练，它们会犯<em>同一类错误</em>：一个事实错误但措辞流畅、逻辑自洽的回答，generator 自信地写出来，judge 同样自信地判它对——一个「错得很流畅」的答案能<strong>同时骗过两者</strong>。这种偏差没有简单的缓解手段，因为它藏在两个模型共同的能力边界之外。识别它要靠系统的<strong>错误分析</strong>——把 judge 判对、但实际是错的样本捞出来逐条看（这是<a href="03-dataset-pipeline.html">第 3 章 error analysis</a> 的主题）。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>你的 generator 和 judge 都用 GPT-4o，且你在排行榜上看到它评出自己家族的模型分数很高。会出什么问题？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>两层问题叠加。表层是 <strong>self-enhancement bias</strong>：judge 偏爱自己家族（GPT-4 +10%），所以 GPT-4o generator 拿到的分会系统性虚高，排行榜不可信——缓解是换一个不同家族的 judge（比如用 Claude 或 Gemini 来评 GPT-4o 的输出）。</p>
+          <p>深层、且更危险的是<strong>共享盲点</strong>：同家族的 generator 和 judge 在相近数据上训练，会对同一类「流畅但错误」的回答一起失明——generator 写出来，judge 判它对，分数高且一致，但答案是错的。换 judge 家族能缓解 self-enhancement，但缓解不了共享盲点中那部分跨家族也共有的错误；最终只能靠对着人类标注做错误分析来兜底（§2.6 + 第 3 章）。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════ 2.4 ════════════════════════ -->
+      <h2 id="geval"><span class="num">2.4</span><span>G-Eval：让 judge 打分更细的机制</span></h2>
+
+      <p class="one-liner">G-Eval 用「LLM 自动生成评分步骤 + 按 token 概率加权求分」两个技巧，把粗糙、方差大的整数分变成与人类判断更接近的连续分。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>朴素 pointwise 有个隐疾：让 LLM 在 1–5 里打分，它几乎只吐<strong>整数</strong>，而且某一位数字（比如「3」）的概率会一家独大。结果是分数<strong>方差极小、大量样本挤在同一个整数上、产生大量平局</strong>——这种粗糙的分布和人类细腻的质量判断相关性很差。G-Eval（Liu 等人，2023）就是来修这个问题的。</p>
+      </div>
+
+      <h3>三步流程</h3>
+      <p><strong>① 给任务定义 + 评分准则。</strong>把要评什么（如「摘要的连贯性」）和一个 0–5 的准则交给 LLM。</p>
+      <p><strong>② LLM 自动生成一串 chain-of-thought 评分步骤。</strong>不靠人手写细则，而是让 LLM 自己把准则展开成一份具体的、分步的评分指引（「先读原文抓主旨，再看摘要是否覆盖主旨、句子间是否连贯……」）。</p>
+      <p><strong>③ form-filling 打分。</strong>让 LLM 按这份生成出来的步骤，像填表一样给出每一项的分。</p>
+
+      <h3>关键技巧：概率加权分</h3>
+      <p>真正让 G-Eval 与人类相关性变好的是最后这一步的聚合方式。不取 LLM 嘴上说的那个整数，而是看它对每个候选分数 token 的<strong>概率</strong>，做加权求和：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">prob_weighted_score.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="geval-code">复制</button>
+        </div>
+<pre id="geval-code"><code class="language-python"># 说明性伪代码，非可直接运行（省略了真实 API 调用与 logprob 取用细节）
+
+# ① + ②：把准则交给 LLM，让它先生成一串评分步骤（CoT）
+EVAL_PROMPT = """
+任务：评估下面这段摘要的「连贯性」，分数 1-5。
+评分准则：5 = 句子间逻辑顺畅、主旨连贯；1 = 跳跃、断裂。
+
+第一步：自己列出评估连贯性的具体步骤。
+第二步：按这些步骤，只输出一个 1-5 的整数分。
+
+原文：{source}
+摘要：{summary}
+"""
+
+# ③：form-filling —— 拿到模型在每个分数 token 上的概率分布
+#     resp.logprobs 形如 {"1": p1, "2": p2, ..., "5": p5}
+score_probs = get_token_probs(call_llm(EVAL_PROMPT), tokens=["1","2","3","4","5"])
+
+# 关键技巧：概率加权分 = Σ p(s_i) · s_i  （over score tokens）
+#   不取模型嘴上说的那个整数，而是按它对每个分数的"信心"加权
+final_score = sum(p * int(s) for s, p in score_probs.items())
+
+# 朴素法只会吐整数 4；加权后得到 4.31 —— 连续、可分辨细微差距
+print(final_score)   # e.g. 4.31  （非固定值，取决于模型 logprobs）
+</code></pre>
+      </div>
+      <p class="annotations">
+        <span class="line-ref">Σ p·s</span>核心就这一行：把 <code>{1:.02, 2:.05, 3:.18, 4:.55, 5:.20}</code> 这样的分布求期望，得到 <code>3.88</code> 而不是生硬的 <code>4</code>。连续分能分辨出朴素整数分压平掉的细微质量差。
+      </p>
+
+      <div class="rationale">
+        <span class="label">底层机制 · 深一层：为什么加权能救相关性</span>
+        <p>问题的根在 LLM 输出层的概率分布<strong>过于尖锐</strong>：对一个 4 分左右的摘要，模型在「4」上放了 0.9 的概率，「3」「5」各分一点，最后采样几乎必出「4」。于是无数个「质量略有差别但都在 4 附近」的样本全被压成同一个整数——分数分布退化成几个尖峰，方差小、平局多，自然和人类的连续质感对不上。<strong>概率加权</strong>把这层被采样丢掉的信息捞回来：用 <code>Σ p(sᵢ)·sᵢ</code> 求期望，模型对「4」90% 的信心和对「3」「5」各 5% 的信心一起进入最终分，得到 <code>3.95</code> 这样的连续值。结果是 G-Eval 在 <strong>SummEval</strong> 上对人类判断的 Spearman <code>ρ = 0.514</code>，超过了此前的指标。<strong>局限</strong>：G-Eval 偏向<em>LLM 自己生成</em>的文本——judge 和 generator 同源时，它会给 LLM 风格的输出打更高分，这又回到了 §2.3 的共享盲点。</p>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">代码是说明性的</span>
+        <p>上面的 <code>prob_weighted_score.py</code> 不能直接跑：真实实现要处理具体厂商的 logprobs 取用方式、分数 token 的对齐（有的模型会把「10」切成两个 token）、以及概率归一化。它的作用是把 <code>Σ p(sᵢ)·sᵢ</code> 这个唯一承重的公式讲清楚，不是给一段开箱即用的库代码。</p>
+      </div>
+
+      <!-- ════════════════════════ 2.5 ════════════════════════ -->
+      <h2 id="rubric"><span class="num">2.5</span><span>rubric 设计：从「模糊 Likert」到「错误驱动的二元判据」</span></h2>
+
+      <p class="one-liner">rubric（评分准则）的质量决定 judge 的噪声。凭空发明的 1–5 Likert 量表噪声大；从真实错误里提炼出的具体二元 pass/fail 判据噪声小。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>judge 的可靠性有一半压在 rubric 上。同一个强模型，配一份含糊的 rubric 会评得满是噪声，配一份精确的 rubric 才能稳定。rubric 设计是 judge 工程里最被低估、回报最高的一环。</p>
+      </div>
+
+      <h3>失败模式：凭空发明的 1–5 Likert</h3>
+      <p>最常见的 rubric 是一个 1–5 的 Likert 量表：「1 = 很差，5 = 很好」。问题是<strong>两个评分员（无论人还是 judge）对每一档的理解不一样</strong>——评分员 A 的「4」和评分员 B 的「4」根本不是同一个东西，「3」和「4」的边界全凭感觉。喂给 judge，这种模糊性直接变成<strong>评分噪声</strong>：同一个输出多评几次给出不同分，因为量表本身没有可操作的判据。</p>
+
+      <h3>修复：错误驱动的二元判据（Hamel Husain）</h3>
+      <p>Hamel Husain 的做法是把 Likert 换成<strong>二元 pass/fail 判据</strong>，而且这些判据<strong>不是凭空发明的，而是从错误分析里发现的</strong>。先去看模型真实输出里反复出现的具体失败——「它会编造不存在的退货政策」「它会忽略用户指定的日期格式」——再把每一个失败固化成一条可判定的 pass/fail：「回答是否只用了知识库里有的政策？是 / 否」。二元判据消除了 Likert 的档位模糊：要么命中这个具体缺陷，要么没有，两个评分员不会再对「这算 3 还是 4」争执。</p>
+
+      <div class="callout example">
+        <span class="label">例 · Likert vs 二元判据</span>
+        <p>含糊 Likert：「回答的有用性，1–5 分。」——judge 给 3 还是 4 全凭手感。</p>
+        <p>错误驱动的二元判据：「① 回答是否直接答了用户问的那个问题？是/否　② 是否只引用了知识库里存在的事实？是/否　③ 是否遵守了用户要求的格式？是/否」——每一条都对应一个在真实输出里观察到的失败模式，judge 只做客观判定。</p>
+      </div>
+
+      <h3>criteria drift 的 catch-22</h3>
+      <p>Shankar 等人在 EvalGen（《Who Validates the Validators?》，2024）里发现一个绕不开的循环：<strong>给输出打分这个行为本身，才教会你判据到底是什么</strong>。研究里的参与者一边给输出打分，一边不断意识到「原来真正在乎的是这一点」，于是<strong>回头去改之前已经打过的分</strong>——他们的评判标准在打分过程中持续漂移（criteria drift）。这是一个 catch-22：你想先定好 rubric 再打分，但你要打了分才知道 rubric 该是什么样。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · rubric 是迭代出来的</span>
+        <p>criteria drift 的含义不是「标准会变所以没法定」，而是：<strong>rubric 不是一次写死的，是迭代出来的</strong>。正确的流程是——看一批输出 → 提炼初版二元判据 → 用它打分 → 在打分中发现新的失败模式和理解偏差 → 修订判据 → 再打分。rubric 和 golden set 标注（§2.6）是同一个迭代循环的两面：标注教你判据，判据指导标注。指望一次性写出完美 rubric，等于否认了 criteria drift 这个被实证观察到的现象。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队第一版 rubric 是「回答质量 1–5 分」，两个标注员独立打分一致率只有 55%。换成什么样的 rubric 能把一致率拉上去？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>把单一的 1–5 Likert 拆成<strong>若干条错误驱动的二元判据</strong>。55% 的低一致率几乎肯定来自档位模糊——两人对「3 还是 4」各有理解。先做一轮错误分析，把真实输出里反复出现的失败固化成「是/否」判据（「有没有编造事实」「有没有答非所问」「有没有违反格式」），每条都客观可判。</p>
+          <p>二元判据天然比连续量表一致——「命中没命中这个具体缺陷」比「值几分」好对齐。但别期望一步到位：根据 criteria drift，第一轮二元判据打分时还会发现新的失败模式，要回头修订判据——这是迭代，不是一锤定音。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════ 2.6 ════════════════════════ -->
+      <h2 id="calibration"><span class="num">2.6</span><span>校准：你凭什么相信这个 judge</span></h2>
+
+      <p class="one-liner">一个 judge 在对着人工标注的 golden set 用 Cohen's κ 验证过、且没超出人与人一致率的上限之前，它给出的分数不能当真。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前五节产出了分数，但没有任何一节回答：这个分数对吗？一个 judge 完全能稳定地、自信地、低成本地给出<strong>系统性错误</strong>的分。校准是把「judge 说的分」和「人类认定的真值」对齐的过程——没校准过的 judge，本质上是一个你不知道偏到哪去的尺子。</p>
+      </div>
+
+      <h3>第一步：建一个 golden set</h3>
+      <p>judge 只有在对着一个<strong>人工标注的 golden set</strong> 验证过才可信。golden set 是一批 <strong>~30–200 条</strong>样本，要点有三：<strong>来自真实分布</strong>（从线上真实流量或贴近真实的数据里抽，不是凭空造的简单样例）、<strong>专家标注</strong>（由真正懂这个任务该长什么样的人打标签）、规模不必大（30–200 条足够测出 judge 和人类的一致程度，关键在质量不在数量）。</p>
+
+      <h3>第二步：用 Cohen's κ 度量一致性，而不是裸 % agreement</h3>
+      <p>对齐程度<strong>不要用裸的百分比一致率</strong>（raw % agreement），要用 <strong>Cohen's κ</strong>。κ 在裸一致率的基础上<strong>扣掉了「纯靠随机也会蒙对」的那部分一致</strong>——两个评分员就算瞎猜，在二分类上也有约 50% 会碰巧一致，裸一致率把这部分白送的运气也算成了功劳。Eugene Yan 给出过一个具体反例：一对评分的<strong>裸一致率 80%，换算成 Cohen's κ 只有 0.62</strong>。更要命的是<strong>类别不均衡</strong>时——如果 95% 的样本都是「pass」，一个无脑全判 pass 的 judge 裸一致率就有 95%，看着很高，κ 却接近 0，因为它完全没有信息量。裸一致率在这种分布下骗人最狠。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="judge 校准循环：golden set 的人工标注与 judge 打分对齐、度量 Cohen's κ、不达标就改 rubric 或换 judge 再测，达标才信任">
+          <defs>
+            <marker id="arrowCal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrowCalA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- golden set (human labels) -->
+          <rect x="36" y="56" width="180" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="126" y="80" text-anchor="middle" class="node-label" font-size="13">golden set</text>
+          <text x="126" y="99" text-anchor="middle" class="edge-label">人工标注 · 真实分布</text>
+
+          <!-- judge scores -->
+          <rect x="36" y="200" width="180" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="126" y="224" text-anchor="middle" class="node-label" font-size="13">judge 打分</text>
+          <text x="126" y="243" text-anchor="middle" class="edge-label">同一批样本</text>
+
+          <!-- measure kappa (center) -->
+          <rect x="296" y="128" width="156" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="374" y="152" text-anchor="middle" class="node-label-accent" font-size="13">度量 Cohen's κ</text>
+          <text x="374" y="171" text-anchor="middle" class="edge-label">非裸 % 一致</text>
+
+          <!-- golden -> measure -->
+          <line x1="216" y1="84" x2="296" y2="146" class="diagram-ink" marker-end="url(#arrowCal)"/>
+          <!-- judge -> measure -->
+          <line x1="216" y1="228" x2="296" y2="166" class="diagram-ink" marker-end="url(#arrowCal)"/>
+
+          <!-- decision: pass? -->
+          <polygon points="374,206 444,256 374,306 304,256" class="diagram-ink node-fill"/>
+          <text x="374" y="261" text-anchor="middle" class="node-label" font-size="12">κ 达标?</text>
+          <line x1="374" y1="184" x2="374" y2="206" class="diagram-ink" marker-end="url(#arrowCal)"/>
+
+          <!-- YES -> trust -->
+          <line x1="444" y1="256" x2="540" y2="256" class="diagram-accent" marker-end="url(#arrowCalA)"/>
+          <text x="492" y="248" text-anchor="middle" class="branch-label">是</text>
+          <rect x="540" y="228" width="150" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="615" y="252" text-anchor="middle" class="node-label-accent" font-size="13">信任该 judge</text>
+          <text x="615" y="271" text-anchor="middle" class="edge-label">可上 CI / 回归</text>
+
+          <!-- NO -> fix rubric/judge -> loop back -->
+          <rect x="540" y="92" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="615" y="116" text-anchor="middle" class="node-label" font-size="12">改 rubric / 换 judge</text>
+          <text x="615" y="135" text-anchor="middle" class="edge-label">§2.3 §2.5</text>
+          <!-- NO branch: from diamond top-right out to the fix box -->
+          <path d="M 420 222 L 470 180 L 470 120 L 540 120" class="diagram-ink" fill="none" marker-end="url(#arrowCal)"/>
+          <text x="470" y="200" text-anchor="middle" class="branch-label">否</text>
+          <!-- fix -> re-measure (loop back to measure box top) -->
+          <path d="M 540 110 L 374 110 L 374 128" class="diagram-ink" fill="none" marker-end="url(#arrowCal)"/>
+          <text x="455" y="103" text-anchor="middle" class="edge-label">re-measure</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>校准是一个闭环：golden set 的人工标注与 judge 打分一起喂进 κ 度量，κ 不达标就回去改 rubric 或换 judge，再测，直到达标才信任。<strong>注意</strong>：闭环的真值锚点永远是<strong>左上角的人工标注</strong>——judge 的分只是被校准的对象，不是真值；而「不达标」的出口指向的修复（改 rubric / 换 judge）正是 §2.5 与 §2.3 的内容。</figcaption>
+      </figure>
+
+      <h3>第三步：认清硬天花板——judge 不可能超过人与人的一致率</h3>
+      <p>校准有一个不可逾越的上限：<strong>judge 与人类的一致率，不可能高于人类标注者彼此之间的一致率</strong>。如果两个专家对同一批样本只能达成 65% 的一致，那这个任务本身就有 35% 的主观模糊地带——judge 再强也变不出一个「正确答案」来，因为根本不存在一个所有人都同意的答案。这种情况下指望 judge 达到 80% 一致是数学上不可能的：80% 的「正确」从何而来？人类自己都给不出。这也给了一个判断 judge 是否够好的标尺：<strong>先测人与人一致率，再拿它当 judge 的目标上限</strong>。Zheng 等人的好消息是：在 MT-Bench 上，<strong>GPT-4 与人类的一致率超过 80%，和人与人之间的一致率持平</strong>——也就是说在那个任务上，GPT-4 judge 已经逼近了天花板，再调也榨不出多少。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>你的 judge 和人类的一致率是 78%，这够好吗？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>单看 78% 无法判断——必须先知道两件事。第一，<strong>人与人一致率的天花板是多少</strong>？如果两个专家在这个任务上也只有 78% 一致，那 judge 已经撞到天花板，78% 就是优秀，再想提升是和任务固有的主观性较劲。如果人-人能到 92%，那 judge 的 78% 说明它还漏了 14 个百分点的可学信号，值得改 rubric 或换更强的 judge。</p>
+          <p>第二，这 78% 是<strong>裸一致率还是 Cohen's κ</strong>？如果是裸一致率，且类别不均衡（比如大多数样本都 pass），78% 换算成 κ 常常只有 0.5 出头，含金量远没有数字看着高。结论：78% 这个数字本身没有意义，它只有放进「人-人上限」和「κ 而非裸值」这两个参照系里才能解读。</p>
+        </details>
+      </div>
+
+      <p>下面这张表把全章收束成一个选型决策——给定任务类型，该用哪种打分方法、为什么。这是本章的「备选方案」核心：每一行的「为什么」都回指前面某一节揭示的机制或失效。</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · 选型：任务类型 → 推荐方法 → 为什么</caption>
+        <thead>
+          <tr><th>任务类型</th><th>推荐方法</th><th>为什么</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>分类 / 抽取式 QA / 代码（答案空间封闭）</td><td>reference-based（exact match / F1 / 测试）</td><td>有唯一正确答案，确定性、零成本、可复现，无需引入 judge 噪声（§2.1）</td></tr>
+          <tr><td>开放式单条质量打分 · 要规模化跑 CI</td><td>pointwise（最好 G-Eval 加权）</td><td>O(n) 线性可扩展；G-Eval 概率加权修掉整数分方差大、平局多的问题（§2.2 §2.4）</td></tr>
+          <tr class="selected"><td>两个版本 / 两个模型谁更好 · 回归对比</td><td>pairwise（+ 顺序交换闸门）</td><td>相对偏好信号最细、绕开绝对分漂移；务必交换 A/B 顺序消除 position bias（§2.2 §2.3）</td></tr>
+          <tr><td>有客观解的推理 / 数学 / 事实问答</td><td>reference-guided</td><td>把 gold answer 塞进 prompt，judge 只需对照而非自己重推，可靠性大幅提升（§2.2）</td></tr>
+          <tr><td>任何上线前的 judge —— 不分任务</td><td>先对 golden set 测 Cohen's κ</td><td>没校准过的 judge 是偏向未知的尺子；κ 去随机一致，且不可能超人-人上限（§2.6）</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ════════════════════════ self-check ════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把你能想到的答案写在纸上或编辑器里。
+          写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>reference-based 的四种做法（exact match / F1 / 状态比对 / code 测试）底层测的是同一个东西——是什么？它在什么时候失效？</li>
+          <li>LLM-as-a-judge 的 pointwise 和 pairwise 各自的成本量级（O(?)）和主要弱点是什么？</li>
+          <li>position bias 的缓解为什么是「双判双赢才算赢」的硬闸门，而不是把两次分数平均？</li>
+          <li>G-Eval 的「概率加权分 = Σ p(sᵢ)·sᵢ」解决了朴素 pointwise 的什么具体问题？（设计层面）</li>
+          <li>为什么度量 judge↔human 一致性要用 Cohen's κ 而不是裸 % agreement？judge 一致率有没有上限？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>四种做法测的都是<strong>表层词汇/状态重叠</strong>，不理解语义。当答案空间不封闭（同一个正确意思有无数种表述）时失效——「Paris」vs「法国首都」F1 给 0.0。所以只适用于抽取式 QA、分类、代码这类答案封闭的任务（§2.1）。</li>
+            <li>pointwise 是 <strong>O(n)</strong>，弱点是绝对分漂移、抓不住小差距；pairwise 是 <strong>O(n²)</strong>，信号最细但成本平方级膨胀、且对答案顺序敏感（position bias）（§2.2）。</li>
+            <li>因为平均会把一个「正着判赢、反着判输」的纯位置噪声蒙混成 0.5 的弱胜，留下污染；硬闸门直接把这种顺序翻转判成平局，只承认两个顺序都赢的——逼 judge 用质量而非位置说话（§2.3）。</li>
+            <li>朴素 pointwise 让 LLM 打分时几乎只吐整数、且某个整数概率独大 → 分数方差小、大量平局、与人类相关性差。按 token 概率加权求期望得到连续分，捞回被采样丢掉的信息，SummEval 上 ρ 提到 0.514（§2.4）。</li>
+            <li>裸一致率把「纯随机也会蒙对」的那部分算成了功劳，类别不均衡时尤其骗人（全判多数类就能拿高裸一致率）；κ 扣掉了随机一致——Eugene Yan 给的实例里 80% 裸一致只有 κ=0.62。上限是<strong>人与人之间的一致率</strong>：两个专家只同意 65%，judge 不可能到 80%（§2.6）。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个「没有客观真值」的任务设计 judge 校准</h3>
+        <p>你要评一个写营销文案的 agent——「文案有没有感染力」是高度主观的，两个市场专家独立打 1–5 分一致率只有 60%。这个任务能用 LLM-as-a-judge 吗？如果能，你的 golden set 怎么建、用什么指标、judge 的目标一致率定多少才算合理？如果发现 judge 和人类一致率做到了 75%，你该高兴还是警惕？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>抓住天花板这条线：人-人一致率只有 60%，意味着这个任务有 40% 的纯主观地带，根本不存在一个所有人都同意的「正确文案」。所以 judge 的合理目标上限就是 ~60%，不是 80%——把 60% 当满分线。</p>
+          <p>那么 judge 做到 75% 一致<em>反而要警惕</em>：它超过了人-人上限，这在数学上很可疑——多半是 judge 抓住了某个人类标注里的<strong>系统性偏差</strong>（比如所有标注员都偏爱更长的文案，judge 学会了用长度作弊，于是和「同样有 length bias 的人类」高度一致）。这把 §2.3 的 verbosity bias 和 §2.6 的天花板缝在了一起。出路：先用错误驱动的二元判据（§2.5）把「感染力」拆成可客观判定的子项（有没有明确的行动号召、有没有具体而非空洞的卖点……），把主观大题分解成若干高一致率的小题，再分别校准。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2306.05685">Zheng et al., 2023 — Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena (arXiv 2306.05685)</a>（三种 judge 模式、position-swap 一致性闸门、GPT-4 ~80% 人类一致）</li>
+          <li><a href="https://arxiv.org/abs/2303.16634">Liu et al., 2023 — G-Eval: NLG Evaluation using GPT-4 with Better Human Alignment (arXiv 2303.16634)</a>（CoT + form-filling + 概率加权分，SummEval ρ=0.514）</li>
+          <li><a href="https://eugeneyan.com/writing/llm-evaluators/">Eugene Yan — Evaluating the Effectiveness of LLM-Evaluators (LLM-as-Judge)</a>（verbosity &gt;90%；self-enhancement Claude-v1 +25% / GPT-4 +10%；裸 80% 一致 = κ 0.62）</li>
+          <li><a href="https://hamel.dev/blog/posts/llm-judge/">Hamel Husain — Creating a LLM-as-a-Judge That Drives Business Results</a>（错误驱动的二元判据 &gt; Likert）</li>
+          <li><a href="https://arxiv.org/abs/2404.12272">Shankar et al., 2024 — Who Validates the Validators? Aligning LLM-Assisted Evaluation with Human Preferences (EvalGen, arXiv 2404.12272)</a>（criteria drift）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 概念</span>
+        </a>
+        <a href="03-dataset-pipeline.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 数据集与流程</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#reference-based" data-toc-target="reference-based">2.1 reference-based</a></li>
+        <li><a href="#llm-judge" data-toc-target="llm-judge">2.2 LLM-as-a-judge</a></li>
+        <li><a href="#judge-bias" data-toc-target="judge-bias">2.3 三大偏差</a></li>
+        <li><a href="#geval" data-toc-target="geval">2.4 G-Eval</a></li>
+        <li><a href="#rubric" data-toc-target="rubric">2.5 rubric 设计</a></li>
+        <li><a href="#calibration" data-toc-target="calibration">2.6 校准</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

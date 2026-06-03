@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  Agent 通信协议 A2A 教程 · 02 原理
+  极简单色 + 单一朱红强调（design system v2，与 index.html 同源）
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 原理 · Agent 通信协议 A2A 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径"><a href="index.html">00 起点</a><span class="sep">—</span><a href="01-concepts.html">01 概念</a><span class="sep">—</span><a href="02-principles.html" class="current">02 原理</a><span class="sep">—</span><a href="03-practice.html">03 实操</a><span class="sep">—</span><a href="04-pitfalls.html">04 失败模式</a><span class="sep">—</span><a href="05-capstone.html">05 综合</a><span class="sep">—</span><a href="06-self-check.html">06 自测</a></nav>
+
+  <div class="page">
+    <article>
+
+      <!-- ════════════════════════════════════════════════════════
+           头部信息
+           ════════════════════════════════════════════════════════ -->
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02 · 工作原理与设计权衡</p>
+        <h1>wire 上发生了什么，以及为什么这么设计</h1>
+        <p class="recap">01 建立了七个抽象的静态结构（Agent Card、Task、Message、Part、Artifact）与不透明原则——本章讲它们在 wire 上如何运转、为什么这么设计、代价落在谁头上。每个设计选择都附带一张备选方案表：被放弃的方案不是错的，是换了一组不同的代价。事实锚点全部来自 A2A v1.0.1 规范（2026-05-28），正文给出 spec-cited 的真实方法名与状态值。</p>
+      </header>
+
+      <!-- ════════════════════════════════════════════════════════
+           本章你要建立的心智模型
+           ════════════════════════════════════════════════════════ -->
+      <section class="schema-panel">
+        <p class="label">本章你要建立的心智模型</p>
+        <ul>
+          <li>一次任务委托端到端走六步：发现 → 鉴权 → 发消息 → 建 Task → 状态流转 → 取 Artifact——凭证走 HTTP header 不进 payload，产出是 Artifact。</li>
+          <li>线缆上是 <code>SendMessage</code>（v1.0 的字面 JSON-RPC 方法名），同一抽象有 JSON-RPC / gRPC / REST 三个对等绑定，agent 在 Card 里声明支持哪些。</li>
+          <li>三种交互模式（请求/响应、SSE 流、webhook 推送）的箭头方向不同；webhook 推送里信任是反向的——是客户端要验证这个入站 POST 真来自 agent。</li>
+          <li>Task 是有状态的，生命周期里 <code>TASK_STATE_INPUT_REQUIRED</code> / <code>TASK_STATE_AUTH_REQUIRED</code> 是可中断的中途态，不是终态。</li>
+          <li>五个设计取舍都指向同一个灵魂——不透明（opaque）：拿到了去中心、抗篡改、可复用，放弃了对等体的内部可见性。</li>
+        </ul>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           §s21 整体：一次任务委托端到端
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s21"><span class="num">2.1</span><span>整体：一次任务委托端到端</span></h2>
+
+      <p>先把 01 章的七个静态抽象放进一条时间线，看它们在 wire 上依次怎么动。一个客户端 agent 要把一件事委托给一个远程对等 agent，从「不知道它在哪」到「拿回结果」，恰好走六步。<strong>本章后面每一节，都是在这条时间线的某一步上展开取舍</strong>——所以先盯住每一步在 wire 上传的是什么、凭证在哪一层、状态存在谁那里。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 470" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一次任务委托的端到端时序：客户端 GET Agent Card 发现、HTTP header 带凭证鉴权、SendMessage 发消息、服务端建有状态 Task、状态从 submitted 流转到 completed、最后产出 Artifact">
+          <defs>
+            <marker id="s21-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s21-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- two lifelines -->
+          <rect class="diagram-ink node-fill" x="60" y="24" width="150" height="40" rx="5"/>
+          <text class="node-label" x="135" y="49" text-anchor="middle">A2A 客户端</text>
+          <rect class="diagram-accent node-fill-accent" x="510" y="24" width="150" height="40" rx="5"/>
+          <text class="node-label-accent" x="585" y="49" text-anchor="middle">远程对等 agent</text>
+          <line class="diagram-soft" x1="135" y1="64" x2="135" y2="448"/>
+          <line class="diagram-soft" x1="585" y1="64" x2="585" y2="448"/>
+
+          <!-- step 1 discovery -->
+          <text class="branch-label" x="135" y="92" text-anchor="middle">① 发现</text>
+          <path class="diagram-ink" d="M 135 104 L 583 104" marker-end="url(#s21-ink)"/>
+          <text class="edge-label" x="360" y="98" text-anchor="middle">GET /.well-known/agent-card.json</text>
+          <path class="diagram-ink" d="M 585 126 L 137 126" marker-end="url(#s21-ink)"/>
+          <text class="edge-label" x="360" y="120" text-anchor="middle">返回 url · skills · capabilities</text>
+
+          <!-- step 2 auth -->
+          <text class="branch-label" x="135" y="160" text-anchor="middle">② 鉴权</text>
+          <path class="diagram-accent" d="M 135 172 L 583 172" marker-end="url(#s21-acc)"/>
+          <text class="edge-label" x="360" y="166" text-anchor="middle">凭证放 HTTP header（不进 payload）</text>
+
+          <!-- step 3 send -->
+          <text class="branch-label" x="135" y="208" text-anchor="middle">③ 发消息</text>
+          <path class="diagram-ink" d="M 135 220 L 583 220" marker-end="url(#s21-ink)"/>
+          <text class="edge-label" x="360" y="214" text-anchor="middle">SendMessage（params.message: role=user, parts[]）</text>
+
+          <!-- step 4 task create (self-loop on server) -->
+          <text class="branch-label" x="585" y="256" text-anchor="middle">④ 建 Task</text>
+          <rect class="diagram-accent node-fill" x="600" y="266" width="104" height="30" rx="4"/>
+          <text class="edge-label" x="652" y="285" text-anchor="middle" stroke="none">有状态 Task</text>
+          <path class="diagram-soft" d="M 600 281 L 588 281" marker-end="url(#s21-ink)"/>
+
+          <!-- step 5 state transition -->
+          <text class="branch-label" x="360" y="324" text-anchor="middle">⑤ 状态流转</text>
+          <path class="diagram-ink" d="M 585 340 L 137 340" marker-end="url(#s21-ink)"/>
+          <text class="edge-label" x="360" y="334" text-anchor="middle">status.state: SUBMITTED → WORKING</text>
+
+          <!-- step 6 artifact -->
+          <text class="branch-label" x="360" y="392" text-anchor="middle">⑥ 取 Artifact</text>
+          <path class="diagram-accent" d="M 585 408 L 137 408" marker-end="url(#s21-acc)"/>
+          <text class="edge-label" x="360" y="402" text-anchor="middle">COMPLETED + Artifact（artifactId + parts[]）</text>
+          <text class="edge-label" x="360" y="436" text-anchor="middle" font-style="italic">产出是 Artifact，不是裸字符串</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>一次任务委托端到端。<strong>注意</strong>三处与直觉不同的边界：<strong>一</strong>·第②步凭证走的是 HTTP header，不在 JSON-RPC payload 里——Agent Card 只声明 <code>securitySchemes</code> 的<em>类型</em>，从不携带凭证本身；<strong>二</strong>·第④步建出来的 Task 是<em>有状态</em>的，状态存在服务端，客户端后续靠 Task id 回查；<strong>三</strong>·第⑥步交回的是 Artifact（带 id 和 Part[]），不是一个裸字符串响应。</figcaption>
+      </figure>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>第②步凭证放在 HTTP header 而不是 JSON-RPC payload 里。为什么这个看似随意的位置选择，恰恰是让 A2A 能直接跑在现有企业基础设施上的关键？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>凭证在 HTTP header（如 <code>Authorization</code>）意味着鉴权发生在<strong>传输层而非应用层</strong>——现有的反向代理、API 网关、负载均衡器、auth proxy 早就懂怎么在 header 上做鉴权、限流、审计，无需理解 A2A 的 JSON-RPC body。如果凭证混进 payload，这些中间设施就得解析 A2A 协议才能鉴权，A2A 也就没法「drop 进」既有 infra 了。这是 §2.6 第一条取舍（建立在既有 HTTP 标准上）在最小处的体现。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §s22 发现机制的取舍
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s22"><span class="num">2.2</span><span>发现机制的取舍</span></h2>
+
+      <p class="one-liner">A2A 把发现做成「去固定 URL 取一份静态 JSON」——像 robots.txt 一样可缓存、无需注册中心，代价是能力只能静态声明，没有运行时协商。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>01 章 <a href="01-concepts.html#s12">§1.2</a> 介绍了 Agent Card 是「声明与发现」的载体，回答「这个 agent 是谁、能干什么」。这一节回答下一个、也是设计时真正要拍板的问题：<strong>客户端到底怎么拿到这份 Card</strong>，以及这个选择放弃了什么。发现机制有三条路可走，A2A 选了最轻的那条——客户端对固定路径发一个普通 HTTP GET：<code>GET https://{domain}/.well-known/agent-card.json</code>（spec §8.2）。</p>
+      </div>
+
+      <h3>底层机制：静态文件发现，谁也不用跑注册中心</h3>
+
+      <p><code>/.well-known/</code> 是 IETF 为「众所周知的资源」预留的路径前缀，<code>robots.txt</code> 是同一族的老熟人。把 Agent Card 放在这里，意味着发现完全是<strong>去中心、可缓存</strong>的：没有一个中央注册中心要运维、要保证高可用、要成为单点故障；客户端可以像缓存任何静态资源一样缓存这份 Card。代价直接写在机制里——Card 是一份<strong>静态声明</strong>，agent 在写下它的那一刻就把能力固定了，客户端在连接前读到的是「这个 agent 一贯能做什么」，而不是「此刻、对你这个调用方，它能做什么」。</p>
+
+      <div class="callout warning">
+        <span class="label">易错 · agent.json 是 v0.x 的废弃路径</span>
+        <p>大量现存博客与旧 SDK 仍写 <code>GET /.well-known/agent.json</code>。v0.3.0 起路径改名为 <code>agent-card.json</code>。看到 <code>agent.json</code> 一律按 v0.x 旧形态处理——这是迁移点，不是当前形态。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.2 · 备选方案对照——三种发现机制</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 代价</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td><strong>静态 Agent Card</strong><br><span style="font-weight:400">（/.well-known/ JSON）</span></td>
+            <td>去中心、可缓存、无注册中心要运维；像 robots.txt 一样人人会取</td>
+            <td>能力静态声明，无 live 协商；想暴露更多得靠 authenticated <code>GetExtendedAgentCard</code> 补丁</td>
+          </tr>
+          <tr>
+            <td>中央注册中心</td>
+            <td>能集中检索、按能力搜索、统一治理</td>
+            <td>多一个要高可用的服务与单点故障；跨组织谁来运营、谁可信都成问题——与「跨信任边界对等协作」相悖</td>
+          </tr>
+          <tr>
+            <td>运行时能力协商<br><span style="font-weight:400">（MCP 的 <code>initialize</code> 握手）</span></td>
+            <td>每个会话现场协商能力，按调用方动态裁剪</td>
+            <td>每次连接都要一轮握手往返，无法预先缓存；A2A 选了「连接前就知道」而非「连上才协商」</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 这恰好与你熟的 MCP 相反</span>
+        <p>读过 mcp 教程会记得：MCP 客户端连上 server 后要先做 <code>initialize</code> 握手，<em>运行时</em>协商双方能力。A2A 走了相反的路——能力在 Card 里<em>静态</em>声明，连接前就可读、可缓存。代价是没有 per-session 的现场协商；spec 留的补丁是鉴权后可拉取的 <code>GetExtendedAgentCard</code>，让 agent 对已认证的调用方多暴露一些能力。但这是补丁，不是 MCP 那种第一性的会话协商。两种协议在「何时确定能力」上做了相反的取舍，对应它们各自的部署形态。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §s23 线缆：SendMessage + 三传输绑定
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s23"><span class="num">2.3</span><span>线缆：SendMessage + 三传输绑定</span></h2>
+
+      <p class="one-liner">委托一件事，wire 上发的是 <code>SendMessage</code>——同一个抽象方法有 JSON-RPC 2.0 / gRPC / HTTP+REST 三个对等绑定，agent 在 Card 里声明它支持哪些、首选哪个。</p>
+
+      <div class="rationale">
+        <span class="label">底层机制：抽象方法名 = 字面 wire 方法名</span>
+        <p>在 A2A v1.0+ 里，抽象操作名和 JSON-RPC <code>"method"</code> 字段的值<strong>是同一个字符串</strong>。「发送一条消息」这个抽象操作，落到 JSON-RPC over HTTP 上，<code>"method"</code> 就是字面的 <code>SendMessage</code>。这与许多现存博客里写的 <code>message/send</code> 不同——后者是 v0.x 的命名约定，v1.0 已弃用（迁移注记见下）。</p>
+      </div>
+
+      <p>下面是一条真实的 <code>SendMessage</code> JSON-RPC 请求（spec 示例）。注意 <code>params.message</code> 就是 01 章的 Message 抽象：一个 <code>role</code> 加一个 <code>parts</code> 数组，数组里每个 Part 带自己的 <code>kind</code> 和内容——这就是 01 章模态无关 Part 的 wire 形态。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">SendMessage 请求 · JSON-RPC 2.0 over HTTP</span>
+          <span class="lang">json</span>
+          <button class="copy" data-copy-target="code-sendmessage">复制</button>
+        </div>
+        <pre><code class="language-json" id="code-sendmessage">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "SendMessage",
+  "params": {
+    "message": {
+      "role": "user",
+      "parts": [
+        { "kind": "text", "text": "把这份季度财报里的风险段落抽出来" }
+      ],
+      "messageId": "9229e770-767c-417b-a0b0-f0741243c589"
+    }
+  }
+}</code></pre>
+      </div>
+      <p class="annotations">
+        <span class="line-ref">method</span>字面值就是 <code>SendMessage</code>，与抽象名一致（v1.0+）。
+        <span class="line-ref">params.message</span>即 01 章的 Message：<code>role</code> + <code>parts[]</code>。
+        <span class="line-ref">parts[].kind</span>标出这个 Part 的模态（此处 <code>text</code>，也可是 <code>file</code> / <code>data</code>）。
+      </p>
+
+      <h3>三个对等绑定：同一抽象，三种线缆</h3>
+
+      <p>A2A 不绑死一种传输。同一组抽象操作，规范定义了三个<strong>对等</strong>的绑定（spec §5.3），agent 在 Agent Card 的 <code>capabilities</code> / <code>preferredTransport</code> 里声明它实现了哪些、首选哪个。下表是抽象操作到三种线缆的映射——同一行的三个写法，做的是同一件事。</p>
+
+      <table class="compare-table">
+        <caption>表 2.3 · 方法映射（spec §5.3）——抽象操作 → 三种传输</caption>
+        <thead>
+          <tr><th>抽象操作</th><th>JSON-RPC <code>method</code></th><th>gRPC rpc</th><th>REST 路径</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>发消息</td><td><code>SendMessage</code></td><td><code>SendMessage</code></td><td><code>POST /message:send</code></td></tr>
+          <tr><td>流式发消息</td><td><code>SendStreamingMessage</code></td><td><code>SendStreamingMessage</code></td><td><code>POST /message:stream</code></td></tr>
+          <tr><td>查 Task</td><td><code>GetTask</code></td><td><code>GetTask</code></td><td><code>GET /tasks/{id}</code></td></tr>
+          <tr><td>取消 Task</td><td><code>CancelTask</code></td><td><code>CancelTask</code></td><td><code>POST /tasks/{id}:cancel</code></td></tr>
+        </tbody>
+      </table>
+
+      <p>REST 列里的 <code>:verb</code> 冒号语法是 Google AIP 风格的自定义方法。三种绑定语义对齐，差别只在线缆形态——选哪个取决于双方基础设施：JSON-RPC over HTTP 部署最省心，gRPC 适合内网高吞吐，REST 适合已有 RESTful 生态。</p>
+
+      <div class="callout warning">
+        <span class="label">迁移注记 · v1.0 SendMessage vs v0.x message/send</span>
+        <p>v1.0 把方法名从斜杠风格的 <code>message/send</code> / <code>message/stream</code> / <code>tasks/get</code> / <code>tasks/cancel</code> 改成了与抽象名一致的 <code>SendMessage</code> 等。看到斜杠形态，就是在读 v0.x 的代码或文档。现存绝大多数博客和 SDK 示例仍停在 v0.x——学当前的 v1.0 形态，把斜杠形态只当迁移识别点。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.3b · 备选方案对照——传输协议怎么选</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 代价</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td><strong>JSON-RPC 2.0 over HTTP</strong>（+ 备选 gRPC / REST）</td>
+            <td>建立在既有标准上，直接落进企业 infra（防火墙 / LB / auth proxy），零新基础设施；人类可读、易调试</td>
+            <td>不如专用协议高效；用<em>额外提供 gRPC + REST 绑定</em>对冲，吞吐敏感场景换 gRPC</td>
+          </tr>
+          <tr>
+            <td>自研二进制 agent 协议</td>
+            <td>为 agent 通信量身定制，编解码最省、吞吐最高</td>
+            <td>要全套新基础设施（新代理、新网关、新调试工具）；跨组织没人愿为一个新二进制协议改 infra——采用成本压垮一切</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ════════════════════════════════════════════════════════
+           §s24 三种交互模式
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s24"><span class="num">2.4</span><span>三种交互模式</span></h2>
+
+      <p class="one-liner">同一个委托，按任务时长和客户端形态有三种交互：请求/响应（短任务）、SSE 流（要实时进度）、webhook 推送（长任务 / 断线客户端）——三者箭头方向不同。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§2.3 的 <code>SendMessage</code> 解决了「发出去」，但 agent 的任务短则几秒、长则几小时。一个客户端 agent 不可能为一个跑三小时的调研任务一直挂着 HTTP 连接；一个 serverless 或移动端客户端甚至随时会断线。三种交互模式就是为不同任务时长和客户端形态准备的——它们传同样的 Task / Artifact，但谁主动、连接怎么活，完全不同。</p>
+      </div>
+
+      <h3>底层机制：三种模式的箭头方向不一样</h3>
+
+      <ul>
+        <li><strong>① 请求/响应</strong>——客户端调 <code>SendMessage</code>，在同一个 HTTP 响应里直接拿回 Task（或已是 <code>TASK_STATE_COMPLETED</code>，或仍在 <code>TASK_STATE_WORKING</code>，客户端事后用 <code>GetTask</code> 回查）。适合秒级短任务。</li>
+        <li><strong>② 流式（SSE）</strong>——客户端调 <code>SendStreamingMessage</code>，服务端回 <code>Content-Type: text/event-stream</code>，在一条长连接上依次推帧：先是 Task，然后是若干 <code>TaskStatusUpdateEvent</code>（状态变化）和 <code>TaskArtifactUpdateEvent</code>（产出分块，带 append / lastChunk 标志）。流在终态时关闭，断了可用 resubscribe 续。适合要实时看进度的中长任务。</li>
+        <li><strong>③ 异步推送（webhook）</strong>——客户端先注册一个 <code>PushNotificationConfig</code>（webhook url + token + auth），然后<em>可以断开连接</em>；服务端在 Task 有重大状态变化时，主动 POST 到那个 webhook url。客户端随时可用 <code>GetTask</code> 主动回查。适合跑几小时的长任务、serverless / 移动端断线客户端。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三种交互模式并排对比：请求响应是一来一回，SSE 流是一次请求后服务端连推多帧，webhook 推送是客户端先注册后服务端反向 POST 到客户端的 webhook">
+          <defs>
+            <marker id="s24-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s24-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== A: req/resp ===== -->
+          <text class="edge-label" x="115" y="24" text-anchor="middle" font-weight="700" stroke="none">① 请求 / 响应</text>
+          <rect class="diagram-ink node-fill" x="40" y="40" width="64" height="30" rx="4"/>
+          <text class="edge-label" x="72" y="59" text-anchor="middle" stroke="none">client</text>
+          <rect class="diagram-ink node-fill" x="158" y="40" width="64" height="30" rx="4"/>
+          <text class="edge-label" x="190" y="59" text-anchor="middle" stroke="none">agent</text>
+          <line class="diagram-soft" x1="72" y1="70" x2="72" y2="280"/>
+          <line class="diagram-soft" x1="190" y1="70" x2="190" y2="280"/>
+          <path class="diagram-ink" d="M 72 100 L 188 100" marker-end="url(#s24-ink)"/>
+          <text class="edge-label" x="130" y="94" text-anchor="middle">SendMessage</text>
+          <path class="diagram-accent" d="M 190 138 L 74 138" marker-end="url(#s24-acc)"/>
+          <text class="edge-label" x="130" y="132" text-anchor="middle">Task</text>
+          <text class="edge-label" x="115" y="248" text-anchor="middle" font-style="italic">一来一回</text>
+          <text class="edge-label" x="115" y="266" text-anchor="middle" font-style="italic">连接即关</text>
+
+          <!-- ===== B: SSE stream ===== -->
+          <text class="edge-label" x="360" y="24" text-anchor="middle" font-weight="700" stroke="none">② SSE 流</text>
+          <rect class="diagram-ink node-fill" x="285" y="40" width="64" height="30" rx="4"/>
+          <text class="edge-label" x="317" y="59" text-anchor="middle" stroke="none">client</text>
+          <rect class="diagram-accent node-fill-accent" x="403" y="40" width="64" height="30" rx="4"/>
+          <text class="edge-label" x="435" y="59" text-anchor="middle" stroke="none">agent</text>
+          <line class="diagram-soft" x1="317" y1="70" x2="317" y2="280"/>
+          <line class="diagram-soft" x1="435" y1="70" x2="435" y2="280"/>
+          <path class="diagram-ink" d="M 317 96 L 433 96" marker-end="url(#s24-ink)"/>
+          <text class="edge-label" x="375" y="90" text-anchor="middle">SendStreaming</text>
+          <path class="diagram-accent" d="M 435 130 L 319 130" marker-end="url(#s24-acc)"/>
+          <text class="edge-label" x="375" y="124" text-anchor="middle">Task</text>
+          <path class="diagram-accent" d="M 435 162 L 319 162" marker-end="url(#s24-acc)"/>
+          <text class="edge-label" x="375" y="156" text-anchor="middle">StatusUpdate</text>
+          <path class="diagram-accent" d="M 435 194 L 319 194" marker-end="url(#s24-acc)"/>
+          <text class="edge-label" x="375" y="188" text-anchor="middle">ArtifactUpdate</text>
+          <text class="edge-label" x="360" y="248" text-anchor="middle" font-style="italic">一次请求</text>
+          <text class="edge-label" x="360" y="266" text-anchor="middle" font-style="italic">连推多帧</text>
+
+          <!-- ===== C: webhook push ===== -->
+          <text class="edge-label" x="605" y="24" text-anchor="middle" font-weight="700" stroke="none">③ webhook 推送</text>
+          <rect class="diagram-ink node-fill" x="530" y="40" width="64" height="30" rx="4"/>
+          <text class="edge-label" x="562" y="59" text-anchor="middle" stroke="none">client</text>
+          <rect class="diagram-ink node-fill" x="648" y="40" width="64" height="30" rx="4"/>
+          <text class="edge-label" x="680" y="59" text-anchor="middle" stroke="none">agent</text>
+          <line class="diagram-soft" x1="562" y1="70" x2="562" y2="280"/>
+          <line class="diagram-soft" x1="680" y1="70" x2="680" y2="280"/>
+          <path class="diagram-ink" d="M 562 100 L 646 100" marker-end="url(#s24-ink)"/>
+          <text class="edge-label" x="604" y="94" text-anchor="middle">注册 webhook</text>
+          <text class="branch-label" x="562" y="150" text-anchor="middle" stroke="none">↯ 断线</text>
+          <path class="diagram-accent" d="M 680 196 L 564 196" marker-end="url(#s24-acc)"/>
+          <text class="edge-label" x="620" y="190" text-anchor="middle">POST 更新</text>
+          <text class="branch-label" x="604" y="244" text-anchor="middle">客户端要</text>
+          <text class="branch-label" x="604" y="262" text-anchor="middle">验来源真伪</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>三种交互的箭头方向。<strong>注意</strong>那条反直觉的边：模式 ③ 里服务端<em>反向</em>发起 POST 打到客户端的 webhook（朱红箭头从 agent 指回 client），这把信任方向也反了过来——见下面的「反向信任」要点。模式 ① 一来一回连接即关；模式 ② 一次请求换服务端连推多帧。</figcaption>
+      </figure>
+
+      <div class="callout warning">
+        <span class="label">反向信任 · webhook 推送里要验来源的是客户端</span>
+        <p>直觉里「客户端调服务端，服务端验客户端凭证」。但 webhook 推送把方向反了：是<strong>服务端反向 POST 到客户端的 webhook url</strong>。于是要做验证的变成了<strong>客户端</strong>——它必须用密码学手段确认这个入站 POST 真的来自那个 agent，而不是攻击者伪造的（手段：JWT + JWKS 验签、HMAC、或 token + 时间戳/ID 防重放）。在这条边上，被认证的一方是服务端。这与「服务端鉴权客户端」的直觉完全相反，是 webhook 模式最容易写错、也最容易被攻击的地方（<a href="04-pitfalls.html#s44">§4.4</a> 展开 SSRF 与反向信任攻击）。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.4 · 备选方案对照——推送 vs 轮询（长任务怎么拿更新）</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 代价</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td><strong>webhook 推送</strong></td>
+            <td>只在有重大状态变化时投递，省往返；客户端可断线，serverless / 移动端不必挂连接</td>
+            <td>引入反向信任——客户端要验入站 POST 真伪；webhook url 还带来 SSRF 面（<a href="04-pitfalls.html#s44">§4.4</a>）</td>
+          </tr>
+          <tr>
+            <td>客户端轮询<br><span style="font-weight:400">（反复 <code>GetTask</code>）</span></td>
+            <td>实现简单，无反向连接、无 webhook 来源验证问题</td>
+            <td>浪费——多数轮询拿到「没变化」；高延迟——更新落在两次轮询之间；断线客户端干脆轮不动</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- ════════════════════════════════════════════════════════
+           §s25 Task 生命周期状态机
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s25"><span class="num">2.5</span><span>Task 生命周期状态机</span></h2>
+
+      <p class="one-liner">Task 是有状态的：从 <code>TASK_STATE_SUBMITTED</code> 起步，经 <code>WORKING</code>，可在中途落到可中断的 <code>INPUT_REQUIRED</code> / <code>AUTH_REQUIRED</code>，最终收敛到四个终态之一。</p>
+
+      <div class="rationale">
+        <span class="label">底层机制：wire 上的状态值是 SCREAMING_SNAKE</span>
+        <p>01 章 <a href="01-concepts.html#s13">§1.3</a> 说 Task 有状态，但没说状态怎么在 wire 上表示。真实 JSON-RPC / REST payload 里，状态是全大写下划线串：<code>"status": {"state": "TASK_STATE_COMPLETED", "timestamp": "...Z"}</code>。全集八个：<code>TASK_STATE_SUBMITTED</code>、<code>WORKING</code>、<code>INPUT_REQUIRED</code>、<code>AUTH_REQUIRED</code>、<code>COMPLETED</code>、<code>FAILED</code>、<code>CANCELED</code>、<code>REJECTED</code>（另有零值 <code>TASK_STATE_UNSPECIFIED</code>，真实 Task 上不会出现）。小写的 <code>completed</code> 是 v0.3.0 旧形态。注意美式拼写 <code>CANCELED</code>（v0.x 的 <code>cancelled</code> 已移除）。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="Task 生命周期状态机：从 submitted 到 working，working 可分叉到中途态 input-required 和 auth-required 并能回到 working，最终收敛到 completed/failed/canceled/rejected 四个终态">
+          <defs>
+            <marker id="s25-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s25-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- start -->
+          <ellipse class="diagram-ink node-fill" cx="80" cy="170" rx="40" ry="20"/>
+          <text class="edge-label" x="80" y="174" text-anchor="middle" stroke="none">start</text>
+
+          <!-- SUBMITTED -->
+          <rect class="diagram-ink node-fill" x="156" y="146" width="120" height="48" rx="6"/>
+          <text class="node-label" x="216" y="166" text-anchor="middle">SUBMITTED</text>
+          <text class="edge-label" x="216" y="183" text-anchor="middle" stroke="none">已收下</text>
+          <path class="diagram-ink" d="M 120 170 L 154 170" marker-end="url(#s25-ink)"/>
+
+          <!-- WORKING -->
+          <rect class="diagram-accent node-fill-accent" x="320" y="146" width="120" height="48" rx="6"/>
+          <text class="node-label-accent" x="380" y="166" text-anchor="middle">WORKING</text>
+          <text class="edge-label" x="380" y="183" text-anchor="middle" stroke="none">执行中</text>
+          <path class="diagram-ink" d="M 276 170 L 318 170" marker-end="url(#s25-ink)"/>
+
+          <!-- mid states (interruptible), above WORKING -->
+          <rect class="diagram-ink node-fill" x="300" y="36" width="160" height="42" rx="6"/>
+          <text class="edge-label" x="380" y="54" text-anchor="middle" stroke="none">INPUT_REQUIRED</text>
+          <text class="edge-label" x="380" y="69" text-anchor="middle" stroke="none">要补输入 · 可中断</text>
+          <rect class="diagram-ink node-fill" x="300" y="262" width="160" height="42" rx="6"/>
+          <text class="edge-label" x="380" y="280" text-anchor="middle" stroke="none">AUTH_REQUIRED</text>
+          <text class="edge-label" x="380" y="295" text-anchor="middle" stroke="none">要补凭证 · 可中断</text>
+          <!-- working <-> input-required (up, both ways) -->
+          <path class="diagram-soft" d="M 360 146 L 360 78" marker-end="url(#s25-ink)"/>
+          <path class="diagram-soft" d="M 400 78 L 400 146" marker-end="url(#s25-ink)"/>
+          <text class="edge-label" x="380" y="120" text-anchor="middle">暂停 / 续</text>
+          <!-- working <-> auth-required (down, both ways) -->
+          <path class="diagram-soft" d="M 360 194 L 360 262" marker-end="url(#s25-ink)"/>
+          <path class="diagram-soft" d="M 400 262 L 400 194" marker-end="url(#s25-ink)"/>
+          <text class="edge-label" x="380" y="228" text-anchor="middle">暂停 / 续</text>
+
+          <!-- terminal states, right column -->
+          <rect class="diagram-ink node-fill" x="560" y="40" width="130" height="38" rx="6"/>
+          <text class="edge-label" x="625" y="63" text-anchor="middle" stroke="none">COMPLETED ✓</text>
+          <rect class="diagram-ink node-fill" x="560" y="100" width="130" height="38" rx="6"/>
+          <text class="edge-label" x="625" y="123" text-anchor="middle" stroke="none">FAILED</text>
+          <rect class="diagram-ink node-fill" x="560" y="200" width="130" height="38" rx="6"/>
+          <text class="edge-label" x="625" y="223" text-anchor="middle" stroke="none">CANCELED</text>
+          <rect class="diagram-ink node-fill" x="560" y="260" width="130" height="38" rx="6"/>
+          <text class="edge-label" x="625" y="283" text-anchor="middle" stroke="none">REJECTED</text>
+
+          <!-- working -> terminals -->
+          <path class="diagram-accent" d="M 440 158 L 558 78" marker-end="url(#s25-acc)"/>
+          <path class="diagram-ink" d="M 440 166 L 558 124" marker-end="url(#s25-ink)"/>
+          <path class="diagram-ink" d="M 440 180 L 558 214" marker-end="url(#s25-ink)"/>
+          <!-- submitted -> rejected (reject up-front) -->
+          <path class="diagram-ink" d="M 232 194 L 588 260" marker-end="url(#s25-ink)"/>
+          <text class="edge-label" x="430" y="244" text-anchor="middle" font-style="italic">刚提交即可拒</text>
+          <text class="branch-label" x="500" y="100" text-anchor="middle">终态</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>Task 生命周期状态机（wire 值为 <code>TASK_STATE_*</code>，图中省略前缀）。<strong>注意</strong>上下两个中途态是<em>双向</em>的（虚线进、虚线出）：<code>INPUT_REQUIRED</code> / <code>AUTH_REQUIRED</code> 不是终态，而是 <code>WORKING</code> 中途的可中断暂停——agent 能把一个跑着的任务暂停下来要更多输入或凭证，拿到后<em>原地续</em>，不必重新开一个 Task。四个右侧框是终态，任务一旦进入就不再流转。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">洞察 · auth-required 不是开头那个 401</span>
+        <p>容易把 <code>AUTH_REQUIRED</code> 理解成「一开始没带凭证被挡」。不是——开头的鉴权失败发生在 §2.1 第②步、HTTP 层，根本到不了建 Task。<code>AUTH_REQUIRED</code> 是任务<em>已经在跑</em>（<code>WORKING</code>）之后，agent 中途发现需要一份新凭证（比如要代客户访问某个需额外授权的下游），于是把 Task 暂停在这个中途态、等客户端补凭证、再续跑。这个「跑到一半暂停要凭证」的能力很强，但也正是钓鱼攻击的入口——恶意 agent 可以伪造一个 <code>INPUT_REQUIRED</code> / <code>AUTH_REQUIRED</code> 骗客户端重新交出凭证（<a href="04-pitfalls.html#s46">§4.6</a>）。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §s26 五个设计取舍 + opaque 的代价
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s26"><span class="num">2.6</span><span>五个设计取舍 + opaque 的代价</span></h2>
+
+      <p class="one-liner">把前五节的取舍并到一张表上看：每一条都是「拿了什么 / 放弃了什么」，而它们最终都收束到同一个灵魂——把对等体当不透明的黑盒。</p>
+
+      <div class="rationale">
+        <span class="label">为什么收在这里</span>
+        <p>§2.2 到 §2.5 各自讲了一个机制的取舍。这一节把它们排成一行行「选了什么 / 放弃了什么」，让取舍之间的共性显出来——前四条都在为同一件事服务：让远程对等体保持<strong>不透明</strong>（opaque）。看清这一点，就不会再试图用 A2A 去做进程内编排，也不会再把它跟 MCP 搞混。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 2.6 · A2A 的五个核心设计取舍</caption>
+        <thead>
+          <tr><th>设计选择</th><th>选了什么</th><th>放弃了什么</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>JSON-RPC 2.0 / HTTP + SSE（§2.3）</td>
+            <td>直接落进既有企业 infra，零新基础设施</td>
+            <td>专用协议的编解码效率——用额外的 gRPC + REST 绑定对冲</td>
+          </tr>
+          <tr>
+            <td>静态 Agent Card 发现（§2.2）</td>
+            <td>去中心、可缓存、无注册中心要运维</td>
+            <td>per-session 的 live 能力协商——只能静态声明</td>
+          </tr>
+          <tr class="selected">
+            <td><strong>不透明 agent（贯穿全章）</strong></td>
+            <td><strong>IP 保护（藏住提示词/工具）、更小攻击面、解耦</strong></td>
+            <td><strong>对内部的深度自省与协调——黑盒不可见</strong></td>
+          </tr>
+          <tr>
+            <td>有状态长任务 + 推送（§2.4 / §2.5）</td>
+            <td>支持跑几小时的任务、断线 / serverless 客户端</td>
+            <td>纯请求/响应的简单——多了 Task 状态机与反向信任</td>
+          </tr>
+          <tr>
+            <td>模态无关 Part（§2.3）</td>
+            <td>多模态 + 按 Part 协商内容类型给 UI 渲染</td>
+            <td>纯文本 string-API 的简单</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>代价收束在 opaque：黑盒换来的一切，都有同一笔账</h3>
+
+      <p>不透明是这张表的中心行，也是全章每个取舍最终指向的地方。把远程对等体当黑盒——只暴露 Agent Card 上的能力声明，绝不暴露它的提示词、记忆、内部工具——直接换来三样东西：厂商能藏住自己的 IP，攻击面更小，双方解耦得彻底。但同一个「黑盒」属性，反过来就是代价：你<strong>看不进去</strong>。你不能像在自己掌控的多 agent 系统里那样，读对等体的中间状态、对它的推理过程做断点、把它的内部记忆当共享黑板来协调。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 这正好把你熟的多 agent 框架世界翻了过来</span>
+        <p>兄弟教程 <a href="../multi-agent-patterns/02-principles.html">多 Agent 协作模式</a> 教的协作，发生在<em>一个你自己掌控的系统内部</em>——共享状态、读得到彼此的上下文、能在一处加约束。A2A 把这件事反了过来：对等体是一个你<strong>不掌控</strong>的黑盒，往往是另一家公司的 agent。一旦接受了「跨信任边界的不透明对等体」这个前提，你就会停止用 A2A 去做进程内编排（那是框架的活），也会停止把它跟 MCP 那种「调一个工具」搞混（MCP 的对端是工具，A2A 的对端是对等 agent）。这就是为什么 opaque 是整套协议的灵魂——它定义了 A2A 该用在哪、不该用在哪。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §synthesis 跨概念综合
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="synthesis"><span class="num">§</span><span>跨概念综合：给一个长任务选型</span></h2>
+
+      <p>把这一章的四个机制——发现、传输、交互模式、生命周期——串到一个具体场景上走一遍。这是本章每个零件第一次合在一起用。</p>
+
+      <div class="callout example">
+        <span class="label">场景</span>
+        <p>你的 orchestrator agent 要把一件事委托给一个第三方「深度调研」agent：给它一个题目，它要爬一批来源、交叉验证、写一份带引用的报告，<strong>预计跑约 10 分钟</strong>。你的 orchestrator 跑在一个 serverless 函数里（请求超过 60 秒就会被平台杀掉）。问：发现怎么做？传输与交互模式选哪个？生命周期里要预备处理哪些状态？</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">先自己选，再展开</span>
+        <p>把四个维度各拍一个板：① 怎么拿到这个调研 agent 的能力声明？② 同步请求/响应、SSE 流、还是 webhook 推送？③ 为什么？④ 生命周期里除了 <code>COMPLETED</code>，还要预备处理哪两个非终态？</p>
+        <details>
+          <summary>展开选型推导（先自己写下答案）</summary>
+          <p><strong>① 发现</strong>——对调研 agent 的域名发 <code>GET /.well-known/agent-card.json</code>，读它的 <code>skills</code>（确认有「调研」能力）、<code>capabilities.streaming</code> 与 <code>capabilities.pushNotifications</code>（确认它支持哪些交互模式）、<code>securitySchemes</code>（确认怎么鉴权）。这一步在委托前就能做、还能缓存。</p>
+          <p><strong>②③ 交互模式</strong>——选 <strong>webhook 推送</strong>。任务约 10 分钟，远超 serverless 的 60 秒上限：请求/响应会在拿到结果前就被平台杀掉；SSE 流要 orchestrator 一直挂着长连接，serverless 函数同样撑不住。webhook 推送让 orchestrator 注册一个 <code>PushNotificationConfig</code> 后<em>立刻返回</em>、释放函数，等调研 agent 在 Task 完成时 POST 回那个 webhook url 再被唤醒。代价是：收到那个 POST 时，orchestrator 这一侧必须<strong>验证它真来自调研 agent</strong>（§2.4 反向信任）——这是选 webhook 必须一起接受的负担。</p>
+          <p><strong>④ 生命周期</strong>——除了 <code>TASK_STATE_COMPLETED</code>，至少要预备处理两个非终态：<code>TASK_STATE_AUTH_REQUIRED</code>（调研 agent 跑到一半可能要一份访问某付费来源的新凭证，把任务暂停下来等你补）和 <code>TASK_STATE_INPUT_REQUIRED</code>（它可能中途要你澄清调研范围）。这两个是可中断的中途态，不处理，任务就卡在那里永远等不到 <code>COMPLETED</code>。当然也要处理 <code>FAILED</code>。</p>
+          <p>一句话收束：<strong>任务时长 + 客户端形态</strong>决定交互模式（长任务 + 易断客户端 ⇒ 推送），<strong>发现</strong>在委托前就把这些能力问清楚，<strong>生命周期</strong>提醒你长任务会在中途停下来要东西。四个零件是这么咬合的。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §self-check
+           ════════════════════════════════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2>self-check</h2>
+        <p>合上教程再答。每题答完再点开对照——能复述出「为什么这么设计」「代价在哪」才算过。</p>
+        <ol>
+          <li>
+            在 A2A v1.0，把一条消息发给远程 agent，JSON-RPC 请求里 <code>"method"</code> 字段的字面值是什么？v0.x 的旧写法是什么？
+            <details>
+              <summary>答案</summary>
+              <p>v1.0 是字面的 <code>SendMessage</code>（抽象名与 wire 方法名同字符串）。v0.x 旧写法是斜杠风格的 <code>message/send</code>，已弃用。看到斜杠形态即在读 v0.x 代码或文档。</p>
+            </details>
+          </li>
+          <li>
+            一个 Task 处于 <code>TASK_STATE_AUTH_REQUIRED</code>，这与「客户端一开始没带凭证、在 HTTP 层被 401 挡住」有什么本质区别？
+            <details>
+              <summary>答案</summary>
+              <p>开头鉴权失败发生在传输层、建 Task <em>之前</em>，请求根本进不来。<code>AUTH_REQUIRED</code> 是 Task <em>已经在跑</em>（<code>WORKING</code>）之后的可中断中途态——agent 中途需要一份新凭证，把任务暂停、等客户端补、再原地续，不重开 Task。前者是「没进门」，后者是「进门后跑到一半停下来要东西」。</p>
+            </details>
+          </li>
+          <li>
+            webhook 推送模式里，<code>SendMessage</code> 模式下「服务端验证客户端凭证」的信任方向，发生了什么变化？是谁要验什么？
+            <details>
+              <summary>答案</summary>
+              <p>信任方向反了。webhook 推送是服务端反向 POST 到客户端的 webhook url，所以要做验证的是<strong>客户端</strong>——它必须用密码学手段（JWT+JWKS 验签 / HMAC / token + 时间戳防重放）确认这个入站 POST 真来自那个 agent。在这条边上被认证的一方是服务端。这与「服务端鉴权客户端」的直觉相反。</p>
+            </details>
+          </li>
+          <li>
+            <strong>（跨机制综合）</strong>一个客户端 agent 要委托一个预计跑 2 分钟的任务，且它运行在一个 30 秒就会超时的环境里。请把「发现读哪个字段 → 选哪种交互模式 → 为什么 → 生命周期要额外预备处理什么」串成一条选型链。
+            <details>
+              <summary>答案</summary>
+              <p>① 发现：读 Agent Card 的 <code>capabilities.pushNotifications</code> 确认对端支持推送，读 <code>securitySchemes</code> 定鉴权方式。② 选 <strong>webhook 推送</strong>：任务 2 分钟 &gt; 环境 30 秒上限，请求/响应和 SSE 长连接都会被超时杀掉；推送让客户端注册后立刻返回、释放资源，靠服务端 POST 回来唤醒。③ 代价：收到 POST 时客户端要验来源真伪（反向信任）。④ 生命周期：除 <code>COMPLETED</code> / <code>FAILED</code>，要预备处理 <code>INPUT_REQUIRED</code> / <code>AUTH_REQUIRED</code> 两个可中断中途态，否则长任务可能停在中途等不到终态。串起来：任务时长 + 客户端形态选交互模式，发现在委托前问清能力，生命周期提示长任务会中途停下来要东西。</p>
+            </details>
+          </li>
+        </ol>
+
+        <div class="challenge">
+          <span class="label">刚好够不着 · 进阶挑战</span>
+          <h3>同一抽象、三种线缆，为什么 v0.x↔v1.0 仍会 wire 不兼容？</h3>
+          <p>§2.3 说同一抽象有 JSON-RPC / gRPC / REST 三个对等绑定。既然抽象对齐，为什么社区报告 v0.x 的 agent 与 v1.0 的 agent 跨版本通信仍会失败（哪怕都用 JSON-RPC over HTTP）？想一想：除了方法名从 <code>message/send</code> 改成 <code>SendMessage</code>，wire 上还有哪些东西会因版本而不同，使得「同一种传输」也不保证互通？</p>
+          <details>
+            <summary>提示</summary>
+            <p>「对等绑定」对齐的是<em>当前版本内部</em>的三种传输，不跨版本。跨 v0.x↔v1.0 至少有三处会变：(1) 方法名（斜杠 vs PascalCase）；(2) 状态值（小写 <code>completed</code> vs <code>TASK_STATE_COMPLETED</code>、<code>cancelled</code> vs <code>CANCELED</code>）；(3) 流式响应的 Content-Type 约定（v1.0.1 倾向 <code>application/a2a+json</code>，而某些 v0.x 实现对 <code>application/json</code> 与 <code>text/event-stream</code> 的处理不一致——这正是社区 issue #885 的症结）。结论：传输相同 ≠ 版本兼容，方法名只是最显眼的那一处。<a href="04-pitfalls.html#s47">§4.7</a> 会把版本 wire 不兼容当成一个独立的失败模式来拆。</p>
+          </details>
+        </div>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           参考
+           ════════════════════════════════════════════════════════ -->
+      <footer class="references">
+        <h3>参考来源</h3>
+        <ul>
+          <li>A2A 规范 v1.0.1（2026-05-28）·方法映射 §5.3、发现路径 §8.2、TaskState 全集 — <a href="https://a2a-protocol.org/latest/specification/">a2a-protocol.org/latest/specification</a></li>
+          <li>A2A 主题文档 · 流式与异步、A2A 与 MCP — <a href="https://a2a-protocol.org/latest/topics/streaming-and-async/">topics/streaming-and-async</a>、<a href="https://a2a-protocol.org/latest/topics/a2a-and-mcp/">topics/a2a-and-mcp</a></li>
+          <li>A2A v1.0 变更与迁移 · whats-new-v1、a2a.proto — <a href="https://github.com/a2aproject/A2A">github.com/a2aproject/A2A</a></li>
+          <li>跨版本 wire 不兼容（Content-Type）· issue #885 — <a href="https://github.com/a2aproject/A2A/issues/885">github.com/a2aproject/A2A/issues/885</a></li>
+        </ul>
+      </footer>
+
+      <!-- ════════════════════════════════════════════════════════
+           章节导航
+           ════════════════════════════════════════════════════════ -->
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 概念:七个抽象与不透明原则</span>
+        </a>
+        <a href="03-practice.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 实操:用 a2a-sdk 写出 server + client</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s21" data-toc-target="s21">2.1 端到端委托总览</a></li>
+        <li><a href="#s22" data-toc-target="s22">2.2 发现机制取舍</a></li>
+        <li><a href="#s23" data-toc-target="s23">2.3 线缆:SendMessage + 三传输</a></li>
+        <li><a href="#s24" data-toc-target="s24">2.4 三种交互模式</a></li>
+        <li><a href="#s25" data-toc-target="s25">2.5 Task 生命周期状态机</a></li>
+        <li><a href="#s26" data-toc-target="s26">2.6 五个取舍 + opaque 代价</a></li>
+        <li><a href="#synthesis" data-toc-target="synthesis">§ 跨概念综合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

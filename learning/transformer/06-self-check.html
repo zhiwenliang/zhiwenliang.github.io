@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 自检 · Transformer 架构深挖</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+.chapter-opener .meta-row {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 心智模型</a><span class="sep">—</span>
+    <a href="02-attention.html">02 注意力</a><span class="sep">—</span>
+    <a href="03-architecture.html">03 整体架构</a><span class="sep">—</span>
+    <a href="04-training-inference.html">04 训练与推理</a><span class="sep">—</span>
+    <a href="05-modern.html">05 经典到现代</a><span class="sep">—</span>
+    <a href="06-self-check.html" class="current">06 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 06</p>
+        <h1>自检：动手回想 + 跨章辨析</h1>
+        <p class="recap">前五章铺完——本章不教新东西，靠动手回想把零散知识逼成可调用的判断力。先合上前面的章节再答，答案全在 <code>&lt;details&gt;</code> 里。</p>
+      </header>
+
+      <div class="callout warning">
+        <span class="label">流畅性错觉</span>
+        <p>三个最危险的自我感觉：「我读得很顺」「我做题很快」「我没卡壳」。这三种感觉都不代表知识可以被提取和迁移——只有合上教程、从空白纸上写出答案，才算检验了真正的掌握程度。每道题先停一下再点开答案。</p>
+      </div>
+
+      <section class="schema-panel">
+        <p class="label">三层梯度 · 怎么用这一章</p>
+        <ul>
+          <li>概念层（§6.1）：回忆定义和直觉，卡住就回对应章节补读。</li>
+          <li>原理层（§6.2）：解释机制背后的数学逻辑，要求说出"为什么"而不只是"是什么"。</li>
+          <li>应用判别层（§6.3）：给定场景，横跨多章作出有取舍的判断——这才是知识真正落地的形式。</li>
+        </ul>
+      </section>
+
+      <!-- ══════════════════════════════ 图 6.1 ══════════════════════════════ -->
+      <figure>
+        <svg viewBox="0 0 700 340" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三层难度梯度金字塔：底层概念层最宽、中层原理层居中、顶层应用判别层最窄且用朱红标注">
+          <defs>
+            <marker id="sc-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- difficulty axis -->
+          <line x1="48" y1="290" x2="48" y2="72" class="diagram-soft" marker-end="url(#sc-ar)"/>
+          <text x="42" y="86" text-anchor="end" class="edge-label">难</text>
+          <text x="42" y="292" text-anchor="end" class="edge-label">易</text>
+
+          <!-- bottom band: concept (widest) -->
+          <rect x="72" y="240" width="564" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="354" y="267" text-anchor="middle" class="node-label">§6.1 概念层（Remember / Understand）</text>
+          <text x="354" y="286" text-anchor="middle" class="edge-label">token · embedding · logits · QKV 角色 · 因果掩码 · 位置编码 · FFN 职责 · 三形态</text>
+
+          <!-- middle band: principle -->
+          <rect x="150" y="164" width="408" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="354" y="191" text-anchor="middle" class="node-label">§6.2 原理层（Apply / Analyze）</text>
+          <text x="354" y="210" text-anchor="middle" class="edge-label">√d_k 缩放 · pre-norm · 多头 · KV-cache · 训练/推理 · O(n²)</text>
+
+          <!-- top band: discrimination (narrowest, accent) -->
+          <rect x="232" y="88" width="244" height="60" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="354" y="115" text-anchor="middle" class="node-label-accent">§6.3 应用判别层（Evaluate）</text>
+          <text x="354" y="134" text-anchor="middle" class="edge-label">5 跨章场景 · 任务选型 · 部署权衡</text>
+
+          <!-- chapter tags on the right -->
+          <text x="648" y="272" text-anchor="start" class="edge-label">ch01–03</text>
+          <text x="648" y="197" text-anchor="start" class="edge-label">ch02–04</text>
+          <text x="648" y="120" text-anchor="start" class="branch-label">ch01–05</text>
+
+          <!-- connecting lines from bands to tags -->
+          <line x1="636" y1="270" x2="645" y2="270" class="diagram-soft"/>
+          <line x1="558" y1="194" x2="645" y2="194" class="diagram-soft"/>
+          <line x1="476" y1="118" x2="645" y2="118" class="diagram-soft"/>
+        </svg>
+        <figcaption><span class="fig-num">图 6.1</span>题库三层梯度。越往上越接近真实工作中的判断。<strong>注意</strong>：底层概念题最多也最像背诵，但顶层应用判别层才是面试和落地真正考的——能背出 pre-norm 的定义，不代表知道什么时候选它、它换了什么代价。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §6.1 概念层 ══════════════════════════════ -->
+      <h2 id="tier-concept"><span class="num">6.1</span><span>概念层（Remember / Understand）</span></h2>
+
+      <p class="one-liner">先合上全部章节，逐题默写答案，再展开对照——这是动手回想，不是再读一遍。</p>
+
+      <!-- Q1 -->
+      <div class="predict">
+        <span class="question-label">Q 6.1.1</span>
+        <p>token、embedding、logits 三者各是什么？说出它们在前向传播里的先后顺序和各自的数据类型/形状。</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>token</strong>：文本的最小离散单位，是整数 id（词表 id），模型看到的原始输入。<strong>embedding</strong>：把 token id 查表映射成 <code>d_model</code> 维连续向量，进入神经网络的第一步——形状 <code>(n, d_model)</code>。<strong>logits</strong>：最后一层 unembedding 后的原始分数向量，softmax 之前，形状 <code>(n, vocab_size)</code>；softmax(logits) 得到下一个 token 的概率分布。顺序：token id → embedding 查表 → N 层 block 变换 → unembedding → logits → softmax → 概率。</p>
+          <p>参考：<a href="01-concepts.html#seq-modeling">→ ch01 §1.1 序列建模</a></p>
+        </details>
+      </div>
+
+      <!-- Q2 -->
+      <div class="predict">
+        <span class="question-label">Q 6.1.2</span>
+        <p>在 scaled dot-product attention 里，Q、K、V 各扮演什么角色？用"字典查找"这个比喻翻译一遍。</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>Q（query）</strong>：当前位置想要什么信息——相当于查询词。<strong>K（key）</strong>：每个位置"声称自己是什么"——相当于字典的键。<strong>V（value）</strong>：每个位置真正携带的信息内容——相当于字典的值。计算 <code>QKᵀ</code> 算出 query 与所有 key 的相似度，softmax 归一化成权重，再对所有 V 加权平均，得到本位置聚合后的表示。这是一个可微的"软字典查找"：不像硬字典只取一个 value，而是按相似度把所有 value 混合。</p>
+          <p>参考：<a href="01-concepts.html#attention-intuition">→ ch01 §1.3 attention 直觉</a>　<a href="02-attention.html#scaled-dot">→ ch02 §2.1 scaled dot-product</a></p>
+        </details>
+      </div>
+
+      <!-- Q3 -->
+      <div class="predict">
+        <span class="question-label">Q 6.1.3</span>
+        <p>因果掩码为什么要在 softmax <strong>之前</strong>把未来位置置为 −∞，而不是在 softmax 之后置为 0？</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>softmax 之后置 0 会<strong>改变整行的分布形状</strong>：先 softmax 再强制归零，各位置权重之和不再等于 1，剩余权重的比例也发生了变化，等于悄悄重新分配了注意力。在 softmax 之前置 −∞，经过 softmax 时 <code>exp(−∞)→0</code>，未来位置自然归零，同时其余位置在各自 <code>exp</code> 之后重新归一——分布形状正确，且数学上等价于"这些位置不存在"。</p>
+          <p>参考：<a href="02-attention.html#causal-mask">→ ch02 §2.3 因果掩码</a></p>
+        </details>
+      </div>
+
+      <!-- Q4 -->
+      <div class="predict">
+        <span class="question-label">Q 6.1.4</span>
+        <p>为什么 Transformer 必须注入位置编码？不加会怎样？（提示：说出"置换等变性"这个性质）</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>点积 attention 是<strong>置换等变</strong>的：把输入序列的 token 打乱顺序，输出也同样打乱，模型看到的本质上是一个无序的 embedding 集合（set），而不是序列。"dog bites man"和"man bites dog"在不注入位置前，注意力分数完全相同——模型无法区分语序。位置编码（正弦或 RoPE）把位置信息叠加到 embedding 或 Q/K 旋转上，让模型能感知词的顺序。</p>
+          <p>参考：<a href="03-architecture.html#pos-enc">→ ch03 §3.1 位置编码</a></p>
+        </details>
+      </div>
+
+      <!-- Q5 -->
+      <div class="predict">
+        <span class="question-label">Q 6.1.5</span>
+        <p>在一块 Transformer block 里，FFN 负责什么？它和 attention 的分工边界在哪里？</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>Attention 是 token 之间交换信息的唯一算子（通信）；FFN 在 attention 之后对<strong>每个位置独立加工</strong>（计算），各位置之间无横向连线。FFN 的作用：把 attention 汇集来的跨位置信息通过非线性变换进一步提炼，同时作为"键值记忆"存储事实（Geva 2021：W₁ 的行像 key，W₂ 的列像 value）。FFN 占 transformer 约 2/3 的参数量——知识主要住在这里，而不是 attention 权重里。</p>
+          <p>参考：<a href="01-concepts.html#communicate-compute">→ ch01 §1.4 通信/计算框架</a>　<a href="03-architecture.html#ffn">→ ch03 §3.4 FFN</a></p>
+        </details>
+      </div>
+
+      <!-- Q6 -->
+      <div class="predict">
+        <span class="question-label">Q 6.1.6</span>
+        <p>encoder-only、decoder-only、encoder-decoder 三种形态各适配什么类型的任务？各举一个代表模型。</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>Encoder-only（双向）</strong>：适合理解类任务——分类、序列标注、embedding。代表：BERT。不适合生成（双向 attention 看到整个序列，生成时会泄露答案）。<strong>Decoder-only（因果）</strong>：适合生成类任务——文本续写、问答、代码生成。代表：GPT 系列、Llama。注意：它没有 cross-attention，不是 encoder-decoder 的"一半"。<strong>Encoder-decoder</strong>：适合 seq2seq——机器翻译、摘要。代表：T5、原版 Transformer。encoder 双向理解源序列，decoder 因果生成目标序列，两者通过 cross-attention 连接。</p>
+          <p>参考：<a href="01-concepts.html#three-forms">→ ch01 §1.5 三种形态</a>　<a href="03-architecture.html#enc-dec">→ ch03 §3.7 enc-dec</a></p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §6.2 原理层 ══════════════════════════════ -->
+      <h2 id="tier-principle"><span class="num">6.2</span><span>原理层（Apply / Analyze）</span></h2>
+
+      <p class="one-liner">每道题要求说出机制背后的逻辑链，不只是复述结论。</p>
+
+      <!-- Q7 -->
+      <div class="predict">
+        <span class="question-label">Q 6.2.1</span>
+        <p>为什么 scaled dot-product attention 要除以 √d_k？把方差论证说完整。</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>假设 q、k 的各分量是零均值、单位方差的随机变量，则 <code>q·k = Σᵢ qᵢkᵢ</code> 是 <code>d_k</code> 项之和，每项方差为 1，总方差为 <code>d_k</code>，标准差为 <code>√d_k</code>。当 <code>d_k</code> 大（如 64 或 512）时，点积数值量级达 <code>√d_k</code>（d_k=64 时约 8，d_k=512 时约 22），把 softmax 推进近 one-hot 区（某一位接近 1，其余接近 0），该区域的导数 <code>σ(1−σ)≈0</code>——梯度消失。除以 <code>√d_k</code> 把方差重新拉回 1，softmax 的输入保持温和，梯度稳定。</p>
+          <p>参考：<a href="02-attention.html#sqrt-dk">→ ch02 §2.2 为什么除以 √d_k</a></p>
+        </details>
+      </div>
+
+      <!-- Q8 -->
+      <div class="predict">
+        <span class="question-label">Q 6.2.2</span>
+        <p>现代 LLM 普遍使用 pre-norm 而不是原版 post-norm。说出两者的区别，以及切换到 pre-norm 的真实原因（提示：不是因为质量更好）。</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>Post-norm（原版）</strong>：<code>LayerNorm(x + Sublayer(x))</code>——归一化在残差相加之后，破坏了 identity 捷径（归一化把 x 改变了）；超过 12 层时训练脆弱，需要精心 warmup 和初始化。<strong>Pre-norm（现代）</strong>：<code>x + Sublayer(RMSNorm(x))</code>——归一化在 sublayer 内部，残差捷径直接通过不被归一化；任意深度下梯度 <code>∂L/∂x</code> 至少有原始梯度这一项，训练无需 warmup。切换的真实原因是<strong>可扩展性和深度稳定性</strong>，不是质量提升——浅层模型上 pre-norm 甚至略逊 post-norm，这个权衡是反直觉的。</p>
+          <p>参考：<a href="03-architecture.html#layernorm">→ ch03 §3.3 归一化</a>　<a href="05-modern.html#norm-act">→ ch05 §5.2 现代 norm</a></p>
+        </details>
+      </div>
+
+      <!-- Q9 -->
+      <div class="predict">
+        <span class="question-label">Q 6.2.3</span>
+        <p>多头 attention 相比单头多了什么？多头机制是否真的会让不同头专门化？</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>单头只产生一个加权平均，承诺一种混合方式；多头把 <code>d_model</code> 切成 h 份，每头在 <code>d_model/h</code> 维子空间里独立学习一种关系，最后 concat 再用 <code>Wᴼ</code> 投回原维度——总 FLOPs 与单头几乎相同（免费获得多样性）。真实专门化：已有实验证据（Olsson/Elhage）发现 <strong>induction heads</strong>，专门做"找到当前 token 上次出现的位置，然后 attend 到那个位置的下一个 token"这个模式，与 in-context learning 能力相关，且在训练中相变式突现。不是所有头都专门化，但确实有头会专门做句法依存、共指等任务。</p>
+          <p>参考：<a href="02-attention.html#multi-head">→ ch02 §2.4 多头</a></p>
+        </details>
+      </div>
+
+      <!-- Q10 -->
+      <div class="predict">
+        <span class="question-label">Q 6.2.4</span>
+        <p>KV-cache 缓存的具体是什么？显存成本随哪些因素增长？（给出公式轮廓）</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>KV-cache 缓存的是过去每个 token、每一层、每个注意力头的 <strong>K 和 V 投影矩阵</strong>（不是权重，是激活值）。没有缓存时，每生成一个新 token 就要对所有历史 token 重算一遍 K 和 V；有缓存则只算当前新 token 的 Q，再与缓存的 K/V 做一次注意力。显存成本公式轮廓：</p>
+          <p><code>seq_len × layers × heads × head_dim × 2 × dtype_bytes</code></p>
+          <p>以 7B 典型配置为例（32 层，32 头，head_dim=128，fp16=2 bytes，seq=8192）约 8 GB——仅 KV-cache 就和模型权重相当。成本随<strong>序列长度、层数、头数×head_dim（即 d_model）</strong>线性增长，这正是催生 GQA、MLA 等技术的根本动力。</p>
+          <p>参考：<a href="04-training-inference.html#kv-cache">→ ch04 §4.4 KV-cache</a></p>
+        </details>
+      </div>
+
+      <!-- Q11 -->
+      <div class="predict">
+        <span class="question-label">Q 6.2.5</span>
+        <p>训练时为什么所有位置能并行计算，推理时却必须串行逐 token 生成？说出两者数据流的根本差异。</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>训练（teacher forcing）</strong>：ground truth 序列在训练时全部已知，因果掩码保证位置 t 只能看到 1…t，但所有位置的掩码矩阵可以一次算完——GPU 对所有位置并行做矩阵乘法，梯度全部在同一次前向/反向中传播。<strong>推理（自回归）</strong>：没有 ground truth，第 t 步的输出必须追加到输入里，才能生成第 t+1 步——每一步的输出依赖上一步，无法跳过，天然串行。陷阱：很多人先实现训练式前向，纳闷"为什么推理出乱码"——少了把当步输出喂回输入再跑下一步的循环。</p>
+          <p>参考：<a href="04-training-inference.html#training">→ ch04 §4.1 训练</a>　<a href="04-training-inference.html#inference">→ ch04 §4.2 推理</a>　<a href="04-training-inference.html#asymmetry">→ ch04 §4.3 不对称性</a></p>
+        </details>
+      </div>
+
+      <!-- Q12 -->
+      <div class="predict">
+        <span class="question-label">Q 6.2.6</span>
+        <p>Attention 的 O(n²) 瓶颈，到底贵在算力还是显存？两者的来源有什么区别？</p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>两者都贵，但<strong>显存瓶颈在长上下文下更为致命</strong>。<code>QKᵀ</code> 产生 <code>n×n</code> 的注意力分数矩阵，标准实现必须把这个矩阵落地（存到显存），才能做 softmax 再乘 V——显存消耗随 <code>n²</code> 增长；n=8192 时每头约 268M 个浮点数。算力层面，矩阵乘法本身也是 <code>O(n²·d)</code>，但现代 GPU 对矩阵乘法极度优化，算力相对不是最紧张的资源。FlashAttention 的核心贡献正是通过 SRAM 分块<strong>避免落地 n×n 矩阵</strong>，把显存开销降到 <code>O(n)</code>，同时输出结果与标准 attention 完全一致（非近似）。</p>
+          <p>参考：<a href="04-training-inference.html#on2">→ ch04 §4.5 O(n²)</a>　<a href="05-modern.html#flash">→ ch05 §5.5 FlashAttention</a></p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §6.3 应用判别层 ══════════════════════════════ -->
+      <h2 id="tier-discrimination"><span class="num">6.3</span><span>应用判别层（Evaluate — 跨章辨析）</span></h2>
+
+      <p class="one-liner">每道题都横跨两章以上，要求作出有取舍的判断，而不只是复述概念。先说清楚选什么，再说为什么，以及放弃了什么。</p>
+
+      <!-- Scenario A -->
+      <div class="predict">
+        <span class="question-label">场景 A · 任务选型</span>
+        <p>给三个任务：① 情感分类（正面/负面），② 写作续写（给前半段故事，续写后半段），③ 中英翻译。各应选 encoder-only / decoder-only / encoder-decoder，说出理由。</p>
+        <p style="font-size: 13px; color: var(--ink-faint);">涉及：<a href="01-concepts.html#three-forms">ch01 #three-forms</a> + <a href="03-architecture.html#enc-dec">ch03 #enc-dec</a></p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>① 情感分类 → encoder-only</strong>：分类需要对整句话有双向理解（"虽然开头不好，但结尾很好"这类转折靠双向上下文判断）；不需要生成，用 encoder 输出的 [CLS] token 表示接分类头即可。代表：BERT fine-tune。</p>
+          <p><strong>② 续写 → decoder-only</strong>：给定前缀、生成后续文本，正是 decoder-only 的主场——因果自回归生成。不需要独立的 encoder 理解前缀，decoder 本身读入前缀再续写。代表：GPT、Llama。</p>
+          <p><strong>③ 中英翻译 → encoder-decoder</strong>：源语言和目标语言是两个不同序列，encoder 双向理解整个中文源句，decoder 因果生成英文目标句，两者通过 cross-attention 对齐——这正是 encoder-decoder 的设计目标（原版 Transformer 就是为翻译而生）。代表：T5、MarianMT。注意：现代大 decoder-only 模型也能做翻译，但在架构设计层面 enc-dec 更自然。</p>
+        </details>
+      </div>
+
+      <!-- Scenario B -->
+      <div class="predict">
+        <span class="question-label">场景 B · 显存被吃爆</span>
+        <p>部署 LLM 推理时显存被 KV-cache 占满。列出 GQA、MLA、sliding-window attention、FlashAttention 四个手段，说明各自压的是哪个成本（KV-cache 显存 vs O(n²) 中间矩阵），以及哪些可以叠加使用。</p>
+        <p style="font-size: 13px; color: var(--ink-faint);">涉及：<a href="04-training-inference.html#kv-cache">ch04 #kv-cache</a> <a href="04-training-inference.html#on2">ch04 #on2</a> + <a href="05-modern.html#kv-heads">ch05 #kv-heads</a> <a href="05-modern.html#flash">ch05 #flash</a> <a href="05-modern.html#longctx">ch05 #longctx</a></p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>GQA（Grouped Query Attention）</strong>：压 <em>KV-cache 显存</em>。把 Q 头分组，每组共享一个 K/V 头，KV-cache 大小 = 总 Q 头数 / 组数。Llama 3 全系使用，现代 LLM 主流。不影响 O(n²) 中间矩阵问题本身。</p>
+          <p><strong>MLA（Multi-head Latent Attention，DeepSeek-V2）</strong>：压 <em>KV-cache 显存</em>（更激进）。把 K/V 压缩成低秩潜向量，按需 up-project，DeepSeek-V2 省 93.3% cache。截至 2025 中仍属个别实现，GQA 是更广泛主流。</p>
+          <p><strong>Sliding-window Attention</strong>：压 <em>KV-cache 显存 + O(n²) 算力</em>（同时缓解）。每个 token 只 attend 到固定窗口 W 内的 token，KV-cache 上限锁死为 W 而不随序列增长，注意力复杂度降为 O(n·W)。代价：丢失远距离依赖（需要与全局注意力交替才能覆盖全程）。</p>
+          <p><strong>FlashAttention</strong>：仅压 <em>O(n²) 中间矩阵显存</em>，不减少 KV-cache。通过 SRAM 分块避免落地 n×n 矩阵，输出与标准 attention 完全一致（非近似）；算力和显存效率都更高，但 KV-cache 本身大小不变。</p>
+          <p><strong>叠加方案</strong>：GQA + FlashAttention 完全可以叠加（分别针对不同成本）；GQA + sliding-window 也可叠加（Mistral 同时用两者）；MLA 与 FlashAttention 理论可叠加但实现更复杂。FlashAttention 与 sliding-window 可以结合（FlashAttention 3 支持分块的 sliding-window kernel）。</p>
+        </details>
+      </div>
+
+      <!-- Scenario C -->
+      <div class="predict">
+        <span class="question-label">场景 C · 推理乱码</span>
+        <p>"模型训练 loss 正常下降，但一推理就输出乱码"——给出根因，并说出它所在的机制。</p>
+        <p style="font-size: 13px; color: var(--ink-faint);">涉及：<a href="04-training-inference.html#asymmetry">ch04 #asymmetry</a></p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p>最可能的根因：<strong>推理代码少了自回归喂回循环</strong>——把训练式前向直接拿来当推理用，一次性把整个 prompt 喂进去拿输出，没有"把当步输出 token append 到输入、再跑下一步"的循环。训练时有 ground truth（teacher forcing），每步输入都是正确上文；推理时没有 ground truth，必须把自己上步的输出当成下步的输入，缺少这个循环就等于每步都在随机噪声上做预测，输出自然是乱码。这是训练/推理不对称最典型的陷阱：loss 正常下降说明训练逻辑没问题，问题出在推理逻辑上。</p>
+          <p>参考：<a href="04-training-inference.html#asymmetry">→ ch04 §4.3 训练与推理不对称</a></p>
+        </details>
+      </div>
+
+      <!-- Scenario D -->
+      <div class="predict">
+        <span class="question-label">场景 D · RoPE 与长文本</span>
+        <p>团队把正弦位置编码换成 RoPE，号称"解决了长文本问题"。这个说法对在哪、不严谨在哪？</p>
+        <p style="font-size: 13px; color: var(--ink-faint);">涉及：<a href="03-architecture.html#pos-enc">ch03 #pos-enc</a> + <a href="05-modern.html#rope">ch05 #rope</a> <a href="05-modern.html#longctx">ch05 #longctx</a></p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>对的部分</strong>：RoPE 把位置信息编码为 Q/K 向量在 2D 子空间的旋转，点积只依赖相对位置距离而非绝对位置，比正弦位置编码（绝对位置，难外推）更适合处理训练中未见过的位置——这是向长文本迈出的一步。现代几乎所有大模型（Llama、Qwen、DeepSeek、Gemma 等）都用 RoPE 取代了正弦编码。</p>
+          <p><strong>不严谨的部分</strong>：RoPE 本身并不能"解决"超出训练长度的外推问题，只是缓解了绝对位置编码的硬墙。128K 上下文需要额外的外推技术：YaRN（ICLR 2024，Llama 3.1 用它扩到 128K，同时把 RoPE base 提到 500,000）、LongRoPE2、iRoPE（Llama 4，部分层不用位置编码）等。换 RoPE 只是必要条件，不是充分条件——"解决了"这个说法过于绝对。</p>
+        </details>
+      </div>
+
+      <!-- Scenario E -->
+      <div class="predict">
+        <span class="question-label">场景 E · 注意力热力图</span>
+        <p>有人指着一张注意力热力图说"模型在重点看'巴黎'这个词"。这个解读的漏洞是什么？</p>
+        <p style="font-size: 13px; color: var(--ink-faint);">涉及：<a href="02-attention.html#weights-not-importance">ch02 #weights-not-importance</a></p>
+        <details>
+          <summary>展开答案（先停一下再点）</summary>
+          <p><strong>漏洞</strong>：注意力权重只是加权平均的权重，最终输出是 <code>Σ αᵢ Vᵢ</code>。高注意力权重（α 大）并不等于高贡献——<strong>V 向量（value）的范数是缺失的另一半</strong>。如果"巴黎"对应的 V 向量范数很小（接近零向量），即使 α=0.9，对输出的实际贡献也可能微乎其微；反之，α=0.05 但 V 范数很大的 token 可能影响更强。热力图给人强烈的"模型在看哪里"错觉，但没有同时展示 V 的范数时，这种可解释性结论是误导性的（arxiv 2004.10102 专门研究过这个问题）。</p>
+          <p>参考：<a href="02-attention.html#weights-not-importance">→ ch02 §2.6 权重≠重要度</a></p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §6.4 自己动手画 ══════════════════════════════ -->
+      <h2 id="draw-it"><span class="num">6.4</span><span>自己动手画</span></h2>
+
+      <div class="challenge">
+        <span class="label">手画挑战 · 合上教程</span>
+        <h3>不看任何资料，在白纸上画两张图</h3>
+        <p><strong>图一：decoder-only block 完整数据流。</strong>画出以下全部元素：输入 x → 第一条残差（x 旁路）→ RMSNorm（pre-norm，在 sublayer 内）→ 因果自注意力（标注 Q/K/V 投影）→ 残差合并 → 第二条残差（x₂ 旁路）→ RMSNorm → FFN（两层，标注 d_model → d_ff → d_model）→ 残差合并 → 输出。注明 norm 在 sublayer 内部（pre-norm），两条残差捷径分别跨过 attention 和 FFN。</p>
+        <p><strong>图二：训练（并行）与推理（自回归）的数据流对比。</strong>左侧画训练：整个序列（含 causal mask 矩阵）一次前向，所有位置输出并行算梯度。右侧画推理：step 1 → token 追加 → step 2 → token 追加 → … 的循环，标出 KV-cache 在哪里被写入和读取。两侧各画一个时间轴，直观显示并行 vs 串行的差异。</p>
+        <p>画完后，回到 <a href="03-architecture.html#block">ch03 §3.5 完整 block</a> 和 <a href="04-training-inference.html#asymmetry">ch04 §4.3 不对称性</a> 对照：残差连接的位置对了吗？推理循环里有没有画出把输出 token 追加到输入的那一步？</p>
+      </div>
+
+      <!-- ══════════════════════════════ References ══════════════════════════════ -->
+      <footer class="references">
+        <h3>延伸阅读</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/1706.03762">Vaswani et al. (2017) · Attention Is All You Need</a> — 原论文，架构所有细节的第一手来源</li>
+          <li><a href="https://jalammar.github.io/illustrated-transformer/">Jay Alammar · The Illustrated Transformer</a> — 图文并茂，配合本教程使用效果极佳</li>
+          <li><a href="https://github.com/karpathy/nanoGPT">Karpathy · nanoGPT</a> — 最短的 decoder-only 实现，把训练/推理不对称看得最清楚</li>
+          <li><a href="https://arxiv.org/abs/2004.10102">Jain &amp; Wallace (2020) · Attention is not Explanation</a> — 注意力权重≠重要度的实验证据</li>
+          <li><a href="https://arxiv.org/abs/2012.14913">Geva et al. (2021) · Transformer Feed-Forward Layers Are Key-Value Memories</a> — FFN 键值记忆的机制分析</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-modern.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 经典到现代</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到 →</span>
+          <span class="title">00 · 起点（重读概念地图）</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#tier-concept" data-toc-target="tier-concept">§6.1 概念层</a></li>
+        <li><a href="#tier-principle" data-toc-target="tier-principle">§6.2 原理层</a></li>
+        <li><a href="#tier-discrimination" data-toc-target="tier-discrimination">§6.3 应用判别层</a></li>
+        <li><a href="#draw-it" data-toc-target="draw-it">§6.4 自己动手画</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

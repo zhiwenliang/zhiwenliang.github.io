@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 陷阱 · Reflexion 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html" class="current">04 陷阱</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04 · 失败模式</p>
+        <h1>Reflexion 的失败模式与适用边界</h1>
+        <p class="recap">03 章把 Algorithm 1 跑通了:Actor 写代码、Evaluator 跑测试、Self-Reflection 产出第一人称教训、episodic memory 滑动窗口存储。一个能跑通的循环掩盖了一个事实——同一套机制在错误的任务、错误的 Evaluator、错误的初始正确率上会净降准确率。本章拆解六个被论文与复现实验量化过的失败模式,每个回指 02 章的机制根因。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>Reflexion 的收益不是无条件的:Evaluator 信号质量 + 初始正确率 + 任务多样性需求,三者共同决定它是净赚还是净亏。</li>
+          <li>失败模式按受损组件归类:Evaluator 失效(信号不可靠)、Actor 失效(反思幻觉、弱模型)、Memory 失效(上下文膨胀)、整体经济性(成本 ≈ self-consistency)。</li>
+          <li>最危险的失败是隐性的:在没有 oracle、初始正确率已高的场景,反思会把对的答案改错——而表面流程一切正常。</li>
+          <li>"什么时候不用 Reflexion"是一个可执行的判据清单,不是态度问题。</li>
+        </ul>
+      </div>
+
+      <p>03 章的 worked example 之所以收敛,是因为三个前提同时成立:Evaluator(单元测试)给的是可信信号、初始代码确实错了、任务有唯一正确解。把任意一个前提抽掉,同一套循环就从"自我改进"滑向"自我损害"。本章按受损组件组织六个失败模式,每个都附论文或复现实验的具体数字,并把根因链回 <a href="02-principles.html#why-language">02 章的机制小节</a>。先看一张全景:这些失败模式分别打在循环的哪个组件上、严重度如何。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 440" role="img" aria-labelledby="fig1-title">
+          <title id="fig1-title">Reflexion 失败模式 2D 分类图</title>
+
+          <!-- Axes -->
+          <line x1="120" y1="60" x2="120" y2="380" class="diagram-ink"/>
+          <line x1="120" y1="380" x2="720" y2="380" class="diagram-ink"/>
+          <!-- Y axis arrow -->
+          <path d="M120 60 l-5 9 M120 60 l5 9" class="diagram-ink"/>
+          <!-- X axis arrow -->
+          <path d="M720 380 l-9 -5 M720 380 l-9 5" class="diagram-ink"/>
+
+          <!-- Y axis label -->
+          <text x="108" y="50" text-anchor="end" class="node-label">严重度</text>
+          <text x="76" y="100" class="edge-label">致命</text>
+          <text x="76" y="230" class="edge-label">中等</text>
+          <text x="76" y="350" class="edge-label">较轻</text>
+
+          <!-- X axis label & column ticks -->
+          <text x="720" y="404" text-anchor="end" class="node-label">受损组件</text>
+          <text x="225" y="400" text-anchor="middle" class="edge-label">Evaluator</text>
+          <text x="420" y="400" text-anchor="middle" class="edge-label">Actor</text>
+          <text x="600" y="400" text-anchor="middle" class="edge-label">Memory / 经济性</text>
+
+          <!-- faint column separators -->
+          <line x1="320" y1="60" x2="320" y2="380" class="diagram-soft"/>
+          <line x1="510" y1="60" x2="510" y2="380" class="diagram-soft"/>
+
+          <!-- ── Nodes ── -->
+          <!-- evaluator-dependency: Evaluator, 致命 -->
+          <rect x="136" y="84" width="176" height="40" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="224" y="100" text-anchor="middle" class="node-label-accent">无 oracle 崩溃</text>
+          <text x="224" y="116" text-anchor="middle" class="edge-label">§5.1 evaluator-dependency</text>
+
+          <!-- reflection-hallucination: Actor, 致命 -->
+          <rect x="346" y="84" width="148" height="40" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="420" y="100" text-anchor="middle" class="node-label-accent">反思幻觉翻转</text>
+          <text x="420" y="116" text-anchor="middle" class="edge-label">§5.2 hallucination</text>
+
+          <!-- task-fit: Evaluator/任务, 中等偏致命 -->
+          <rect x="136" y="178" width="176" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="224" y="194" text-anchor="middle" class="node-label">高置信反改错</text>
+          <text x="224" y="210" text-anchor="middle" class="edge-label">§5.6 task-fit</text>
+
+          <!-- convergence: Actor, 中等 -->
+          <rect x="346" y="218" width="148" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="420" y="234" text-anchor="middle" class="node-label">平台期 / 弱模型</text>
+          <text x="420" y="250" text-anchor="middle" class="edge-label">§5.5 convergence</text>
+
+          <!-- cost: 经济性, 中等偏轻 -->
+          <rect x="538" y="246" width="150" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="613" y="262" text-anchor="middle" class="node-label">成本≈采样</text>
+          <text x="613" y="278" text-anchor="middle" class="edge-label">§5.4 cost</text>
+
+          <!-- memory-bloat: Memory, 较轻 -->
+          <rect x="538" y="316" width="150" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="613" y="332" text-anchor="middle" class="node-label">上下文膨胀</text>
+          <text x="613" y="348" text-anchor="middle" class="edge-label">§5.3 memory-bloat</text>
+
+        </svg>
+        <figcaption><span class="fig-num">图 4-1</span>六个失败模式按「受损组件 × 严重度」分布。<strong>注意</strong>:左上两格(红框)——Evaluator 无 oracle、Actor 反思幻觉——是致命的,因为它们都让错误答案被当成正确答案提交,且发生时表面流程毫无异常。</figcaption>
+      </figure>
+
+      <p>致命的失败模式集中在左上:它们破坏的是循环的<strong>正确性判据</strong>本身,而不只是效率。下面逐个拆解,顺序按 <a href="02-principles.html#reward-source">02 章的机制依赖</a>从根上排起——先是 Evaluator 失效,因为它是整个循环的地基。</p>
+
+      <h2 id="evaluator-dependency"><span class="num">5.1</span>失败模式一:没有 oracle,改进就消失</h2>
+
+      <p class="one-liner">症状:论文里漂亮的提升数字,换到生产环境就蒸发,甚至变成净下降。</p>
+
+      <h3>症状</h3>
+      <p>团队照搬论文 setup 接一个 reasoning 任务(数学题、常识问答),线下用带标准答案的数据集验证时收益明显;一旦上线、失去标准答案,Reflexion 不再带来提升,内在自我纠错的准确率反而低于不纠错的单遍生成。</p>
+
+      <p>Huang et al.(<a href="https://arxiv.org/abs/2310.01798">《LLMs Cannot Self-Correct Reasoning Yet》</a>,ICLR 2024,arXiv 2310.01798)复现了 Reflexion 式 setup,得出一个尖锐结论:headline 收益<strong>依赖一个 oracle label 来决定何时停止反思</strong>。把 oracle 拿掉、让模型自己判断对错并据此反思,内在自我纠错<strong>净降准确率</strong>:</p>
+
+      <table class="compare-table">
+        <caption>Huang et al. ICLR 2024:去掉 oracle 后的内在自我纠错(单位:准确率 %)</caption>
+        <thead><tr><th>任务 / 模型</th><th>初始(单遍)</th><th>自我纠错后</th><th>净变化</th></tr></thead>
+        <tbody>
+          <tr><td>GSM8K</td><td>75.9</td><td>74.7</td><td>−1.2</td></tr>
+          <tr class="selected"><td>Llama-2 (GSM8K)</td><td>62.0</td><td>36.5</td><td>−25.5</td></tr>
+          <tr><td>CommonSenseQA</td><td>75.8</td><td>41.8</td><td>−34.0</td></tr>
+        </tbody>
+      </table>
+
+      <h3>根因</h3>
+      <p>这直接命中 <a href="02-principles.html#reward-source">02 章 #reward-source</a> 的机制:Reflexion 的"学习"由 Evaluator 的 reward 驱动,而<strong>反思的方向由"判定为错"这个信号触发</strong>。当 Evaluator 就是被反思的同一个 LLM、又没有外部 ground-truth 锚定时,它的"对错判断"本身就带着和 Actor 一样的偏差。模型既判不准对错,反思自然指向错误的方向——它在用一个不可靠的信号去"纠正"一个本来正确的答案。论文设计里 reasoning 任务用的是 <strong>exact-match 对标准答案</strong>(HotPotQA +20%),决策任务用<strong>手写启发式或环境信号</strong>(AlfWorld 130/134)——这些都是<em>外部、可信</em>的判据,不是模型自评。</p>
+
+      <h3>修复:错误写法 / 正确写法</h3>
+      <div class="code-block">
+        <div class="header"><span class="filename">evaluator_self_judge.py</span><span class="lang">python</span><button class="copy" data-copy-target="c1a">复制</button></div>
+        <pre id="c1a"><code class="language-python"># ❌ 错误:让同一个 LLM 既生成答案又判断对错,没有外部锚
+class SelfJudgeEvaluator:
+    def __init__(self, llm):
+        self.llm = llm
+    def evaluate(self, answer, task):
+        verdict = self.llm.complete(
+            f"问题:{task.spec}\n答案:{answer}\n这个答案对吗?只回答 对/错。"
+        )
+        passed = verdict.strip().startswith("对")
+        return passed, ""        # 没有 ground-truth,verdict 和答案同源偏差
+</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">evaluator_grounded.py</span><span class="lang">python</span><button class="copy" data-copy-target="c1b">复制</button></div>
+        <pre id="c1b"><code class="language-python"># ✅ 正确:Evaluator 锚定到外部可验证信号;无信号时拒绝启用反思循环
+class GroundedEvaluator:
+    def __init__(self, oracle=None, tests=None):
+        if oracle is None and tests is None:
+            raise ValueError(
+                "Reflexion 需要可信的对错判据(ground-truth / 单元测试 / 环境 reward);"
+                "缺失时应退化为单遍生成,而非自评反思。"
+            )
+        self.oracle, self.tests = oracle, tests
+    def evaluate(self, answer, task):
+        if self.tests is not None:          # 编程:跑测试(外部、确定)
+            return run_tests(answer, self.tests)
+        return answer == self.oracle[task.id], ""   # 推理:对标准答案
+</code></pre>
+      </div>
+
+      <h3>如何避免再次触发</h3>
+      <p>把"是否存在外部可验证信号"列为接入 Reflexion 的<strong>准入门槛</strong>,而不是事后检查项:有单元测试、编译器、环境 reward、或线下标准答案,才上反思循环;只有模型自评时,默认退化为单遍生成或 self-consistency。线上无 oracle 的场景,可用线下带标签的数据评估反思是否真的提升,再决定是否部署——绝不能用"线上看起来在自我改进"作为依据。</p>
+
+      <h2 id="reflection-hallucination"><span class="num">5.2</span>失败模式二:反思幻觉——把对的答案改错</h2>
+
+      <p class="one-liner">症状:反思这一步本身产出了错误的"教训",把一个已经正确的答案翻转成错误答案。</p>
+
+      <h3>症状</h3>
+      <p>Actor 第一次就答对了,但循环没有可靠信号确认"已通过",于是照常进入反思;Self-Reflection 凭空捏造一条"问题",Actor 据此"修正",结果把对的改成错的。这种 <strong>correct→incorrect 翻转</strong>在 Huang 的实验里被量化:</p>
+
+      <table class="compare-table">
+        <caption>correct→incorrect 翻转率与净准确率(无 oracle 的内在自我纠错)</caption>
+        <thead><tr><th>设置</th><th>correct→incorrect 翻转</th><th>净准确率影响</th></tr></thead>
+        <tbody>
+          <tr><td>GSM8K · GPT-3.5</td><td>8.8%</td><td>翻转多于纠正 → 净降</td></tr>
+          <tr class="selected"><td>GSM8K · Llama-2</td><td>31%</td><td>62.0 → 36.5(净降 25.5)</td></tr>
+        </tbody>
+      </table>
+
+      <p>Llama-2 上 31% 的正确答案被反思改错,是 62.0→36.5 这个崩塌的直接来源。翻转率越高、模型越弱,这个失败模式越致命。</p>
+
+      <h3>根因</h3>
+      <p>回指 <a href="02-principles.html#why-language">02 章 #why-language</a>:Reflexion 起作用的前提是 Self-Reflection 能做出<em>有效的</em> credit assignment——准确定位"哪一步错了、该怎么改"。但这个能力依赖一个真实存在的错误。当答案其实是对的、却被要求"找出问题并改进"时,语言模型会顺从指令<strong>编造一个并不存在的缺陷</strong>(语言反思的灵活性在这里成了双刃:它能表达任何"教训",包括错误的)。这也是 02 章 <a href="02-principles.html#ablation">#ablation</a> 那条结论的反面——反思之所以比 blind retry 强(+8% 绝对值),是因为 credit assignment 指向了真实错误;一旦指向虚构错误,同一机制反向放大损害。</p>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>若把反思的触发条件从"每轮都反思"改成"仅当 Evaluator 明确判失败才反思",上面 31% 的翻转率会怎样变化?为什么这恰好对应 Huang 所说的"oracle 决定何时停"?</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>翻转率会大幅下降:只要 Evaluator 是可信的,正确答案根本不会进入反思分支,自然不会被改错。Huang 的"oracle 决定何时停"正是这个意思——oracle 的真正作用不是指导反思内容,而是<strong>门控反思是否发生</strong>。论文的收益里有相当一部分来自"oracle 让正确答案及时停止、不被破坏",而非反思本身的纠错力。把这个门控误当成模型自评,翻转就回来了。</p>
+        </details>
+      </div>
+
+      <h3>修复:错误写法 / 正确写法</h3>
+      <div class="code-block">
+        <div class="header"><span class="filename">loop_always_reflect.py</span><span class="lang">python</span><button class="copy" data-copy-target="c2a">复制</button></div>
+        <pre id="c2a"><code class="language-python"># ❌ 错误:无条件每轮反思,正确答案也被拖进反思 → 可能被改错
+def loop(task, actor, reflector, memory, max_trials=3):
+    code = ""
+    for t in range(max_trials):
+        code = actor.act(task, memory.reflections)
+        sr = reflector.reflect(code, "请找出可改进之处", task)  # 不管对错都反思
+        memory.add(sr)
+    return code
+</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">loop_gated_reflect.py</span><span class="lang">python</span><button class="copy" data-copy-target="c2b">复制</button></div>
+        <pre id="c2b"><code class="language-python"># ✅ 正确:反思由可信 Evaluator 门控;判通过立即停,绝不反思正确答案
+def loop(task, actor, evaluator, reflector, memory, max_trials=3):
+    code = ""
+    for t in range(max_trials):
+        code = actor.act(task, memory.reflections)
+        passed, error = evaluator.evaluate(code, task)   # 外部可信判据
+        if passed:
+            return code                                  # 停止条件:正确即停
+        sr = reflector.reflect(code, error, task)        # 仅在确认失败时反思
+        memory.add(sr)
+    return code
+</code></pre>
+      </div>
+
+      <h3>如何避免再次触发</h3>
+      <p>反思永远由"已确认的失败"触发,不是由"惯例每轮反思"触发。停止条件必须是循环里的硬约束(<code>if passed: return</code>),而非"跑满 max_trials"。模型越弱,这个门控越要严——下一个失败模式会量化弱模型的处境。</p>
+
+      <h2 id="memory-bloat"><span class="num">5.3</span>失败模式三:记忆膨胀——上下文溢出窗口</h2>
+
+      <p class="one-liner">症状:trial 数一多,prompt 越拼越长,先是变慢变贵,最后溢出上下文窗口直接报错或截断丢信息。</p>
+
+      <h3>症状</h3>
+      <p>到 trial 3 时,prompt 已经等于「任务描述 + 3 次完整尝试 + 3 条反思文本」;长任务(长代码、长轨迹)累积几轮后超出模型上下文窗口,要么报错,要么静默截断——把最关键的早期反思或任务描述挤掉,循环开始"失忆"。</p>
+
+      <h3>根因</h3>
+      <p>回指 <a href="01-concepts.html#episodic-memory">01 章 #episodic-memory</a>:episodic memory 是一个 <strong>Ω=1-3 的滑动窗口</strong>,这正是论文为<em>适配上下文长度限制</em>而设的容量上限——它不是向量库(论文把向量检索/SQL 列为 future work)。设计上 AlfWorld 用 Ω=3、programming 用 Ω=1。忽略这个上限、把所有历史反思无限拼接,就是把一个有意为之的"有界窗口"当成"无界缓冲"用,直接撞上 02 章 <a href="02-principles.html#memory-injection">#memory-injection</a> 描述的 context 拼接边界。</p>
+
+      <h3>修复:错误写法 / 正确写法</h3>
+      <div class="code-block">
+        <div class="header"><span class="filename">memory_unbounded.py</span><span class="lang">python</span><button class="copy" data-copy-target="c3a">复制</button></div>
+        <pre id="c3a"><code class="language-python"># ❌ 错误:无限累积反思 + 把每轮完整代码也塞进 prompt
+class UnboundedMemory:
+    def __init__(self):
+        self.reflections = []
+        self.full_trajectories = []          # 还把整段代码也存下来
+    def add(self, sr, code):
+        self.reflections.append(sr)          # 永不截断 → 线性膨胀
+        self.full_trajectories.append(code)  # trial 越多,prompt 越长
+</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">memory_sliding.py</span><span class="lang">python</span><button class="copy" data-copy-target="c3b">复制</button></div>
+        <pre id="c3b"><code class="language-python"># ✅ 正确:Ω 滑动窗口(论文设计),只保留最近 capacity 条反思
+from dataclasses import dataclass, field
+
+@dataclass
+class EpisodicMemory:
+    capacity: int = 3                        # 论文 Ω=1-3;programming 用 1
+    reflections: list[str] = field(default_factory=list)
+    def add(self, sr: str) -> None:
+        self.reflections.append(sr)
+        self.reflections = self.reflections[-self.capacity:]  # 截断到窗口
+    # 注意:长期记忆只存"反思文本",不存完整 trajectory;
+    # 当前 trajectory 是短期记忆,每个 trial 重置,不进 memory。
+</code></pre>
+      </div>
+
+      <h3>如何避免再次触发</h3>
+      <p>把 <code>capacity</code> 作为显式参数,按任务轨迹长度调:短轨迹任务可放宽到 3,长代码任务收紧到 1。只持久化<strong>反思文本</strong>(长期记忆),当前 trajectory 属于短期记忆、随 trial 重置、不进 memory(这条区分在 01 章已建立)。上线前用最长的预期输入压测一遍,确认拼好的 prompt 在窗口内。</p>
+
+      <h2 id="cost"><span class="num">5.4</span>失败模式四:成本——相同预算下并不比采样划算</h2>
+
+      <p class="one-liner">症状:上了 Reflexion,延迟和 token 成本翻几倍,但在相同采样预算下,准确率并不优于简单多采几次。</p>
+
+      <h3>症状</h3>
+      <p>Reflexion 一轮(生成 → 评估 → 反思)耗时约 <strong>10-30 秒</strong>,而单次生成约 <strong>0.8 秒</strong>。多个 trial 叠加,延迟和成本成倍上升。关键的反直觉点:在<strong>相同采样预算</strong>下,Reflexion 的多次尝试 <strong>≈ self-consistency</strong>(多采样投票)——也就是说,把同样的 token 预算花在"采 N 次取多数"上,常常拿到相当甚至更好的结果,而 Reflexion 不一定赚回它的复杂度和延迟。</p>
+
+      <h3>根因</h3>
+      <p>回指 <a href="02-principles.html#why-language">02 章 #why-language</a>:Reflexion 用"推理期算力"换"可靠性"——每个 trial 都是一次完整的生成+评估+反思。当任务本身可以靠并行多采样解决(答案分布里正确答案占多数),反思那一步带来的 credit assignment 增益,抵不过它串行、多轮、长 prompt 的开销。Reflexion 的优势区是"单纯多采样救不了"的任务(初始正确率低、需要定向纠错),不是所有需要多次尝试的场景。</p>
+
+      <h3>修复:错误写法 / 正确写法</h3>
+      <div class="code-block">
+        <div class="header"><span class="filename">cost_blind.py</span><span class="lang">python</span><button class="copy" data-copy-target="c4a">复制</button></div>
+        <pre id="c4a"><code class="language-python"># ❌ 错误:默认上 Reflexion,不和等预算的 self-consistency 比
+answer = reflexion(task, max_trials=5)   # 5 轮串行,5×(生成+评估+反思)
+# 没有对照:同样的预算如果改成多采样投票会怎样?
+</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">cost_baselined.py</span><span class="lang">python</span><button class="copy" data-copy-target="c4b">复制</button></div>
+        <pre id="c4b"><code class="language-python"># ✅ 正确:在相同采样预算下,先和 self-consistency 对照再决策
+from collections import Counter
+
+def self_consistency(task, actor, n=5):
+    samples = [actor.act(task, reflections=[]) for _ in range(n)]
+    return Counter(samples).most_common(1)[0][0]   # 多数投票,可并行
+
+# 选型:仅当 Reflexion 在等预算下显著优于 self-consistency,
+# 且任务确实"多采样救不了"(初始正确率低),才付它的串行+延迟代价。
+def choose(task, actor, evaluator, budget=5):
+    baseline = self_consistency(task, actor, n=budget)
+    if not needs_directed_correction(task):   # 多采样能解 → 用更便宜的
+        return baseline
+    return reflexion(task, max_trials=budget)
+</code></pre>
+      </div>
+
+      <h3>如何避免再次触发</h3>
+      <p>把 self-consistency 当作<strong>默认对照基线</strong>:任何上 Reflexion 的决策,都要回答"同样的 token 预算花在多采样投票上,结果如何"。只有当反思的定向纠错确实赢过等预算的并行采样时,串行多轮的延迟和成本才值得。</p>
+
+      <h2 id="convergence"><span class="num">5.5</span>失败模式五:不收敛——平台期、局部最优、弱模型</h2>
+
+      <p class="one-liner">症状:trial 加了,曲线却拍平不动;或陷在同一类错误里反复反思;或换个弱模型直接毫无效果。</p>
+
+      <h3>症状</h3>
+      <p>三种相关表现:</p>
+      <ul>
+        <li><strong>平台期</strong>:WebShop 任务上,Reflexion 在 <strong>trial 4 即触顶</strong>,且<strong>始终不超过 ReAct</strong>(论文 Fig 6)。需要大量探索/多样性的任务,反思无法靠"复盘上次"突破。</li>
+        <li><strong>局部最优</strong>:反思反复指向同一类小修补,Actor 在一个错误区域里打转,不做结构性的换路线尝试。</li>
+        <li><strong>弱模型无效</strong>:starchat-beta 上,Reflexion 得分 <strong>0.26 = baseline 0.26</strong>——完全没有提升。</li>
+      </ul>
+
+      <h3>根因</h3>
+      <p>回指 <a href="02-principles.html#why-language">02 章 #why-language</a> 与 <a href="02-principles.html#credit-assignment">#credit-assignment</a>:Reflexion 探索的是"时间"维度(跨 trial 复盘),而非"宽度"维度(一次尝试内的分支搜索,那是 Tree of Thoughts 的领域)。当任务的瓶颈是<strong>探索不足</strong>而非<strong>纠错不到位</strong>时,反思——再精准的 credit assignment——也只能在已走过的路径附近微调,跳不出去。而弱模型无效的根因更深:<strong>自我纠错是更强模型的涌现能力</strong>。credit assignment 要求模型有能力推断"a_i 导致后续出错、应改成 a'_i";starchat 这一级的模型根本产不出有效的反思文本,语言强化无从发生。</p>
+
+      <h3>修复:错误写法 / 正确写法</h3>
+      <div class="code-block">
+        <div class="header"><span class="filename">converge_naive.py</span><span class="lang">python</span><button class="copy" data-copy-target="c5a">复制</button></div>
+        <pre id="c5a"><code class="language-python"># ❌ 错误:盲目加大 max_trials,期待更多轮就能突破平台期
+answer = reflexion(task, model="starchat-beta", max_trials=10)
+# 弱模型产不出有效反思;探索型任务再多轮也拍平 → 纯烧钱
+</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">converge_guarded.py</span><span class="lang">python</span><button class="copy" data-copy-target="c5b">复制</button></div>
+        <pre id="c5b"><code class="language-python"># ✅ 正确:能力门槛 + 平台期早停 + 探索型任务改用宽度搜索
+def run_with_guards(task, model, max_trials=4):
+    if model_capability(model) < CORRECTION_THRESHOLD:
+        return single_pass(task, model)          # 弱模型:别上反思
+    if task.needs_exploration:                   # 探索型:宽度而非时间
+        return tree_of_thoughts(task, model)     # 换搜索范式
+    prev = None
+    for t in range(max_trials):                  # 反思型:监控平台期
+        ans = reflexion_step(task, model)
+        if ans == prev:                          # 连续两轮无变化 → 平台期
+            break                                # 早停,不空烧 trial
+        prev = ans
+    return ans
+</code></pre>
+      </div>
+
+      <h3>如何避免再次触发</h3>
+      <p>先判任务瓶颈:是"纠错不到位"(Reflexion 的主场)还是"探索不足"(交给宽度搜索 / 多样性采样)。再设能力门槛:模型弱到产不出有效反思,就退回单遍生成。最后给循环装平台期早停——连续若干轮 Evaluator 信号或答案不变,立即停止,别用 max_trials 空烧。Actor 内部用 ReAct/CoT 的细节,见 <a href="../agent-reasoning-patterns/index.html">agent-reasoning-patterns 教程</a>;把 Reflexion 摆进"agent 自我改进"谱系的对比,见 <a href="../agent-planning/index.html">agent-planning 教程</a>。</p>
+
+      <h2 id="task-fit"><span class="num">5.6</span>失败模式六:任务不匹配——初始正确率太高反受其害</h2>
+
+      <p class="one-liner">症状:在本就高置信、初始正确率高的任务上启用反思,准确率不升反降。</p>
+
+      <h3>症状</h3>
+      <p>把 Reflexion 套在初始正确率已经很高的任务上,反思频繁地"修正"本来正确的答案,净效果是<strong>降准确率</strong>。<a href="https://arxiv.org/abs/2404.09129">《When Hindsight is Not 20/20》</a>(arXiv 2404.09129)给出量化的 <strong>RA(reflection)阈值</strong>:反思只在<strong>初始正确率 &lt; 20-30%</strong> 时净获益;用在高置信答案上有害——HotpotQA 上初始 <strong>80.3 → 反思后 76.2</strong>(净降 4.1)。</p>
+
+      <p>这和论文里 HumanEval 的成功并不矛盾:HumanEval 的 base 是 GPT-4 的 80% pass@1,Reflexion 把它推到 <strong>91%</strong>——但那是因为编程任务里"失败"由<em>可信的单元测试</em>判定(假阳性仅 1.4%),错误答案被准确识别后才反思。问题出在<em>初始正确率高 + 判据不可靠</em>同时成立时:反思去动了不该动的答案。</p>
+
+      <h3>根因</h3>
+      <p>回指 <a href="02-principles.html#reward-source">02 章 #reward-source</a>:Reflexion 的收益来自"把错误轨迹纠正过来"。当初始正确率已高,大多数答案本就是对的——可纠正的空间小,而误伤正确答案的风险大。收益与风险的天平在初始正确率高时整体倒向风险一侧。这与失败模式二(反思幻觉)同源——都是"对正确答案做了不必要的反思",但这里的判据是<strong>任务层面的初始正确率</strong>,是选型阶段就能预判的,不必等到运行时才发现翻转。</p>
+
+      <div class="callout insight">
+        <span class="label">非对称失败</span>
+        <p>论文给的更深一层判据:Evaluator 的<strong>假阴性可容忍</strong>(误判为失败,还能继续反思修正),<strong>假阳性致命</strong>(误判为通过,提前提交错误答案不可恢复)。这正是论文唯一一次失利的根因——MBPP-Python <strong>77.1% &lt; GPT-4 的 80.1%</strong>,因为自生成测试有 <strong>16.3% 假阳性</strong>(HumanEval 仅 1.4%),错代码被误判通过、提前提交。是 reward 源错了,不是反思错了。</p>
+      </div>
+
+      <h3>修复:错误写法 / 正确写法</h3>
+      <div class="code-block">
+        <div class="header"><span class="filename">fit_blanket.py</span><span class="lang">python</span><button class="copy" data-copy-target="c6a">复制</button></div>
+        <pre id="c6a"><code class="language-python"># ❌ 错误:对所有任务一刀切上反思,不看初始正确率
+def solve(task, actor, evaluator, reflector, memory):
+    return reflexion(task, actor, evaluator, reflector, memory)
+    # 高置信任务也反思 → 误伤正确答案(HotpotQA 80.3 → 76.2)
+</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">fit_gated.py</span><span class="lang">python</span><button class="copy" data-copy-target="c6b">复制</button></div>
+        <pre id="c6b"><code class="language-python"># ✅ 正确:用初始正确率 / 置信度门控是否启用反思
+RA_THRESHOLD = 0.30   # 《When Hindsight》:初始正确率 < 20-30% 才净获益
+
+def solve(task, actor, evaluator, reflector, memory):
+    first = actor.act(task, reflections=[])
+    passed, error = evaluator.evaluate(first, task)   # 需可信判据(低假阳性)
+    if passed:
+        return first                                  # 已对:不反思,避免误伤
+    if estimated_initial_accuracy(task) >= RA_THRESHOLD:
+        return first        # 高置信任务:即使这条错了,反思整体期望为负 → 不上
+    return reflexion(task, actor, evaluator, reflector, memory)
+</code></pre>
+      </div>
+
+      <h3>如何避免再次触发</h3>
+      <p>选型阶段先估初始正确率:本就高置信的任务(初始正确率超过 20-30%)默认不上 Reflexion,或仅在有<strong>低假阳性</strong>判据时谨慎启用。把"初始正确率是否够低"和"Evaluator 假阳性是否够低"做成两道并列的准入门槛——这正是下一节"什么时候不用"清单的核心两条。</p>
+
+      <h2 id="when-not"><span class="num">5.7</span>诚实段:什么时候不要用 Reflexion</h2>
+
+      <p>Reflexion 不是默认选项。把它当成有明确适用边界的工具,以下任一条成立时,默认<strong>不用</strong>:</p>
+
+      <table class="compare-table">
+        <caption>Reflexion 的"不适用"判据(满足任一条即默认不上)</caption>
+        <thead><tr><th>判据</th><th>为什么不适用</th><th>替代</th></tr></thead>
+        <tbody>
+          <tr><td>没有可靠的 Evaluator(无单元测试 / 环境 reward / 标准答案,只能模型自评)</td><td>无 oracle 时改进消失,且会净降准确率(§5.1)</td><td>单遍生成 / 工具 grounding(CRITIC)</td></tr>
+          <tr><td>任务初始正确率已高(&gt; 20-30%)</td><td>误伤正确答案的风险大于纠错收益(§5.6,HotpotQA 80.3→76.2)</td><td>单遍 / self-consistency</td></tr>
+          <tr><td>任务单次就能解 / 不允许重试</td><td>跨 trial 学习无处发生;Reflexion 的"时间维度"探索失去意义</td><td>单遍生成</td></tr>
+          <tr><td>用的是弱模型(自我纠错能力未涌现)</td><td>产不出有效反思文本,starchat-beta 实测 0.26 = baseline(§5.5)</td><td>换更强模型 / 单遍</td></tr>
+          <tr><td>瓶颈是探索不足而非纠错不到位</td><td>反思只在已走路径附近微调,跳不出(WebShop trial4 平台期,§5.5)</td><td>Tree of Thoughts / 多样性采样</td></tr>
+          <tr><td>相同预算下 self-consistency 已够好</td><td>串行多轮 + 长 prompt 的开销抵不过并行采样(§5.4)</td><td>self-consistency</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">现状提醒 · 截至 2026-06</span>
+        <p>"让模型无 grounding 自己 review 自己"已被 Huang et al.(ICLR 2024)证伪——不要学。值得注意的转向:SCoRe(DeepMind,2024-09,arXiv 2409.12917)用多轮 RL 在自生成数据上训练,得到真正的内在自我纠错(+15.6% MATH),把 Huang 的结论改写为"未经训练的 prompting 不行",而非"原理上不可能"。当下共识(CMU,2026-02):外部反思循环与 o1/R1 这类推理模型<strong>互补而非替代</strong>,且外部反思循环存在 <strong>3-7 轮的能力天花板</strong>——这正是 §5.5 平台期的更一般形式。</p>
+      </div>
+
+      <section class="self-check">
+        <h2>自测</h2>
+        <ol>
+          <li>同一套 Reflexion 循环,接 HumanEval(单元测试当 Evaluator)收益显著,接"无标准答案的开放问答 + 模型自评"却净降准确率。用 §5.1 的机制解释这个落差,并指出根因链到 02 章哪个 anchor。</li>
+          <li>Llama-2 在 GSM8K 上从 62.0 掉到 36.5。这个 25.5 的净降里,"correct→incorrect 翻转"扮演什么角色?把反思触发条件改成什么,能直接堵住这个失败模式?</li>
+          <li>一位工程师为提升收敛,把 <code>max_trials</code> 从 3 调到 10,用的是 starchat-beta。预测结果,并说明为什么这同时踩中"弱模型"和"成本"两个失败模式。</li>
+          <li>《When Hindsight is Not 20/20》说反思只在初始正确率 &lt; 20-30% 才净获益。HotpotQA 上 80.3→76.2 是这条的例证。它和论文 HumanEval 80%→91% 的成功为什么不矛盾?(提示:判据的假阳性率。)</li>
+        </ol>
+        <details>
+          <summary>展开参考答案</summary>
+          <p><strong>1.</strong> HumanEval 的 Evaluator 是外部、确定的单元测试(假阳性仅 1.4%),"失败"判定可信,反思指向真实错误;开放问答用模型自评、无 ground-truth 锚,判定本身带着和 Actor 同源的偏差,反思被错误信号驱动,把对的改错。根因链到 <code>02-principles.html#reward-source</code>:Reflexion 的学习由 reward 驱动,reward 不可信则方向错。</p>
+          <p><strong>2.</strong> 翻转是净降的主因:31% 的正确答案被反思改错,直接拖垮总分。把触发条件从"每轮都反思"改成"仅当可信 Evaluator 判失败才反思"(并在判通过时立即 <code>return</code>),正确答案不进反思分支,翻转被堵住——这就是 Huang 说的"oracle 决定何时停"。</p>
+          <p><strong>3.</strong> 结果:几乎无提升且成本激增。starchat-beta 自我纠错能力未涌现(实测 0.26 = baseline),产不出有效反思文本,加轮数也补不上;同时 10 轮串行每轮 10-30s,延迟和 token 成本线性上升,在等预算下还不如 self-consistency。踩中 §5.5(弱模型)+ §5.4(成本)。</p>
+          <p><strong>4.</strong> 不矛盾。关键在判据的假阳性率:HumanEval 单元测试假阳性仅 1.4%,错误答案被准确识别后才反思,初始正确率虽不低但纠错指向真实错误;HotpotQA 案例是"初始正确率高 + 判据不可靠"叠加,反思动了不该动的正确答案。论文里 MBPP 失利(77.1 &lt; 80.1)同样源于 16.3% 假阳性。<strong>是 reward 源的质量决定成败,不是任务类型。</strong></p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">刚好够不着 · 挑战</span>
+        <h3>给循环加一道"是否值得反思"的护栏</h3>
+        <p>基于 03 章的 <code>reflexion.py</code> 骨架,设计一个 <code>should_reflect(task, first_answer, evaluator) -&gt; bool</code> 护栏,要同时挡住本章的失败模式二(反思幻觉)和六(高置信反改错)。约束:① 判通过立即停;② 用初始正确率阈值(RA &lt; 20-30%)门控;③ 给 Evaluator 留一个"假阳性率"参数,假阳性高于阈值时拒绝据其提前提交。写出函数 + 三行注释说明每个分支堵的是哪个失败模式。把它接进主循环后,§5.2 的 31% 翻转和 §5.6 的 80.3→76.2 各被哪一行挡下?(参考实现留到 05 章 capstone。)</p>
+      </div>
+
+      <div class="references">
+        <h3>Further reading</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2310.01798">Huang et al., 《LLMs Cannot Self-Correct Reasoning Yet》(ICLR 2024, arXiv 2310.01798)</a> — §5.1/5.2 的数据来源:无 oracle 改进消失、correct→incorrect 翻转。</li>
+          <li><a href="https://arxiv.org/abs/2404.09129">《When Hindsight is Not 20/20》(arXiv 2404.09129)</a> — §5.6 的 RA 阈值(初始正确率 &lt; 20-30% 才净获益)。</li>
+          <li><a href="https://arxiv.org/abs/2303.11366">Shinn et al., Reflexion(arXiv 2303.11366)</a> — WebShop 平台期(Fig 6)、starchat 弱模型、MBPP 假阳性等原始结论。</li>
+          <li><a href="https://arxiv.org/abs/2409.12917">SCoRe(DeepMind, arXiv 2409.12917)</a> — 把"prompting 自纠错不行"改写为"未经训练才不行"的对照。</li>
+        </ul>
+      </div>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="03-practice.html">
+          <span class="label">← 上一章</span>
+          <span class="title">03 实操:跑通最小 Reflexion 循环</span>
+        </a>
+        <a class="next" href="05-capstone.html">
+          <span class="label">下一章 →</span>
+          <span class="title">05 综合:带护栏的自修正反思循环</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#evaluator-dependency" data-toc-target="evaluator-dependency">5.1 没有 oracle</a></li>
+        <li><a href="#reflection-hallucination" data-toc-target="reflection-hallucination">5.2 反思幻觉</a></li>
+        <li><a href="#memory-bloat" data-toc-target="memory-bloat">5.3 记忆膨胀</a></li>
+        <li><a href="#cost" data-toc-target="cost">5.4 成本</a></li>
+        <li><a href="#convergence" data-toc-target="convergence">5.5 不收敛</a></li>
+        <li><a href="#task-fit" data-toc-target="task-fit">5.6 任务不匹配</a></li>
+        <li><a href="#when-not" data-toc-target="when-not">5.7 什么时候不用</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>运行期 Evaluator（B 面） · Agent Eval 评测教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-methods.html">02 方法</a><span class="sep">—</span>
+    <a href="03-dataset-pipeline.html">03 数据集与流程</a><span class="sep">—</span>
+    <a href="04-tools-frontier.html">04 工具与前沿</a><span class="sep">—</span>
+    <a href="05-runtime-evaluator.html" class="current">05 运行期 Evaluator</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 05</p>
+        <h1>运行期 Evaluator：把判分搬进 agent 的循环（B 面）</h1>
+        <p class="recap">前四章讲的全是 A——开发期、离线的评测体系。这一章补上第 1 章特意划出去的另一半：B，运行期 Evaluator。重点不是重教 Reflexion / Self-RAG 的机制（那些在别处），而是说清一件没人讲透的事：B 用的就是第 2 章那套 LLM-as-judge，所以它继承全部偏差；而且 B 自己是一个必须用 A 来验证的组件。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的认识</p>
+        <ul>
+          <li>运行期 Evaluator（B）是什么：把"判分"从离线测试集搬进 agent 推理循环，每次任务实时跑——evaluator-optimizer 是它的通用形态。</li>
+          <li>B 就是 LLM-as-judge 换了个位置，所以第 2 章的三大偏差原样继承，其中 generator==evaluator 同模型是最危险配置。</li>
+          <li>A 与 B 的接口：B 是一个判分器，它准不准要用 A（golden set + κ）量；一个乱判的 B 比没有更糟。</li>
+        </ul>
+      </section>
+
+      <h2 id="what-is-b"><span class="num">5.1</span><span>运行期 Evaluator 是什么</span></h2>
+
+      <p class="one-liner">B = 把"判分"放进 agent 的推理循环里，让模型边做边给自己的中间产物打分、据此决定要不要重做。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>LLM 第一次的输出常常"差一点"——代码跑不过、简报漏了关键条件。与其把这个半成品直接交付，不如在循环内加一道关：生成一版 → 评判这版 → 不达标就带着反馈重写。这道"关"就是 B。它和 A 的根本区别在<strong>时机</strong>：A 在开发期对固定数据集跑、产出回归报告；B 在<strong>每一次真实任务</strong>的推理过程中跑、产出一个更好的当次输出。</p>
+      </div>
+
+      <p>B 最通用的形态叫 <strong>evaluator-optimizer</strong>（Anthropic 在《Building Effective Agents》里给的名字）：一个角色负责生成，另一个角色负责评判，两者迭代到评判通过为止。图 5.1 是这个回路。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="evaluator-optimizer 回路：生成器产出草稿、评判器判分、未达标带反馈重写、达标则交付">
+          <defs>
+            <marker id="eo-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="eo-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- feedback loop arc over the top (drawn first, sits behind) -->
+          <polyline points="600,80 600,46 135,46 135,80" class="diagram-accent" marker-end="url(#eo-ar-v)"/>
+          <text x="368" y="40" text-anchor="middle" class="branch-label">未达标 · 自然语言反馈带回</text>
+
+          <!-- generator -->
+          <rect x="60" y="80" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="135" y="105" text-anchor="middle" class="node-label">生成器</text>
+          <text x="135" y="123" text-anchor="middle" class="edge-label">产出草稿</text>
+
+          <!-- evaluator -->
+          <rect x="300" y="80" width="180" height="56" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="390" y="105" text-anchor="middle" class="node-label-accent">评判器</text>
+          <text x="390" y="123" text-anchor="middle" class="edge-label">= LLM-as-judge</text>
+
+          <!-- decision diamond -->
+          <polygon points="600,82 666,114 600,146 534,114" class="diagram-ink node-fill"/>
+          <text x="600" y="118" text-anchor="middle" class="node-label">达标？</text>
+
+          <!-- terminal: ship -->
+          <rect x="535" y="210" width="130" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="600" y="238" text-anchor="middle" class="node-label">交付输出</text>
+
+          <!-- forward arrows -->
+          <line x1="210" y1="108" x2="300" y2="108" class="diagram-ink" marker-end="url(#eo-ar)"/>
+          <text x="255" y="100" text-anchor="middle" class="edge-label">草稿</text>
+          <line x1="480" y1="114" x2="534" y2="114" class="diagram-ink" marker-end="url(#eo-ar)"/>
+          <line x1="600" y1="146" x2="600" y2="210" class="diagram-ink" marker-end="url(#eo-ar)"/>
+          <text x="612" y="182" text-anchor="start" class="branch-label">达标</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>evaluator-optimizer：生成→评判→（不达标）带反馈重写的回路。<strong>注意</strong>：朱红色那个"评判器"不是新东西，它就是第 2 章的 LLM-as-judge——只是从离线测试集挪到了循环里实时跑。这一点决定了下面两节。</figcaption>
+      </figure>
+
+      <h2 id="patterns"><span class="num">5.2</span><span>B 的几种形态（机制在别处，这里给地图）</span></h2>
+
+      <p>evaluator-optimizer 是骨架，套上不同的"评判什么 / 何时评"就长成了几个有名字的模式。它们的<strong>机制</strong>分散在其它教程里讲过，这一章不重复，只把它们摆进同一张表，让边界清楚。</p>
+
+      <table class="compare-table">
+        <caption>表 5.1 · B 的常见形态（机制详见各自链接）</caption>
+        <thead>
+          <tr><th>形态</th><th>评判什么</th><th>何时触发</th><th>机制详见</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected"><td>evaluator-optimizer</td><td>整个输出达没达到评判标准</td><td>每次任务，迭代到通过</td><td><a href="../agent-interview/03-agent-arch.html#s5">agent-interview §3.5</a></td></tr>
+          <tr><td>Reflexion</td><td>这一回合哪里错了（口头自我批评）</td><td>失败后，把批评存进记忆再重试</td><td><a href="../agent-reasoning-patterns/02-grounding.html#s24">agent-reasoning-patterns §2.4</a></td></tr>
+          <tr><td>Self-RAG</td><td>要不要检索 / 检索回来的相不相关</td><td>检索前后，模型自评 token 控制</td><td><a href="../rag/04-frontier.html#s43">rag §4.3</a></td></tr>
+          <tr><td>CRAG（Corrective RAG）</td><td>检索质量够不够（够 / 模糊 / 不够）</td><td>检索后，差就触发改写或转网搜</td><td><a href="../rag/04-frontier.html#s43">rag §4.3</a></td></tr>
+          <tr><td>LATS</td><td>树搜索里每个节点的好坏</td><td>搜索展开时，给候选打分剪枝</td><td><a href="../agent-reasoning-patterns/03-search-frontier.html#s31">agent-reasoning-patterns §3.1</a></td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 一张表看穿</span>
+        <p>这五个名字差异只在"评判什么、何时触发"两栏。把这两栏抽掉，剩下的都是同一句话：<strong>在循环里插一个 LLM-as-judge，用它的判分驱动下一步</strong>。记住这个骨架，遇到任何新名字（下个月还会有），先问它"评判什么、何时触发"，就能归位。</p>
+      </div>
+
+      <h2 id="b-is-judge"><span class="num">5.3</span><span>B 继承 A 第 2 章 judge 的全部偏差</span></h2>
+
+      <p>既然 B 的评判器就是 LLM-as-judge，第 2 章列的三大偏差<a href="02-methods.html#judge-bias">（§2.3）</a>原样搬过来，而且在运行期更隐蔽——因为没有离线分数摆在面前，没人盯着它判得对不对。</p>
+
+      <ul>
+        <li><strong>verbosity bias</strong>：评判器偏爱更长的草稿，于是 evaluator-optimizer 每迭代一轮输出往往更啰嗦，而不是更好。</li>
+        <li><strong>position / 自我一致性</strong>：同一版草稿评判器多次给的判定未必一致，循环会在"通过 / 不通过"之间抖动。</li>
+        <li><strong>self-enhancement bias</strong>：评判器偏爱自己模型家族的输出——而在 B 里，<strong>生成器和评判器常常就是同一个模型</strong>。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">最危险配置 · generator == evaluator</span>
+        <p>当生成器和评判器是同一个模型，self-enhancement bias 拉满：它在评判自己刚写的东西。更糟的是<strong>共享盲点</strong>——一个"错得很流畅"的草稿，写它的模型看不出错，评判它的同款模型一样看不出，于是循环高高兴兴地收敛到一个错误答案。这正是第 2 章那条警告在运行期的版本。缓解：评判器换一个不同家族的模型，或退回到有真值的 grounding（让 Observation 而不是另一个 LLM 来当裁判，见 <a href="../agent-reasoning-patterns/02-grounding.html#s24">Reflexion 的接地</a>）。</p>
+      </div>
+
+      <p>还有一条比偏差更根本的限制：<strong>评判标准模糊时，越反思越跑偏</strong>。当任务没有清晰的对错判据，评判器的自我批评本身就不可靠，多迭代几轮反而把对的改错。所以 B 不是默认开关。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 evaluator-optimizer 跑了 5 轮，每轮评判器都说"还能更好"，输出越来越长。这是哪个偏差在作祟？该怎么改？</p>
+        <details>
+          <summary>展开答案（先停 10 秒）</summary>
+          <p>verbosity bias：评判器把"更长"误当成"更好"，于是给越长的草稿越高分，循环朝啰嗦的方向收敛。改法：在评判 rubric 里显式加入"简洁度 / 是否有冗余"作为一条二元判据（回到 <a href="02-methods.html#rubric">§2.5 错误驱动的判据</a>），或设一个硬迭代上限 + 长度预算，别让循环自己决定停。</p>
+        </details>
+      </div>
+
+      <h2 id="eval-the-evaluator"><span class="num">5.4</span><span>B 本身要用 A 来验证</span></h2>
+
+      <p class="one-liner">B 是一个判分器；判分器准不准，要用第 2 章那套校准方法（golden set + Cohen's κ）量出来。</p>
+
+      <p>这是 A 和 B 真正接上的地方，也是这一章存在的理由。开发期的离线评测（A）不只是用来评 agent 的最终产物——它还是<strong>用来验证 B 这个运行期评判器</strong>的工具。一个没被校准过的 evaluator，会在循环里自信地把对的草稿判成"不达标"、把错的判成"通过"。这样的 B 比没有 B 更糟：它增加了成本，还引入了一个你看不见的错误源。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="A 与 B 的连接：开发期 A 用 golden set 加 κ 校准运行期 B 评判器，B 继承第 2 章 judge 偏差">
+          <defs>
+            <marker id="ab-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+            <marker id="ab-ar-k" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- Group A (dev-time, dashed) -->
+          <rect x="36" y="64" width="250" height="208" rx="8" class="diagram-soft"/>
+          <text x="161" y="86" text-anchor="middle" class="edge-label" font-weight="700">开发期 · A（离线）</text>
+          <rect x="66" y="104" width="190" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="161" y="128" text-anchor="middle" class="node-label">golden set</text>
+          <text x="161" y="146" text-anchor="middle" class="edge-label">人工标注的真值</text>
+          <rect x="66" y="192" width="190" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="161" y="216" text-anchor="middle" class="node-label">Cohen's κ</text>
+          <text x="161" y="234" text-anchor="middle" class="edge-label">量 B 判得准不准</text>
+          <line x1="161" y1="160" x2="161" y2="192" class="diagram-ink" marker-end="url(#ab-ar-k)"/>
+
+          <!-- Group B (runtime, dashed) -->
+          <rect x="434" y="64" width="250" height="208" rx="8" class="diagram-soft"/>
+          <text x="559" y="86" text-anchor="middle" class="edge-label" font-weight="700">运行期 · agent 循环</text>
+          <rect x="464" y="120" width="200" height="58" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="564" y="144" text-anchor="middle" class="node-label-accent">B：运行期 Evaluator</text>
+          <text x="564" y="162" text-anchor="middle" class="edge-label">= LLM-as-judge</text>
+          <text x="559" y="214" text-anchor="middle" class="edge-label">⚠ 继承第 2 章三大偏差</text>
+          <text x="559" y="234" text-anchor="middle" class="edge-label">generator==evaluator 最危险</text>
+
+          <!-- A validates B arrow -->
+          <line x1="286" y1="148" x2="464" y2="148" class="diagram-accent" marker-end="url(#ab-ar)"/>
+          <text x="375" y="138" text-anchor="middle" class="branch-label">用 A 校准 B</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.2</span>A 与 B 的接口：开发期的 golden set + κ（A）是用来<strong>校准</strong>运行期评判器（B）的工具。<strong>注意</strong>：箭头方向是 A→B——很多人以为 A 和 B 是两个独立话题，其实 A 是 B 的"质检员"。B 没被 A 校准过，就是个没人验过的裁判。</figcaption>
+      </figure>
+
+      <p>落到第 3 章那个个人情报员 Agent 上：如果给它加一个运行期评判器，让简报生成后自评"每条 [n] 引用是否真的有据"，那么这个评判器本身要先进 golden set——拿一批人工标过"忠实 / 编造"的简报喂给它，量它和人工判定的 κ。κ 不达标，这个运行期自评就是噪声，接进循环只会帮倒忙。</p>
+
+      <h2 id="when"><span class="num">5.5</span><span>什么时候上 B，什么时候别</span></h2>
+
+      <p>B 不免费：每迭代一轮就多一组"生成 + 评判"调用，token 和延迟成倍涨。是否划算，取决于三个问题，图 5.3 是判定路径。</p>
+
+      <figure>
+        <svg viewBox="0 0 700 440" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="决策树：评判标准明确吗、提升值这些 token 吗、评判器和生成器不同吗，决定该不该上运行期 Evaluator">
+          <defs>
+            <marker id="dt-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- start -->
+          <ellipse cx="350" cy="34" rx="74" ry="22" class="diagram-ink node-fill"/>
+          <text x="350" y="40" text-anchor="middle" class="node-label">要不要上 B？</text>
+          <line x1="350" y1="56" x2="350" y2="78" class="diagram-ink" marker-end="url(#dt-ar)"/>
+
+          <!-- Q1 -->
+          <polygon points="350,78 470,120 350,162 230,120" class="diagram-ink node-fill"/>
+          <text x="350" y="124" text-anchor="middle" class="node-label">评判标准明确？</text>
+          <!-- Q1 no -> left terminal -->
+          <line x1="230" y1="120" x2="180" y2="120" class="diagram-ink" marker-end="url(#dt-ar)"/>
+          <text x="205" y="112" text-anchor="middle" class="branch-label">否</text>
+          <rect x="22" y="98" width="158" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="101" y="118" text-anchor="middle" class="node-label">别上</text>
+          <text x="101" y="135" text-anchor="middle" class="edge-label">越反思越跑偏</text>
+          <!-- Q1 yes down -->
+          <line x1="350" y1="162" x2="350" y2="196" class="diagram-ink" marker-end="url(#dt-ar)"/>
+          <text x="362" y="182" text-anchor="start" class="branch-label">是</text>
+
+          <!-- Q2 -->
+          <polygon points="350,196 478,238 350,280 222,238" class="diagram-ink node-fill"/>
+          <text x="350" y="242" text-anchor="middle" class="node-label">提升值这些 token？</text>
+          <!-- Q2 no -> left terminal -->
+          <line x1="222" y1="238" x2="180" y2="238" class="diagram-ink" marker-end="url(#dt-ar)"/>
+          <text x="201" y="230" text-anchor="middle" class="branch-label">否</text>
+          <rect x="22" y="216" width="158" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="101" y="236" text-anchor="middle" class="node-label">别上</text>
+          <text x="101" y="253" text-anchor="middle" class="edge-label">成本翻倍不值</text>
+          <!-- Q2 yes down -->
+          <line x1="350" y1="280" x2="350" y2="314" class="diagram-ink" marker-end="url(#dt-ar)"/>
+          <text x="362" y="300" text-anchor="start" class="branch-label">是</text>
+
+          <!-- Q3 -->
+          <polygon points="350,314 482,356 350,398 218,356" class="diagram-ink node-fill"/>
+          <text x="350" y="360" text-anchor="middle" class="node-label">评判器≠生成器？</text>
+          <!-- Q3 no -> left terminal -->
+          <line x1="218" y1="356" x2="180" y2="356" class="diagram-ink" marker-end="url(#dt-ar)"/>
+          <text x="199" y="348" text-anchor="middle" class="branch-label">否</text>
+          <rect x="14" y="334" width="166" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="97" y="354" text-anchor="middle" class="node-label">先换 judge 模型</text>
+          <text x="97" y="371" text-anchor="middle" class="edge-label">避 self-enhancement</text>
+          <!-- Q3 yes -> right terminal -->
+          <line x1="482" y1="356" x2="520" y2="356" class="diagram-accent" marker-end="url(#dt-ar)"/>
+          <text x="501" y="348" text-anchor="middle" class="branch-label">是</text>
+          <rect x="520" y="332" width="166" height="48" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="603" y="352" text-anchor="middle" class="node-label-accent">上 B</text>
+          <text x="603" y="369" text-anchor="middle" class="edge-label">且先用 A 校准它</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.3</span>该不该上运行期 Evaluator 的判定路径。<strong>注意</strong>：三道关任意一道不过就别上——尤其第一关"评判标准明确吗"，模糊时 B 是负价值；最后即便决定上，也要先用 A（§5.4）把它校准过。</figcaption>
+      </figure>
+
+      <p>这条判据和第 3 章那个"先做错误分析"的立场一致：B 只在你<strong>已经</strong>通过读 trace 摸清了"什么算好、什么算坏"之后才值得上——清晰的判据是 B 能工作的前提，而清晰的判据恰恰来自 A 那一侧的错误分析。</p>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程把答案写下来，再展开对照。</p>
+        <ol>
+          <li>用一句话说清 A 和 B 在"时机"上的根本区别。</li>
+          <li>evaluator-optimizer 里那个"评判器"，本质上是第 2 章的什么东西？这句话能推出哪一个最危险的配置？</li>
+          <li>为什么说"一个没被校准过的运行期 Evaluator 比没有它更糟"？</li>
+          <li>什么情况下绝对不该上 B？说出那个最硬的前置条件。</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>A 在<strong>开发期</strong>对固定数据集离线跑、防回归；B 在<strong>每次真实任务的推理过程中</strong>实时跑、提升当次输出。同样用模型打分，时机完全不同。</li>
+            <li>就是 <strong>LLM-as-judge</strong>。由此推出最危险配置：<strong>生成器和评判器是同一个模型</strong>——self-enhancement bias 拉满 + 共享盲点，循环会自信地收敛到错误答案。</li>
+            <li>因为它会在循环里自信地误判——把对的草稿判"不达标"反复重写、把错的判"通过"交付。它既加了成本，又引入一个没人盯着的错误源；而你以为加了它质量会更好。所以 B 上线前必须用 A（golden set + κ）校准。</li>
+            <li><strong>评判标准模糊</strong>时绝对不上——判据不清，评判器的自我批评不可靠，越迭代越跑偏，B 是负价值。清晰判据是 B 工作的硬前提。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给个人情报员 Agent 设计一个"安全"的运行期 Evaluator</h3>
+        <p>第 3 章给这个 agent 建了离线评测。现在要给它加一个运行期自评：简报生成后，自己检查"每条 [n] 引用是否在源里真的存在"。请写出：① 这个评判器该不该用和生成器同款的模型，为什么；② 上线前你怎么用 A 校准它（标多少、量什么）；③ 一个会让这个自评变成负价值的具体场景。写完对照 <a href="#eval-the-evaluator">§5.4</a> 与 <a href="#when">§5.5</a>。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>①"引用是否在源里存在"其实是个<strong>有真值</strong >的判据（能逐条核对），接近 reference-based，self-enhancement 风险小，但仍建议评判器换一个模型以防共享盲点。②标 30–100 条人工判过"忠实/编造"的简报，量评判器判定与人工的 Cohen's κ。③负价值场景：当源文档本身被指令注入污染，"存在于源里"被满足但内容是恶意的——此时这个自评给出虚假的安心。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/engineering/building-effective-agents">Anthropic · Building Effective Agents</a>（evaluator-optimizer 工作流）</li>
+          <li><a href="https://arxiv.org/abs/2303.11366">Shinn et al. 2023 · Reflexion</a>（口头自我批评 + 情景记忆）</li>
+          <li><a href="https://arxiv.org/abs/2310.11511">Asai et al. 2023 · Self-RAG</a>（模型自评检索）</li>
+          <li>本教程内部：<a href="02-methods.html#judge-bias">§2.3 judge 偏差</a> · <a href="02-methods.html#calibration">§2.6 校准</a> · <a href="../agent-reasoning-patterns/index.html">agent-reasoning-patterns</a>（推理视角讲同一批模式）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="04-tools-frontier.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">04 · 工具与前沿</span>
+        </a>
+        <a href="06-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">06 · 自测</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#what-is-b" data-toc-target="what-is-b">5.1 B 是什么</a></li>
+        <li><a href="#patterns" data-toc-target="patterns">5.2 B 的形态</a></li>
+        <li><a href="#b-is-judge" data-toc-target="b-is-judge">5.3 继承 judge 偏差</a></li>
+        <li><a href="#eval-the-evaluator" data-toc-target="eval-the-evaluator">5.4 用 A 验证 B</a></li>
+        <li><a href="#when" data-toc-target="when">5.5 何时上 B</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) { tocLinks.forEach(a => a.classList.remove('active')); link.classList.add('active'); }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

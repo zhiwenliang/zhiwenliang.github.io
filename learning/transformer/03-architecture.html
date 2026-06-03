@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 整体架构 · Transformer 深挖教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+.chapter-opener .meta-row {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 心智模型</a><span class="sep">—</span>
+    <a href="02-attention.html">02 注意力</a><span class="sep">—</span>
+    <a href="03-architecture.html" class="current">03 整体架构</a><span class="sep">—</span>
+    <a href="04-training-inference.html">04 训练与推理</a><span class="sep">—</span>
+    <a href="05-modern.html">05 经典到现代</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03</p>
+        <h1>整体架构：把零件拼成一张网络</h1>
+        <p class="recap">第 02 章给了注意力这个核心算子——本章把它和位置编码、残差、归一化、FFN 拼成一块完整的 block，再堆成整张网络，并讲清经典 encoder-decoder 与现代 decoder-only 的区别。</p>
+        <p class="meta-row"><strong>本章交付</strong>：位置编码必要性 + 残差梯度分析 + post/pre-norm 选择依据 + FFN 键值记忆观 + 完整 block 前向 + 堆叠结构 + enc-dec vs decoder-only　|　<strong>带走的能力</strong>：能画出一个完整的 Transformer block 并说清每个组件的存在理由，能区分经典 encoder-decoder 和 decoder-only 的结构差异</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">读完本章，你脑子里会多出这几条</p>
+        <ul>
+          <li>注意力是<strong>置换等变</strong>的——打乱输入、输出同样打乱，模型看到的是一袋 embedding 不是序列；位置信息必须显式注入。</li>
+          <li>残差连接是给梯度的<strong>加法高速路</strong>：<code>∂L/∂x = ∂L/∂F(x) + 1</code>，顶层梯度至少原样到底层，解决了深层训练的梯度消失。</li>
+          <li>FFN 占 Transformer 约 <strong>2/3 参数</strong>，是"知识"的主要存储处——W₁ 的行是 keys，W₂ 的列是 values，低层存句法、高层存事实。</li>
+          <li>一块 block = 注意力（<strong>通信</strong>）+ FFN（<strong>计算</strong>）+ 残差 + 归一化，堆 N 层就是整张网络；encoder-decoder 多一层 cross-attention，decoder-only 没有 cross-attention。</li>
+        </ul>
+      </section>
+
+      <!-- ══════════════════════════════ §3.1 ══════════════════════════════ -->
+      <h2 id="pos-enc"><span class="num">3.1</span><span>位置编码：注意力是置换等变的</span></h2>
+
+      <p class="one-liner">点积注意力对输入的排列顺序没有感知，"dog bites man" 与 "man bites dog" 在注入位置前产生完全相同的注意力分数——位置必须显式注入。</p>
+
+      <p>第 02 章的 <a href="02-attention.html#scaled-dot">scaled dot-product attention</a> 计算的是 <code>softmax(QKᵀ/√d_k)·V</code>。把输入 token 顺序打乱，Q、K、V 矩阵的行跟着一起打乱，输出矩阵的行也同样打乱——任意一对 token 之间的注意力分数完全不变。这个性质叫<strong>置换等变</strong>（permutation-equivariant）：对输入施加某种排列变换，输出也以同样的排列变换响应。</p>
+
+      <p>置换等变的直接后果：注意力层把输入序列当成一个<strong>集合</strong>（set），而不是序列。两个词序完全相反的句子，在加位置编码之前，每个 token 的 query 向量和 key 向量都一模一样，因而所有位置两两之间的相似度也一样。语义就此丢失——"dog bites man" 和 "man bites dog" 对模型来说无法区分。</p>
+
+      <div class="rationale">
+        <span class="label">为什么用加法而不是拼接</span>
+        <p>位置编码加到 embedding 向量上，而不是拼接在后面。拼接会把 d_model 扩到 2d_model，之后所有投影矩阵的规模翻倍，参数量和 FLOPs 都翻倍。加法代价为零：每个维度上，embedding 值和位置信号同时贡献，学习过程会自动把两种信息分配到不同维度或以叠加方式编码。</p>
+      </div>
+
+      <p>原版 Transformer 用的是正弦位置编码（sinusoidal positional encoding），公式如下：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">正弦位置编码</span><span class="lang">数学</span></div>
+        <pre><code class="language-none">PE(pos, 2i)   = sin( pos / 10000^(2i / d_model) )
+PE(pos, 2i+1) = cos( pos / 10000^(2i / d_model) )
+
+  pos: 词在序列中的位置 (0, 1, 2, ...)
+  i  : 编码维度下标 (0 ≤ i &lt; d_model/2)
+
+  每个 pos 得到一个 d_model 维向量；
+  偶数维用 sin、奇数维用 cos；
+  频率从低(i=0, 周期≈62832)到高(i=d_model/2, 周期≈2π)。
+
+  最终: x_embedded = token_embedding + PE   ← 相加，不拼接</code></pre>
+      </div>
+
+      <p>正弦编码的两个设计意图：第一，不同位置的编码互相不同，模型能区分 pos=0 和 pos=7；第二，位置之间的相对距离可以用线性变换表达——PE(pos+k) 可以写成 PE(pos) 的线性函数，理论上让模型学习"相对距离"变得更容易。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 2026 年的状态</span>
+        <p>正弦绝对位置编码已被现代 LLM 全面替换。<a href="05-modern.html#rope">第 05 章</a>的 RoPE（旋转位置编码）通过在 Q/K 上直接旋转、让点积天然依赖相对距离，目前是 Llama、Qwen、Mistral、DeepSeek 等几乎所有主流开放模型的标配。本章讲原版是为了理解机制根源，05 章再讲演化。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="置换等变性示意：两种词序在去掉位置编码后注意力分数相同，加入位置编码后才能区分">
+          <defs>
+            <marker id="pe-ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="pe-ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== LEFT COLUMN: without PE ===== -->
+          <text x="170" y="22" text-anchor="middle" class="node-label" font-weight="700">无位置编码</text>
+
+          <!-- sentence A -->
+          <rect x="60" y="34" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="92" y="55" text-anchor="middle" class="node-label">dog</text>
+          <rect x="134" y="34" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="166" y="55" text-anchor="middle" class="node-label">bites</text>
+          <rect x="208" y="34" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="240" y="55" text-anchor="middle" class="node-label">man</text>
+          <text x="170" y="82" text-anchor="middle" class="edge-label">「dog bites man」</text>
+
+          <!-- sentence B -->
+          <rect x="60" y="104" width="64" height="32" rx="4" class="diagram-soft node-fill"/>
+          <text x="92" y="125" text-anchor="middle" class="node-label" fill="#A3A3A3">man</text>
+          <rect x="134" y="104" width="64" height="32" rx="4" class="diagram-soft node-fill"/>
+          <text x="166" y="125" text-anchor="middle" class="node-label" fill="#A3A3A3">bites</text>
+          <rect x="208" y="104" width="64" height="32" rx="4" class="diagram-soft node-fill"/>
+          <text x="240" y="125" text-anchor="middle" class="node-label" fill="#A3A3A3">dog</text>
+          <text x="170" y="152" text-anchor="middle" class="edge-label">「man bites dog」</text>
+
+          <!-- equal sign -->
+          <rect x="90" y="185" width="160" height="36" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="170" y="208" text-anchor="middle" class="node-label-accent">注意力分数相同</text>
+          <line x1="170" y1="168" x2="170" y2="185" class="diagram-soft" marker-end="url(#pe-ar-ink)"/>
+
+          <text x="170" y="248" text-anchor="middle" class="edge-label">两句 token 相同，仅词序不同</text>
+          <text x="170" y="264" text-anchor="middle" class="edge-label">→ 模型无法区分语义</text>
+
+          <!-- ===== DIVIDER ===== -->
+          <line x1="360" y1="10" x2="360" y2="290" class="diagram-soft"/>
+
+          <!-- ===== RIGHT COLUMN: with PE ===== -->
+          <text x="540" y="22" text-anchor="middle" class="node-label" font-weight="700">加位置编码后</text>
+
+          <!-- sentence A with PE -->
+          <rect x="420" y="34" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="452" y="49" text-anchor="middle" class="node-label">dog</text>
+          <text x="452" y="62" text-anchor="middle" class="edge-label">pos=0</text>
+          <rect x="494" y="34" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="526" y="49" text-anchor="middle" class="node-label">bites</text>
+          <text x="526" y="62" text-anchor="middle" class="edge-label">pos=1</text>
+          <rect x="568" y="34" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="600" y="49" text-anchor="middle" class="node-label">man</text>
+          <text x="600" y="62" text-anchor="middle" class="edge-label">pos=2</text>
+
+          <!-- sentence B with PE -->
+          <rect x="420" y="104" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="452" y="119" text-anchor="middle" class="node-label">man</text>
+          <text x="452" y="132" text-anchor="middle" class="edge-label">pos=0</text>
+          <rect x="494" y="104" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="526" y="119" text-anchor="middle" class="node-label">bites</text>
+          <text x="526" y="132" text-anchor="middle" class="edge-label">pos=1</text>
+          <rect x="568" y="104" width="64" height="32" rx="4" class="diagram-ink node-fill"/>
+          <text x="600" y="119" text-anchor="middle" class="node-label">dog</text>
+          <text x="600" y="132" text-anchor="middle" class="edge-label">pos=2</text>
+
+          <!-- different sign -->
+          <rect x="460" y="165" width="160" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="540" y="188" text-anchor="middle" class="node-label">注意力分数不同</text>
+          <line x1="540" y1="148" x2="540" y2="165" class="diagram-ink" marker-end="url(#pe-ar-ink)"/>
+
+          <text x="540" y="235" text-anchor="middle" class="edge-label">dog 在 pos=0 / pos=2 产生</text>
+          <text x="540" y="251" text-anchor="middle" class="edge-label">不同 embedding → 可区分</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>置换等变性示意。左侧：无位置编码时，「dog bites man」和「man bites dog」的每个 token embedding 相同（仅顺序不同），注意力分数完全相同，模型无法区分两句语义。右侧：加入位置编码后，同一个词在不同位置得到不同的最终 embedding，注意力分数随词序改变。<strong>注意</strong>：位置信息不是可选的优化，而是让注意力能区分序列的最低条件。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §3.2 ══════════════════════════════ -->
+      <h2 id="residual"><span class="num">3.2</span><span>残差连接：给梯度一条高速路</span></h2>
+
+      <p class="one-liner">残差连接把前向路径变成 <code>y = x + F(x)</code>，梯度反传时得到 <code>∂L/∂x = ∂L/∂y · (∂F(x)/∂x + 1)</code>，常数项 <code>1</code> 保证顶层梯度至少原样传到底层。</p>
+
+      <p>没有残差连接时，梯度要流过每一层的 <code>∂F/∂x</code> 项连乘。超过几十层之后，这些小于 1 的导数连乘趋近于零（梯度消失）；或大于 1 的连乘指数爆炸。ResNet 在 2015 年用残差连接解决了 CV 领域的深层训练问题，Transformer 从第一版起就内置了同样的机制。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">残差连接梯度分析</span><span class="lang">数学</span></div>
+        <pre><code class="language-none">前向：  y = x + F(x)           ← x 是残差捷径，F(x) 是子层输出
+
+反传：  ∂L/∂x = ∂L/∂y · ∂y/∂x
+              = ∂L/∂y · (∂F(x)/∂x + 1)
+                         └────────────┘
+                         即使 ∂F/∂x → 0
+                         这一项仍 ≥ 1，顶层梯度原样穿透
+
+结论：梯度 = 子层梯度 + 直传梯度
+      直传梯度永不消失 → 任意深度仍可有效训练</code></pre>
+      </div>
+
+      <p>残差连接还有第二个作用：初始化时，如果子层权重初始化为零附近，则 <code>F(x) ≈ 0</code>，整个 block 退化为恒等映射 <code>y ≈ x</code>。这让网络在训练之初接近恒等变换，每一层只需学习在现有表示上的增量——这被称为 identity shortcut（恒等捷径）初始化优势，也是后文 pre-norm 设计的依据之一。</p>
+
+      <!-- ══════════════════════════════ §3.3 ══════════════════════════════ -->
+      <h2 id="layernorm"><span class="num">3.3</span><span>归一化：LayerNorm，以及 post-norm vs pre-norm</span></h2>
+
+      <p class="one-liner">归一化稳定每层的激活分布；原版 Transformer 用 post-norm（归一化在残差相加后），现代 LLM 全面切换到 pre-norm（归一化在子层内），原因不是质量而是深层稳定性。</p>
+
+      <p>LayerNorm（层归一化）对单个样本的<strong>每一个 token 位置</strong>独立计算均值和方差，然后缩放还原：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">LayerNorm</span><span class="lang">数学</span></div>
+        <pre><code class="language-none">LayerNorm(x) = γ · (x - μ) / √(σ² + ε) + β
+
+  x: 单个 token 的 d_model 维向量
+  μ = mean(x),  σ² = var(x)     ← 在 d_model 维度上统计
+  γ, β: 可学习缩放/偏移，形状 (d_model,)
+  ε: 数值稳定小量 (通常 1e-5)
+
+与 BatchNorm 区别：BN 在 batch 维统计，LN 在特征维统计
+→ LN 对 batch size 无要求，NLP 可变长序列天然适用</code></pre>
+      </div>
+
+      <h3>post-norm（原版）vs pre-norm（现代）</h3>
+
+      <p>原版 Transformer 的 post-norm 结构把归一化放在残差相加之后：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">post-norm（原版 Vaswani 2017）</span><span class="lang">结构</span></div>
+        <pre><code class="language-none">post-norm:  y = LayerNorm( x + Sublayer(x) )
+            └ 归一化作用在残差相加结果上
+            └ 归一化"覆盖"了恒等捷径 x
+            └ 残差捷径被归一化改变了量级</code></pre>
+      </div>
+
+      <p>post-norm 的问题：归一化发生在残差相加之后，等于把捷径 <code>x</code> 的量级也归一化掉了——恒等捷径被破坏，初始化时无法形成近乎恒等的 block。超过 12 层后训练极不稳定，需要精心调节 warmup 和学习率；深层（如 N=24 以上）经常需要 Post-LN 专门的初始化方案。</p>
+
+      <p>pre-norm 把归一化移到子层内部、残差捷径不经过归一化：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">pre-norm（GPT-2 起、Llama/PaLM 等现代 LLM 标配）</span><span class="lang">结构</span></div>
+        <pre><code class="language-none">pre-norm:   y = x + Sublayer( LayerNorm(x) )
+            └ 归一化只作用在子层输入上
+            └ 残差捷径 x 原封不动地加回来
+            └ 初始化时 Sublayer 输出趋零 → y ≈ x（恒等）
+            └ 任意深度稳定训练，无需特殊 warmup</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">反直觉警告</span>
+        <p>浅层模型（N ≤ 12）上，pre-norm 的最终收敛质量<strong>略逊于</strong> post-norm。切换到 pre-norm 的驱动力不是质量提升，而是让深层（N=32/64/96）的训练<strong>从根本上变得可行</strong>——post-norm 在这个规模下需要繁琐的初始化和精细的调参，pre-norm 则开箱即用地稳定。现代 LLM 的层数动辄 32-96 层，所以 pre-norm 成了标配。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 3.3 · post-norm vs pre-norm 对比</caption>
+        <thead>
+          <tr><th>维度</th><th>post-norm（原版）</th><th>pre-norm（现代）</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>公式</td><td><code>LayerNorm(x + Sublayer(x))</code></td><td><code>x + Sublayer(LayerNorm(x))</code></td></tr>
+          <tr><td>捷径状态</td><td>被归一化，恒等捷径破坏</td><td>原封不动，恒等捷径完整</td></tr>
+          <tr><td>浅层质量（N≤12）</td><td>略优</td><td>略逊</td></tr>
+          <tr class="selected"><td>深层稳定性（N≥24）</td><td>不稳定，需 warmup / 特殊初始化</td><td>任意深度稳定，无需特殊调参</td></tr>
+          <tr><td>代表模型</td><td>原版 Transformer（2017）</td><td>GPT-2/3, Llama, PaLM, Mistral, Qwen, DeepSeek</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ══════════════════════════════ §3.4 ══════════════════════════════ -->
+      <h2 id="ffn"><span class="num">3.4</span><span>FFN：逐位置计算，知识住在哪</span></h2>
+
+      <p class="one-liner">FFN 是 Transformer 里另一半算力：每个 token 位置独立经过两层线性变换+激活，占整个网络约 2/3 参数——它是模型存储事实知识的主要场所。</p>
+
+      <p>第 01 章介绍了通信（attention）+ 计算（FFN）的 <a href="01-concepts.html#communicate-compute">Karpathy 框架</a>。FFN 是其中的"计算"部分：注意力完成跨位置的信息汇聚后，FFN 对每个 token 位置<strong>独立</strong>地做非线性变换。原版公式：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">Position-wise FFN</span><span class="lang">数学</span></div>
+        <pre><code class="language-none">FFN(x) = max(0, x·W₁ + b₁)·W₂ + b₂
+
+  W₁: (d_model, d_ff)   W₂: (d_ff, d_model)
+  d_ff ≈ 4 × d_model   ← 原版 512 → 2048
+
+  每个 token 位置独立计算——无跨位置通信
+  （注意力才是唯一跨位置算子）
+
+参数量对比（d_model = d）：
+  attention 投影：4 个 (d, d) 矩阵 = 4d²
+  FFN：W₁(d, 4d) + W₂(4d, d)      = 8d²
+  → FFN 占整个 block ~2/3 参数</code></pre>
+      </div>
+
+      <h3>键值记忆视角（Geva 2021）</h3>
+
+      <p>Geva 等人（2021，arxiv 2012.14913）给出了 FFN 的另一种解读，与第 02 章 attention 的软字典查找形成对照：把 <code>FFN(x) = W₂ · ReLU(W₁ x)</code> 拆开看，W₁ 的每一行是一个 key——当输入 <code>x</code> 与该 key 内积为正时，对应的神经元激活；W₂ 的对应列是这个神经元的 value——它直接加权叠加进输出空间，偏向某些 token 的概率分布。</p>
+
+      <p>实验支持：低层神经元在输入匹配浅层句法模式（冠词、词性）时激活，高层神经元对应具体事实（如"法国首都是巴黎"这条知识的召回恰好发生在高层 FFN 的某几个神经元激活时）。这不仅是比喻——直接修改 W₂ 中对应列，就能改变模型对某条事实的"记忆"，知识编辑方法（knowledge editing）正是基于此。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · FFN 是参数存储、attention 是检索</span>
+        <p>这个视角下，attention 在序列上做"检索"（哪些位置的表示值得关注），FFN 做"查表"（当前 token 应该调出哪条知识）。两者交替运行：先让 token 交换信息（<a href="02-attention.html#self-vs-cross">第 02 章的 self-attention</a>），再让每个 token 基于汇聚后的表示独立查取知识（FFN）。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>模型在第 20 层的 FFN 中"召回"了某条事实，但如果只看最终输出没有出错，这条事实调用过程是否会被 outcome 层的评测发现？这涉及哪个 <a href="01-concepts.html#communicate-compute">Karpathy 框架</a>中的原则？</p>
+        <details>
+          <summary>展开思路（先停 10 秒再点）</summary>
+          <p>不会被 outcome 层发现——outcome 只看最终输出对不对，看不见某一层 FFN 激活了哪些神经元。要观察 FFN 的内部行为需要在组件层做激活分析（probing），这与 01 章中通信（attention）+计算（FFN）框架的划分一致：FFN 是逐位置的计算单元，其内部激活不会在 token 间流动，因此在正常推理输出中不可见。</p>
+        </details>
+      </div>
+
+      <!-- ══════════════════════════════ §3.5 ══════════════════════════════ -->
+      <h2 id="block"><span class="num">3.5</span><span>一块完整的 Transformer block</span></h2>
+
+      <p class="one-liner">一个 block = pre-norm → attention（通信）→ 残差 → pre-norm → FFN（计算）→ 残差，共两条残差高速路，把第 02 章的注意力和本章的 3.2–3.4 节串在一起。</p>
+
+      <p>把前四节组合起来，现代 decoder-only 的单个 block（pre-norm 版本）前向流程如下：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">pre-norm Transformer block 前向</span><span class="lang">伪代码</span></div>
+        <pre><code class="language-none">输入: x  (seq_len, d_model)
+
+# 第一条残差：attention 子层
+h  = LayerNorm(x)                    # pre-norm，不改变残差捷径
+h  = MultiHeadAttention(h, h, h)     # self-attention (Q=K=V=h)
+                                     # decoder: 加因果掩码
+x  = x + h                          # 残差相加 ← 第一条高速路
+
+# 第二条残差：FFN 子层
+h  = LayerNorm(x)                    # pre-norm
+h  = FFN(h)                          # 两层线性 + 激活，逐位置
+x  = x + h                          # 残差相加 ← 第二条高速路
+
+输出: x  (seq_len, d_model)          # 形状不变，供下一层继续</code></pre>
+      </div>
+
+      <p>两处 pre-norm + 两条残差是现代 LLM 的标准骨架。整个 block 的输入输出形状完全相同，因此可以任意堆叠。</p>
+
+      <figure>
+        <svg viewBox="0 0 480 500" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="pre-norm Transformer block 结构图，展示两条残差高速路">
+          <defs>
+            <marker id="blk-ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="blk-ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- input x -->
+          <rect x="160" y="18" width="160" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="240" y="42" text-anchor="middle" class="node-label">输入 x</text>
+
+          <!-- ===== RESIDUAL HIGHWAY 1 (left side, ink) ===== -->
+          <!-- vertical line down left side -->
+          <line x1="100" y1="36" x2="100" y2="300" class="diagram-accent" stroke-dasharray="5 3"/>
+          <text x="72" y="180" text-anchor="middle" class="branch-label" transform="rotate(-90,72,180)">残差高速路 1</text>
+
+          <!-- branch off from input to highway -->
+          <line x1="160" y1="36" x2="100" y2="36" class="diagram-accent"/>
+
+          <!-- main flow: input → LayerNorm1 -->
+          <line x1="240" y1="54" x2="240" y2="78" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+          <rect x="150" y="78" width="180" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="240" y="102" text-anchor="middle" class="node-label">LayerNorm</text>
+          <text x="335" y="102" text-anchor="middle" class="edge-label">pre-norm</text>
+
+          <!-- LayerNorm1 → Attention -->
+          <line x1="240" y1="114" x2="240" y2="138" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+          <rect x="130" y="138" width="220" height="46" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="240" y="158" text-anchor="middle" class="node-label-accent">Multi-Head Attention</text>
+          <text x="240" y="174" text-anchor="middle" class="edge-label">通信 — 跨位置信息汇聚</text>
+
+          <!-- Attention → residual add 1 -->
+          <line x1="240" y1="184" x2="240" y2="220" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+
+          <!-- highway merges -->
+          <line x1="100" y1="300" x2="200" y2="300" class="diagram-accent" marker-end="url(#blk-ar-verm)"/>
+
+          <!-- residual add 1 -->
+          <circle cx="240" cy="300" r="16" class="diagram-ink node-fill"/>
+          <text x="240" y="305" text-anchor="middle" class="node-label" font-size="18">+</text>
+          <line x1="240" y1="220" x2="240" y2="284" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+          <text x="285" y="305" text-anchor="middle" class="edge-label">残差相加①</text>
+
+          <!-- ===== RESIDUAL HIGHWAY 2 (right side, ink) ===== -->
+          <line x1="380" y1="316" x2="380" y2="450" class="diagram-accent" stroke-dasharray="5 3"/>
+          <text x="408" y="400" text-anchor="middle" class="branch-label" transform="rotate(90,408,400)">残差高速路 2</text>
+          <line x1="256" y1="316" x2="380" y2="316" class="diagram-accent"/>
+
+          <!-- residual add 1 → LayerNorm2 -->
+          <line x1="240" y1="316" x2="240" y2="342" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+          <rect x="150" y="342" width="180" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="240" y="366" text-anchor="middle" class="node-label">LayerNorm</text>
+          <text x="335" y="366" text-anchor="middle" class="edge-label">pre-norm</text>
+
+          <!-- LayerNorm2 → FFN -->
+          <line x1="240" y1="378" x2="240" y2="398" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+          <rect x="150" y="398" width="180" height="36" rx="5" class="diagram-ink node-fill"/>
+          <text x="240" y="422" text-anchor="middle" class="node-label">FFN</text>
+          <text x="335" y="422" text-anchor="middle" class="edge-label">计算 — 逐位置独立</text>
+
+          <!-- FFN → residual add 2 -->
+          <line x1="240" y1="434" x2="240" y2="458" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+          <circle cx="240" cy="458" r="16" class="diagram-ink node-fill"/>
+          <text x="240" y="463" text-anchor="middle" class="node-label" font-size="18">+</text>
+          <line x1="380" y1="450" x2="256" y2="450" class="diagram-accent" marker-end="url(#blk-ar-verm)"/>
+          <text x="144" y="462" text-anchor="middle" class="edge-label">残差相加②</text>
+
+          <!-- output -->
+          <line x1="240" y1="474" x2="240" y2="494" class="diagram-ink" marker-end="url(#blk-ar-ink)"/>
+          <text x="240" y="498" text-anchor="middle" class="edge-label">输出 x（形状不变，供下一层）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>pre-norm Transformer block。左侧朱红虚线是第一条残差高速路（绕过 LayerNorm + Attention），右侧是第二条（绕过 LayerNorm + FFN）。<strong>注意</strong>：两处 LayerNorm 都在子层<em>内部</em>，残差捷径上的 x 原封不动直接相加——这是 pre-norm 与 post-norm 的本质区别，也是任意深度都能稳定训练的原因。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §3.6 ══════════════════════════════ -->
+      <h2 id="stack"><span class="num">3.6</span><span>堆叠 N 层，与 embedding / unembedding</span></h2>
+
+      <p class="one-liner">将相同结构的 block 堆叠 N 次，头尾各加一个 embedding/unembedding 矩阵，就是完整的 Transformer；unembedding 在多数现代 LLM 中与 input embedding 矩阵共享权重（权重绑定）。</p>
+
+      <p>单个 block 的输入输出形状完全相同（seq_len, d_model），因此可以直接串联。完整网络的前向流程：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">完整 Transformer 前向（decoder-only）</span><span class="lang">伪代码</span></div>
+        <pre><code class="language-none">输入: token ids  (batch, seq_len)
+
+1. Embedding
+   x = Embedding(token_ids)         # (batch, seq_len, d_model)
+   x = x + PositionalEncoding(seq)  # 加位置编码
+
+2. N 个相同的 block（各含 attention + FFN + 残差 + LN）
+   for i in range(N):
+       x = TransformerBlock_i(x)    # 形状不变
+
+3. 最终 LayerNorm（pre-norm 架构的末端 norm）
+   x = LayerNorm(x)
+
+4. Unembedding → logits
+   logits = x @ Embedding.weight.T  # 权重绑定：转置复用 embedding
+   # logits: (batch, seq_len, vocab_size)
+
+5. 下一 token 概率
+   probs = softmax(logits[:, -1, :]) # 取最后位置，归一化成概率分布</code></pre>
+      </div>
+
+      <h3>权重绑定（Weight Tying）</h3>
+
+      <p>多数现代 LLM（GPT 系列、Llama、Mistral 等）让 unembedding 矩阵 = input embedding 矩阵的转置。输入端：token id → d_model 维向量；输出端：d_model 维隐状态 → vocab_size 维 logits（点积相似度）。两端用的是同一个矩阵，正向和反向读取。</p>
+
+      <p>权重绑定有两个好处：第一，节省约 vocab_size × d_model 的参数量（对 vocab=32000、d=4096 的模型约 500M 参数，接近模型总量的 10–20%）；第二，语义一致性——embedding 空间和输出 logit 空间共享，模型预测"下一 token 是 X"等价于"隐状态与 X 的 embedding 最相似"，两者形成自洽的语义空间。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · logits 和 softmax 的关系</span>
+        <p>logits（未归一化的得分向量）经过 <code>softmax</code> 变成概率分布，之后再用 temperature（温度）或 top-k/top-p 采样策略选出下一个 token。logits 的绝对值不重要，相对大小决定概率分配；softmax 的数值稳定写法是先减 max 再 exp（等价变换，防止 fp16 溢出）。<a href="04-training-inference.html#inference">第 04 章</a>会展开采样策略。</p>
+      </div>
+
+      <!-- ══════════════════════════════ §3.7 ══════════════════════════════ -->
+      <h2 id="enc-dec"><span class="num">3.7</span><span>经典 encoder-decoder → decoder-only</span></h2>
+
+      <p class="one-liner">原版 Transformer（2017）是 encoder-decoder 结构，decoder 含额外的 cross-attention 把 encoder 上下文引入；现代 GPT/Llama 等 decoder-only 删掉了整个 encoder 和 cross-attention，每块只是因果自注意力 + FFN。</p>
+
+      <h3>经典 encoder-decoder（Vaswani 2017）</h3>
+
+      <p>原版论文为机器翻译设计，encoder 读入源语言序列、decoder 生成目标语言序列。结构差异集中在 decoder 的多一层：</p>
+
+      <ul>
+        <li><strong>Encoder block</strong>：多头自注意力（双向，所有位置互相可见）+ FFN + 残差 + LayerNorm，共 N=6 层。</li>
+        <li><strong>Decoder block</strong>：比 encoder 多一个 cross-attention 子层。每个 decoder block 含三个子层：① 带掩码的自注意力（因果，只看已生成的 token）；② <strong>cross-attention</strong>（Q 来自 decoder 当前隐状态，K/V 来自 encoder 最后一层的输出）；③ FFN。</li>
+      </ul>
+
+      <p>cross-attention 是 encoder-decoder 的连接点：decoder 的每个 token 通过 Q 向 encoder 的所有 token 发出查询，把源序列的信息"拉入"目标序列的生成过程。第 02 章的 <a href="02-attention.html#self-vs-cross">self vs cross attention</a> 解释了 cross-attention 和 self-attention 的数学区别（K/V 来自不同序列）。</p>
+
+      <h3>decoder-only（GPT、Llama 等现代 LLM）</h3>
+
+      <p>decoder-only 架构删掉了整个 encoder 和所有 cross-attention：每个 block 只有<strong>因果自注意力</strong>（causal self-attention）+ FFN + 残差 + LayerNorm。输入和输出都是同一个序列，模型预测下一个 token，训练目标是 next-token prediction。</p>
+
+      <div class="callout warning">
+        <span class="label">失败模式 · decoder-only 不是「encoder-decoder 的一半」</span>
+        <p>decoder-only 不等于"只用了原版 Transformer 的 decoder 侧"。原版 decoder 里有 cross-attention，decoder-only 没有——两者每个 block 的子层数不同（原版 3 个，decoder-only 2 个）。把 decoder-only 当成"砍掉了 encoder 的 enc-dec"会误解参数量和结构。</p>
+      </div>
+
+      <h3>为什么 decoder-only 成为主流</h3>
+
+      <p>几个互相强化的原因：</p>
+      <ul>
+        <li><strong>统一目标</strong>：next-token prediction 可以用一个极简目标在海量无标注文本上预训练。encoder-decoder 需要有对应的输入-输出对（翻译语料、摘要语料），数据规模受限。</li>
+        <li><strong>生成任务自然</strong>：所有生成任务（问答、代码、摘要）都可以转化为"给定前缀，预测后续"，decoder-only 天然适配。</li>
+        <li><strong>scaling 表现优越</strong>：GPT-3 证明单纯的 decoder-only 在足够规模下具备惊人的 few-shot 能力，推动了整个领域的预训练范式迁移。</li>
+        <li><strong>工程简洁</strong>：没有 cross-attention 的参数管理和 encoder/decoder 分离带来的推理复杂性，整个前向传播是单一的 N 层堆叠。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 740 480" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="encoder-decoder 与 decoder-only 并排对照，标出 cross-attention 位置">
+          <defs>
+            <marker id="ed-ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ed-ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== DIVIDER ===== -->
+          <line x1="370" y1="10" x2="370" y2="470" class="diagram-soft"/>
+
+          <!-- ===== LEFT: ENCODER-DECODER ===== -->
+          <text x="185" y="28" text-anchor="middle" class="node-label" font-weight="700">Encoder-Decoder（2017）</text>
+
+          <!-- ENCODER -->
+          <text x="90" y="56" text-anchor="middle" class="edge-label" font-weight="700">ENCODER</text>
+          <rect x="28" y="64" width="124" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="90" y="87" text-anchor="middle" class="node-label">双向 Self-Attn</text>
+          <line x1="90" y1="100" x2="90" y2="116" class="diagram-ink" marker-end="url(#ed-ar-ink)"/>
+          <rect x="28" y="116" width="124" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="90" y="139" text-anchor="middle" class="node-label">FFN</text>
+          <text x="90" y="166" text-anchor="middle" class="edge-label">× N 层</text>
+
+          <!-- encoder output arrow -->
+          <line x1="90" y1="152" x2="90" y2="190" class="diagram-ink"/>
+          <rect x="28" y="190" width="124" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="90" y="212" text-anchor="middle" class="node-label">Encoder 输出</text>
+
+          <!-- cross-attention arrow from encoder to decoder -->
+          <line x1="152" y1="207" x2="250" y2="310" class="diagram-accent" stroke-dasharray="5 3" marker-end="url(#ed-ar-verm)"/>
+          <text x="195" y="248" text-anchor="middle" class="branch-label">K / V</text>
+
+          <!-- DECODER -->
+          <text x="300" y="56" text-anchor="middle" class="edge-label" font-weight="700">DECODER</text>
+          <rect x="233" y="64" width="126" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="296" y="87" text-anchor="middle" class="node-label">因果 Self-Attn</text>
+          <line x1="296" y1="100" x2="296" y2="120" class="diagram-ink" marker-end="url(#ed-ar-ink)"/>
+
+          <!-- cross-attention box (highlighted) -->
+          <rect x="233" y="120" width="126" height="46" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="296" y="142" text-anchor="middle" class="node-label-accent">Cross-Attention</text>
+          <text x="296" y="157" text-anchor="middle" class="edge-label">Q ← decoder</text>
+          <line x1="296" y1="166" x2="296" y2="188" class="diagram-ink" marker-end="url(#ed-ar-ink)"/>
+
+          <rect x="233" y="188" width="126" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="296" y="211" text-anchor="middle" class="node-label">FFN</text>
+          <text x="296" y="238" text-anchor="middle" class="edge-label">× N 层（每层 3 个子层）</text>
+
+          <line x1="296" y1="224" x2="296" y2="258" class="diagram-ink" marker-end="url(#ed-ar-ink)"/>
+          <rect x="233" y="258" width="126" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="296" y="280" text-anchor="middle" class="node-label">输出 logits</text>
+
+          <!-- label: cross-attn annotation -->
+          <rect x="195" y="310" width="165" height="50" rx="4" class="diagram-soft node-fill"/>
+          <text x="277" y="331" text-anchor="middle" class="edge-label">cross-attention：</text>
+          <text x="277" y="347" text-anchor="middle" class="edge-label">decoder 读取 encoder 表示</text>
+
+          <!-- ===== RIGHT: DECODER-ONLY ===== -->
+          <text x="555" y="28" text-anchor="middle" class="node-label" font-weight="700">Decoder-Only（GPT/Llama）</text>
+
+          <!-- single block -->
+          <rect x="430" y="64" width="250" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="555" y="87" text-anchor="middle" class="node-label">因果 Self-Attention</text>
+
+          <!-- cross-attn: ABSENT -->
+          <rect x="430" y="114" width="250" height="36" rx="4" class="diagram-soft"/>
+          <text x="555" y="137" text-anchor="middle" class="node-label" fill="#A3A3A3">Cross-Attention</text>
+          <line x1="430" y1="114" x2="680" y2="150" class="diagram-soft"/>
+          <line x1="430" y1="150" x2="680" y2="114" class="diagram-soft"/>
+          <text x="555" y="170" text-anchor="middle" class="node-label-accent" font-size="12">✕ 不存在</text>
+
+          <line x1="555" y1="150" x2="555" y2="188" class="diagram-ink" marker-end="url(#ed-ar-ink)"/>
+          <rect x="430" y="188" width="250" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="555" y="211" text-anchor="middle" class="node-label">FFN</text>
+          <text x="555" y="238" text-anchor="middle" class="edge-label">× N 层（每层 2 个子层）</text>
+
+          <line x1="555" y1="224" x2="555" y2="258" class="diagram-ink" marker-end="url(#ed-ar-ink)"/>
+          <rect x="430" y="258" width="250" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="555" y="280" text-anchor="middle" class="node-label">输出 logits</text>
+
+          <!-- difference annotation -->
+          <rect x="400" y="320" width="310" height="70" rx="4" class="diagram-soft node-fill"/>
+          <text x="555" y="342" text-anchor="middle" class="edge-label">每块仅 2 个子层，无 cross-attn</text>
+          <text x="555" y="358" text-anchor="middle" class="edge-label">输入即源、生成即目标</text>
+          <text x="555" y="374" text-anchor="middle" class="edge-label">next-token prediction 一个目标</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>经典 encoder-decoder（左）与 decoder-only（右）并排对照。朱红高亮的 Cross-Attention 是区分两者的核心：encoder-decoder 的每个 decoder block 含三个子层，cross-attention 把 encoder 输出的 K/V 引入；decoder-only 删掉了整个 encoder 和 cross-attention，每块只有因果自注意力 + FFN 两个子层。<strong>注意</strong>：decoder-only 不是「砍掉 encoder 的 enc-dec」——每个 block 的结构本就不同，参数量和子层数也不同。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ self-check ══════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把能想到的答案写在纸上或编辑器里。写完再点开答案对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>为什么注意力需要位置编码？"置换等变"的精确含义是什么？正弦编码是<strong>加</strong>到 embedding 上还是<strong>拼接</strong>？</li>
+          <li>写出残差连接的梯度公式 <code>∂L/∂x = ?</code>，解释其中常数项 1 的作用。post-norm 和 pre-norm 各在哪个位置放 LayerNorm？</li>
+          <li>FFN 占整个 block 大约多少比例的参数（给出推导过程中的参数量对比）？Geva 2021 的键值记忆视角如何解读 W₁ 和 W₂？</li>
+          <li>经典 encoder-decoder 的 decoder block 有几个子层？decoder-only 的每个 block 有几个子层？cross-attention 的 Q/K/V 分别来自哪里？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>注意力是置换等变的：打乱输入，输出同样打乱；任意两 token 之间的注意力分数对词序无感知，模型看到的是一袋 embedding 而非序列。精确含义：对输入施加排列变换 π，输出以同样的 π 响应。正弦编码是<strong>加法</strong>（<code>x = embedding + PE</code>），不是拼接——拼接会让 d_model 翻倍，代价为零的加法已足够。</li>
+            <li><code>∂L/∂x = ∂L/∂y · (∂F(x)/∂x + 1)</code>。常数项 1 保证即使子层梯度 ∂F/∂x 趋近于零，顶层梯度仍原样传到 x，消除梯度消失。post-norm：<code>LayerNorm(x + Sublayer(x))</code>，归一化在残差相加后；pre-norm：<code>x + Sublayer(LayerNorm(x))</code>，归一化在子层内、残差捷径不经过归一化。</li>
+            <li>attention 投影 4 个 (d, d) 矩阵 = 4d²；FFN W₁(d, 4d) + W₂(4d, d) = 8d²；FFN 占约 8/(4+8) = 2/3。键值记忆：W₁ 的每一行是 key（对应一种输入模式的检测器），W₂ 的对应列是 value（激活后叠加到输出的贡献向量），低层存句法、高层存事实。</li>
+            <li>decoder block（enc-dec）有 3 个子层：带掩码自注意力 + cross-attention + FFN。decoder-only 每 block 有 2 个子层：因果自注意力 + FFN。cross-attention：Q 来自 decoder 当前隐状态，K/V 来自 encoder 最后一层的输出——decoder 通过 Q 向 encoder 的所有 token 查询，把源序列信息引入生成过程。</li>
+          </ol>
+        </details>
+      </section>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/1706.03762">Vaswani 等，2017 · "Attention Is All You Need"</a>（原版 encoder-decoder Transformer，post-norm，正弦位置编码，N=6 层）</li>
+          <li><a href="http://nlp.seas.harvard.edu/annotated-transformer/">The Annotated Transformer · Harvard NLP</a>（逐行注释的 PyTorch 实现，block 结构和残差位置与本章对应）</li>
+          <li><a href="https://arxiv.org/abs/2012.14913">Geva 等，2021 · "Transformer Feed-Forward Layers Are Key-Value Memories"</a>（FFN 键值记忆视角，低层句法/高层事实，知识编辑的实验基础）</li>
+          <li><a href="https://arxiv.org/abs/2002.04745">Xiong 等，2020 · "On Layer Normalization in the Transformer Architecture"</a>（post-norm vs pre-norm 的理论分析，pre-norm 稳定性论证）</li>
+          <li><a href="https://github.com/karpathy/nanoGPT">Karpathy · nanoGPT</a>（最简 decoder-only 实现，pre-norm + weight tying，约 300 行 PyTorch 可读懂整张网络）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="02-attention.html">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 注意力机制</span>
+        </a>
+        <a class="next" href="04-training-inference.html">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 训练与推理</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#pos-enc" data-toc-target="pos-enc">3.1 位置编码</a></li>
+        <li><a href="#residual" data-toc-target="residual">3.2 残差连接</a></li>
+        <li><a href="#layernorm" data-toc-target="layernorm">3.3 归一化 LN</a></li>
+        <li><a href="#ffn" data-toc-target="ffn">3.4 FFN 键值记忆</a></li>
+        <li><a href="#block" data-toc-target="block">3.5 完整 block</a></li>
+        <li><a href="#stack" data-toc-target="stack">3.6 堆叠与权重绑定</a></li>
+        <li><a href="#enc-dec" data-toc-target="enc-dec">3.7 enc-dec vs decoder-only</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自检</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 注意力机制 · Transformer 深挖教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+.chapter-opener .meta-row {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 心智模型</a><span class="sep">—</span>
+    <a href="02-attention.html" class="current">02 注意力</a><span class="sep">—</span>
+    <a href="03-architecture.html">03 整体架构</a><span class="sep">—</span>
+    <a href="04-training-inference.html">04 训练与推理</a><span class="sep">—</span>
+    <a href="05-modern.html">05 经典到现代</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02</p>
+        <h1>注意力机制：可微的软字典查找</h1>
+        <p class="recap">第 01 章给了 attention 的软查表直觉和通信/计算框架——本章把直觉变成精确机制：QKV 的矩阵运算、为什么除以 √d_k、因果掩码、多头。</p>
+        <p class="meta-row"><strong>本章交付</strong>：scaled dot-product 完整数学 · √d_k 方差论证 · 因果掩码机制 · 多头子空间与 induction heads · self vs cross · 注意力权重≠重要度　|　<strong>带走的能力</strong>：徒手推导 <code>Attention(Q,K,V) = softmax(QKᵀ/√d_k)·V</code> 的每一步形状，并能解释为什么这四个设计决策缺一不可</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">读完本章，你脑子里会多出这几条</p>
+        <ul>
+          <li>scaled dot-product 的确切公式与形状：<strong>Q(n,d_k)·Kᵀ(d_k,n) → (n,n) 相似度矩阵 → softmax 按行 → ×V(n,d_v) → 输出(n,d_v)</strong>；每一步形状可徒手验证。</li>
+          <li>除以 √d_k 不是随手一除，是防 softmax 饱和：d_k 维点积的方差等于 d_k，标准差 √d_k；不除，大值把 softmax 推进近 one-hot 区，梯度 σ(1−σ)≈0。</li>
+          <li>因果掩码 = 未来位置在 softmax <strong>前</strong>置 −∞；在 softmax 后置零会改分布；对角线可见（位置 t 看得见自己）；错位一格就泄露 t+1。</li>
+          <li>多头 = 把 d_model 切成 h 个 d_k 维子空间并行运算、concat、Wᴼ 投回；总 FLOPs 近乎不变；induction heads 会真实专门化，相变式突现。</li>
+        </ul>
+      </section>
+
+      <!-- ══════════════════════════════ §2.1 ══════════════════════════════ -->
+      <h2 id="scaled-dot"><span class="num">2.1</span><span>scaled dot-product attention 的完整数学</span></h2>
+
+      <p class="one-liner">attention 的全部计算是：把 Q 和 K 做点积得相似度矩阵、除以 √d_k 稳定数值、softmax 归一化成权重、再对 V 加权平均——四步，每步形状唯一确定。</p>
+
+      <p>第 01 章的软查表直觉（query 对每个 key 打相似度、softmax 成权重、对 value 加权平均）已经给了框架。现在把它落成矩阵运算，让形状可以逐步验算。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">scaled dot-product attention</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">Attention(Q, K, V) = softmax( Q · Kᵀ / √d_k ) · V
+
+输入形状：
+  Q : (n, d_k)    n = 序列长度，d_k = 查询/键的维度
+  K : (n, d_k)    与 Q 同形（self-attention 时 Q/K/V 来自同一序列）
+  V : (n, d_v)    d_v = 值的维度（原版 Transformer 中 d_k = d_v）
+
+逐步形状：
+  Q · Kᵀ        : (n, d_k) × (d_k, n) → (n, n)   注意力分数矩阵
+  ÷ √d_k        : (n, n)               → (n, n)   数值缩放
+  softmax(行)   : (n, n)               → (n, n)   每行归一，权重 ∈ [0,1]，行和 = 1
+  × V           : (n, n) × (n, d_v)   → (n, d_v) 加权平均，最终输出</code></pre>
+      </div>
+
+      <p>逐符号拆解：</p>
+      <ul>
+        <li><strong>Q（query）</strong>：序列中每个位置发出的"查询"，形状 (n, d_k)。第 i 行 Qᵢ 代表位置 i 想要找什么。</li>
+        <li><strong>K（key）</strong>：序列中每个位置暴露的"键"，同样 (n, d_k)。第 j 行 Kⱼ 代表位置 j 愿意被什么样的查询匹配到。</li>
+        <li><strong>QKᵀ</strong>：(n, n) 相似度矩阵，第 (i,j) 项 = Qᵢ·Kⱼ，表示位置 i 对位置 j 的未归一化注意力分数。</li>
+        <li><strong>softmax 按行</strong>：对第 i 行做 softmax，把位置 i 对所有其他位置的分数归一化成概率分布——这就是"软字典"里的"权重"。</li>
+        <li><strong>×V</strong>：V 的形状是 (n, d_v)，第 j 行 Vⱼ 是位置 j 真正携带的信息。加权后，位置 i 的输出是所有位置 value 的加权平均，权重来自刚才的 softmax。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="scaled dot-product attention 数据流：Q、K、V 三路输入，经 QKᵀ、除√d_k、可选因果掩码、softmax、乘 V 五步得到输出">
+          <defs>
+            <marker id="at-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="at-ar-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Q 输入 -->
+          <rect x="20" y="90" width="60" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="50" y="112" text-anchor="middle" class="node-label">Q</text>
+          <text x="50" y="143" text-anchor="middle" class="edge-label">(n, d_k)</text>
+
+          <!-- K 输入 -->
+          <rect x="20" y="10" width="60" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="50" y="32" text-anchor="middle" class="node-label">K</text>
+          <text x="50" y="56" text-anchor="middle" class="edge-label">(n, d_k)</text>
+
+          <!-- QKᵀ box -->
+          <rect x="140" y="50" width="80" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="180" y="74" text-anchor="middle" class="node-label">Q · Kᵀ</text>
+          <text x="180" y="105" text-anchor="middle" class="edge-label">(n, n)</text>
+
+          <!-- arrows Q,K → QKᵀ -->
+          <line x1="80" y1="28" x2="140" y2="63" class="diagram-ink" marker-end="url(#at-ar)"/>
+          <line x1="80" y1="108" x2="140" y2="77" class="diagram-ink" marker-end="url(#at-ar)"/>
+
+          <!-- ÷√d_k box -->
+          <rect x="270" y="50" width="80" height="40" rx="4" class="diagram-ink node-fill"/>
+          <text x="310" y="70" text-anchor="middle" class="node-label">÷ √d_k</text>
+          <text x="310" y="84" text-anchor="middle" class="edge-label" style="font-size:10px">缩放</text>
+          <text x="310" y="105" text-anchor="middle" class="edge-label">(n, n)</text>
+          <line x1="220" y1="70" x2="270" y2="70" class="diagram-ink" marker-end="url(#at-ar)"/>
+
+          <!-- mask box -->
+          <rect x="400" y="50" width="80" height="40" rx="4" class="diagram-soft node-fill"/>
+          <text x="440" y="68" text-anchor="middle" class="node-label" style="font-size:12px">mask</text>
+          <text x="440" y="83" text-anchor="middle" class="edge-label" style="font-size:10px">未来→−∞</text>
+          <text x="440" y="105" text-anchor="middle" class="edge-label">(n, n)</text>
+          <line x1="350" y1="70" x2="400" y2="70" class="diagram-ink" marker-end="url(#at-ar)"/>
+          <text x="375" y="64" text-anchor="middle" class="edge-label" style="font-size:10px">可选</text>
+
+          <!-- softmax box -->
+          <rect x="530" y="50" width="80" height="40" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="570" y="68" text-anchor="middle" class="node-label-accent">softmax</text>
+          <text x="570" y="83" text-anchor="middle" class="edge-label" style="font-size:10px">按行归一</text>
+          <text x="570" y="105" text-anchor="middle" class="edge-label">(n, n)</text>
+          <line x1="480" y1="70" x2="530" y2="70" class="diagram-ink" marker-end="url(#at-ar)"/>
+
+          <!-- V 输入 -->
+          <rect x="530" y="170" width="80" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="570" y="192" text-anchor="middle" class="node-label">V</text>
+          <text x="570" y="220" text-anchor="middle" class="edge-label">(n, d_v)</text>
+
+          <!-- × V → 输出 -->
+          <rect x="660" y="88" width="80" height="40" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="700" y="106" text-anchor="middle" class="node-label-accent">× V</text>
+          <text x="700" y="120" text-anchor="middle" class="edge-label" style="font-size:10px">加权平均</text>
+          <text x="700" y="142" text-anchor="middle" class="edge-label">(n, d_v)</text>
+
+          <!-- arrows softmax → ×V, V → ×V -->
+          <line x1="610" y1="70" x2="660" y2="100" class="diagram-accent" marker-end="url(#at-ar-v)"/>
+          <line x1="610" y1="188" x2="660" y2="114" class="diagram-accent" marker-end="url(#at-ar-v)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 2.1</span>scaled dot-product attention 的完整数据流。Q 和 K 做矩阵乘法得 (n,n) 相似度矩阵，除 √d_k 缩放，因果掩码（decoder 专用，将未来位置置 −∞）可选插入，softmax 按行归一成权重，最后乘 V 得加权平均输出 (n, d_v)。<strong>注意</strong>：softmax 之前，不是之后，插入掩码——位置不同结果不同。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §2.2 ══════════════════════════════ -->
+      <h2 id="sqrt-dk"><span class="num">2.2</span><span>为什么除以 √d_k</span></h2>
+
+      <p class="one-liner">除以 √d_k 是方差控制：d_k 维随机点积的标准差恰好是 √d_k，不除会把 softmax 推进近 one-hot 区，梯度接近零。</p>
+
+      <p>从 01 章的软查表直觉出发，softmax 之前的分数越极端，权重就越接近 one-hot（只有一个位置权重接近 1，其余接近 0）。极端分数本身不是问题，但它们是怎么来的？答案在点积的方差统计。</p>
+
+      <h3>方差论证</h3>
+      <p>假设 Q 和 K 的每个分量独立、零均值、单位方差（这是初始化后合理的近似）。Qᵢ 和 Kⱼ 的点积是 d_k 项之和：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">点积方差推导</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">Qᵢ · Kⱼ = Σₜ₌₁^d_k  Qᵢₜ · Kⱼₜ
+
+每项 Qᵢₜ · Kⱼₜ 的期望 = 0，方差 = Var(Qᵢₜ) · Var(Kⱼₜ) = 1 · 1 = 1
+
+d_k 项独立求和 → 总方差 = d_k · 1 = d_k
+
+→ 标准差 = √d_k
+
+除以 √d_k 后：方差 = d_k / d_k = 1，恢复单位方差</code></pre>
+      </div>
+
+      <p>具体数字感受：</p>
+      <ul>
+        <li><strong>d_k = 64</strong>（原版 Transformer base 配置）：点积量级约 ±8，softmax 仍能产生合理的权重分布。</li>
+        <li><strong>d_k = 512</strong>（更大的头维度）：点积量级约 ±22，softmax 输入中最大值与第二大之差已很悬殊，输出接近 one-hot。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">梯度消失的机制</span>
+        <p>softmax 的梯度是 σ(1−σ)，其中 σ 是输出概率。当输出接近 one-hot 时，σ ≈ 1 或 σ ≈ 0，梯度 σ(1−σ) ≈ 0。这不是深层网络的梯度消失，而是在单次 softmax 运算内就发生：注意力权重的梯度信号在训练初期几乎归零，模型学不动。</p>
+        <p>除以 √d_k 把输入方差拉回 1，softmax 输出保持多峰分布，梯度信号正常传播。</p>
+      </div>
+
+      <div class="rationale">
+        <span class="label">为什么是 √d_k 而不是 d_k</span>
+        <p>因为控制的是标准差（量级），不是方差。点积量级≈标准差≈√d_k，除以 √d_k 把量级归一，而非除以 d_k（那会过度压缩，让 softmax 输出趋向均匀分布）。</p>
+      </div>
+
+      <!-- ══════════════════════════════ §2.3 ══════════════════════════════ -->
+      <h2 id="causal-mask"><span class="num">2.3</span><span>因果掩码：让 decoder 不能偷看未来</span></h2>
+
+      <p class="one-liner">因果掩码在 softmax 前把未来位置的分数置为 −∞，使 softmax 后对应权重精确为 0——位置 t 只能看到位置 0…t 的信息。</p>
+
+      <p>decoder 在训练时需要同时计算所有位置的输出（并行化，这是 Transformer 相比 RNN 的核心优势之一，第 01 章通信/计算框架里已经给过背景）。但如果位置 t 能看到位置 t+1, t+2, … 的信息，训练时等于"作弊"——模型不需要真正学会预测下一个 token，直接抄答案就行。推理时这些未来 token 根本不存在，训练和推理就彻底不一致了。</p>
+
+      <h3>具体做法</h3>
+      <p>构造一个下三角矩阵形式的掩码：位置 (i, j) 中，当 j &gt; i 时（位置 i 试图看位置 j &gt; i），在 softmax 前把注意力分数设为 −∞。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">因果掩码应用</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">原始分数矩阵 S = Q · Kᵀ / √d_k    形状 (n, n)
+
+掩码 M(i, j):   M(i, j) = 0   若 j ≤ i（可见）
+                M(i, j) = −∞  若 j &gt; i（未来，屏蔽）
+
+应用掩码后：     S_masked(i, j) = S(i, j) + M(i, j)
+
+softmax(S_masked) 的第 (i,j) 项：
+  当 j &gt; i：exp(−∞) / Z = 0 / Z = 0  → 权重精确为零
+  当 j ≤ i：正常的 softmax 权重       → 对可见位置重新归一</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">失败模式：在 softmax 后置零</span>
+        <p>有时会看到把 softmax 输出直接置零的实现。这是错误的：softmax 后置零破坏了"权重之和为 1"的归一化不变量。位置 i 的输出变成所有可见位置 value 的部分加权和，而非完整的加权平均——这相当于让"注意力总量"随可见 token 数量变化，引入位置相关的比例误差。正确做法是在 softmax 前加 −∞，让 softmax 天然地只对可见位置归一。</p>
+      </div>
+
+      <h3>两个精确性细节</h3>
+      <p><strong>对角线可见</strong>：掩码条件是 j &gt; i 才屏蔽，j = i（位置 t 看自己）属于可见范围。位置 t 能且应该关注自身的 key，这是 attention 设计的合理组成部分。</p>
+      <p><strong>off-by-one 泄露</strong>：若掩码条件写成 j ≥ i（把对角线也屏蔽），位置 t 连自身都看不到；若写成 j &gt; i+1，位置 t 会提前看到 t+1。这两种错误都是沉默的——训练不会报错，但模型会学到与推理不一致的分布，表现为推理时质量下降或生成重复。</p>
+
+      <figure>
+        <svg viewBox="0 0 420 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="因果掩码矩阵热力图：4×4 下三角结构，下三角含对角线为可见格，上三角为−∞屏蔽格">
+          <defs>
+            <marker id="cm-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- 标题 -->
+          <text x="210" y="16" text-anchor="middle" class="node-label" font-weight="700">因果掩码矩阵（n=4）</text>
+
+          <!-- 列标签 (j = key 位置) -->
+          <text x="100" y="50" text-anchor="middle" class="edge-label">j=0</text>
+          <text x="160" y="50" text-anchor="middle" class="edge-label">j=1</text>
+          <text x="220" y="50" text-anchor="middle" class="edge-label">j=2</text>
+          <text x="280" y="50" text-anchor="middle" class="edge-label">j=3</text>
+          <text x="210" y="34" text-anchor="middle" class="edge-label">← key 位置 j →</text>
+
+          <!-- 行标签 (i = query 位置) -->
+          <text x="52" y="92" text-anchor="end" class="edge-label">i=0</text>
+          <text x="52" y="152" text-anchor="end" class="edge-label">i=1</text>
+          <text x="52" y="212" text-anchor="end" class="edge-label">i=2</text>
+          <text x="52" y="272" text-anchor="end" class="edge-label">i=3</text>
+
+          <!-- 行轴标签 -->
+          <text x="38" y="185" text-anchor="middle" class="edge-label"
+                transform="rotate(-90,38,185)">← query 位置 i →</text>
+
+          <!-- 行 i=0 -->
+          <!-- (0,0) 可见 -->
+          <rect x="70" y="64" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.85"/>
+          <text x="100" y="96" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <!-- (0,1) 屏蔽 -->
+          <rect x="130" y="64" width="60" height="56" rx="2" fill="var(--vermilion-soft)" stroke="#B73B2F" stroke-width="1.2"/>
+          <text x="160" y="90" text-anchor="middle" class="node-label-accent" font-size="11">−∞</text>
+          <!-- (0,2) 屏蔽 -->
+          <rect x="190" y="64" width="60" height="56" rx="2" fill="var(--vermilion-soft)" stroke="#B73B2F" stroke-width="1.2"/>
+          <text x="220" y="90" text-anchor="middle" class="node-label-accent" font-size="11">−∞</text>
+          <!-- (0,3) 屏蔽 -->
+          <rect x="250" y="64" width="60" height="56" rx="2" fill="var(--vermilion-soft)" stroke="#B73B2F" stroke-width="1.2"/>
+          <text x="280" y="90" text-anchor="middle" class="node-label-accent" font-size="11">−∞</text>
+
+          <!-- 行 i=1 -->
+          <rect x="70" y="124" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.7"/>
+          <text x="100" y="156" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="130" y="124" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.85"/>
+          <text x="160" y="156" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="190" y="124" width="60" height="56" rx="2" fill="var(--vermilion-soft)" stroke="#B73B2F" stroke-width="1.2"/>
+          <text x="220" y="150" text-anchor="middle" class="node-label-accent" font-size="11">−∞</text>
+          <rect x="250" y="124" width="60" height="56" rx="2" fill="var(--vermilion-soft)" stroke="#B73B2F" stroke-width="1.2"/>
+          <text x="280" y="150" text-anchor="middle" class="node-label-accent" font-size="11">−∞</text>
+
+          <!-- 行 i=2 -->
+          <rect x="70" y="184" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.55"/>
+          <text x="100" y="216" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="130" y="184" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.7"/>
+          <text x="160" y="216" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="190" y="184" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.85"/>
+          <text x="220" y="216" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="250" y="184" width="60" height="56" rx="2" fill="var(--vermilion-soft)" stroke="#B73B2F" stroke-width="1.2"/>
+          <text x="280" y="210" text-anchor="middle" class="node-label-accent" font-size="11">−∞</text>
+
+          <!-- 行 i=3 -->
+          <rect x="70" y="244" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.42"/>
+          <text x="100" y="276" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="130" y="244" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.55"/>
+          <text x="160" y="276" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="190" y="244" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.7"/>
+          <text x="220" y="276" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+          <rect x="250" y="244" width="60" height="56" rx="2" fill="#0A0A0A" opacity="0.85"/>
+          <text x="280" y="276" text-anchor="middle" class="node-label" fill="white" font-size="12">可见</text>
+
+          <!-- 图例 -->
+          <rect x="70" y="318" width="18" height="18" fill="#0A0A0A" opacity="0.85" rx="2"/>
+          <text x="94" y="331" class="edge-label">可见（softmax 前保留分数）</text>
+          <rect x="240" y="318" width="18" height="18" fill="var(--vermilion-soft)" stroke="#B73B2F" stroke-width="1.2" rx="2"/>
+          <text x="264" y="331" class="node-label-accent" font-size="11">−∞（softmax 后权重=0）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.3</span>4×4 因果掩码矩阵：深色格（下三角含对角线）为位置 i 可见的 key，朱红格（上三角）在 softmax 前被置为 −∞。<strong>注意</strong>：对角线（i=j）属于可见范围——位置 t 看得见自己；掩码写在 softmax 前，确保权重精确为零而不破坏归一化。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §2.4 ══════════════════════════════ -->
+      <h2 id="multi-head"><span class="num">2.4</span><span>多头注意力：多个表示子空间</span></h2>
+
+      <p class="one-liner">单头只能产生一个加权平均（只承诺一种混合方式）；多头把 d_model 切成 h 个子空间并行运算，让模型同时学习不同类型的依赖关系——总 FLOPs 近乎不变，表达能力翻倍。</p>
+
+      <p>单头 attention 的局限：给定位置 i，softmax 输出的是一个概率分布，最终输出是所有 value 的一个加权平均。这意味着在一次 attention 里，模型只能"承诺"一种混合方式——或者关注句法依赖，或者关注语义相似，或者关注指代关系，无法同时做到。</p>
+
+      <h3>多头的切分方式</h3>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">multi-head attention</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">MultiHead(Q, K, V) = Concat(head₁, head₂, …, headₕ) · Wᴼ
+
+其中：
+  headᵢ = Attention(Q · WᵢQ,  K · WᵢK,  V · WᵢV)
+
+投影矩阵形状：
+  WᵢQ : (d_model, d_k)   d_k = d_model / h
+  WᵢK : (d_model, d_k)
+  WᵢV : (d_model, d_v)   d_v = d_model / h  （原版中 d_k = d_v）
+  Wᴼ  : (h · d_v, d_model)   将 concat 结果投回 d_model
+
+原版 Transformer base：d_model = 512，h = 8，d_k = d_v = 64
+总 FLOPs ≈ 单头 attention（d_model=512）的计算量（各头维度缩小 1/h，h 头并行）</code></pre>
+      </div>
+
+      <p>每个头 headᵢ 先用自己的线性投影 (WᵢQ, WᵢK, WᵢV) 把输入投到 d_k 维子空间，在那个子空间里做独立的 scaled dot-product attention，然后 h 个头的输出 concat 拼接成 h·d_v 维，最后通过 Wᴼ 投回 d_model。</p>
+
+      <div class="callout insight">
+        <span class="label">为什么说"近乎免费"</span>
+        <p>单头用 d_model 维做 attention，FLOPs 主要来自 Q·Kᵀ，量级 O(n²·d_model)。切成 h 头后每头只有 d_model/h 维，每头 FLOPs ≈ O(n²·d_model/h)，h 头相加恰好还是 O(n²·d_model)。参数量上投影矩阵增加了，但 d_k·h = d_model，整体参数量同阶。代价近乎为零，但表达空间从一个 d_model 维视角扩展到 h 个 d_k 维的独立视角。</p>
+      </div>
+
+      <h3>induction heads：真实的专门化</h3>
+      <p>多头真的会学到不同功能，而不只是理论上可以。Olsson 等（2022）通过机制可解释性研究发现 <strong>induction heads</strong>（归纳头）：给定模式 [A][B]…[A]，一个 head 会 attend 到当前 token [A] 上次出现后面的那个 [B]，完成"模式补全"。这是 in-context learning 的基础机制之一。</p>
+      <p>更关键的是，induction heads 在训练过程中不是渐进形成的，而是<strong>相变式突现</strong>（类似 grokking 现象）：某个训练步之前几乎不存在，某个训练步之后突然出现、与 in-context learning 能力的跃升同步。这说明多头的"专门化"是有真实机制根基的，不只是数学上的自由度。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="多头注意力结构图：d_model 输入分三路投影到 h 个头，各自 attention，输出 concat，Wᴼ 投回 d_model">
+          <defs>
+            <marker id="mh-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="mh-ar-v" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- 输入 d_model -->
+          <rect x="20" y="124" width="90" height="44" rx="4" class="diagram-ink node-fill"/>
+          <text x="65" y="144" text-anchor="middle" class="node-label">输入</text>
+          <text x="65" y="159" text-anchor="middle" class="edge-label">d_model</text>
+
+          <!-- 投影标注 -->
+          <text x="145" y="100" text-anchor="middle" class="edge-label">W₁Q,K,V</text>
+          <text x="145" y="152" text-anchor="middle" class="edge-label">W₂Q,K,V</text>
+          <text x="145" y="210" text-anchor="middle" class="edge-label">WₕQ,K,V</text>
+
+          <!-- head 1 -->
+          <rect x="190" y="60" width="110" height="50" rx="4" class="diagram-ink node-fill"/>
+          <text x="245" y="80" text-anchor="middle" class="node-label">head₁</text>
+          <text x="245" y="97" text-anchor="middle" class="edge-label">d_k = d_model/h</text>
+
+          <!-- head 2 -->
+          <rect x="190" y="128" width="110" height="50" rx="4" class="diagram-ink node-fill"/>
+          <text x="245" y="148" text-anchor="middle" class="node-label">head₂</text>
+          <text x="245" y="165" text-anchor="middle" class="edge-label">d_k = d_model/h</text>
+
+          <!-- dots -->
+          <text x="245" y="200" text-anchor="middle" class="node-label" font-size="18">⋮</text>
+
+          <!-- head h -->
+          <rect x="190" y="212" width="110" height="50" rx="4" class="diagram-ink node-fill"/>
+          <text x="245" y="232" text-anchor="middle" class="node-label">headₕ</text>
+          <text x="245" y="249" text-anchor="middle" class="edge-label">d_k = d_model/h</text>
+
+          <!-- arrows input → heads -->
+          <line x1="110" y1="146" x2="190" y2="86" class="diagram-ink" marker-end="url(#mh-ar)"/>
+          <line x1="110" y1="146" x2="190" y2="153" class="diagram-ink" marker-end="url(#mh-ar)"/>
+          <line x1="110" y1="146" x2="190" y2="237" class="diagram-ink" marker-end="url(#mh-ar)"/>
+
+          <!-- concat box -->
+          <rect x="370" y="110" width="90" height="72" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="415" y="141" text-anchor="middle" class="node-label-accent">Concat</text>
+          <text x="415" y="158" text-anchor="middle" class="edge-label">h × d_v</text>
+          <text x="415" y="172" text-anchor="middle" class="edge-label">= d_model</text>
+
+          <!-- arrows heads → concat -->
+          <line x1="300" y1="86" x2="370" y2="138" class="diagram-ink" marker-end="url(#mh-ar)"/>
+          <line x1="300" y1="153" x2="370" y2="150" class="diagram-ink" marker-end="url(#mh-ar)"/>
+          <line x1="300" y1="237" x2="370" y2="167" class="diagram-ink" marker-end="url(#mh-ar)"/>
+
+          <!-- Wᴼ box -->
+          <rect x="520" y="124" width="90" height="44" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="565" y="142" text-anchor="middle" class="node-label-accent">× Wᴼ</text>
+          <text x="565" y="157" text-anchor="middle" class="edge-label">→ d_model</text>
+          <line x1="460" y1="146" x2="520" y2="146" class="diagram-accent" marker-end="url(#mh-ar-v)"/>
+
+          <!-- 输出 -->
+          <text x="625" y="150" text-anchor="start" class="node-label">输出</text>
+          <text x="625" y="165" text-anchor="start" class="edge-label">d_model</text>
+          <line x1="610" y1="146" x2="622" y2="146" class="diagram-ink" marker-end="url(#mh-ar)"/>
+
+          <!-- 标注：子空间专门化 -->
+          <text x="245" y="290" text-anchor="middle" class="branch-label">各头学不同依赖关系</text>
+          <text x="245" y="304" text-anchor="middle" class="edge-label">句法 / 语义 / 指代 / 模式补全…</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2.2</span>多头注意力：输入经 h 组不同线性投影映射到 d_k = d_model/h 维子空间，各头独立运行 scaled dot-product attention，输出 concat 后通过 Wᴼ 投回 d_model。<strong>注意</strong>：h 头并行运算的总 FLOPs 与单头（维度=d_model）几乎相同，但各头可以自由专门化——induction heads 是真实观测到的专门化案例。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §2.5 ══════════════════════════════ -->
+      <h2 id="self-vs-cross"><span class="num">2.5</span><span>self-attention vs cross-attention</span></h2>
+
+      <p class="one-liner">self-attention 的 Q/K/V 来自同一序列，cross-attention 的 Q 来自 decoder、K/V 来自 encoder——差异只在 QKV 的来源，公式形式相同。</p>
+
+      <p>scaled dot-product attention 的公式 <code>softmax(QKᵀ/√d_k)·V</code> 对两种形式完全通用，区别只在输入从哪来：</p>
+
+      <table class="compare-table">
+        <caption>表 2.5 · self-attention vs cross-attention</caption>
+        <thead>
+          <tr><th>类型</th><th>Q 来源</th><th>K/V 来源</th><th>典型用途</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>self-attention</td>
+            <td>当前序列</td>
+            <td>当前序列（同 Q）</td>
+            <td>encoder 双向建模；decoder 因果自回归建模</td>
+          </tr>
+          <tr>
+            <td>cross-attention</td>
+            <td>decoder 当前状态</td>
+            <td>encoder 输出（固定，与 decoder 无关）</td>
+            <td>经典 encoder-decoder（翻译、摘要）；decoder 提取 encoder 表示</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>在第 01 章介绍的通信/计算框架中，self-attention 让序列内每个位置交换信息。cross-attention 的 K/V 来自 encoder 的最终输出，decoder 的每一步都通过它"查询" encoder 对源序列的理解。完整 encoder-decoder 架构的细节在第 03 章覆盖——那里会把 cross-attention 放进完整的 block 堆叠里讲。值得注意的是，现代 decoder-only 模型（GPT、Llama 等）没有 cross-attention：每个 block 只有因果 self-attention + FFN，不存在 encoder 输出可查。</p>
+
+      <!-- ══════════════════════════════ §2.6 ══════════════════════════════ -->
+      <h2 id="weights-not-importance"><span class="num">2.6</span><span>一个反直觉：注意力权重 ≠ 重要度</span></h2>
+
+      <p class="one-liner">输出是 value 向量的加权平均，高注意力权重 × 低范数 value = 输出贡献极小；热力图只展示权重，永远看不到 value 的范数——这是读注意力热力图最常见的误解来源。</p>
+
+      <p>attention 热力图直觉上像"模型在看哪些词"，但它只展示了 <code>softmax(QKᵀ/√d_k)</code> 的输出，即权重矩阵 W。最终输出是 <code>W · V</code>，位置 i 对位置 j 的实际贡献是 <code>W(i,j) × ‖Vⱼ‖</code> 的方向投影。一个很高的权重 W(i,j) 配上一个几乎为零范数的 Vⱼ，对输出的贡献趋近于零；相反，一个中等权重配上高范数 value，可能主导输出。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>在 attention 热力图中，位置 i 对位置 j 的权重是 0.9（极高），位置 i 对位置 k 的权重是 0.1（很低）。能否断言位置 j 对位置 i 输出的影响远大于位置 k？为什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>不能断言。输出是加权平均 <code>W · V</code>，位置 j 对输出的实际贡献量级约为 <code>W(i,j) × ‖Vⱼ‖ = 0.9 × ‖Vⱼ‖</code>，位置 k 的约为 <code>0.1 × ‖Vₖ‖</code>。若 ‖Vₖ‖ ≫ ‖Vⱼ‖（例如 Vₖ 范数是 Vⱼ 的 10 倍以上），位置 k 的贡献反而更大。</p>
+          <p>权重矩阵只是注意力分布，value 的范数是缺失的另一半。热力图误导的根源恰在于此——它展示的是"模型把注意力集中到哪"，但注意力集中到的位置的 value 范数小时，该位置对实际输出几乎没有影响。这是 Jain &amp; Wallace（2019，arxiv 2004.10102 的先驱工作）以及后续研究反复验证的结论。</p>
+        </details>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">失败模式：用热力图做因果解释</span>
+        <p>把注意力权重当作"模型决策依据"，用它来解释"为什么模型给出了这个输出"，是对 attention 机制的误用。权重只描述了 key-query 相似度分布，不描述 value 对输出的实际影响量。正确的可解释性方法需要同时考虑 value 的范数，或直接用梯度/积分梯度等输出相关方法。</p>
+      </div>
+
+      <!-- ══════════════════════════════ self-check ══════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把能想到的答案写在纸上或编辑器里。写完再对照——直接点开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li><code>Attention(Q,K,V) = softmax(QKᵀ/√d_k)·V</code>，若 n=128、d_k=64、d_v=64，写出 Q、K、V、QKᵀ、最终输出的形状。</li>
+          <li>为什么 d_k=512 时不除 √d_k 会导致梯度消失？从点积方差到 softmax 导数，用三句话讲清楚。</li>
+          <li>因果掩码为什么必须在 softmax 前置 −∞ 而不是在 softmax 后置零？两种做法的数学结果有何不同？</li>
+          <li>注意力热力图上某个词的权重接近 1，是否说明该词对模型输出"很重要"？缺少什么信息才能做出完整判断？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>Q: (128,64)；K: (128,64)；V: (128,64)；QKᵀ: (128,128)；最终输出: (128,64)。每步矩阵乘法的形状规则：(n,d_k)×(d_k,n)→(n,n)，(n,n)×(n,d_v)→(n,d_v)。</li>
+            <li>①d_k=512 时，零均值单位方差的 d_k 维点积方差=512，标准差=√512≈22.6，点积量级约±22。②softmax 输入出现极端大值时，最大项的 exp 值远大于其他项，输出接近 one-hot。③softmax 的梯度 σ(1−σ)：当 σ≈1 时导数≈0，当 σ≈0 时导数也≈0——梯度在 softmax 内就消失了，模型无法从 attention 层学到任何有用信号。</li>
+            <li>softmax 前置 −∞：exp(−∞)=0，该位置在归一化分母中贡献 0，其余可见位置的权重重新对自身归一，行和始终=1。softmax 后置零：强制让某些权重变 0，但分母已经包含了这些位置的 exp 值（分母被高估），剩余权重的行和 &lt; 1——输出是所有可见位置 value 的"部分加权"，不再是完整的加权平均，引入与可见 token 数量相关的比例误差。</li>
+            <li>不能。输出是加权平均 <code>W·V</code>，该词对输出的实际贡献 = 权重 × ‖V‖（value 范数）× 方向对齐程度。缺少该词的 value 向量范数信息，无法判断实际影响大小。</li>
+          </ol>
+        </details>
+      </section>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/1706.03762">Vaswani et al. (2017) · Attention Is All You Need</a>——scaled dot-product attention、multi-head 公式的原出处，§3.2–3.3。</li>
+          <li><a href="https://jalammar.github.io/illustrated-transformer/">Jay Alammar · The Illustrated Transformer</a>——QKV 矩阵运算与多头的图示讲解，与本章数学互为补充。</li>
+          <li><a href="https://www.youtube.com/watch?v=eMlx5fFNoYc">3Blue1Brown · Attention in transformers, visually explained</a>——注意力机制的几何直觉，√d_k 与 softmax 饱和有直观演示。</li>
+          <li><a href="https://arxiv.org/abs/2004.10102">Jain &amp; Wallace (2019 / arxiv 2004.10102) · Attention is not Explanation</a>——实验证明注意力权重与特征重要度的相关性弱，§2.6 的引用来源。</li>
+          <li><a href="https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html">Olsson et al. (2022) · In-context Learning and Induction Heads</a>——induction heads 的发现与相变式突现的实验证据。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="01-concepts.html">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 心智模型</span>
+        </a>
+        <a class="next" href="03-architecture.html">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 整体架构</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#scaled-dot" data-toc-target="scaled-dot">2.1 完整数学</a></li>
+        <li><a href="#sqrt-dk" data-toc-target="sqrt-dk">2.2 为什么除 √d_k</a></li>
+        <li><a href="#causal-mask" data-toc-target="causal-mask">2.3 因果掩码</a></li>
+        <li><a href="#multi-head" data-toc-target="multi-head">2.4 多头注意力</a></li>
+        <li><a href="#self-vs-cross" data-toc-target="self-vs-cross">2.5 self vs cross</a></li>
+        <li><a href="#weights-not-importance" data-toc-target="weights-not-importance">2.6 权重≠重要度</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

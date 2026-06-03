@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 心智模型 · Transformer 架构深挖</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+.chapter-opener .meta-row {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html" class="current">01 心智模型</a><span class="sep">—</span>
+    <a href="02-attention.html">02 注意力</a><span class="sep">—</span>
+    <a href="03-architecture.html">03 整体架构</a><span class="sep">—</span>
+    <a href="04-training-inference.html">04 训练与推理</a><span class="sep">—</span>
+    <a href="05-modern.html">05 经典到现代</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 01</p>
+        <h1>心智模型：Transformer 到底在做什么</h1>
+        <p class="recap">index 给了全局地图——这章建立词汇表与核心直觉：语言建模的任务、为什么 RNN 不够、attention 的"软字典查找"直觉、一块 Transformer 的通信+计算骨架。</p>
+        <p class="meta-row"><strong>本章交付</strong>：token / embedding / logits 定义 · RNN 串行瓶颈的根因 · attention 软查表直觉 · 通信+计算框架 · 三种 Transformer 形态之分　|　<strong>带走的能力</strong>：对任何一句 Transformer 讨论，说出「这是通信还是计算、哪种形态在用、直觉是什么」</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">读完本章，你脑子里会多出这几条</p>
+        <ul>
+          <li>语言模型 = 把一串 token 映射成下一个 token 的概率分布。</li>
+          <li>RNN 的串行瓶颈是 Transformer 出现的根因：step t 依赖 t-1，任意两位置路径长 O(n)，无法并行。</li>
+          <li>Attention 是可微的软字典查找（直觉）：query 与所有 key 算相似度→softmax 权重→对所有 value 加权平均。</li>
+          <li>一块 Transformer = attention 通信 + FFN 计算：attention 是 token 跨位置交换信息的唯一算子，FFN 逐位置独立加工。</li>
+        </ul>
+      </section>
+
+      <!-- ══════════════════════════════ §1.1 ══════════════════════════════ -->
+      <h2 id="seq-modeling"><span class="num">1.1</span><span>从序列建模说起：token、embedding、要预测什么</span></h2>
+
+      <p class="one-liner">语言模型的任务是：给定一段文本，预测下一个词是什么——而这个「预测」不是单选，是整张词表上的概率分布。</p>
+
+      <p>在深入 Transformer 的机制之前，先弄清楚它在解决什么问题。</p>
+
+      <h3>Token：模型看到的最小单位</h3>
+      <p>模型不直接处理字符，也不直接处理整词。文本首先被切分成 <strong>token</strong>（文本的原子单位，由分词器决定边界，通常是子词级别：一个常见词 = 1 个 token，罕见词被切成 2–4 个）。英文 "hello" 是 1 个 token；中文「变压器」可能被切成 2–3 个 token；代码里的缩进符可能独占一个 token。GPT-4 的词表约 10 万个 token，Llama 3 约 12.8 万个。</p>
+
+      <h3>Embedding：把 token 变成向量</h3>
+      <p>token 是整数 id，神经网络处理的是浮点向量。<strong>embedding</strong>（词嵌入，把离散 token id 映射成连续向量的查表操作）把每个 token id 映射到一个 d_model 维的实数向量。这个向量是模型的「第一语言」：从这一步起，所有计算都在向量空间进行。d_model 典型值：BERT-base = 768，GPT-2 = 768，Llama 3-8B = 4096。</p>
+
+      <h3>要预测什么：下一个 token 的概率分布</h3>
+      <p>语言模型的核心任务是 <strong>next-token prediction</strong>：给定前缀序列 <code>x₁, x₂, …, xₙ</code>，输出下一个 token 在整张词表上的概率分布。这个分布用 <strong>logits</strong>（模型最后一层输出的原始分数向量，尚未归一化为概率）经过 softmax 得到。采样（sample）或取最高概率（argmax）即得到生成的下一个 token。</p>
+
+      <div class="rationale">
+        <span class="label">为什么是概率分布而不是单点预测</span>
+        <p>语言本身有歧义性和多样性：「今天天气」之后可以接「很好」「不错」「真热」……每一个都合理。用分布而非单点，模型在训练时可以对多个合理续接都分配概率质量，而不是把所有概率押在一个答案上。softmax 后的分布在训练时与 ground truth token 的 one-hot 分布算交叉熵损失，推动模型把正确 token 的概率推高。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">术语速查 · 三个必须分清的词</span>
+        <p><strong>token</strong>：文本的最小离散单位，是整数 id，模型看到的原始输入。<br>
+        <strong>embedding</strong>：把 token id 变成连续向量的查表，是进入神经网络的第一步。<br>
+        <strong>logits</strong>：模型最后一层输出的原始分数，softmax 之前的向量；softmax(logits) = 概率。</p>
+      </div>
+
+      <!-- ══════════════════════════════ §1.2 ══════════════════════════════ -->
+      <h2 id="rnn-bottleneck"><span class="num">1.2</span><span>为什么不用 RNN</span></h2>
+
+      <p class="one-liner">RNN 把序列压成一个隐状态串行传递，任意两位置之间的路径长度是 O(n)——长序列下梯度消失，训练不可并行。</p>
+
+      <p>Transformer 之前，处理序列的主流方案是 RNN（循环神经网络）与 LSTM（Long Short-Term Memory，通过门控机制缓解梯度消失的 RNN 变体）。理解它们的瓶颈，是理解 Transformer 为什么这么设计的根因。</p>
+
+      <h3>串行瓶颈：step t 依赖 t-1，不能并行</h3>
+      <p>RNN 的前向公式是 <code>hₜ = f(hₜ₋₁, xₜ)</code>：第 t 步的隐状态依赖第 t-1 步。这意味着计算整个序列时，必须按顺序一步一步走，无法并行。GPU 的优势是大规模矩阵并行，而 RNN 把这个优势完全锁死。一条 512 token 的句子，RNN 要串行跑 512 步；Transformer 一次算完所有位置。</p>
+
+      <h3>长序列梯度消失：信息在长路径上衰减</h3>
+      <p>梯度通过时间反向传播（BPTT）时，需要乘以每一步的 Jacobian。链式相乘超过几十步，梯度要么指数级衰减（消失），要么指数级爆炸。LSTM 的门控机制缓解了这个问题，但没有从根本上解决——超过几百 token 的长程依赖仍然脆弱。</p>
+
+      <h3>任意两位置路径长 O(n)：信号传递代价高</h3>
+      <p>衡量一个架构处理长程依赖的能力，可以看「任意两个位置之间信号需要经过多少步才能互相影响」。RNN 中，位置 1 和位置 n 之间需要经过 n-1 步中间隐状态——路径长度 O(n)。Attention 中，任意两位置直接计算相似度，路径长度 O(1)。路径越长，梯度越难传，依赖越难学。</p>
+
+      <figure>
+        <svg viewBox="0 0 680 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="上排 RNN 串行链路径 O(n)，下排 attention 全连接路径 O(1)">
+          <defs>
+            <marker id="rnn-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="attn-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ===== TOP ROW: RNN ===== -->
+          <text x="30" y="56" class="edge-label" font-weight="700">RNN</text>
+          <text x="30" y="70" class="edge-label">串行</text>
+
+          <!-- RNN nodes -->
+          <rect x="100" y="36" width="72" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="136" y="62" text-anchor="middle" class="node-label">h₁</text>
+
+          <line x1="172" y1="56" x2="208" y2="56" class="diagram-ink" marker-end="url(#rnn-ar)"/>
+
+          <rect x="208" y="36" width="72" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="244" y="62" text-anchor="middle" class="node-label">h₂</text>
+
+          <line x1="280" y1="56" x2="316" y2="56" class="diagram-ink" marker-end="url(#rnn-ar)"/>
+
+          <rect x="316" y="36" width="72" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="352" y="62" text-anchor="middle" class="node-label">h₃</text>
+
+          <line x1="388" y1="56" x2="420" y2="56" class="diagram-soft"/>
+          <text x="435" y="60" class="edge-label">…</text>
+
+          <line x1="450" y1="56" x2="482" y2="56" class="diagram-soft"/>
+
+          <rect x="482" y="36" width="72" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="518" y="62" text-anchor="middle" class="node-label">hₙ</text>
+
+          <!-- O(n) label -->
+          <text x="136" y="106" text-anchor="middle" class="edge-label">位置 1</text>
+          <text x="518" y="106" text-anchor="middle" class="edge-label">位置 n</text>
+          <text x="327" y="108" text-anchor="middle" class="branch-label">路径 O(n)</text>
+
+          <!-- separator -->
+          <line x1="40" y1="128" x2="640" y2="128" class="diagram-soft"/>
+
+          <!-- ===== BOTTOM ROW: Attention ===== -->
+          <text x="30" y="170" class="node-label-accent">Attention</text>
+          <text x="30" y="185" class="edge-label">全连接</text>
+
+          <!-- Attention nodes -->
+          <rect x="100" y="152" width="72" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="136" y="178" text-anchor="middle" class="node-label">t₁</text>
+
+          <rect x="226" y="152" width="72" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="262" y="178" text-anchor="middle" class="node-label">t₂</text>
+
+          <rect x="352" y="152" width="72" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="388" y="178" text-anchor="middle" class="node-label">t₃</text>
+
+          <rect x="478" y="152" width="72" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="514" y="178" text-anchor="middle" class="node-label">tₙ</text>
+
+          <!-- full connections (selected key pairs) -->
+          <line x1="172" y1="172" x2="226" y2="172" class="diagram-accent" marker-end="url(#attn-ar)"/>
+          <line x1="172" y1="164" x2="352" y2="164" class="diagram-accent" marker-end="url(#attn-ar)"/>
+          <line x1="172" y1="158" x2="478" y2="158" class="diagram-accent" marker-end="url(#attn-ar)"/>
+          <line x1="298" y1="172" x2="352" y2="172" class="diagram-accent" marker-end="url(#attn-ar)"/>
+          <line x1="298" y1="180" x2="478" y2="180" class="diagram-accent" marker-end="url(#attn-ar)"/>
+          <line x1="424" y1="172" x2="478" y2="172" class="diagram-accent" marker-end="url(#attn-ar)"/>
+
+          <!-- O(1) label -->
+          <text x="136" y="218" text-anchor="middle" class="edge-label">位置 1</text>
+          <text x="514" y="218" text-anchor="middle" class="edge-label">位置 n</text>
+          <text x="327" y="220" text-anchor="middle" class="branch-label">路径 O(1)</text>
+          <text x="327" y="250" text-anchor="middle" class="edge-label">任意两位置直接相连，一步到达</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.1</span>上排：RNN 串行链，位置 1 到位置 n 的信号必须经过 n-1 个中间隐状态，路径 O(n)，梯度沿链累乘衰减。下排：attention 全连接，任意两位置一步直接相连，路径 O(1)。<strong>注意</strong>：路径缩短到 O(1) 是 attention 能学长程依赖的根本原因，而不是参数量更多。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 1.1 · RNN vs Transformer 关键维度对比</caption>
+        <thead>
+          <tr><th>维度</th><th>RNN / LSTM</th><th>Transformer</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>训练并行</td><td>串行，GPU 无法并行计算各步</td><td>全并行，所有位置同时算（因果掩码保证不偷看未来）</td></tr>
+          <tr><td>任意两位置路径</td><td>O(n)，长序列梯度难传</td><td>O(1)，直接计算注意力</td></tr>
+          <tr><td>长程依赖</td><td>LSTM 缓解但未解决，超百 token 后脆弱</td><td>直接连，上限由 d_model 和注意力质量决定</td></tr>
+          <tr class="selected"><td>计算复杂度</td><td>O(n·d²)，可并行 d 维</td><td>O(n²·d)，注意力矩阵 n×n 是代价（见第 04 章）</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ══════════════════════════════ §1.3 ══════════════════════════════ -->
+      <h2 id="attention-intuition"><span class="num">1.3</span><span>Attention 是什么：可微的软字典查找（直觉层）</span></h2>
+
+      <p class="one-liner">注意力是一次"软"字典查找——不精确命中一个 key，而是按相似度对所有 value 加权平均。</p>
+
+      <p>「attention」这个词经常被误解为「模型在看哪些词」的玄学。实际上，attention 是一个完全确定的数学操作，有清晰的类比：一次可微的软字典查找。完整数学（<code>softmax(QKᵀ/√d_k)·V</code> 以及为什么除 √d_k）留到<a href="02-attention.html#scaled-dot">第 02 章</a>，这里只建直觉。</p>
+
+      <h3>类比：从硬字典到软字典</h3>
+      <p><strong>硬字典</strong>（精确匹配）：给一个 query（查询键），在字典里找到精确匹配的 key，返回对应的 value。Python 的 <code>dict[key]</code> 就是这个操作——命中则返回，不命中则报错。</p>
+
+      <p><strong>软字典</strong（attention 的直觉）：给一个 query，不要求精确命中，而是用 query 与每个 key 计算相似度，经 softmax 归一化成权重，再对所有 value 做加权平均。权重之和为 1，所有 value 都参与，只是权重不同。</p>
+
+      <p>「<strong>可微</strong>」意味着这整个操作端到端可以用梯度下降训练——query、key、value 都是通过线性投影从 token embedding 里学出来的，不是人手工指定的。「<strong>软</strong>」意味着结果是所有 value 的凸组合，而不是非此即彼地选一个。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>如果 attention 权重是 [0.9, 0.05, 0.05]，第一个 value 向量范数为 0.01，后两个 value 向量范数各为 100，哪个 value 对输出影响更大？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>后两个 value。输出是加权平均：权重 × value 向量。即使第一个权重最大（0.9），对应的 value 范数极小（0.01），贡献量极低；后两个权重虽只有 0.05，但 value 范数 100，贡献量远超第一个。</p>
+          <p>这说明<strong>注意力权重 ≠ 重要度</strong>——value 向量的范数是缺失的另一半。光看注意力热力图会误导。这是 attention 最常见的解释陷阱，完整论证见<a href="02-attention.html#weights-not-importance">第 02 章注意力权重≠重要度一节</a>。</p>
+        </details>
+      </div>
+
+      <h3>形状直觉（不涉及 √d_k 的完整推导）</h3>
+      <p>设序列长度为 n，每个 token 的向量维度为 d_k。attention 操作接受三组向量：<strong>Q</strong>（query，形状 n × d_k）、<strong>K</strong>（key，形状 n × d_k）、<strong>V</strong>（value，形状 n × d_v）。Q 与 K 的点积产生 n×n 的相似度矩阵——每个位置对每个位置的分数。softmax 按行归一化，再乘以 V，输出形状 n × d_v。每一行输出是该位置综合了所有位置信息的新表示。</p>
+
+      <div class="callout insight">
+        <span class="label">关于 √d_k 与完整数学</span>
+        <p>为什么要除以 √d_k？答案涉及点积方差的论证（d_k 维点积方差 = d_k，不缩放会把 softmax 推进近 one-hot 区导致梯度消失）。这是 attention 机制的重要细节，放到<a href="02-attention.html#sqrt-dk">第 02 章完整展开</a>——那章的起点就是从这里接上去的。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="软字典查找示意：一个 query 对一排 key 算相似度得到权重，再对 value 加权平均得到输出">
+          <defs>
+            <marker id="sd-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="sd-ar-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Query node -->
+          <rect x="30" y="108" width="80" height="40" rx="6" class="diagram-ink node-fill"/>
+          <text x="70" y="130" text-anchor="middle" class="node-label-accent">query</text>
+          <text x="70" y="145" text-anchor="middle" class="edge-label">(1, d_k)</text>
+
+          <!-- Keys column -->
+          <rect x="190" y="36" width="80" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="230" y="57" text-anchor="middle" class="node-label">key₁</text>
+
+          <rect x="190" y="86" width="80" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="230" y="107" text-anchor="middle" class="node-label">key₂</text>
+
+          <rect x="190" y="136" width="80" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="230" y="157" text-anchor="middle" class="node-label">key₃</text>
+
+          <rect x="190" y="186" width="80" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="230" y="207" text-anchor="middle" class="node-label">key₄</text>
+
+          <text x="230" y="236" text-anchor="middle" class="edge-label">(n, d_k)</text>
+
+          <!-- arrows: query to keys -->
+          <line x1="110" y1="122" x2="190" y2="53" class="diagram-soft" marker-end="url(#sd-ar)"/>
+          <line x1="110" y1="126" x2="190" y2="103" class="diagram-soft" marker-end="url(#sd-ar)"/>
+          <line x1="110" y1="130" x2="190" y2="153" class="diagram-soft" marker-end="url(#sd-ar)"/>
+          <line x1="110" y1="134" x2="190" y2="203" class="diagram-soft" marker-end="url(#sd-ar)"/>
+
+          <!-- Weights column -->
+          <text x="320" y="22" text-anchor="middle" class="edge-label">softmax(相似度)</text>
+
+          <rect x="300" y="36" width="68" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="334" y="57" text-anchor="middle" class="node-label">0.55</text>
+
+          <rect x="300" y="86" width="68" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="334" y="107" text-anchor="middle" class="node-label">0.25</text>
+
+          <rect x="300" y="136" width="68" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="334" y="157" text-anchor="middle" class="node-label">0.15</text>
+
+          <rect x="300" y="186" width="68" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="334" y="207" text-anchor="middle" class="node-label">0.05</text>
+
+          <line x1="270" y1="53" x2="300" y2="53" class="diagram-ink" marker-end="url(#sd-ar)"/>
+          <line x1="270" y1="103" x2="300" y2="103" class="diagram-ink" marker-end="url(#sd-ar)"/>
+          <line x1="270" y1="153" x2="300" y2="153" class="diagram-ink" marker-end="url(#sd-ar)"/>
+          <line x1="270" y1="203" x2="300" y2="203" class="diagram-ink" marker-end="url(#sd-ar)"/>
+
+          <!-- Values column -->
+          <rect x="430" y="36" width="72" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="466" y="57" text-anchor="middle" class="node-label">val₁</text>
+
+          <rect x="430" y="86" width="72" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="466" y="107" text-anchor="middle" class="node-label">val₂</text>
+
+          <rect x="430" y="136" width="72" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="466" y="157" text-anchor="middle" class="node-label">val₃</text>
+
+          <rect x="430" y="186" width="72" height="34" rx="5" class="diagram-accent node-fill-accent"/>
+          <text x="466" y="207" text-anchor="middle" class="node-label">val₄</text>
+
+          <text x="466" y="236" text-anchor="middle" class="edge-label">(n, d_v)</text>
+
+          <!-- weights × values arrows -->
+          <line x1="368" y1="53" x2="430" y2="53" class="diagram-ink" marker-end="url(#sd-ar)"/>
+          <line x1="368" y1="103" x2="430" y2="103" class="diagram-ink" marker-end="url(#sd-ar)"/>
+          <line x1="368" y1="153" x2="430" y2="153" class="diagram-ink" marker-end="url(#sd-ar)"/>
+          <line x1="368" y1="203" x2="430" y2="203" class="diagram-ink" marker-end="url(#sd-ar)"/>
+
+          <!-- Output node -->
+          <rect x="568" y="108" width="88" height="40" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="612" y="130" text-anchor="middle" class="node-label-accent">output</text>
+          <text x="612" y="145" text-anchor="middle" class="edge-label">(1, d_v)</text>
+
+          <!-- values to output (converge) -->
+          <line x1="502" y1="53" x2="568" y2="118" class="diagram-accent" marker-end="url(#sd-ar-acc)"/>
+          <line x1="502" y1="103" x2="568" y2="122" class="diagram-accent" marker-end="url(#sd-ar-acc)"/>
+          <line x1="502" y1="153" x2="568" y2="130" class="diagram-accent" marker-end="url(#sd-ar-acc)"/>
+          <line x1="502" y1="203" x2="568" y2="138" class="diagram-accent" marker-end="url(#sd-ar-acc)"/>
+
+          <!-- label: weighted sum -->
+          <text x="540" y="170" text-anchor="middle" class="branch-label">加权</text>
+          <text x="540" y="183" text-anchor="middle" class="branch-label">平均</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1.2</span>软字典查找：一个 query（朱红）对一列 key 计算相似度，softmax 归一化为权重（0.55/0.25/0.15/0.05），再对对应 value（朱红底）做加权平均，输出是 n 个 value 的混合。<strong>注意</strong>：权重最高不等于对输出影响最大——value 向量本身的大小同样决定贡献量。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §1.4 ══════════════════════════════ -->
+      <h2 id="communicate-compute"><span class="num">1.4</span><span>一块 Transformer = 通信 + 计算</span></h2>
+
+      <p class="one-liner">Karpathy 框架：attention 是 token 跨位置交换信息的唯一算子（通信）；FFN 逐位置独立加工（计算）。两者缺一不可，顺序不能换。</p>
+
+      <p>Andrej Karpathy 在 nanoGPT 讲解中提出了一个极度清晰的框架：每个 Transformer block 由两种性质完全不同的操作交替组成。</p>
+
+      <h3>Attention = 通信（Communication）</h3>
+      <p>self-attention 是整个 Transformer 里<strong>唯一</strong>让 token 跨位置交换信息的算子。每个位置发出 query，与所有位置的 key 计算相似度，把各位置的 value 信息聚合回来——这是 token 之间的通信。没有 attention，每个位置只能看到自己，对上下文一无所知。</p>
+
+      <p>LayerNorm、残差连接、FFN 都是逐位置（position-wise）独立处理的——每个位置的计算不依赖其它位置的数据，即使有 n 个 token，这些操作也是 n 个独立的函数调用。<strong>token 之间只在 attention 里说话。</strong></p>
+
+      <h3>FFN = 计算（Computation）</h3>
+      <p>FFN（前馈网络，两层线性变换加激活函数，<code>FFN(x) = max(0, xW₁+b₁)W₂+b₂</code>）逐位置独立处理，位置 3 的 FFN 计算与位置 1、2 的数据毫无关系。Geva 等人（2021）的研究表明，FFN 的权重像键值记忆一样存储事实和语义模式：W₁ 的行是 key（某种输入模式的检测器），W₂ 的列是 value（对应的输出知识）。知识住在 FFN 里，语境整合住在 attention 里。</p>
+
+      <h3>为什么顺序不能换</h3>
+      <p>先通信（attention）让每个位置知道上下文，再计算（FFN）对这个「被语境化的表示」独立加工——这个顺序有意义。如果先跑 FFN，每个位置只在自己的原始 embedding 上加工，还没看过上下文；再跑 attention，聚合的是还没被 FFN 加工过的信息。两者交替、顺序固定，是 block 设计的核心。</p>
+
+      <figure>
+        <svg viewBox="0 0 640 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一个 Transformer block 的通信与计算：attention 横向连线表示跨位置通信，FFN 每列独立表示逐位置计算">
+          <defs>
+            <marker id="blk-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="blk-ar-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- Input tokens row -->
+          <text x="30" y="42" class="edge-label" font-weight="700">输入</text>
+
+          <rect x="100" y="22" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="130" y="43" text-anchor="middle" class="node-label">t₁</text>
+
+          <rect x="230" y="22" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="260" y="43" text-anchor="middle" class="node-label">t₂</text>
+
+          <rect x="360" y="22" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="390" y="43" text-anchor="middle" class="node-label">t₃</text>
+
+          <rect x="490" y="22" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="520" y="43" text-anchor="middle" class="node-label">t₄</text>
+
+          <!-- Attention layer -->
+          <rect x="80" y="84" width="460" height="50" rx="6" class="diagram-accent node-fill-accent" stroke-width="1.6"/>
+          <text x="310" y="107" text-anchor="middle" class="node-label-accent">Attention（通信）</text>
+          <text x="310" y="122" text-anchor="middle" class="edge-label">每个位置发 query，聚合所有位置的信息 — token 间唯一通信点</text>
+
+          <!-- cross-position arrows -->
+          <line x1="130" y1="54" x2="130" y2="84" class="diagram-ink" marker-end="url(#blk-ar)"/>
+          <line x1="260" y1="54" x2="260" y2="84" class="diagram-ink" marker-end="url(#blk-ar)"/>
+          <line x1="390" y1="54" x2="390" y2="84" class="diagram-ink" marker-end="url(#blk-ar)"/>
+          <line x1="520" y1="54" x2="520" y2="84" class="diagram-ink" marker-end="url(#blk-ar)"/>
+
+          <!-- FFN layer (4 independent columns) -->
+          <rect x="100" y="164" width="60" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="130" y="189" text-anchor="middle" class="node-label">FFN</text>
+          <text x="130" y="203" text-anchor="middle" class="edge-label">独立</text>
+
+          <rect x="230" y="164" width="60" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="260" y="189" text-anchor="middle" class="node-label">FFN</text>
+          <text x="260" y="203" text-anchor="middle" class="edge-label">独立</text>
+
+          <rect x="360" y="164" width="60" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="390" y="189" text-anchor="middle" class="node-label">FFN</text>
+          <text x="390" y="203" text-anchor="middle" class="edge-label">独立</text>
+
+          <rect x="490" y="164" width="60" height="44" rx="5" class="diagram-ink node-fill"/>
+          <text x="520" y="189" text-anchor="middle" class="node-label">FFN</text>
+          <text x="520" y="203" text-anchor="middle" class="edge-label">独立</text>
+
+          <text x="30" y="186" class="edge-label" font-weight="700">FFN</text>
+          <text x="30" y="200" class="edge-label">计算</text>
+
+          <!-- attn to ffn arrows -->
+          <line x1="130" y1="134" x2="130" y2="164" class="diagram-accent" marker-end="url(#blk-ar-acc)"/>
+          <line x1="260" y1="134" x2="260" y2="164" class="diagram-accent" marker-end="url(#blk-ar-acc)"/>
+          <line x1="390" y1="134" x2="390" y2="164" class="diagram-accent" marker-end="url(#blk-ar-acc)"/>
+          <line x1="520" y1="134" x2="520" y2="164" class="diagram-accent" marker-end="url(#blk-ar-acc)"/>
+
+          <!-- Output row -->
+          <rect x="100" y="236" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="130" y="257" text-anchor="middle" class="node-label">h₁</text>
+
+          <rect x="230" y="236" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="260" y="257" text-anchor="middle" class="node-label">h₂</text>
+
+          <rect x="360" y="236" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="390" y="257" text-anchor="middle" class="node-label">h₃</text>
+
+          <rect x="490" y="236" width="60" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="520" y="257" text-anchor="middle" class="node-label">h₄</text>
+
+          <text x="30" y="257" class="edge-label" font-weight="700">输出</text>
+
+          <line x1="130" y1="208" x2="130" y2="236" class="diagram-ink" marker-end="url(#blk-ar)"/>
+          <line x1="260" y1="208" x2="260" y2="236" class="diagram-ink" marker-end="url(#blk-ar)"/>
+          <line x1="390" y1="208" x2="390" y2="236" class="diagram-ink" marker-end="url(#blk-ar)"/>
+          <line x1="520" y1="208" x2="520" y2="236" class="diagram-ink" marker-end="url(#blk-ar)"/>
+        </svg>
+        <figcaption><span class="fig-num">图 1.3</span>一个 Transformer block 的两个阶段：attention 层（朱红，横向跨位置通信）汇集所有 token 的信息；四个 FFN 模块（黑色，纵向每列独立）分别对每个位置单独加工。<strong>注意</strong>：FFN 模块之间无任何横向连线——四个位置的 FFN 计算完全独立，token 间的所有通信都压缩在 attention 这一层。</figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §1.5 ══════════════════════════════ -->
+      <h2 id="three-forms"><span class="num">1.5</span><span>三种形态：encoder-only / decoder-only / encoder-decoder</span></h2>
+
+      <p class="one-liner">同一套 attention+FFN 积木，因掩码策略和堆叠方式不同，长出了三种形态：BERT 的双向 encoder、GPT 的因果 decoder、T5 的 seq2seq encoder-decoder。</p>
+
+      <p>Transformer 原论文（Vaswani 2017）给出的是 encoder-decoder 结构，用于机器翻译。此后社区发现同一套积木可以三种方式组合，适配不同任务。</p>
+
+      <h3>Encoder-Only（双向）· 代表：BERT</h3>
+      <p>每个位置的 attention 可以看到整个序列——既看左边也看右边，无因果掩码。输出是每个 token 的双向上下文化表示。<strong>适合</strong>：分类（句子情感）、序列标注（命名实体识别）、embedding（把句子压成一个向量）。<strong>不适合</strong>：生成——双向模型看到了整个序列，生成时会泄露「答案」。BERT-base（2018）：d_model=768，12 层，约 110M 参数。</p>
+
+      <h3>Decoder-Only（因果）· 代表：GPT 系列 / Llama / 几乎所有现代 LLM</h3>
+      <p>每个位置只能看到自己和左边的位置（因果掩码，Causal Masking：attention 矩阵的上三角位置置 −∞，softmax 后权重为 0，防止偷看未来 token）。<strong>适合</strong>：文本生成、补全、对话。<strong>关键细节</strong>：decoder-only 没有 cross-attention——它不是 encoder-decoder 的「一半」，每个 block 只有因果自注意力 + FFN。为什么它成了 LLM 主流？next-token prediction 这一个目标就能驱动大规模预训练，简单、普适、可扩展，不需要成对的输入-输出数据。GPT-2（2019，1.5B）；Llama 3-70B（2024）；Claude 3/4 系列均为 decoder-only。</p>
+
+      <h3>Encoder-Decoder（seq2seq）· 代表：T5 / BART / 原始 Transformer</h3>
+      <p>编码端（encoder）用双向 attention 处理输入序列，解码端（decoder）用因果 attention 处理输出序列，并通过 cross-attention（decoder 的 Q 来自解码端，K/V 来自编码端输出）将两侧信息桥接。<strong>适合</strong>：机器翻译、摘要、问答（有明确输入输出对）。<strong>现状</strong>：seq2seq 任务现在也常用指令微调的 decoder-only 模型处理，encoder-decoder 的独特优势在输入-输出差异极大的任务（如翻译）上才特别显著。cross-attention 的完整机制见<a href="02-attention.html#self-vs-cross">第 02 章 self vs cross attention</a>。</p>
+
+      <table class="compare-table">
+        <caption>表 1.5 · 三种形态对比</caption>
+        <thead>
+          <tr><th>形态</th><th>Attention 方向</th><th>典型代表</th><th>主要适用任务</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Encoder-Only</td><td>双向（全局可见）</td><td>BERT、RoBERTa</td><td>分类、NER、embedding</td></tr>
+          <tr class="selected"><td>Decoder-Only</td><td>因果（只看左边）</td><td>GPT 系列、Llama、Claude</td><td>生成、补全、对话——LLM 主流</td></tr>
+          <tr><td>Encoder-Decoder</td><td>Encoder 双向 + Decoder 因果 + Cross</td><td>T5、BART、原始 Transformer</td><td>翻译、摘要、seq2seq</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">失败模式 · decoder-only ≠ encoder-decoder 的一半</span>
+        <p>decoder-only 的每个 block 是<strong>因果自注意力 + FFN</strong>，没有 cross-attention。不要把它当成「只用 decoder 的 enc-dec 模型」——enc-dec 的 decoder 有三种 sublayer（masked self-attention + cross-attention + FFN），而 GPT/Llama 的 decoder 只有两种（causal self-attention + FFN）。这个差异在看架构图时非常容易混淆。</p>
+      </div>
+
+      <!-- ══════════════════════════════ self-check ══════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把能想到的答案写在纸上或编辑器里。写完再展开答案对照——直接展开等于把这一节当再读一遍。
+        </p>
+        <ol>
+          <li>token、embedding、logits 三者各是什么？在前向计算中的顺序是什么？</li>
+          <li>RNN 有三个典型缺陷导致 Transformer 出现，分别是什么？对应于 Transformer 的哪个设计选择解决了它？</li>
+          <li>attention 的「软字典查找」类比：Q、K、V 分别扮演类比中的哪个角色？输出是什么？</li>
+          <li>一块 Transformer block 里，哪个操作让 token 跨位置通信？哪个操作逐位置独立？如果一个 bug 让 FFN 意外读到了其它位置的信息，破坏了哪个设计原则？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li><strong>token</strong>：文本切分后的离散单位，整数 id。<strong>embedding</strong>：把 token id 查表映射到连续向量（d_model 维），是神经网络的输入。<strong>logits</strong>：模型最后一层输出的原始分数向量，softmax 后得概率。顺序：token id → embedding → 多层 Transformer 处理 → logits → softmax → 概率分布。</li>
+            <li>① <strong>串行不可并行</strong>（step t 依赖 t-1）→ Transformer 的 attention 全并行，所有位置同时算。② <strong>梯度消失</strong>（长链式乘法）→ 残差连接让梯度绕过中间层（见<a href="03-architecture.html#residual">第 03 章</a>）。③ <strong>O(n) 路径长度</strong>（任意两位置需经 n-1 步）→ attention O(1) 直接连接。</li>
+            <li><strong>Q（query）</strong>= 查询键（要找什么）；<strong>K（key）</strong>= 字典里的键（每个条目的标签）；<strong>V（value）</strong>= 条目内容（要返回的信息）。输出是所有 value 的加权平均，权重由 Q 与各 K 的相似度经 softmax 归一化得到。</li>
+            <li><strong>attention</strong> 让 token 跨位置通信（唯一）；<strong>FFN、LayerNorm、残差</strong>逐位置独立。FFN 意外读其它位置信息，破坏了「FFN = 逐位置独立计算」这一原则，也破坏了通信/计算的明确分工——Karpathy 框架的核心不变式。</li>
+          </ol>
+        </details>
+      </section>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a>（Vaswani 等，2017）—— Transformer 原论文，encoder-decoder 原始结构</li>
+          <li><a href="https://jalammar.github.io/illustrated-transformer/">The Illustrated Transformer</a>（Jay Alammar）—— 逐步图解 attention 与 encoder-decoder</li>
+          <li><a href="https://www.youtube.com/watch?v=kCc8FmEb1nY">Let's build GPT: from scratch</a>（Andrej Karpathy）—— 通信/计算框架的原始来源，nanoGPT 讲解</li>
+          <li><a href="https://www.youtube.com/watch?v=wjZofJX0v4M">3Blue1Brown · But what is a GPT?</a>（Grant Sanderson）—— attention 直觉的可视化</li>
+          <li><a href="https://arxiv.org/abs/2012.14913">Transformer Feed-Forward Layers Are Key-Value Memories</a>（Geva 等，2021）—— FFN = 键值记忆的实证</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="index.html">
+          <span class="label">← 上一章</span>
+          <span class="title">00 · 起点</span>
+        </a>
+        <a class="next" href="02-attention.html">
+          <span class="label">下一章 →</span>
+          <span class="title">02 · 注意力机制</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#seq-modeling" data-toc-target="seq-modeling">1.1 序列建模</a></li>
+        <li><a href="#rnn-bottleneck" data-toc-target="rnn-bottleneck">1.2 为什么不用 RNN</a></li>
+        <li><a href="#attention-intuition" data-toc-target="attention-intuition">1.3 Attention 直觉</a></li>
+        <li><a href="#communicate-compute" data-toc-target="communicate-compute">1.4 通信 + 计算</a></li>
+        <li><a href="#three-forms" data-toc-target="three-forms">1.5 三种形态</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update the page title, breadcrumb, article, and TOC.
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分布式事务 · 分布式系统教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-foundations.html">01 为什么难</a><span class="sep">—</span>
+    <a href="02-time-order.html">02 时间与序</a><span class="sep">—</span>
+    <a href="03-consistency.html">03 一致性</a><span class="sep">—</span>
+    <a href="04-replication.html">04 复制</a><span class="sep">—</span>
+    <a href="05-partitioning.html">05 分区</a><span class="sep">—</span>
+    <a href="06-consensus.html">06 共识</a><span class="sep">—</span>
+    <a href="07-transactions.html" class="current">07 事务</a><span class="sep">—</span>
+    <a href="08-cap-tradeoffs.html">08 CAP权衡</a><span class="sep">—</span>
+    <a href="09-self-check.html">09 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+<header class="chapter-opener">
+  <p class="chapter-label">Chapter 07</p>
+  <h1>分布式事务：跨节点的原子提交</h1>
+  <p class="recap">第 06 章的共识解决了"对一个值达成一致"。跨多个节点或服务的一个业务操作要么全做、要么全不做——原子提交既是共识的一个具体应用，也带来新的失败模式：协调者崩溃、网络分区、以及"语义回滚"与"真回滚"的根本区别。</p>
+</header>
+
+<section class="schema-panel">
+  <p class="label">本章你将建立的 schema</p>
+  <ul>
+    <li>2PC 的阻塞问题：协调者在哪个时刻崩溃会让参与者永久持锁</li>
+    <li>3PC 为何不算真正修复：把阻塞换成了分区下的脑裂</li>
+    <li>Saga 牺牲隔离性：补偿是语义回滚，不是物理回滚</li>
+    <li>exactly-once 投递不可能、处理可达：靠幂等键把 at-least-once 变 exactly-once</li>
+  </ul>
+</section>
+
+<!-- §7.1 2PC -->
+<h2 id="s71"><span class="num">7.1</span><span>2PC 两阶段提交</span></h2>
+<p class="one-liner">协调者通过两轮通信保证所有参与者要么都提交、要么都中止。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要它</span>
+  <p>跨多个数据库节点（或服务）的操作必须原子完成，否则"已从 A 扣款、B 库存扣失败"会留下不一致的中间态。在没有协调者的情况下，每个参与者只知道自己的状态，无法在本地判断"全局是否可以提交"。</p>
+</div>
+
+<h3>机制：两轮通信</h3>
+<p><strong>Phase 1 — Prepare</strong>：协调者向所有参与者发送 Prepare 消息。每个参与者将事务操作写入 prepare 日志，持有相关行锁，然后向协调者回复 YES（愿意提交）或 NO（遇到冲突 / 约束违反）。YES 意味着参与者做出承诺：即使协调者此后不再出现，参与者也已准备好提交，且已将 prepare 日志落盘。</p>
+<p><strong>Phase 2 — Commit / Abort</strong>：若协调者收齐全 YES，则将 commit 决定写入自身日志，然后广播 Commit 给所有参与者；任意一个 NO 则广播 Abort。参与者收到 Commit 后提交并释放锁。</p>
+
+<h3>阻塞问题：那个危险窗口</h3>
+<p>参与者投出 YES 之后，处于一个特殊的中间状态：它已承诺可以提交，但尚未知道全局决定。此时参与者既不能单方面提交（如果其他参与者投了 NO 而协调者决定 Abort，单方面提交违反原子性），也不能单方面中止（如果其他参与者全部投 YES 而协调者决定 Commit，单方面中止同样违反原子性）。唯一合法动作是等待协调者的决定。</p>
+<p>若协调者在收齐 YES 之后、广播决定之前崩溃，参与者进入<strong>无限等待</strong>：锁不能释放，事务不能完成，直到协调者恢复并重播日志。这就是 2PC 的阻塞性（blocking）。</p>
+<p>参与者无法通过相互联系打破僵局——它们各自只知道"自己投了 YES"，不知道其他参与者是否也全投 YES；即便相互可见，多数参与者也无法推断出全局决定，因为协调者的 commit/abort 日志不在它们这里。</p>
+
+<div class="callout insight">
+  <span class="label">定位</span>
+  <p>2PC 是 CP 协议：可用性换一致性。XA 标准（JDBC 两阶段）实现了 2PC。Spanner 的跨分区提交也用 2PC，但将协调者状态本身用 Paxos 组复制，使协调者高可用，从而绕开阻塞问题——这是 06 章共识与本章 2PC 的直接结合。</p>
+</div>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>协调者在写 commit 日志之前崩溃，和写日志之后、广播之前崩溃，参与者的处境有何不同？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>写日志之前崩溃：协调者恢复后日志里没有 commit 记录，重新发送 Abort；参与者不会卡死，最终都会中止。写日志之后、广播之前崩溃：协调者恢复后读到 commit 记录，会重发 Commit；参与者在等待期间卡死持锁，但最终会提交。这正说明协调者日志（commit point）是全局唯一的决定权威——它落盘那一刻决定了整个事务的命运。</p>
+  </details>
+</div>
+
+<!-- 图 7.1 2PC 时序 -->
+<figure>
+  <svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg"
+       role="img" aria-label="2PC 时序图：Phase1 Prepare 与 Phase2 Commit，高亮协调者崩溃的阻塞窗口">
+    <defs>
+      <marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+      <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+      </marker>
+    </defs>
+
+    <!-- 时间轴标题行 -->
+    <text x="120" y="28" text-anchor="middle" class="node-label" font-weight="700">协调者</text>
+    <text x="360" y="28" text-anchor="middle" class="node-label">参与者 A</text>
+    <text x="560" y="28" text-anchor="middle" class="node-label">参与者 B</text>
+
+    <!-- 生命线 -->
+    <line x1="120" y1="36" x2="120" y2="380" class="diagram-ink" stroke-dasharray="4 4"/>
+    <line x1="360" y1="36" x2="360" y2="380" class="diagram-ink" stroke-dasharray="4 4"/>
+    <line x1="560" y1="36" x2="560" y2="380" class="diagram-ink" stroke-dasharray="4 4"/>
+
+    <!-- Phase 1 标注 -->
+    <text x="14" y="72" class="edge-label" font-weight="700">Phase 1</text>
+
+    <!-- Prepare → A -->
+    <line x1="120" y1="70" x2="352" y2="70" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="236" y="64" text-anchor="middle" class="edge-label">Prepare</text>
+
+    <!-- Prepare → B -->
+    <line x1="120" y1="88" x2="552" y2="88" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="340" y="82" text-anchor="middle" class="edge-label">Prepare</text>
+
+    <!-- YES A → 协调者 -->
+    <line x1="360" y1="126" x2="128" y2="126" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="244" y="120" text-anchor="middle" class="edge-label">YES（已写 prepare 日志，持锁）</text>
+
+    <!-- YES B → 协调者 -->
+    <line x1="560" y1="148" x2="128" y2="148" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="344" y="142" text-anchor="middle" class="edge-label">YES（已写 prepare 日志，持锁）</text>
+
+    <!-- 协调者写 commit 日志 -->
+    <rect x="56" y="170" width="128" height="36" rx="4" class="diagram-accent node-fill-accent"/>
+    <text x="120" y="184" text-anchor="middle" class="node-label-accent">写 commit 日志</text>
+    <text x="120" y="199" text-anchor="middle" class="edge-label">← 决定点</text>
+
+    <!-- 阻塞窗口说明 -->
+    <rect x="168" y="170" width="420" height="52" rx="4" class="diagram-soft node-fill" stroke="#B73B2F" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="378" y="190" text-anchor="middle" class="node-label-accent">危险窗口</text>
+    <text x="378" y="210" text-anchor="middle" class="edge-label">若协调者此时崩溃 → 参与者卡死，持锁等待</text>
+
+    <!-- Phase 2 标注 -->
+    <text x="14" y="256" class="edge-label" font-weight="700">Phase 2</text>
+
+    <!-- Commit → A -->
+    <line x1="120" y1="256" x2="352" y2="256" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="236" y="250" text-anchor="middle" class="edge-label">Commit</text>
+
+    <!-- Commit → B -->
+    <line x1="120" y1="274" x2="552" y2="274" class="diagram-ink" marker-end="url(#arrow-ink)"/>
+    <text x="340" y="268" text-anchor="middle" class="edge-label">Commit</text>
+
+    <!-- Ack A -->
+    <line x1="360" y1="310" x2="128" y2="310" class="diagram-soft" stroke-dasharray="3 3" marker-end="url(#arrow-ink)"/>
+    <text x="244" y="304" text-anchor="middle" class="edge-label">Ack（释放锁）</text>
+
+    <!-- Ack B -->
+    <line x1="560" y1="330" x2="128" y2="330" class="diagram-soft" stroke-dasharray="3 3" marker-end="url(#arrow-ink)"/>
+    <text x="344" y="324" text-anchor="middle" class="edge-label">Ack（释放锁）</text>
+  </svg>
+  <figcaption><span class="fig-num">图 7.1</span>2PC 两阶段时序。<strong>注意</strong>：协调者写完 commit 日志、广播前崩溃，参与者已投 YES 且持锁，无法自行决定——这是阻塞窗口，也是 2PC 的根本弱点。</figcaption>
+</figure>
+
+<!-- §7.2 3PC -->
+<h2 id="s72"><span class="num">7.2</span><span>3PC 与"它不算真正的修复"</span></h2>
+<p class="one-liner">在 Prepare 与 Commit 之间加入 PreCommit 阶段，消除单点阻塞——但只在同步网络假设下成立。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要它</span>
+  <p>2PC 阻塞的根因是参与者在"全部投 YES"这个事实上没有共识——若参与者能确知"所有人都投了 YES"，超时后就可以安全自行提交，无需等待协调者。3PC 的 PreCommit 阶段正是为了传播这个信息。</p>
+</div>
+
+<h3>机制：三轮通信</h3>
+<p><strong>Phase 1 — Prepare</strong>（同 2PC）。<strong>Phase 2 — PreCommit</strong>：协调者收齐全 YES 后，广播 PreCommit；参与者收到后回复 Ack，并记录"已收到 PreCommit"。<strong>Phase 3 — Commit</strong>：协调者收齐 Ack 后广播 Commit。</p>
+<p>关键逻辑：收到过 PreCommit 的参与者知道"所有参与者都投了 YES"。若协调者此后崩溃，参与者超时后可以安全地自行提交——不存在某个参与者投 NO 的情况，因为 PreCommit 只在全 YES 之后才发出。这消除了 2PC 的阻塞场景。</p>
+
+<h3>为什么分区下仍然失败</h3>
+<p>3PC 依赖<strong>同步网络假设</strong>：消息必须在有限时间内到达（即存在消息延迟上界）。现实网络不满足这个假设。</p>
+<p>网络分区时：参与者组 A 与协调者失联，超时后根据 PreCommit 的"全 YES 已确认"逻辑自行提交；与此同时，协调者决定中止（比如又收到其他信号）并通知了未分区的参与者组 B。结果 A 组提交、B 组中止——<strong>原子性被打破</strong>，出现脑裂。</p>
+<p>3PC 把 2PC 的阻塞问题换成了分区下的脑裂问题，并未真正修复。实务系统中不使用 3PC；需要非阻塞原子提交的场景转向共识协议（Paxos / Raft）或者把协调者本身做成高可用复制状态机（Spanner 的做法）。</p>
+
+<div class="callout warning">
+  <span class="label">陷阱</span>
+  <p>3PC 的超时自行提交逻辑在有界延迟网络中安全，在真实互联网（无界延迟）中必然存在某个分区场景触发脑裂。不要在生产系统中用 3PC 替代 2PC，除非你已经用共识协议保证了消息可靠有序传递——但那样就不需要 3PC 了。</p>
+</div>
+
+<!-- §7.3 TCC -->
+<h2 id="s73"><span class="num">7.3</span><span>TCC：应用层的三步补偿</span></h2>
+<p class="one-liner">把每个参与者拆成 Try / Confirm / Cancel 三个显式业务操作，在应用层替代数据库级锁。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要它</span>
+  <p>2PC 依赖数据库的 XA 接口，跨异构存储（Redis + MySQL + 外部服务）时无法统一协调。TCC 把协调逻辑上移到应用层，每个服务只需实现三个业务方法，不依赖底层数据库的事务协议。</p>
+</div>
+
+<h3>机制：三个显式操作</h3>
+<p><strong>Try</strong>：预留资源，不立即生效。例如将库存从"可用"状态改为"冻结"状态，确保资源不被他人抢占，但不减少实际库存。<strong>Confirm</strong>：将预留转正，幂等执行。例如将冻结库存实际扣减。<strong>Cancel</strong>：释放预留，幂等补偿。例如将冻结库存返回可用状态。</p>
+<p>协调者按序调用所有参与者的 Try；全部成功后调用全部 Confirm；任一 Try 失败则调用已成功的参与者的 Cancel。Confirm 和 Cancel 必须幂等，协调者在部分失败时会重试。</p>
+
+<h3>失败模式</h3>
+<p><strong>空回滚（empty cancel）</strong>：Cancel 先于 Try 到达（因为网络乱序），此时服务没有对应的预留记录，Cancel 无从操作。解决方案：服务在 Cancel 时检查预留记录是否存在；若不存在，则记录"已取消"标记，让后续到达的 Try 直接返回失败（防悬挂）。</p>
+<p><strong>悬挂（suspension）</strong>：Try 超时后协调者调用 Cancel，然后 Try 的消息延迟到达并被执行，此时预留成功但后续不会有 Confirm / Cancel，资源永久冻结。状态检查（看到"已取消"标记就拒绝 Try）可防止悬挂。</p>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>TCC 的 Confirm 必须幂等，但业务操作（如发送短信通知）天然非幂等。工程上如何处理？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>为每次 Confirm 调用携带唯一幂等键（如 transaction_id + step_id）。服务在幂等表中记录已完成的键；收到重复请求时直接返回成功，不再重复执行副作用。这把"业务操作是否可重复"和"接口是否幂等"解耦——接口层保证幂等，业务副作用在首次执行后由幂等表保护。</p>
+  </details>
+</div>
+
+<!-- §7.4 Saga -->
+<h2 id="s74"><span class="num">7.4</span><span>Saga：长事务的分解与补偿</span></h2>
+<p class="one-liner">长事务拆成一串本地事务 T1..Tn，每个配一个补偿 C1..Cn，失败时反向依次补偿。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要它</span>
+  <p>跨多个微服务的业务操作（如下单→库存→扣款→通知）不能共享一个数据库事务。如果用 2PC 协调跨服务，持锁时间随业务流程拉长而放大，在高并发系统中成为瓶颈。Saga 的每个本地事务立即提交，持锁时间缩短到单个服务本地操作的粒度。</p>
+</div>
+
+<h3>机制：正向链与补偿链</h3>
+<p>每个本地事务 Ti 提交后即对外可见，业务流程推进到下一步。若 Tk 失败，系统反向执行 Ck-1、Ck-2、...、C1，每个 Ci 是 Ti 的语义补偿（semantic undo）。</p>
+<p><strong>编排方式</strong>有两种：choreography（编舞）——每个服务完成 Ti 后发布事件，下游服务监听事件触发 Ti+1，无中央协调器，耦合度低但全局流程难以观测；orchestration（编排）——中央编排器按序调用各服务，全局状态集中管理，便于监控和重试，但编排器成为单点。</p>
+
+<h3>Saga 丢失了什么：隔离性</h3>
+<p>每个 Ti 独立提交意味着中间状态对并发请求可见。ACID 中的 I（Isolation）被放弃，Saga 只剩 ACD——原子性（通过补偿链模拟）、一致性（业务语义保证，非数据库约束）、持久性。</p>
+<p>补偿（Ci）不是数据库的 ROLLBACK。数据库回滚是物理撤销，对外完全不可见；Saga 补偿是一个新的正向业务操作，执行的是语义取消——它会产生新的业务记录，并且无法撤销已经被外部观察到的中间状态。</p>
+<p>具体例子：下单 Saga 中，T1 建订单、T2 预留库存、T3 扣款。若 T3 扣款失败，补偿序列 C2（释放库存）+ C1（取消订单）执行。但若 T2 之后仓库已经开始备货，C2 的"释放库存"只是数据库记录的恢复，备货动作本身无法物理撤销——这是丢弃隔离性的真实后果。</p>
+
+<div class="callout warning">
+  <span class="label">陷阱</span>
+  <p>Saga 不提供隔离性。并发的两个 Saga 实例会读到彼此的中间状态，导致"更新丢失"（T2 读到了另一个 Saga T1 已提交但尚未补偿的状态）。若业务场景需要隔离，须在应用层加悲观锁（预留令牌）或设计补偿逻辑对"已观察中间态"的情况容错。</p>
+</div>
+
+<!-- 图 7.4 Saga 正向 + 补偿链 -->
+<figure>
+  <svg viewBox="0 0 680 340" xmlns="http://www.w3.org/2000/svg"
+       role="img" aria-label="Saga 正向链 T1→T2→T3 与失败后的反向补偿链 C2→C1">
+    <defs>
+      <marker id="arrow-ink2" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+      <marker id="arrow-red2" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+      </marker>
+    </defs>
+
+    <!-- 正向链标题 -->
+    <text x="30" y="50" class="edge-label" font-weight="700">正向链</text>
+
+    <!-- T1 建订单 -->
+    <rect x="70" y="30" width="120" height="44" rx="6" class="diagram-ink node-fill"/>
+    <text x="130" y="51" text-anchor="middle" class="node-label">T1</text>
+    <text x="130" y="66" text-anchor="middle" class="edge-label">建订单</text>
+
+    <!-- → T2 -->
+    <line x1="190" y1="52" x2="270" y2="52" class="diagram-ink" marker-end="url(#arrow-ink2)"/>
+    <text x="230" y="46" text-anchor="middle" class="edge-label">提交</text>
+
+    <!-- T2 预留库存 -->
+    <rect x="270" y="30" width="130" height="44" rx="6" class="diagram-ink node-fill"/>
+    <text x="335" y="51" text-anchor="middle" class="node-label">T2</text>
+    <text x="335" y="66" text-anchor="middle" class="edge-label">预留库存</text>
+
+    <!-- → T3 -->
+    <line x1="400" y1="52" x2="480" y2="52" class="diagram-ink" marker-end="url(#arrow-ink2)"/>
+    <text x="440" y="46" text-anchor="middle" class="edge-label">提交</text>
+
+    <!-- T3 扣款 -->
+    <rect x="480" y="30" width="120" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+    <text x="540" y="51" text-anchor="middle" class="node-label-accent">T3</text>
+    <text x="540" y="66" text-anchor="middle" class="edge-label">扣款 — 失败</text>
+
+    <!-- 失败箭头 -->
+    <line x1="540" y1="74" x2="540" y2="120" class="diagram-accent" stroke-dasharray="4 3" marker-end="url(#arrow-red2)"/>
+    <text x="554" y="102" class="branch-label">失败</text>
+
+    <!-- 补偿链标题 -->
+    <text x="30" y="158" class="edge-label" font-weight="700">补偿链</text>
+
+    <!-- C2 释放库存 -->
+    <rect x="270" y="138" width="130" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+    <text x="335" y="159" text-anchor="middle" class="node-label-accent">C2</text>
+    <text x="335" y="174" text-anchor="middle" class="edge-label">释放库存</text>
+
+    <!-- C2 → C1 -->
+    <line x1="270" y1="160" x2="198" y2="160" class="diagram-accent" marker-end="url(#arrow-red2)"/>
+    <text x="234" y="154" text-anchor="middle" class="edge-label">补偿提交</text>
+
+    <!-- C1 取消订单 -->
+    <rect x="70" y="138" width="128" height="44" rx="6" class="diagram-accent node-fill-accent"/>
+    <text x="134" y="159" text-anchor="middle" class="node-label-accent">C1</text>
+    <text x="134" y="174" text-anchor="middle" class="edge-label">取消订单</text>
+
+    <!-- T3 → C2 水平连接线 -->
+    <line x1="540" y1="120" x2="400" y2="160" class="diagram-accent" stroke-dasharray="4 3"/>
+
+    <!-- 说明：中间态可见 -->
+    <rect x="70" y="222" width="570" height="62" rx="6" class="diagram-soft node-fill" stroke-dasharray="4 3"/>
+    <text x="355" y="246" text-anchor="middle" class="node-label">T1、T2 已提交 → 中间状态对外可见</text>
+    <text x="355" y="268" text-anchor="middle" class="edge-label">并发请求可读到"已建单 + 已预留库存"但最终被补偿的状态 — 隔离性丧失</text>
+  </svg>
+  <figcaption><span class="fig-num">图 7.4</span>Saga 正向链与补偿链。<strong>注意</strong>：T1、T2 已提交并对外可见；C2、C1 是新的正向业务操作，不是数据库回滚——外部已观察到的中间状态无法被"撤销"。</figcaption>
+</figure>
+
+<!-- §7.5 幂等与 exactly-once -->
+<h2 id="s75"><span class="num">7.5</span><span>幂等与 exactly-once 处理</span></h2>
+<p class="one-liner">幂等：同一操作执行多次与执行一次结果相同；exactly-once 投递不可能，exactly-once 处理靠幂等键实现。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要它</span>
+  <p>网络会丢包、会重传；TCC 重试 Confirm、Saga 重发补偿——这些机制的正确性全部建立在"重试安全"的基础上。若操作不幂等，重试等于重复扣款或重复发货。</p>
+</div>
+
+<h3>exactly-once 投递为什么不可能</h3>
+<p>发送方发出消息后，有三种情况：消息在途、消息已到达但 ACK 丢失、消息确实丢失。发送方无法区分这三种情况（01 章的核心约束：无法区分"慢"和"死"）。若选择不重发，就丢消息（at-most-once）；若选择重发，就会重复（at-least-once）；二者之间没有第三条路——这是网络层面的不可能，不是工程疏漏。</p>
+
+<h3>exactly-once 处理如何可达</h3>
+<p>发送方为每个请求分配唯一<strong>幂等键</strong>（idempotency key，通常是 UUID 或雪花 ID）。接收方在处理前检查幂等表：若键已存在则返回上次结果，不重复执行副作用；若不存在则执行并持久化键与结果。这将 at-least-once 投递语义转换为 exactly-once 处理效果。</p>
+<p>Kafka 的事务生产者在 broker 端使用 PID（Producer ID）+ 序列号实现同样的机制：broker 对同一 PID 的重复序列号直接去重，生产者端 at-least-once 投递 + broker 端去重 = 端到端 exactly-once。</p>
+<p>TCC 的重试 Confirm 和 Saga 的补偿重发都依赖幂等键兜底：协调者携带 transaction_id + step_id 作为幂等键，参与者幂等表保证重复调用无副作用。</p>
+
+<div class="callout warning">
+  <span class="label">陷阱</span>
+  <p>没有幂等键的重试等于重复扣款。常见错误：协调者超时后重发请求，但请求体里没有幂等键，接收方当成新请求处理——金融系统中这类 bug 往往在压测或故障演练时才暴露，修复成本极高。幂等键应在请求发出前生成，随请求体一起传输，接收方持久化，而不是在接收方端生成。</p>
+</div>
+
+<!-- 图 7.5 幂等去重示意 -->
+<figure>
+  <svg viewBox="0 0 680 260" xmlns="http://www.w3.org/2000/svg"
+       role="img" aria-label="幂等键去重流程：发送方携带 idempotency key，接收方查幂等表决定执行或跳过">
+    <defs>
+      <marker id="arrow-ink3" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+      <marker id="arrow-red3" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+      </marker>
+    </defs>
+
+    <!-- 发送方 -->
+    <rect x="30" y="80" width="120" height="44" rx="6" class="diagram-ink node-fill"/>
+    <text x="90" y="101" text-anchor="middle" class="node-label">发送方</text>
+    <text x="90" y="116" text-anchor="middle" class="edge-label">携带幂等键</text>
+
+    <!-- →（首次） -->
+    <line x1="150" y1="102" x2="226" y2="102" class="diagram-ink" marker-end="url(#arrow-ink3)"/>
+    <text x="188" y="96" text-anchor="middle" class="edge-label">首次</text>
+
+    <!-- 接收方 -->
+    <rect x="226" y="60" width="148" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+    <text x="300" y="82" text-anchor="middle" class="node-label-accent">接收方</text>
+    <text x="300" y="99" text-anchor="middle" class="edge-label">查幂等表</text>
+    <text x="300" y="114" text-anchor="middle" class="edge-label">→ 不存在 → 执行</text>
+
+    <!-- 幂等表 -->
+    <rect x="420" y="60" width="150" height="64" rx="6" class="diagram-ink node-fill"/>
+    <text x="495" y="82" text-anchor="middle" class="node-label">幂等表</text>
+    <text x="495" y="99" text-anchor="middle" class="edge-label">key → result</text>
+    <text x="495" y="114" text-anchor="middle" class="edge-label">持久化写入</text>
+    <line x1="374" y1="92" x2="420" y2="92" class="diagram-ink" marker-end="url(#arrow-ink3)"/>
+    <text x="397" y="86" text-anchor="middle" class="edge-label">写入</text>
+
+    <!-- →（重试） -->
+    <line x1="150" y1="148" x2="226" y2="148" class="diagram-ink" stroke-dasharray="4 3" marker-end="url(#arrow-red3)"/>
+    <text x="188" y="142" text-anchor="middle" class="branch-label">重试</text>
+
+    <!-- 接收方重试路径 -->
+    <rect x="226" y="136" width="148" height="52" rx="6" class="diagram-soft node-fill" stroke-dasharray="3 3"/>
+    <text x="300" y="158" text-anchor="middle" class="node-label">查幂等表</text>
+    <text x="300" y="175" text-anchor="middle" class="edge-label">→ 已存在 → 返回缓存结果</text>
+
+    <!-- 幂等表 → 返回 -->
+    <line x1="420" y1="130" x2="374" y2="155" class="diagram-soft" stroke-dasharray="3 3" marker-end="url(#arrow-ink3)"/>
+    <text x="402" y="138" text-anchor="middle" class="edge-label">命中</text>
+
+    <!-- 底部注释 -->
+    <text x="340" y="226" text-anchor="middle" class="edge-label">at-least-once 投递 + 幂等键去重 = exactly-once 处理效果</text>
+  </svg>
+  <figcaption><span class="fig-num">图 7.5</span>幂等键去重将 at-least-once 投递转换为 exactly-once 处理。<strong>注意</strong>：幂等键由发送方在发出前生成，接收方持久化到幂等表——重试命中已有键时直接返回缓存结果，不重复执行副作用。</figcaption>
+</figure>
+
+<!-- 协议对比表 -->
+<h3>四种方案对比</h3>
+<table class="compare-table">
+  <caption>分布式事务方案对比</caption>
+  <thead>
+    <tr>
+      <th>方案</th>
+      <th>ACID 保证</th>
+      <th>依赖</th>
+      <th>阻塞 / 脑裂风险</th>
+      <th>适用场景</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr class="selected">
+      <td>2PC</td>
+      <td>ACID（强一致）</td>
+      <td>数据库 XA / 支持 2PC 的存储</td>
+      <td>协调者崩溃 → 参与者阻塞</td>
+      <td>同构存储，短事务，可容忍短暂不可用</td>
+    </tr>
+    <tr>
+      <td>3PC</td>
+      <td>ACID（同步网络假设）</td>
+      <td>同步网络</td>
+      <td>网络分区 → 脑裂</td>
+      <td>实务中不用，仅理论参考</td>
+    </tr>
+    <tr>
+      <td>TCC</td>
+      <td>ACD（应用层原子）</td>
+      <td>业务接口实现 Try/Confirm/Cancel</td>
+      <td>空回滚、悬挂（须应用层防）</td>
+      <td>异构存储，高并发金融场景</td>
+    </tr>
+    <tr>
+      <td>Saga</td>
+      <td>ACD（无隔离）</td>
+      <td>事件总线或编排器</td>
+      <td>中间状态可见，补偿不可逆</td>
+      <td>长流程微服务，可容忍中间状态</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- 自测 -->
+<section class="self-check" id="self-check">
+  <h2>章末自测</h2>
+  <ol>
+    <li>2PC 的"阻塞问题"具体指什么？协调者在哪个时刻崩溃会让参与者卡死？</li>
+    <li>参与者在投出 YES 之后，为什么不能单方面提交、也不能单方面中止？</li>
+    <li>3PC 号称非阻塞，为什么说它在网络分区下并不算真正修复了 2PC？</li>
+    <li>Saga 牺牲了 ACID 里的哪个性质？"补偿"和数据库"回滚"的本质区别是什么？</li>
+    <li>为什么 exactly-once 投递不可能、但 exactly-once 处理可达？靠什么实现？</li>
+  </ol>
+  <details>
+    <summary>展开答案（先作答再看）</summary>
+    <p><strong>Q1</strong>：参与者全部投 YES 后，协调者在写 commit/abort 日志之前（或写完日志广播之前）崩溃，参与者已承诺可以提交但不知道全局决定，既不能单方提交也不能单方中止，只能持锁等待协调者恢复。</p>
+    <p><strong>Q2</strong>：参与者只知道"自己投了 YES"，不知道其他参与者是否也全投 YES。若单方面提交，可能有其他参与者投了 NO、协调者决定 Abort；若单方面中止，可能全员都投 YES、协调者决定 Commit——两种自行决定都可能违反原子性。</p>
+    <p><strong>Q3</strong>：3PC 依赖同步网络假设（消息有界延迟）。网络分区时，一侧参与者超时后根据"已收 PreCommit = 全 YES 已确认"自行提交，另一侧协调者因其他原因决定中止——两侧执行相反的决定，原子性被打破（脑裂）。3PC 把阻塞换成了分区下脑裂，并非真正修复。</p>
+    <p><strong>Q4</strong>：Saga 牺牲了 I（Isolation，隔离性）。数据库回滚是物理撤销，对外完全不可见；Saga 补偿是新的正向业务操作，产生新的记录，且已被外部观察到的中间状态无法被语义撤销。</p>
+    <p><strong>Q5</strong>：网络层无法区分"消息在途"和"消息丢失"，at-most-once（不重发）可能丢消息，at-least-once（重发）可能重复，二者之间没有第三条路，所以 exactly-once 投递不可能。exactly-once 处理通过幂等键实现：发送方为每个请求生成唯一键，接收方持久化已处理的键；重复请求命中幂等表直接返回上次结果，不重复执行副作用。</p>
+  </details>
+
+  <div class="predict">
+    <span class="question-label">动手画一下</span>
+    <p>不看教程，在纸上画出一个三服务下单 Saga 的正向链和补偿链（T1 建单 → T2 预留库存 → T3 扣款，T3 失败时补偿）。再标注哪些步骤的中间状态对外可见、哪个补偿无法物理撤销。画完后对照图 7.4 检查。</p>
+  </div>
+</section>
+
+<div class="challenge">
+  <span class="label">进阶挑战 · 刚好够不着</span>
+  <h3>用共识修复 2PC 的单点协调者</h3>
+  <p>2PC 的协调者是单点，崩了参与者就卡死。06 章的共识（Raft/Paxos）如何修复这个问题？如果协调者状态本身被复制到一个 Raft 组里，协调者崩溃时会发生什么？这正是 Google Spanner 的结构：每个分片用 Paxos 复制，跨分片用 2PC，2PC 的协调者状态也落在 Paxos 组里——你能描述这个组合为什么能消除 2PC 的阻塞吗？</p>
+  <details>
+    <summary>提示（卡住再展开）</summary>
+    <p>2PC 阻塞的根因是协调者的 commit/abort 决定丢失。把协调者状态用 Raft 复制后，协调者崩溃时新 leader 接管并从日志里恢复决定，继续向参与者广播。参与者等待的不再是单点协调者，而是一个高可用的 Raft 组——只要 majority 存活，等待就会终止。这把"协调者单点崩溃"转化为"Raft 组多数派失败"，后者的概率远低于单机崩溃概率。代价是跨分片事务需要两层协议（Paxos 复制 + 2PC 协调），延迟高于纯本地事务。</p>
+  </details>
+</div>
+
+<footer class="references">
+  <h3>参考</h3>
+  <ul>
+    <li>Kleppmann, M. <em>Designing Data-Intensive Applications</em>, ch. 7（事务）&amp; ch. 9（一致性与共识）— 2PC、Saga、幂等的权威系统性梳理。</li>
+    <li>Helland, P. <a href="https://queue.acm.org/detail.cfm?id=3025012">"Life Beyond Distributed Transactions: An Apostate's Opinion"</a>, CIDR 2007 — 为什么大规模系统必须放弃分布式事务、转向幂等消息与补偿。</li>
+    <li>Richardson, C. <a href="https://microservices.io/patterns/data/saga.html">Saga Pattern</a>, microservices.io — Saga choreography vs orchestration 的工程实践。</li>
+    <li>Corbett et al. <a href="https://dl.acm.org/doi/10.1145/2491245">"Spanner: Google's Globally Distributed Database"</a>, OSDI 2012 — Paxos + 2PC 组合的真实生产实现。</li>
+  </ul>
+</footer>
+
+<nav class="chapter-nav">
+  <a href="06-consensus.html" class="prev">
+    <span class="label">上一章</span>
+    <span class="title">06 · 共识</span>
+  </a>
+  <a href="08-cap-tradeoffs.html" class="next">
+    <span class="label">下一章</span>
+    <span class="title">08 · CAP、PACELC 与综合权衡</span>
+  </a>
+</nav>
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+<li><a href="#s71" data-toc-target="s71">7.1 2PC 两阶段提交</a></li>
+<li><a href="#s72" data-toc-target="s72">7.2 3PC 与"不算真正修复"</a></li>
+<li><a href="#s73" data-toc-target="s73">7.3 TCC：应用层三步补偿</a></li>
+<li><a href="#s74" data-toc-target="s74">7.4 Saga：长事务分解</a></li>
+<li><a href="#s75" data-toc-target="s75">7.5 幂等与 exactly-once</a></li>
+<li><a href="#self-check" data-toc-target="self-check">章末自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

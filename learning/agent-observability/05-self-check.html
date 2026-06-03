@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自测与辨析 · Agent 可观测性教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint);
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 24px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-mechanism.html">02 机制</a><span class="sep">—</span>
+    <a href="03-operations.html">03 落地</a><span class="sep">—</span>
+    <a href="04-tools-frontier.html">04 工具与前沿</a><span class="sep">—</span>
+    <a href="05-self-check.html" class="current">05 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 05 · Self-check</p>
+        <h1>自测与辨析</h1>
+        <p class="recap">前四章把可观测性的概念、机制、落地、工具讲完了；这一章用三层梯度题 + 五个跨章辨析场景 + 一次动手画，把零散知识逼成可调用的判断力。</p>
+      </header>
+
+      <p>读完不等于学会。下面的题目分三层：<strong>概念层</strong>查词汇与边界（记得 / 认得），<strong>机制层</strong>查"为什么这样工作"（会推 / 会算），<strong>应用判别层</strong>把多章概念混在一个真实场景里，逼出"该用哪个、看哪里"的判断。每题先合上教程独立作答，再展开对照——直接展开等于把这一章当再读一遍。</p>
+
+      <div class="callout warning">
+        <span class="label">用法 · 别骗自己</span>
+        <p>展开答案前先把回答写在纸上或编辑器里。"大概知道"和"能完整说出来"之间的差距，正是这一章要暴露的。答得磕绊的题，回对应章节重读，不要靠多看一遍答案蒙混过去。</p>
+      </div>
+
+      <h2 id="grad"><span class="num">·</span><span>三层梯度</span></h2>
+      <p>题目从"记得"逐层走到"会判"。越往下，越需要把多章概念接起来用——这也是面试和真实排障里最常被问、最难绕过的一层。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三层梯度金字塔：概念层、机制层、应用判别层，自上而下整合度与难度上升">
+          <defs>
+            <marker id="grad-down" viewBox="0 0 10 10" refX="5" refY="9" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 5 10 L 10 0 z" fill="#525252"/>
+            </marker>
+          </defs>
+
+          <!-- difficulty axis on the left -->
+          <line x1="70" y1="92" x2="70" y2="252" class="diagram-ink" marker-end="url(#grad-down)"/>
+          <text x="70" y="84" text-anchor="middle" class="edge-label">易</text>
+          <text x="70" y="272" text-anchor="middle" class="edge-label">难</text>
+
+          <!-- band 1: 概念层 (narrow, top) -->
+          <rect x="280" y="72" width="200" height="58" rx="5" class="diagram-ink node-fill"/>
+          <text x="380" y="96" text-anchor="middle" class="node-label">① 概念层</text>
+          <text x="380" y="114" text-anchor="middle" class="edge-label">记得 · 认得（词汇 / 边界）</text>
+
+          <!-- band 2: 机制层 (mid) -->
+          <rect x="210" y="142" width="340" height="58" rx="5" class="diagram-ink node-fill"/>
+          <text x="380" y="166" text-anchor="middle" class="node-label">② 机制层</text>
+          <text x="380" y="184" text-anchor="middle" class="edge-label">会推 · 会算（传播 / 归因 / instrument）</text>
+
+          <!-- band 3: 应用判别层 (wide, bottom, accent) -->
+          <rect x="120" y="212" width="520" height="58" rx="5" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="380" y="236" text-anchor="middle" class="node-label-accent">③ 应用判别层</text>
+          <text x="380" y="254" text-anchor="middle" class="edge-label">会选 · 会判（obs/eval/APM · 选型 · 根因）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 5.1</span>三层梯度：自上而下，单题涉及的章节越多、越需要"接起来用"。<strong>注意</strong>：底层（应用判别）最宽不是因为它"基础"，而是因为它把上两层全部吃进一个真实场景——这一层答得出，才算真的会。</figcaption>
+      </figure>
+
+      <!-- ════════════════ §s51 概念层 ════════════════ -->
+      <section class="self-check" id="s51">
+        <h2><span class="num">①</span><span>概念层 · 记得 / 认得</span></h2>
+        <ol>
+          <li>
+            用一句话分别说出可观测性、eval、传统 APM 三者在<strong>时机</strong>和<strong>对象</strong>上的区别。
+            <details>
+              <summary>展开答案</summary>
+              <p>可观测性：<strong>运行期</strong>，对象是<strong>单条真实运行</strong>。eval：<strong>开发期 / CI</strong>，对象是<strong>固定数据集</strong>。传统 APM：运行期，对象是单请求（但判据只到状态码 + 延迟，不进语义）。三者只在"在线评估"处相交（详见第 3 章）。</p>
+            </details>
+          </li>
+          <li>
+            一个 span 的 <code>parent_span_id</code> 为空，意味着什么？它在 agent 的一次运行里通常是哪个 operation？
+            <details>
+              <summary>展开答案</summary>
+              <p>它是这棵 trace 的<strong>根 span（root span）</strong>，没有父节点。在 agent 运行里通常是 <code>invoke_agent</code>，代表一次完整运行的起点，其下挂着各 <code>chat</code> / <code>execute_tool</code> / retriever 子 span，全树共享同一 <code>trace_id</code>。</p>
+            </details>
+          </li>
+          <li>
+            为什么 prompt / completion 文本放在 span 的 <code>events</code> 而不是 <code>attributes</code>？给两个原因。
+            <details>
+              <summary>展开答案</summary>
+              <p>① <code>attributes</code> 设计为低基数、可聚合的结构化键值，prompt 文本每条唯一（高基数），放进去会撑爆时序索引；② prompt 体积大（数 KB）且常含 PII，<code>attributes</code> 的批量索引无法做细粒度访问控制，且会被 SDK 默认的 4–64KB 截断阈值静默砍掉。<code>events</code> 是带时间戳的日志事件，为大块 / 敏感内容而设，且 opt-in。</p>
+            </details>
+          </li>
+          <li>
+            OTel GenAI semconv 里有 <code>gen_ai.usage.input_tokens</code>，却没有 <code>gen_ai.cost.*</code>。成本由谁、在什么时候算出来？
+            <details>
+              <summary>展开答案</summary>
+              <p>由<strong>可观测性 backend</strong> 在 <strong>ingestion（落库）时</strong>算：用 span 里的 token 数 × 内置定价表。规范不定义成本，是因为同样 token 数的价格随账户折扣、厂商调价、模型版本变动，写进规范会让规范追着调价跑。后果：不同 backend 的成本数字可能因定价快照时间点不同而有差异，不代表 token 数据有误。</p>
+            </details>
+          </li>
+          <li>
+            说出"三支柱"（traces / metrics / logs）在 LLM 可观测性里各自的角色变化。
+            <details>
+              <summary>展开答案</summary>
+              <p><strong>traces 主导</strong>——span 树是执行图，是"为什么"的直接载体。<strong>metrics 退化为直方图</strong>（token 用量、操作耗时、TTFT 分布）；把 prompt / user-id 当 metric label 会引发基数爆炸。<strong>logs 降级为 span 上的 events</strong>，独立日志流不再是主要手段。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ════════════════ §s52 机制层 ════════════════ -->
+      <section class="self-check" id="s52">
+        <h2><span class="num">②</span><span>机制层 · 会推 / 会算</span></h2>
+        <ol>
+          <li>
+            两个独立进程里的 agent，怎么做到它们的 span 落在<strong>同一棵</strong> trace 树上？关键是哪个 HTTP 头，它传的是什么？
+            <details>
+              <summary>展开答案</summary>
+              <p>靠 <strong>context propagation</strong>：上游在跨进程调用时把 W3C <code>traceparent</code> 头（含 <code>trace_id</code> 和当前的 <code>parent_span_id</code>）附在请求里；下游读取它，用其中的 <code>parent_span_id</code> 作为自己根 span 的父，并把 <code>trace_id</code> 原样继承。于是两个进程的 span 共享同一 <code>trace_id</code>、父子关系正确相连。头没传，子 agent 的 span 就成孤儿，树断裂。</p>
+            </details>
+          </li>
+          <li>
+            差旅助理并发调用 <code>search_flights</code> 和 <code>retrieve_policy</code>，怎么保证两个 <code>execute_tool</code> span 都挂在正确的父节点下？什么情况下会变成孤儿 span？
+            <details>
+              <summary>展开答案</summary>
+              <p>每个 span 创建时从<strong>当前调用点的 context storage</strong>（如 Python 的 <code>contextvars.ContextVar</code>）读取当前 span id 作为自己的 <code>parent_span_id</code>。只要两个工具调用都在同一个决策 <code>chat</code> span 的执行上下文里发起，就都以它为父，互不干扰。孤儿出现在：把调用扔进新线程 / 新进程却没把 context 复制过去（如裸 <code>threading.Thread</code> 而非 OTel 的 context-propagating wrapper），新执行体看到空 context。</p>
+            </details>
+          </li>
+          <li>
+            代理网关（HTTP 拦截）和进程内 SDK 相比，哪一类信息代理网关<strong>结构性</strong>地看不到？为什么这是架构决定的、不是配置问题？
+            <details>
+              <summary>展开答案</summary>
+              <p>代理网关只看到进出 LLM API 的 HTTP 请求 / 响应（模型名、prompt、completion、latency、状态码），<strong>看不到进程内的编排状态</strong>：agent 为什么选这个工具、检索召回了哪些文档、路由决策的候选是什么。这些状态从不离开应用进程、不走那一跳 HTTP，所以代理在网络层无论怎么配置都拿不到。因此代理网关适合成本 / latency 监控，不适合调试 agent 决策链。</p>
+            </details>
+          </li>
+          <li>
+            在线评估的步骤里，"<strong>异步</strong>"和"<strong>分层采样</strong>"分别解决什么问题？去掉它们各会怎样？
+            <details>
+              <summary>展开答案</summary>
+              <p><strong>异步</strong>：scorer 在 trace 落库后才跑，不阻塞热路径。去掉（同步打分）= 给每次 agent 运行的关键路径叠加一次额外 LLM 调用的延迟。<strong>分层采样</strong>：低分 / 可疑区域多采、正常区域少采。去掉（均匀采样）= 在 bug 密度低时几乎采不到失败 trace，scorer 看到的全是正常 case，监控形同虚设。</p>
+            </details>
+          </li>
+          <li>
+            一棵 trace 里有 5 个 <code>chat</code> span，根 <code>invoke_agent</code> span 自己不调 LLM。trace 级的 token 总量怎么得到？两种实现方式分别在哪一层做聚合？
+            <details>
+              <summary>展开答案</summary>
+              <p>每个 <code>chat</code> span 自记 <code>gen_ai.usage.*</code>（billable token），父 span 汇总子 span 的数值得到 trace 级总量。两种实现：① <strong>SDK 侧</strong>——父 span 关闭时遍历子 span 求和（OpenInference / Phoenix 路线）；② <strong>backend 侧</strong>——ingestion 后由查询 API 提供 trace 级聚合（LangSmith / Langfuse 路线）。结果相同，区别只在聚合发生的位置。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ════════════════ §s53 应用判别层 ════════════════ -->
+      <section class="self-check" id="s53">
+        <h2><span class="num">③</span><span>应用判别层 · 会选 / 会判（跨章）</span></h2>
+        <p style="font-size:14px; color:var(--ink-soft); margin: 0 0 16px;">每个场景都把多章概念混在一起，括号标出主要涉及哪些章。先判断"该用哪个工具 / 看哪里"，再展开。</p>
+        <ol>
+          <li>
+            <strong>场景（第 1、3 章）</strong>：线上 agent 给用户的答复是错的，但 HTTP 返回 200，Datadog 的错误率 / 延迟仪表盘一切正常。这是可观测性、eval 还是 APM 的活？下一步具体看什么？
+            <details>
+              <summary>展开分析</summary>
+              <p>这是<strong>可观测性</strong>的活（运行期、还原单条真实运行）。APM 盲，因为<strong>语义失败对状态码不可见</strong>。下一步：打开这条 trace，沿父子链从最终答复 span 向上回溯，逐级检查每个 span 的<strong>中间状态</strong>——工具返回了什么、检索召回了哪些文档、路由 <code>chat</code> 选了哪个工具，找到第一个产出"语义上坏"输出的 span（根因 span）。eval 在这里帮不上：它对的是数据集，不是这一条线上运行。</p>
+            </details>
+          </li>
+          <li>
+            <strong>场景（第 2、4 章）</strong>：LangGraph 创业团队，数据不能出境（自托管），人力有限但想要在线评估。给出 emitter + backend 的组合，并说出五条判别轴各倾向哪端。
+            <details>
+              <summary>展开分析</summary>
+              <p>组合：<strong>OpenLLMetry（emitter）+ 自托管 Langfuse（backend）</strong>，OTLP 串联。五轴：开放标准（OTel，避免迁移成本）；自托管（数据不出境，Langfuse 开源 MIT 自托管成熟）；框架无关（妥协 LangSmith 的 LangChain 耦合换数据主权）；all-in-one（Langfuse 2025-06 开源 LLM-as-judge 满足在线评估）；进程内（要调试编排失败，必须进程内 instrumentation）。</p>
+            </details>
+          </li>
+          <li>
+            <strong>场景（第 1、3 章）</strong>：差旅助理某次运行成本是平时的 3 倍，但功能正常、用户拿到了答复。怎么用 trace 定位？这是 obs 还是 eval 的活？
+            <details>
+              <summary>展开分析</summary>
+              <p><strong>obs</strong>（运行期单条运行的成本归因）。定位：按 <code>invoke_agent</code> 根 span 找成本最高的运行，展开子树，比较各 <code>chat</code> span 的 <code>gen_ai.usage.*</code>；若看到同名 <code>execute_tool</code>（如 <code>search_flights</code>）并列出现多次，且其中有 <code>status=ERROR</code>，说明工具失败触发了 LLM 自发重试循环，每次把全量历史重喂、token 线性叠加。根因是工具层无重试上限，不是 prompt。eval 看不到这个——它不跑在这条真实 trace 上。</p>
+            </details>
+          </li>
+          <li>
+            <strong>场景（第 1、3 章）</strong>：团队声称"99.9% 可用性 + P95 延迟监控都正常，质量没问题"。这套监控有什么盲区？需要补什么？
+            <details>
+              <summary>展开分析</summary>
+              <p>盲区：可用性和延迟是 APM 式指标，<strong>对语义失败和悄悄重试都不可见</strong>。一个 agent 可以 99.9% 可用、P95 正常，同时幻觉率在涨、工具在后台重试烧钱。需要补：① <strong>cost/run</strong> 告警（APM 没有的一等信号）；② <strong>子 span 工具失败率</strong>（根 span OK 掩盖工具层 ERROR）；③ <strong>在线评估</strong>——对采样生产 trace 打质量分，把"答得对不对"变成可监控的数。</p>
+            </details>
+          </li>
+          <li>
+            <strong>场景（第 1、3 章）</strong>：受 HIPAA 约束，团队对生产 trace 做脱敏，只对 <code>gen_ai.output.messages</code>（最终输出）脱了敏。够吗？还缺什么？
+            <details>
+              <summary>展开分析</summary>
+              <p>不够。① 输入侧 <code>gen_ai.input.messages</code> 同样含 PII，也要脱；② 更隐蔽的是<strong>推理链 PII 泄漏</strong>——带思维链的模型（o1/R1 类）在 <code>reasoning</code> token 里会用到上下文 PII，即便最终输出干净。正确做法：把 input / output / reasoning 三类 events 全纳入脱敏管道，或对敏感业务直接禁用这三类 opt-in 捕获、改自托管私有存储。只脱输出是半截子工程。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ════════════════ §s54 动手画 ════════════════ -->
+      <h2 id="s54"><span class="num">·</span><span>动手画：两张图</span></h2>
+      <p>辨认一张图和<strong>亲手画出</strong>一张图，是两种不同强度的掌握。下面两张图都在前面章节出现过——合上教程，凭记忆画，再翻回对照。画得出来，才说明这套结构真的进了脑子。</p>
+
+      <div class="challenge">
+        <span class="label">动手画 · 1</span>
+        <h3>差旅助理「成本翻 3 倍」的失败 trace 树</h3>
+        <p>不许翻书。画出这次失败运行的 span 树，要求标注：</p>
+        <ul>
+          <li>根 span 是谁，它的 <code>status</code> 是什么（陷阱在这里）；</li>
+          <li>正常 5 个 <code>chat</code> + 多出来的 4 个重试 <code>chat</code> 的父子关系；</li>
+          <li>哪个是<strong>根因 span</strong>，它的 <code>status</code> 和 <code>status.message</code>；</li>
+          <li>token 怎么从子 span 上卷到根，为什么总量翻倍。</li>
+        </ul>
+        <p>画完翻回 <a href="01-concepts.html#s12">图 1.2</a>（span 树）和 <a href="03-operations.html#s31">图 3.1</a>（根因回溯）对照。漏标了 <code>status</code> 或父子关系的地方，就是没真正吃透的地方。</p>
+      </div>
+
+      <div class="challenge">
+        <span class="label">动手画 · 2</span>
+        <h3>obs / eval / APM 三方边界图</h3>
+        <p>画一张二维定位图：横轴是<strong>时机</strong>（运行期 ↔ 开发期），纵轴或分区标出三者各自的<strong>对象</strong>与<strong>判据</strong>。然后把"<strong>在线评估</strong>"这条唯一接缝画在正确位置，并标出它的方向（数据从哪流向哪）。</p>
+        <p>画完翻回 <a href="index.html#essence">起点的一句话本质</a> 与 <a href="01-concepts.html#s11">图 1.1</a> 对照。如果"在线评估"的箭头方向画反了（应是可观测性 → eval：生产 trace 流入离线集），说明这条接缝还没真正理顺。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">学完之后</span>
+        <p>这五层题答顺了，可观测性在脑子里就从"接个看板"变成了一套判断力：分得清 obs / eval / APM，看得懂 trace 树怎么由 context propagation 长出来，拿到失败 trace 能定位根因，面对工具和前沿能按场景选型并核对时效。下一步的自然延伸见 <a href="index.html#next">起点 · 学完之后</a>——在线评估那条接缝把你引向 <a href="../agent-eval/index.html">agent-eval</a>，多 agent 的 trace 拓扑引向 <a href="../multi-agent-patterns/index.html">multi-agent-patterns</a>。</p>
+      </div>
+
+      <footer class="references">
+        <h3>参考资料</h3>
+        <ul>
+          <li>本章题目综合自前四章；各概念的权威出处见对应章节的"参考资料"。</li>
+          <li><a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/">OpenTelemetry · GenAI Semantic Conventions</a>——验证 token / span / 属性名相关答案。</li>
+          <li><a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents">Anthropic · Demystifying Evals for AI Agents</a>——obs 与 eval 边界的延伸阅读。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="04-tools-frontier.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">04 · 工具与前沿</span>
+        </a>
+        <a href="index.html" class="next">
+          <span class="label">回到 →</span>
+          <span class="title">00 · 起点 / 目录</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#grad" data-toc-target="grad">三层梯度</a></li>
+        <li><a href="#s51" data-toc-target="s51">① 概念层</a></li>
+        <li><a href="#s52" data-toc-target="s52">② 机制层</a></li>
+        <li><a href="#s53" data-toc-target="s53">③ 应用判别层</a></li>
+        <li><a href="#s54" data-toc-target="s54">动手画</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>起点 · Transformer 架构深挖教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; grid-column: 2; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* index entry-page extras */
+.entry-meta {
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  font-family: var(--mono); font-size: 12px; color: var(--ink-soft);
+  margin: 8px 0 0;
+}
+.entry-meta span { white-space: nowrap; }
+.entry-meta b { color: var(--vermilion); font-weight: 600; }
+.toc-chapters { margin: 16px 0; display: grid; gap: 10px; }
+.toc-chapters a {
+  display: block; padding: 14px 16px;
+  border: 1px solid var(--rule); border-radius: 3px;
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.toc-chapters a:hover { border-color: var(--vermilion); }
+.toc-chapters .ch-num { font-family: var(--mono); font-size: 11px; color: var(--vermilion); font-weight: 600; letter-spacing: 0.06em; }
+.toc-chapters .ch-title { font-weight: 600; font-size: 15px; margin: 2px 0 0; }
+.toc-chapters .ch-desc { font-size: 13px; color: var(--ink-soft); margin: 4px 0 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html" class="current">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 心智模型</a><span class="sep">—</span>
+    <a href="02-attention.html">02 注意力</a><span class="sep">—</span>
+    <a href="03-architecture.html">03 整体架构</a><span class="sep">—</span>
+    <a href="04-training-inference.html">04 训练与推理</a><span class="sep">—</span>
+    <a href="05-modern.html">05 经典到现代</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Transformer · 起点</p>
+        <h1>Transformer：从注意力到现代大模型</h1>
+        <p class="recap">面向工程师的 Transformer 架构深挖教程。覆盖：2017 经典机制 → 注意力数学 → 整体架构 → 训练/推理不对称 → RoPE/GQA/MoE 等现代演化。</p>
+        <div class="entry-meta">
+          <span>时点：<b>截至 2026-06</b></span>
+          <span>阅读：<b>~半天</b></span>
+          <span>形态：概念为主（6 章 + 起点）</span>
+          <span>数学：用 Unicode 排，未引入 MathJax</span>
+        </div>
+      </header>
+
+      <section id="who-for">
+        <h2><span class="num">·</span><span>适合谁</span></h2>
+        <p>这份教程假设读者具备三项能力，三项都对得上，阅读体验最顺：</p>
+        <ul>
+          <li>会用 Python 调一次 LLM API。</li>
+          <li>知道神经网络、向量、矩阵乘法是什么。</li>
+          <li>想真正搞懂 LLM 底层那块"地基"——不是调 API 技巧，是机制本身。</li>
+        </ul>
+      </section>
+
+      <section id="not-for">
+        <h2><span class="num">·</span><span>不适合谁</span></h2>
+        <ul>
+          <li><strong>完全没碰过编程或线性代数</strong>：这份教程的公式、形状分析和代码示意会让阅读体验很差；先补基础再回来。</li>
+          <li><strong>只想调 API、不关心内部机制</strong>：直接去 <a href="../prompt-engineering/index.html">prompt-engineering</a> 和 <a href="../llm-api/index.html">llm-api</a>，那两份教程面向使用侧。</li>
+          <li><strong>想要完整数学证明或做研究</strong>：原论文（Vaswani 2017 arxiv 1706.03762）加教科书是正途，本教程不是研究入门。</li>
+        </ul>
+      </section>
+
+      <section id="outcomes">
+        <h2><span class="num">·</span><span>读完之后你能做到什么</span></h2>
+        <p>读完，你能把任何一个现代 LLM 的架构图（Llama/DeepSeek/Qwen 的某层）拆开，逐个零件说出它在解决什么问题、替代了 2017 原版的什么、代价是什么——而不是把 transformer 当成一个会出魔法的黑箱。</p>
+        <ul>
+          <li>说清 attention 的 QKV 软查表机制：query 发出、key 匹配、value 聚合，三者各自扮演什么角色。</li>
+          <li>解释为什么除以 <code>√d_k</code>、为什么要位置编码、为什么 pre-norm 取代 post-norm。</li>
+          <li>说清训练并行（teacher forcing + 因果掩码）与推理自回归的不对称，以及 KV-cache 由此而来的逻辑。</li>
+          <li>在 RoPE、GQA、MLA、FlashAttention、MoE 里按场景辨析选型，并说得出每条替代了什么、代价是什么。</li>
+          <li>判断某任务该用 encoder-only（BERT 类）、decoder-only（GPT 类）还是 encoder-decoder（T5 类），并给出依据。</li>
+        </ul>
+      </section>
+
+      <section class="schema-panel" id="essence">
+        <p class="label">一句话本质</p>
+        <p style="font-size:16px; font-weight:500; margin:0 0 10px;">Transformer = 用一个可微的「软字典查找」（attention：每个位置发出 query，与所有位置的 key 算相似度、softmax 成权重，再对 value 加权平均）让 token 跨位置交换信息，再用逐位置的 FFN 加工；两者交替堆叠 N 层——没有循环，训练可全并行。<strong>Attention 是整张网络里 token 之间唯一能通信的地方。</strong></p>
+        <p style="font-size:14px; color:var(--ink-soft); margin:0 0 6px;">三个贯穿全程、一旦明白就不可逆的认知：</p>
+        <ul>
+          <li><strong>注意力不是"模型在看哪些词"的玄学</strong>，是 QKV 软查表；且注意力权重本身 ≠ 重要度——value 向量的范数是缺失的另一半，光看注意力热力图会误导。</li>
+          <li><strong>block = 通信（attention）+ 计算（FFN）交替</strong>（Karpathy 框架）：attention 是唯一跨位置算子，FFN 逐位置独立处理；这解释了为什么两者都要、顺序不能换。</li>
+          <li><strong>训练并行 vs 推理串行的不对称</strong>：训练用 teacher forcing + 因果掩码一次算完所有位置；推理是一次一个 token 自回归喂回去。几乎所有人在这卡过。</li>
+        </ul>
+      </section>
+
+      <section id="frontier-now">
+        <h2><span class="num">·</span><span>现状速览（截至 2026-06）</span></h2>
+        <div class="callout">
+          <span class="label">稳了什么 / 换了什么 / 在变什么 / 过时了什么</span>
+          <p><strong>已稳定（2017 至今没变）</strong>：scaled dot-product attention 公式、multi-head 概念、残差连接、堆叠 N 层、decoder 因果掩码。这些是地基，放心学。</p>
+          <p><strong>现代标配（约 2019–2023 完成切换，已稳定）</strong>：decoder-only 取代 encoder-decoder 成 LLM 主流；RoPE 取代正弦位置编码；RMSNorm + pre-norm 取代 LayerNorm + post-norm；SwiGLU 取代 ReLU；GQA 取代朴素 MHA；FlashAttention 成标准 kernel。Llama/Mistral/Qwen/DeepSeek/Gemma 全系采用这套配方。</p>
+          <p><strong>仍在快速变化（截至 2026-06，带日期学）</strong>：MoE 成前沿主流扩展（Mixtral 2024 / DeepSeek-V3 2024-12 / Llama 4 2025-04 / Qwen3 2025 / Kimi K2 2025-06），但路由与专家粒度仍演化；QK-norm 在 2025 大模型（Gemma 3、OLMo 2、Qwen3、Kimi K2）快速普及；MLA（DeepSeek-V2, 2024-05）低秩压缩 KV 仍属个别；长上下文方案（YaRN 2024、iRoPE/NoPE Llama4 2025）未收敛；FlashAttention-3（2024-07, Hopper）仍在铺开；SSM/Mamba（Mamba-3 ICLR 2026）长序列吞吐有优势但推理质量仍落后，2026 年 transformer 仍主导前沿。</p>
+          <p><strong>已过时（别当现状学）</strong>：正弦/学习式绝对位置编码、ALiBi、post-norm、ReLU-FFN、朴素全 KV 的 MHA。第 05 章逐条说明替代方案与日期。</p>
+        </div>
+      </section>
+
+      <div class="callout warning" id="fluency-warning">
+        <span class="label">读之前 · 关于"读懂了"的错觉</span>
+        <p>这份教程会刻意在每章末尾设置自测题。原因是：流畅地读完一段，和真正建立起机制理解，是两回事。读的时候如果冒出这三句心里话，它们多半是错觉信号，不是掌握信号——</p>
+        <p>「<strong>我读得很顺</strong>」（熟悉，不等于学会）；「<strong>我做题很快</strong>」（多半是题型眼熟）；「<strong>我没卡壳</strong>」（多半没真正碰到难点）。碰到自测题，先合上教程动笔，再对答案。</p>
+      </div>
+
+      <section id="concept-map">
+        <h2><span class="num">·</span><span>概念地图</span></h2>
+        <p>这张图是后面所有细节的挂钩。从顶部的 token/embedding 出发，沿中心脊柱向下走，是从原始 transformer 到现代演化的完整依赖链；左右两侧是各节点的配套概念。学习时脑子里有这张图，每章的细节才有地方挂。</p>
+        <figure>
+          <svg viewBox="0 0 820 980" xmlns="http://www.w3.org/2000/svg" role="img"
+               aria-label="Transformer 概念地图：从 token/embedding 出发，经注意力机制、block 结构、堆叠，到训练推理不对称与现代演化">
+            <defs>
+              <marker id="cm-ar" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+              </marker>
+              <marker id="cm-ar-accent" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+              </marker>
+              <marker id="cm-ar-soft" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+              </marker>
+            </defs>
+
+            <!-- ── 顶部：token + embedding ── -->
+            <rect x="290" y="20" width="240" height="50" rx="6" class="diagram-ink node-fill"/>
+            <text x="410" y="43" text-anchor="middle" class="node-label">token + embedding</text>
+            <text x="410" y="61" text-anchor="middle" class="edge-label">输入表示</text>
+
+            <!-- 从 token 向下到三列分叉 -->
+            <line x1="410" y1="70" x2="410" y2="108" class="diagram-ink" marker-end="url(#cm-ar)"/>
+
+            <!-- ── 三列节点 row 2 ── -->
+            <!-- 左: 序列建模问题 -->
+            <rect x="50" y="110" width="180" height="52" rx="6" class="diagram-ink node-fill"/>
+            <text x="140" y="132" text-anchor="middle" class="node-label">序列建模问题</text>
+            <text x="140" y="150" text-anchor="middle" class="edge-label">RNN 为何不够</text>
+
+            <!-- 中: 软字典查找 (accent) -->
+            <rect x="310" y="110" width="200" height="52" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+            <text x="410" y="132" text-anchor="middle" class="node-label-accent">软字典查找</text>
+            <text x="410" y="150" text-anchor="middle" class="edge-label">attention QKV</text>
+
+            <!-- 右: 通信/计算框架 -->
+            <rect x="590" y="110" width="180" height="52" rx="6" class="diagram-ink node-fill"/>
+            <text x="680" y="132" text-anchor="middle" class="node-label">通信 / 计算</text>
+            <text x="680" y="150" text-anchor="middle" class="edge-label">框架（Karpathy）</text>
+
+            <!-- 从 token 引出左右分支 -->
+            <line x1="350" y1="70" x2="140" y2="110" class="diagram-soft" marker-end="url(#cm-ar-soft)"/>
+            <line x1="470" y1="70" x2="680" y2="110" class="diagram-soft" marker-end="url(#cm-ar-soft)"/>
+
+            <!-- 三列汇到 scaled dot-product -->
+            <line x1="230" y1="162" x2="310" y2="198" class="diagram-ink" marker-end="url(#cm-ar)"/>
+            <line x1="410" y1="162" x2="410" y2="198" class="diagram-accent" marker-end="url(#cm-ar-accent)"/>
+            <line x1="590" y1="162" x2="510" y2="198" class="diagram-ink" marker-end="url(#cm-ar)"/>
+
+            <!-- ── row 3: scaled dot-product ── -->
+            <rect x="280" y="200" width="260" height="66" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+            <text x="410" y="224" text-anchor="middle" class="node-label-accent">scaled dot-product</text>
+            <text x="410" y="242" text-anchor="middle" class="edge-label">· √d_k 缩放 · 因果掩码</text>
+            <text x="410" y="257" text-anchor="middle" class="edge-label">· 多头 · self / cross</text>
+
+            <!-- 左侧: 位置编码 -->
+            <rect x="50" y="220" width="160" height="52" rx="6" class="diagram-ink node-fill"/>
+            <text x="130" y="242" text-anchor="middle" class="node-label">位置编码</text>
+            <text x="130" y="260" text-anchor="middle" class="edge-label">置换等变性</text>
+            <line x1="280" y1="240" x2="210" y2="246" class="diagram-ink" marker-end="url(#cm-ar)"/>
+
+            <!-- 右侧: FFN -->
+            <rect x="610" y="220" width="160" height="52" rx="6" class="diagram-ink node-fill"/>
+            <text x="690" y="242" text-anchor="middle" class="node-label">FFN</text>
+            <text x="690" y="260" text-anchor="middle" class="edge-label">键值记忆</text>
+            <line x1="540" y1="240" x2="610" y2="246" class="diagram-ink" marker-end="url(#cm-ar)"/>
+
+            <!-- scaled dot-product 向下 -->
+            <line x1="410" y1="266" x2="410" y2="304" class="diagram-accent" marker-end="url(#cm-ar-accent)"/>
+
+            <!-- ── row 4: 残差 + 归一化 ── -->
+            <rect x="300" y="306" width="220" height="50" rx="6" class="diagram-ink node-fill"/>
+            <text x="410" y="328" text-anchor="middle" class="node-label">残差 + 归一化</text>
+            <text x="410" y="346" text-anchor="middle" class="edge-label">pre-norm / post-norm</text>
+
+            <!-- 位置编码 & FFN 汇入残差 -->
+            <line x1="130" y1="272" x2="300" y2="326" class="diagram-soft" marker-end="url(#cm-ar-soft)"/>
+            <line x1="690" y1="272" x2="520" y2="326" class="diagram-soft" marker-end="url(#cm-ar-soft)"/>
+
+            <line x1="410" y1="356" x2="410" y2="394" class="diagram-accent" marker-end="url(#cm-ar-accent)"/>
+
+            <!-- ── row 5: 完整 block ── -->
+            <rect x="295" y="396" width="230" height="50" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+            <text x="410" y="418" text-anchor="middle" class="node-label-accent">完整 block</text>
+            <text x="410" y="436" text-anchor="middle" class="edge-label">attention + FFN + 残差 + norm</text>
+
+            <line x1="410" y1="446" x2="410" y2="484" class="diagram-accent" marker-end="url(#cm-ar-accent)"/>
+
+            <!-- ── row 6: 堆叠 N 层 ── -->
+            <rect x="295" y="486" width="230" height="50" rx="6" class="diagram-ink node-fill"/>
+            <text x="410" y="508" text-anchor="middle" class="node-label">堆叠 N 层 + unembedding</text>
+            <text x="410" y="526" text-anchor="middle" class="edge-label">logits → softmax</text>
+
+            <line x1="410" y1="536" x2="410" y2="568" class="diagram-ink" marker-end="url(#cm-ar)"/>
+
+            <!-- ── row 7: 两种形态分叉 ── -->
+            <!-- 左: 经典 enc-dec -->
+            <rect x="80" y="570" width="210" height="52" rx="6" class="diagram-ink node-fill"/>
+            <text x="185" y="592" text-anchor="middle" class="node-label">经典 enc-dec</text>
+            <text x="185" y="610" text-anchor="middle" class="edge-label">encoder + decoder + cross-attn</text>
+
+            <!-- 右: decoder-only -->
+            <rect x="530" y="570" width="210" height="52" rx="6" class="diagram-accent node-fill-accent" stroke-width="2"/>
+            <text x="635" y="592" text-anchor="middle" class="node-label-accent">decoder-only（主流）</text>
+            <text x="635" y="610" text-anchor="middle" class="edge-label">因果自注意力 + FFN</text>
+
+            <line x1="375" y1="568" x2="185" y2="570" class="diagram-ink" marker-end="url(#cm-ar)"/>
+            <line x1="445" y1="568" x2="635" y2="570" class="diagram-accent" marker-end="url(#cm-ar-accent)"/>
+
+            <!-- 两边汇向不对称 -->
+            <line x1="185" y1="622" x2="350" y2="658" class="diagram-soft" marker-end="url(#cm-ar-soft)"/>
+            <line x1="635" y1="622" x2="470" y2="658" class="diagram-ink" marker-end="url(#cm-ar)"/>
+
+            <!-- ── row 8: 训练/推理不对称 ── -->
+            <rect x="270" y="660" width="280" height="52" rx="6" class="diagram-ink node-fill"/>
+            <text x="410" y="682" text-anchor="middle" class="node-label">训练（并行）← 不对称 → 推理（自回归）</text>
+            <text x="410" y="700" text-anchor="middle" class="edge-label">teacher forcing vs 逐 token 喂回</text>
+
+            <line x1="410" y1="712" x2="410" y2="748" class="diagram-ink" marker-end="url(#cm-ar)"/>
+
+            <!-- ── row 9: KV-cache / O(n²) ── -->
+            <rect x="290" y="750" width="240" height="52" rx="6" class="diagram-ink node-fill"/>
+            <text x="410" y="772" text-anchor="middle" class="node-label">KV-cache · O(n²) 瓶颈</text>
+            <text x="410" y="790" text-anchor="middle" class="edge-label">显存成本 · 序列长度压力</text>
+
+            <!-- 催生标签 -->
+            <text x="430" y="826" text-anchor="middle" class="branch-label">催生 ↓</text>
+            <line x1="410" y1="802" x2="410" y2="838" class="diagram-accent" marker-end="url(#cm-ar-accent)"/>
+
+            <!-- ── row 10: 现代演化 ── -->
+            <rect x="150" y="840" width="520" height="108" rx="6" class="diagram-ink node-fill"/>
+            <text x="410" y="864" text-anchor="middle" class="node-label">现代演化</text>
+            <text x="410" y="884" text-anchor="middle" class="edge-label">RoPE / RMSNorm / SwiGLU</text>
+            <text x="410" y="902" text-anchor="middle" class="edge-label">GQA · MLA / FlashAttention</text>
+            <text x="410" y="920" text-anchor="middle" class="edge-label">MoE / SSM 挑战者（Mamba）</text>
+            <text x="410" y="938" text-anchor="middle" class="edge-label">2026 标准 decoder block 配方</text>
+          </svg>
+          <figcaption><span class="fig-num">图 0.1</span>Transformer 全景概念地图，从 token/embedding 出发沿中心脊柱走到现代演化。<strong>注意</strong>：图中朱红色节点（软字典查找 / scaled dot-product / 完整 block / decoder-only）是整个教程的核心脊柱；左右灰色节点是配套概念，在对应章展开。</figcaption>
+        </figure>
+      </section>
+
+      <section id="paths">
+        <h2><span class="num">·</span><span>学习路径建议</span></h2>
+        <p>按目的挑一条线，不必从头读到尾：</p>
+        <ul>
+          <li><strong>只想懂直觉、不被"注意力"这个词搞蒙</strong>：第 01 章（心智模型）→ 第 02 章前两节（QKV 直觉）→ 第 06 章概念层自测。</li>
+          <li><strong>要彻底搞懂机制（公式 + 形状 + 陷阱）</strong>：全程通读，不跳章。第 02、03、04 章密度最高，每章末自测必做。</li>
+          <li><strong>要读懂现代模型架构图（Llama/DeepSeek/Qwen）</strong>：第 01–03 章打底 → 第 05 章（经典到现代）重点阅读 → 对照目标模型架构图逐件拆解。</li>
+          <li><strong>准备面试</strong>（"transformer 的注意力机制是什么""为什么用 KV-cache""MoE 是什么"是高频题）：全程通读 + 第 06 章应用辨析题。</li>
+        </ul>
+      </section>
+
+      <section id="toc">
+        <h2><span class="num">·</span><span>目录</span></h2>
+        <nav class="toc-chapters" aria-label="章节目录">
+          <a href="01-concepts.html">
+            <span class="ch-num">01 · 心智模型</span>
+            <p class="ch-title">从 token 到 attention 的直觉框架</p>
+            <p class="ch-desc">token/embedding 是什么 · 序列建模问题 &amp; RNN 的三个瓶颈 · attention 软字典查找直觉 · 通信+计算框架（Karpathy）· encoder-only / decoder-only / encoder-decoder 三形态</p>
+          </a>
+          <a href="02-attention.html">
+            <span class="ch-num">02 · 注意力机制</span>
+            <p class="ch-title">scaled dot-product 的完整数学与陷阱</p>
+            <p class="ch-desc">QKᵀ/√d_k → softmax → ×V 形状推导 · 为什么除以 √d_k（方差论证）· 因果掩码机制 · 多头与子空间专化 · self vs cross attention · 注意力权重 ≠ 重要度</p>
+          </a>
+          <a href="03-architecture.html">
+            <span class="ch-num">03 · 整体架构</span>
+            <p class="ch-title">从一个 block 到完整 transformer</p>
+            <p class="ch-desc">位置编码（置换等变性 · 正弦原版）· 残差梯度高速路 · LayerNorm pre vs post-norm · FFN 键值记忆（Geva 2021）· 完整 block 前向 · 堆叠 N 层 · embedding/unembedding &amp; 权重绑定 · 经典 enc-dec → decoder-only</p>
+          </a>
+          <a href="04-training-inference.html">
+            <span class="ch-num">04 · 训练与推理</span>
+            <p class="ch-title">并行训练、自回归推理与 KV-cache 的由来</p>
+            <p class="ch-desc">teacher forcing · 因果掩码实现并行 · 推理自回归循环 · 训练/推理不对称（aha #3）· KV-cache 缓存什么 · 显存成本公式 · O(n²) 计算与显存瓶颈 · 这些成本如何催生第 05 章优化</p>
+          </a>
+          <a href="05-modern.html">
+            <span class="ch-num">05 · 经典到现代</span>
+            <p class="ch-title">2017→2026 每条演化替代了什么、代价是什么</p>
+            <p class="ch-desc">RoPE 旋转位置 · YaRN/iRoPE 长上下文 · RMSNorm + QK-norm · SwiGLU · MQA/GQA/MLA · FlashAttention 1/2/3 · MoE（Mixtral/DeepSeek-V3/Llama4/Qwen3/Kimi K2）· 2026 标准 decoder block 配方 · SSM/Mamba 诚实现状</p>
+          </a>
+          <a href="06-self-check.html">
+            <span class="ch-num">06 · 自检</span>
+            <p class="ch-title">三层梯度题库 + 跨章辨析场景</p>
+            <p class="ch-desc">概念层 / 原理层 / 应用辨析层 · 跨章场景题（≥3 个，标注涉及哪几章）· 手画完整 block 架构图 prompt · 把零散知识逼成可调用的判断力</p>
+          </a>
+        </nav>
+      </section>
+
+      <section id="after">
+        <h2><span class="num">·</span><span>学完之后</span></h2>
+        <p>这份教程之后，几个自然的下一步，以及它们在已有结构上加了什么：</p>
+        <ul>
+          <li><strong>检索增强生成（RAG）</strong>：理解了 transformer encoder 怎么把 token 变成 embedding，才能真正理解为什么 embedding 能做语义相似度检索——去 <a href="../rag/index.html">rag</a> 直接从向量检索机制开始。</li>
+          <li><strong>Agent 推理模式</strong>：CoT、ReAct、Tree-of-Thought 都建立在对 decoder 自回归生成的理解上——去 <a href="../agent-reasoning-patterns/index.html">agent-reasoning-patterns</a> 看推理期算力怎么换可靠性。</li>
+          <li><strong>LLM API 工程实践</strong>：把 transformer 机制映射到 API 参数（temperature/top-p/max-tokens 背后的逻辑）——去 <a href="../llm-api/index.html">llm-api</a>。</li>
+          <li><strong>Prompt 工程</strong>：知道 attention 怎么工作、上下文窗口的本质是什么，prompt 设计就从玄学变成工程——去 <a href="../prompt-engineering/index.html">prompt-engineering</a>。</li>
+        </ul>
+      </section>
+
+      <footer class="references">
+        <h3>参考资料 · 总览</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/1706.03762">Vaswani et al. 2017 · Attention Is All You Need</a>（原论文，base/big 配置与公式出处）</li>
+          <li><a href="https://jalammar.github.io/illustrated-transformer/">Jay Alammar · The Illustrated Transformer</a>（最广为流传的可视化讲解）</li>
+          <li><a href="https://nlp.seas.harvard.edu/annotated-transformer/">The Annotated Transformer (Harvard NLP)</a>（带注释的逐行 PyTorch 实现）</li>
+          <li><a href="https://github.com/karpathy/nanoGPT">Karpathy · nanoGPT</a> 以及配套视频 "Let's build GPT"（通信/计算框架来源，最简 decoder-only 实现）</li>
+          <li><a href="https://arxiv.org/abs/2012.14913">Geva et al. 2021 · Transformer Feed-Forward Layers Are Key-Value Memories</a>（FFN 键值记忆实验证据）</li>
+          <li><a href="https://arxiv.org/abs/2104.09864">Su et al. 2021 · RoFormer: RoPE</a>（旋转位置编码原论文）</li>
+          <li><a href="https://arxiv.org/abs/2205.14135">Dao et al. 2022 · FlashAttention</a>（IO-aware 精确注意力，FA1 原论文）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-concepts.html" class="next">
+          <span class="label">开始 →</span>
+          <span class="title">01 · 心智模型：从 token 到 attention 直觉</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本页目录">
+      <p class="toc-label">本页 · TOC</p>
+      <ul>
+        <li><a href="#who-for" data-toc-target="who-for">适合谁</a></li>
+        <li><a href="#not-for" data-toc-target="not-for">不适合谁</a></li>
+        <li><a href="#outcomes" data-toc-target="outcomes">能做到什么</a></li>
+        <li><a href="#essence" data-toc-target="essence">一句话本质</a></li>
+        <li><a href="#frontier-now" data-toc-target="frontier-now">现状速览</a></li>
+        <li><a href="#fluency-warning" data-toc-target="fluency-warning">流畅感警告</a></li>
+        <li><a href="#concept-map" data-toc-target="concept-map">概念地图</a></li>
+        <li><a href="#paths" data-toc-target="paths">学习路径</a></li>
+        <li><a href="#toc" data-toc-target="toc">目录</a></li>
+        <li><a href="#after" data-toc-target="after">学完之后</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  Agent 通信协议 A2A 教程 · 03 实操 03-practice.html
+  极简单色 + 单一朱红强调（design system v2，与 index.html 同源）
+  scaffold: 复制 multi-agent-patterns/03-practice.html 的 <head>（含完整 <style>）与底部 <script>
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 实操 · Agent 通信协议 A2A 教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 概念</a><span class="sep">—</span>
+    <a href="02-principles.html">02 原理</a><span class="sep">—</span>
+    <a href="03-practice.html" class="current">03 实操</a><span class="sep">—</span>
+    <a href="04-pitfalls.html">04 失败模式</a><span class="sep">—</span>
+    <a href="05-capstone.html">05 综合</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+  </nav>
+
+  <div class="page">
+    <article id="practice">
+
+      <!-- ════════════════════════════════════════════════════════
+           头部 + recap
+           ════════════════════════════════════════════════════════ -->
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03 · 上手实操</p>
+        <h1>把它跑起来：一个 A2A server，一个 client，端到端</h1>
+        <p class="recap">02 讲清了 wire 上发生什么与三种交互——本章把它跑起来。一个 A2A server 暴露一项 skill，一个 client 发现它的 Agent Card、发 <code>SendMessage</code>、收回 Task 与 Artifact。三阶推进：worked（读完整可运行代码）→ partial（补关键 schema 决策）→ open（改成流式）。读完，你不仅能跑通这条链，还能指出 SDK 在哪几处把 wire 协议藏了起来。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>用 <code>a2a-sdk</code> 1.1.0 把 01 章的 Agent Card / Task / Message / Part / Artifact 落成可运行代码——每个对象都映射回它的概念定义。</li>
+          <li>server 端 = 子类化 <code>AgentExecutor</code> 实现 <code>execute</code>、发布一张 <code>AgentCard</code>、用 Starlette 路由挂起来；client 端 = 解析 Card → 发 <code>SendMessage</code> → 异步迭代收回结果。</li>
+          <li>SDK 在哪藏了 wire：Python 方法是 snake_case <code>send_message</code>，它在线缆上发出的 <code>"method"</code> 却是 <code>SendMessage</code>——SDK 的人体工学不等于 wire 协议。</li>
+          <li>三个 schema 决策点亲手补：Card 里要不要声明 <code>capabilities.streaming</code>、结果怎么包成 Artifact、<code>input-required</code> 状态怎么处理。</li>
+        </ul>
+      </section>
+
+      <!-- ════════════════════════════════════════════════════════
+           作者认识论说明
+           ════════════════════════════════════════════════════════ -->
+      <div class="callout warning">
+        <span class="label">关于代码的认识论说明</span>
+        <p>本章除 shell 安装命令外的全部代码均标注「<strong>未在本机验证</strong>」。它们按 <code>a2a-sdk</code> 1.1.0（2026-05-29，实现 spec v1.0）的公开源码逐字核对过导入路径与方法签名，语法完整、可复制粘贴、无 <code>...</code> 省略；但本教程未在本机实跑这条链。这个领域迭代很快——读到这里时请以 <code>pip show a2a-sdk</code> 的实际版本与官方文档为准。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           架构图 + 三阶进度图
+           ════════════════════════════════════════════════════════ -->
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="A2A server 与 client 的控制流与数据流：client 先 GET agent-card.json 发现，再发 SendMessage 到 server，server 的 AgentExecutor.execute 把事件 enqueue 到 EventQueue，最后 Artifact 经响应回流到 client">
+          <defs>
+            <marker id="s32-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="s32-acc" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- client box (left) -->
+          <rect class="diagram-ink node-fill" x="30" y="120" width="150" height="110" rx="6"/>
+          <text class="node-label" x="105" y="150" text-anchor="middle">A2A client</text>
+          <text class="edge-label" x="105" y="172" text-anchor="middle" stroke="none">ClientFactory</text>
+          <text class="edge-label" x="105" y="190" text-anchor="middle" stroke="none">.create(card)</text>
+          <text class="edge-label" x="105" y="212" text-anchor="middle" stroke="none">send_message()</text>
+
+          <!-- server box (right) -->
+          <rect class="diagram-accent node-fill-accent" x="500" y="40" width="190" height="280" rx="6" stroke-width="2"/>
+          <text class="node-label-accent" x="595" y="64" text-anchor="middle">A2A server</text>
+
+          <!-- agent card route -->
+          <rect class="diagram-ink node-fill" x="520" y="80" width="150" height="44" rx="4"/>
+          <text class="edge-label" x="595" y="100" text-anchor="middle" stroke="none">AgentCard 路由</text>
+          <text class="edge-label" x="595" y="116" text-anchor="middle" stroke="none">/.well-known/…</text>
+
+          <!-- executor -->
+          <rect class="diagram-ink node-fill" x="520" y="148" width="150" height="50" rx="4"/>
+          <text class="edge-label" x="595" y="168" text-anchor="middle" stroke="none" font-weight="700">AgentExecutor</text>
+          <text class="edge-label" x="595" y="185" text-anchor="middle" stroke="none">.execute()</text>
+
+          <!-- event queue -->
+          <rect class="diagram-ink node-fill" x="520" y="222" width="150" height="44" rx="4"/>
+          <text class="edge-label" x="595" y="242" text-anchor="middle" stroke="none">EventQueue</text>
+          <text class="edge-label" x="595" y="258" text-anchor="middle" stroke="none">enqueue_event</text>
+
+          <!-- (1) discovery: GET card -->
+          <path class="diagram-ink" d="M 180 140 L 518 102" marker-end="url(#s32-ink)"/>
+          <text class="edge-label" x="350" y="112" text-anchor="middle">① GET agent-card.json</text>
+
+          <!-- (2) send message -->
+          <path class="diagram-ink" d="M 180 175 L 518 173" marker-end="url(#s32-ink)"/>
+          <text class="edge-label" x="350" y="166" text-anchor="middle">② SendMessage（Message: role + parts）</text>
+
+          <!-- internal: executor -> event queue -->
+          <path class="diagram-soft" d="M 595 198 L 595 220" marker-end="url(#s32-ink)"/>
+          <text class="edge-label" x="595" y="212" text-anchor="middle">③ Task + Artifact</text>
+
+          <!-- (4) artifact回流 -->
+          <path class="diagram-accent" d="M 518 244 L 182 212" marker-end="url(#s32-acc)"/>
+          <text class="edge-label" x="350" y="246" text-anchor="middle">④ 回流：Task → Artifact</text>
+
+          <text class="edge-label" x="350" y="300" text-anchor="middle" stroke="none" font-style="italic">黑线 = client 发起的控制流 · 朱红线 = server 产出的数据回流</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>server + client 的控制流（黑）与数据回流（朱红）。<strong>注意</strong>：第①步「发现」与第②步「发消息」是<em>两次独立的 HTTP 往返</em>——client 先 GET 那张静态 Card 确认能力与端点，<em>之后</em>才发 <code>SendMessage</code>；产出不是裸字符串，而是 <code>execute()</code> 经 EventQueue 包出的 Artifact，沿朱红线回流。</figcaption>
+      </figure>
+
+      <figure>
+        <svg viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三阶实操进度：worked 全部代码给定，partial 抠掉关键 schema 决策点，open 移除全部脚手架只给规格">
+          <defs>
+            <marker id="s3stage" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+          <!-- stage 1: worked -->
+          <rect class="diagram-ink node-fill" x="30" y="60" width="190" height="120" rx="6"/>
+          <text class="node-label-accent" x="125" y="86" text-anchor="middle">3.2 Worked</text>
+          <text class="edge-label" x="125" y="112" text-anchor="middle" stroke="none">server 全给</text>
+          <text class="edge-label" x="125" y="132" text-anchor="middle" stroke="none">client 全给</text>
+          <text class="edge-label" x="125" y="152" text-anchor="middle" stroke="none">逐行映射回概念</text>
+          <text class="edge-label" x="125" y="172" text-anchor="middle" stroke="none" font-style="italic">学读代码</text>
+          <!-- stage 2: partial -->
+          <rect class="diagram-ink node-fill" x="285" y="60" width="190" height="120" rx="6"/>
+          <text class="node-label-accent" x="380" y="86" text-anchor="middle">3.3 Partial</text>
+          <text class="edge-label" x="380" y="112" text-anchor="middle" stroke="none">骨架给定</text>
+          <rect class="diagram-accent node-fill-accent" x="300" y="122" width="160" height="20"/>
+          <text class="branch-label" x="380" y="136" text-anchor="middle">3 决策留空</text>
+          <text class="edge-label" x="380" y="162" text-anchor="middle" stroke="none">streaming/Artifact/input</text>
+          <text class="edge-label" x="380" y="172" text-anchor="middle" stroke="none" font-style="italic">学做选择</text>
+          <!-- stage 3: open -->
+          <rect class="diagram-ink node-fill" x="540" y="60" width="190" height="120" rx="6"/>
+          <text class="node-label-accent" x="635" y="86" text-anchor="middle">3.4 Open</text>
+          <text class="edge-label" x="635" y="112" text-anchor="middle" stroke="none">只给规格</text>
+          <text class="edge-label" x="635" y="132" text-anchor="middle" stroke="none">改成流式 SSE</text>
+          <text class="edge-label" x="635" y="152" text-anchor="middle" stroke="none">脚手架全撤</text>
+          <text class="edge-label" x="635" y="172" text-anchor="middle" stroke="none" font-style="italic">学组装系统</text>
+          <!-- arrows -->
+          <line class="diagram-ink" x1="220" y1="120" x2="285" y2="120" marker-end="url(#s3stage)"/>
+          <text class="edge-label" x="252" y="112" text-anchor="middle">撤决策</text>
+          <line class="diagram-ink" x1="475" y1="120" x2="540" y2="120" marker-end="url(#s3stage)"/>
+          <text class="edge-label" x="507" y="112" text-anchor="middle">撤骨架</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>三阶脚手架递减：每往前一阶撤掉一层给定。<strong>注意</strong>：3.3 抠掉的三个不是任意填空——分别对应一个真正影响 wire 行为的 schema 决策：Card 的 <code>capabilities.streaming</code> 声明（<a href="01-concepts.html#s12">§1.2</a>）、结果包成 Artifact（<a href="01-concepts.html#s13">§1.3</a>）、<code>input-required</code> 中途态（<a href="02-principles.html#s25">§2.5</a>）。</figcaption>
+      </figure>
+
+      <!-- ════════════════════════════════════════════════════════
+           3.1 环境准备
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s31"><span class="num">3.1</span>环境准备</h2>
+
+      <p>整章用官方 Python SDK <code>a2a-sdk</code>。版本锁到 <strong>1.1.0</strong>（2026-05-29 发布，实现 spec v1.0、带 v0.3 兼容模式）。需要 <strong>Python 3.10+</strong>。最小依赖只有这一个包——它已把服务端的 Starlette 路由、客户端的 httpx 传输都带进来了。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">setup.sh</span>
+          <span class="lang">Bash</span>
+          <button class="copy" data-copy-target="cb-31-1">复制</button>
+        </div>
+<pre id="cb-31-1"><code class="language-bash"># Python 3.10+
+python -m venv .venv &amp;&amp; source .venv/bin/activate
+
+# 锁定版本，避免装到 v0.3.x 的旧 API（见下方预防说明）
+pip install "a2a-sdk==1.1.0"
+
+# 自检：导入不报错、且版本是 1.1.0 = 装对了
+python -c "import a2a; from importlib.metadata import version; print(version('a2a-sdk'))"
+</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">常见安装失败 · 预防</span>
+        <p><strong>装到 v0.3.x 旧版</strong>是头号失败源。<code>a2a-sdk</code> 在 1.0 做过破坏性重构：v0.3.x 的客户端入口是 <code>A2AClient.get_client_from_agent_card_url(...)</code>，而 1.1.0 改成了 <code>ClientFactory</code> / <code>create_client</code>；服务端的 <code>A2AStarletteApplication</code> 也在 1.0 被路由函数 <code>create_jsonrpc_routes</code> 取代。裸跑 <code>pip install a2a-sdk</code> 可能解析到与本章不符的版本，照着本章代码写就会报 <code>ImportError</code>。永远带上 <code>==1.1.0</code>（或你确认过的版本），装完先跑那行 <code>python -c</code> 把版本号打出来核对。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           3.2 Worked
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s32"><span class="num">3.2</span>Worked · 一个大写转换 agent，端到端</h2>
+
+      <p>需求：做一个最小的 A2A server，暴露一项 skill「把文本转成大写」。再写一个 client，去<strong>发现</strong>它的 Agent Card、把一句话<strong>发</strong>过去、把结果<strong>收</strong>回来。这条链把 01 章的五个抽象（<a href="01-concepts.html#s12">Agent Card §1.2</a>、<a href="01-concepts.html#s13">Task / Message / Part / Artifact §1.3</a>）和 02 章的 <code>SendMessage</code>（<a href="02-principles.html#s23">§2.3</a>）一次性落地。</p>
+
+      <h3>server 端：暴露能力的两件事</h3>
+
+      <p>一个 A2A server 在代码上拆成两半：<strong>一</strong>·业务逻辑——子类化 <code>AgentExecutor</code>，在 <code>execute()</code> 里干活、把产出 enqueue 到 <code>EventQueue</code>；<strong>二</strong>·能力声明——构造一张 <code>AgentCard</code> 公开发布。先看业务逻辑这半。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">upper_executor.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-32-1">复制</button>
+        </div>
+<pre id="cb-32-1"><code class="language-python"># 未在本机验证 —— a2a-sdk 1.1.0（spec v1.0）
+from a2a.helpers import get_message_text, new_task_from_user_message, new_text_part
+from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.events import EventQueue
+from a2a.server.tasks import TaskUpdater
+from a2a.types.a2a_pb2 import TaskState
+
+
+class UpperCaseExecutor(AgentExecutor):
+    """把客户端发来的文本转成大写，作为一个 Artifact 返回。"""
+
+    async def execute(
+        self,
+        context: RequestContext,
+        event_queue: EventQueue,
+    ) -&gt; None:
+        # 1. 取出 / 新建一个有状态 Task（对应 01 章 §1.3 的 Task）
+        if context.current_task:
+            task = context.current_task
+        else:
+            task = new_task_from_user_message(context.message)
+            await event_queue.enqueue_event(task)   # 把新建的 Task 投到事件队列
+
+        # 2. 用 TaskUpdater 推进状态：先置 WORKING
+        updater = TaskUpdater(
+            event_queue=event_queue,
+            task_id=task.id,
+            context_id=task.context_id,
+        )
+        await updater.update_status(state=TaskState.TASK_STATE_WORKING)
+
+        # 3. 从入站 Message 抽出纯文本，干活（这里就是 .upper()）
+        query = get_message_text(context.message)
+        result = query.upper() if query else "(空输入)"
+
+        # 4. 把结果包成 Artifact（对应 01 章 §1.3 的 Artifact = 任务产出）
+        await updater.add_artifact(
+            parts=[new_text_part(text=result, media_type="text/plain")],
+            name="uppercased",
+        )
+
+        # 5. 终态：COMPLETED（对应 02 章 §2.5 生命周期的终态）
+        await updater.update_status(state=TaskState.TASK_STATE_COMPLETED)
+
+    async def cancel(
+        self,
+        context: RequestContext,
+        event_queue: EventQueue,
+    ) -&gt; None:
+        # 本例不支持取消；真实长任务应在此置 TASK_STATE_CANCELED
+        raise NotImplementedError("Cancel is not supported.")
+</code></pre>
+      </div>
+
+      <div class="annotations">
+        <p><span class="line-ref">execute(context, event_queue)</span>这是 server 的核心契约：SDK 框架保证同一请求不会并发调它；agent 只管从 <code>context</code> 读入站 Message、把事件 enqueue 到 <code>event_queue</code>。返回即代表本次执行结束。</p>
+        <p><span class="line-ref">new_task_from_user_message</span>把入站 Message 包成一个有状态 <code>Task</code> 并 <code>enqueue_event</code> 投出去——这就是 01 章<a href="01-concepts.html#s13">§1.3</a> 说的「服务端为一次托付建出一个 Task」在代码里的样子。</p>
+        <p><span class="line-ref">TaskState.TASK_STATE_WORKING / COMPLETED</span>正是 02 章<a href="02-principles.html#s25">§2.5</a> 状态机里的 wire 值（<code>SCREAMING_SNAKE</code>，不是小写 <code>working</code>）。这里把任务从 <code>WORKING</code> 推到终态 <code>COMPLETED</code>。</p>
+        <p><span class="line-ref">add_artifact(parts=[…])</span>产出<strong>不是</strong>直接 return 一个字符串，而是包成 Artifact 的 <code>Part[]</code>（这里一个 <code>text</code> Part）。这对应 01 章<a href="01-concepts.html#s13">§1.3</a>「Artifact 是任务的产出、内容是 Part[]」。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>上面 <code>cancel()</code> 里直接 <code>raise NotImplementedError</code>。对一个 50ms 就算完的 <code>.upper()</code>，不实现取消没问题；但换成一个跑几小时的调研 agent，<code>cancel()</code> 该往 <code>event_queue</code> 里发什么，才算「真的取消了」？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>它该把 Task 推进到终态 <code>TASK_STATE_CANCELED</code>——即在 <code>cancel()</code> 里用 <code>TaskUpdater(...).update_status(state=TaskState.TASK_STATE_CANCELED)</code>（或等价的 <code>updater.cancel()</code>）发一个 <code>TaskStatusUpdateEvent</code>。原因在 02 章<a href="02-principles.html#s25">§2.5</a> 的状态机：<code>CANCELED</code> 是四个终态之一，客户端正是靠这个状态变化知道「这个 Task 不会再有产出了」，从而停止等待 / 回查。只是停掉后台计算却不发终态事件，客户端会一直以为任务还在 <code>WORKING</code>、傻等下去。注意 wire 上是美式拼写 <code>CANCELED</code>（v0.x 的 <code>cancelled</code> 已移除）——这也是 SDK 替你对齐 wire 的一处细节。</p>
+        </details>
+      </div>
+
+      <p>第二半是<strong>能力声明</strong>加<strong>把它挂起来</strong>。构造一张 <code>AgentCard</code>（含 <code>skills</code>、<code>capabilities</code>、服务端点），交给 <code>DefaultRequestHandler</code>，再用两个路由函数生成 Starlette 路由，uvicorn 起服务。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">server.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-32-2">复制</button>
+        </div>
+<pre id="cb-32-2"><code class="language-python"># 未在本机验证 —— a2a-sdk 1.1.0（spec v1.0）
+import uvicorn
+from starlette.applications import Starlette
+
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
+from a2a.server.tasks import InMemoryTaskStore
+from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
+
+from upper_executor import UpperCaseExecutor
+
+PORT = 9999
+BASE_URL = f"http://127.0.0.1:{PORT}"
+
+# ── 一项 skill：向别的 agent 声明本 agent 能干这件事（对应 01 章 §1.2 的 skills）──
+skill = AgentSkill(
+    id="uppercase",
+    name="Uppercase Text",
+    description="把输入的纯文本整体转成大写。",
+    input_modes=["text/plain"],
+    output_modes=["text/plain"],
+    tags=["text", "demo"],
+    examples=["hello a2a", "make this loud"],
+)
+
+# ── Agent Card：对外的一纸能力声明（对应 01 章 §1.2、02 章 §2.2）──
+agent_card = AgentCard(
+    name="Uppercase Agent",
+    description="一个把文本转大写的最小 A2A agent。",
+    version="1.0.0",
+    default_input_modes=["text/plain"],
+    default_output_modes=["text/plain"],
+    # capabilities：声明支持哪些可选能力。这里先不开流式（3.3 让你决定要不要开）
+    capabilities=AgentCapabilities(streaming=False),
+    # supported_interfaces：声明走哪种传输、服务端点在哪（这里 JSON-RPC）
+    supported_interfaces=[
+        AgentInterface(protocol_binding="JSONRPC", url=BASE_URL),
+    ],
+    skills=[skill],
+)
+
+# ── 把 executor、task store、card 接到请求处理器上 ──
+handler = DefaultRequestHandler(
+    agent_executor=UpperCaseExecutor(),
+    task_store=InMemoryTaskStore(),
+    agent_card=agent_card,
+)
+
+# ── 生成路由：一组发布 Agent Card，一组处理 JSON-RPC 的 SendMessage 等 ──
+routes = []
+routes.extend(create_agent_card_routes(agent_card))   # GET /.well-known/agent-card.json
+routes.extend(create_jsonrpc_routes(handler, "/"))    # POST / —— JSON-RPC 入口
+
+app = Starlette(routes=routes)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=PORT)
+</code></pre>
+      </div>
+
+      <div class="annotations">
+        <p><span class="line-ref">AgentSkill / skills=[skill]</span>对应 01 章<a href="01-concepts.html#s12">§1.2</a> 的 <code>skills</code> 字段：声明这个 agent 会哪几手。client 读 Card 时靠它判断对端能不能干这件事。</p>
+        <p><span class="line-ref">capabilities=AgentCapabilities(streaming=False)</span>对应 01 章<a href="01-concepts.html#s12">§1.2</a> 的 <code>capabilities</code> 可选能力开关。此处声明<strong>不</strong>支持流式——3.3 的决策 (a) 就是让你决定要不要把它改成 <code>True</code>，以及那意味着什么。</p>
+        <p><span class="line-ref">create_agent_card_routes</span>这一组路由把 Card 发布到 <code>/.well-known/agent-card.json</code>——正是 02 章<a href="02-principles.html#s22">§2.2</a> 那个固定发现路径。client 第一次 GET 的就是它。</p>
+        <p><span class="line-ref">create_jsonrpc_routes(handler, "/")</span>把 JSON-RPC 端点挂在 <code>/</code>。client 发的 <code>SendMessage</code> 落到这里，由 <code>handler</code> 路由进 <code>execute()</code>。</p>
+      </div>
+
+      <h3>client 端：发现、发消息、收回流</h3>
+
+      <p>client 这一侧三步走：解析 Agent Card（<strong>发现</strong>）、构造一个 Message 调 <code>send_message</code>（<strong>发</strong>）、异步迭代拿回 Task 与 Artifact（<strong>收</strong>）。注意 1.1.0 的 <code>send_message</code> 永远返回一个异步迭代器——无论 server 流不流式，client 都用 <code>async for</code> 收，由 SDK 在底层替你聚合。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">client.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-32-3">复制</button>
+        </div>
+<pre id="cb-32-3"><code class="language-python"># 未在本机验证 —— a2a-sdk 1.1.0（spec v1.0）
+import asyncio
+import httpx
+
+from a2a.client import A2ACardResolver, ClientConfig, ClientFactory
+from a2a.helpers import get_stream_response_text, new_text_message
+from a2a.types.a2a_pb2 import Role, SendMessageRequest
+
+BASE_URL = "http://127.0.0.1:9999"
+
+
+async def main() -&gt; None:
+    async with httpx.AsyncClient() as httpx_client:
+        # 1. 发现：去固定路径 GET 那张 Agent Card（对应 01 §1.2 / 02 §2.2）
+        resolver = A2ACardResolver(httpx_client=httpx_client, base_url=BASE_URL)
+        agent_card = await resolver.get_agent_card()   # GET /.well-known/agent-card.json
+        print("发现 skill:", [s.id for s in agent_card.skills])
+
+        # 2. 用 Card 造一个 client。streaming=False 与本例 server 的声明一致
+        config = ClientConfig(streaming=False, httpx_client=httpx_client)
+        client = ClientFactory(config).create(agent_card)
+
+        # 3. 发：构造一个 user 角色的 Message，调 send_message
+        #    注意：Python 方法名是 snake_case send_message，
+        #    但它在 wire 上发出的 JSON-RPC "method" 是 PascalCase "SendMessage"
+        message = new_text_message("hello a2a", role=Role.ROLE_USER)
+        request = SendMessageRequest(message=message)
+
+        # 4. 收：send_message 返回异步迭代器，逐块收回 Task / Artifact
+        async for chunk in client.send_message(request):
+            print("收到:", get_stream_response_text(chunk))
+
+        await client.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+</code></pre>
+      </div>
+
+      <div class="annotations">
+        <p><span class="line-ref">A2ACardResolver.get_agent_card()</span>这是<strong>发现</strong>那一步——一次普通 HTTP GET 打到 <code>/.well-known/agent-card.json</code>，把 02 章<a href="02-principles.html#s21">§2.1</a> 端到端时序的第①步落成一行代码。此刻还没发任何任务。</p>
+        <p><span class="line-ref">ClientFactory(config).create(agent_card)</span>工厂读 Card 的 <code>supported_interfaces</code>，挑一个双方都支持的传输绑定，造出对应的传输层 client。（便捷写法 <code>create_client(agent=agent_card, client_config=config)</code> 是它的一行封装。）</p>
+        <p><span class="line-ref">Role.ROLE_USER + SendMessageRequest</span>对应 01 章<a href="01-concepts.html#s13">§1.3</a> 的 Message：一个 <code>role</code> 加 parts；<code>new_text_message</code> 替你包了 <code>text</code> Part。</p>
+        <p><span class="line-ref">async for chunk in client.send_message(request)</span>1.1.0 统一用异步迭代收回——非流式时 SDK 聚合成一两块吐出来，流式时逐帧吐。返回里带着 Task 与 Artifact。</p>
+      </div>
+
+      <h3>跑起来 + 预期输出</h3>
+
+      <p>开两个终端。第一个起 server，第二个跑 client。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">run.sh</span>
+          <span class="lang">Bash</span>
+          <button class="copy" data-copy-target="cb-32-4">复制</button>
+        </div>
+<pre id="cb-32-4"><code class="language-bash"># 终端 1：起 server（监听 127.0.0.1:9999）
+python server.py
+
+# 终端 2：先手动看一眼那张 Card（发现这一步本质就是个 HTTP GET）
+curl -s http://127.0.0.1:9999/.well-known/agent-card.json | head -c 400
+echo
+
+# 终端 2：再跑 client
+python client.py
+</code></pre>
+      </div>
+
+      <div class="callout example">
+        <span class="label">预期输出（client 终端，示意）</span>
+        <p><code>发现 skill: ['uppercase']</code><br>
+        <code>收到: HELLO A2A</code></p>
+        <p>那行 <code>curl</code> 会先吐出一段 JSON——里面有 <code>name</code>、<code>skills</code>、<code>capabilities</code>、<code>supportedInterfaces</code> 等字段。这就是 client 在第①步读到的同一张 Card；client 只是用代码把这次 GET 做了一遍。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">洞察 · SDK 在哪藏了 wire</span>
+        <p>整段代码里你写的是 Python 方法 <code>client.send_message(...)</code>（snake_case）。但它在线缆上发出的 JSON-RPC 请求，<code>"method"</code> 字段的字面值是 <code>SendMessage</code>（PascalCase）——正是 02 章<a href="02-principles.html#s23">§2.3</a> 教的那个 v1.0 wire 方法名。<strong>SDK 的命名人体工学 ≠ wire 协议</strong>：方法名、<code>TASK_STATE_*</code> 状态值、Card 的 JSON 字段名，都是 SDK 在帮你做 Python 风格 ↔ wire 风格的来回翻译。想确认 wire 真长什么样，别只读 SDK 源码——抓一次包，或读 02 章那段 spec 示例。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>client 里 <code>send_message</code> 是 <code>async for chunk in ...</code> 迭代着收的。可本例 server 明明声明了 <code>capabilities.streaming=False</code>、也没逐帧推任何东西——为什么 client 这边还要用异步迭代，而不是一句 <code>result = await client.send_message(...)</code> 直接拿一个返回值？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>因为 1.1.0 把<strong>两种交互模式统一成了同一个 client API</strong>。<code>send_message</code> 的签名固定返回 <code>AsyncIterator</code>，由 SDK 在底层根据「server 支不支持流式 + <code>ClientConfig.streaming</code> 怎么设」自动选走 SSE 流还是普通请求/响应（02 章<a href="02-principles.html#s24">§2.4</a> 的两种交互）。非流式时，SDK 把单个响应也包成「只迭代一两次」的迭代器吐给你——于是<strong>调用方代码不必随交互模式改写</strong>。这正是 SDK 抹平 wire 差异的又一处：同一行 <code>async for</code>，底下可能是一次 HTTP 往返，也可能是一条 <code>text/event-stream</code> 长连接。3.4 把 server 改成流式时，client 这段<em>一个字都不用动</em>。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           3.3 Partial
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s33"><span class="num">3.3</span>Partial · 补三个关键 schema 决策点</h2>
+
+      <p>把 3.2 的 server 改成需要你拍板的版本——三处真正影响 wire 行为的 schema 决策抠成 <code>TODO</code>。<strong>每个 TODO 先合上页面想 30 秒</strong>该怎么选、代价是什么，再展开对照。三个决策分别落在 Card 能力声明、Artifact 封装、生命周期中途态上——都不是无关填空。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">upper_executor_partial.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="cb-33-1">复制</button>
+        </div>
+<pre id="cb-33-1"><code class="language-python"># 未在本机验证 —— 在 3.2 基础上抠掉 3 个 schema 决策
+from a2a.helpers import get_message_text, new_task_from_user_message, new_text_part
+from a2a.server.agent_execution import AgentExecutor, RequestContext
+from a2a.server.events import EventQueue
+from a2a.server.tasks import TaskUpdater
+from a2a.types.a2a_pb2 import TaskState
+
+# ─────────────────────────────────────────────
+# 决策 (a) · Card 里要不要声明 capabilities.streaming = True？
+#   3.2 声明的是 False。如果这个 agent 要逐字吐结果（像 LLM 流式输出），
+#   该把它改成 True 吗？改了之后，server 端 execute 里要相应多做什么？
+#   （这个开关在 server.py 的 AgentCapabilities(...) 里，见下方答案）
+# ─────────────────────────────────────────────
+
+class UpperCaseExecutor(AgentExecutor):
+    async def execute(
+        self,
+        context: RequestContext,
+        event_queue: EventQueue,
+    ) -&gt; None:
+        if context.current_task:
+            task = context.current_task
+        else:
+            task = new_task_from_user_message(context.message)
+            await event_queue.enqueue_event(task)
+
+        updater = TaskUpdater(
+            event_queue=event_queue,
+            task_id=task.id,
+            context_id=task.context_id,
+        )
+        await updater.update_status(state=TaskState.TASK_STATE_WORKING)
+
+        query = get_message_text(context.message)
+
+        # ─────────────────────────────────────────────
+        # 决策 (c) · input-required 中途态怎么处理？
+        #   如果客户端发来空文本（没东西可转大写），该怎么办？
+        #   直接 FAILED？还是把任务暂停成 INPUT_REQUIRED 等它补一句？
+        # ─────────────────────────────────────────────
+        if not query:
+            # await updater.update_status(state=???)   # 该置成哪个状态？然后 return 让出控制权？
+            return
+
+        result = query.upper()
+
+        # ─────────────────────────────────────────────
+        # 决策 (b) · 结果怎么包成 Artifact？
+        #   下面这行只发了一个 text Part。如果还想附一份「原文 + 大写」的
+        #   结构化对照（JSON），该往 parts 里加什么 kind 的 Part？
+        # ─────────────────────────────────────────────
+        await updater.add_artifact(
+            parts=[new_text_part(text=result, media_type="text/plain")],  # 还要再加一个 Part 吗？
+            name="uppercased",
+        )
+
+        await updater.update_status(state=TaskState.TASK_STATE_COMPLETED)
+
+    async def cancel(self, context: RequestContext, event_queue: EventQueue) -&gt; None:
+        raise NotImplementedError("Cancel is not supported.")
+</code></pre>
+      </div>
+
+      <details>
+        <summary>决策 (a) 答案 · Card 里要不要声明 capabilities.streaming</summary>
+        <p><strong>看产出形态，不是默认开</strong>：</p>
+        <ul>
+          <li><strong>短任务、一次性产出（如本例 <code>.upper()</code>）</strong>：声明 <code>streaming=False</code> 就够。结果一步算完，没有「逐字吐」的中间过程，开流式只是徒增复杂度。</li>
+          <li><strong>逐字 / 分块产出（如 LLM 流式生成、长报告边写边发）</strong>：声明 <code>capabilities=AgentCapabilities(streaming=True)</code>。但<strong>声明只是一半</strong>——server 端 <code>execute</code> 还得真的<em>多次</em> <code>add_artifact(..., append=True)</code> 或多发 <code>TaskStatusUpdateEvent</code>，否则声明了流式却一次性吐，等于没流。</li>
+          <li><strong>代价</strong>：声明 <code>True</code> 是对 client 的承诺。client 读到后可能选走 SSE 长连接（02 章<a href="02-principles.html#s24">§2.4</a>）；server 却没真流式地发，行为就和声明不符。能力声明是<strong>契约</strong>，不是装饰。</li>
+        </ul>
+        <p>填空：本例保持 <code>AgentCapabilities(streaming=False)</code>；要改流式得连 <code>execute</code> 一起改（这正是 3.4 的开放练习）。锚 01 章 Card 能力声明（<a href="01-concepts.html#s12">§1.2</a>）+ 02 章交互模式（<a href="02-principles.html#s24">§2.4</a>）。</p>
+      </details>
+
+      <details>
+        <summary>决策 (b) 答案 · 结果怎么包成 Artifact</summary>
+        <p><strong>一个 Artifact 可以装多个 Part，按内容形态选 <code>kind</code></strong>：</p>
+        <ul>
+          <li><strong>纯文本结果</strong>：一个 <code>text</code> Part（<code>new_text_part</code>），就是 3.2 的做法。</li>
+          <li><strong>文本 + 结构化对照</strong>：再加一个 <code>data</code> Part 装 JSON。01 章<a href="01-concepts.html#s13">§1.3</a> 说过 Part 靠 <code>kind</code> 分 <code>text</code> / <code>file</code> / <code>data</code>，一条消息 / 一个 Artifact 能混装多种——这正是模态无关设计的用处。用 <code>a2a.helpers</code> 的 <code>new_data_part(data={...})</code>。</li>
+          <li><strong>多个独立产出（如同时给报告和图）</strong>：可以发<strong>多次</strong> <code>add_artifact</code>，每次一个独立 <code>artifactId</code>；也可以一个 Artifact 塞多个 Part。前者语义是「几份成果」，后者是「一份成果的几个部分」。</li>
+        </ul>
+        <p>填空（文本 + 结构化对照）：</p>
+<pre><code class="language-python"># 未在本机验证
+from a2a.helpers import new_data_part, new_text_part
+
+await updater.add_artifact(
+    parts=[
+        new_text_part(text=result, media_type="text/plain"),
+        new_data_part(data={"original": query, "upper": result}),
+    ],
+    name="uppercased",
+)
+</code></pre>
+        <p>锚 01 章 Part / Artifact（<a href="01-concepts.html#s13">§1.3</a>）。</p>
+      </details>
+
+      <details>
+        <summary>决策 (c) 答案 · input-required 中途态怎么处理</summary>
+        <p><strong>缺必要输入时，用 <code>INPUT_REQUIRED</code> 暂停、等补，而不是直接 <code>FAILED</code></strong>：</p>
+        <ul>
+          <li><strong>置 <code>TASK_STATE_INPUT_REQUIRED</code> 并 return</strong>：02 章<a href="02-principles.html#s25">§2.5</a> 讲过，<code>INPUT_REQUIRED</code> 是<em>可中断的中途态</em>，不是终态。server 把任务停在这里、捎一条「请补一句要转大写的文本」的 message，然后 <code>execute</code> 返回让出控制权；client 补完输入后框架会带着同一个 Task 再次调 <code>execute</code>，任务原地续，不重开。</li>
+          <li><strong>为什么不直接 <code>FAILED</code></strong>：<code>FAILED</code> 是终态，任务就此结束，客户端得从头再发一个新 Task。对「只是少了点输入」这种可恢复情况，<code>INPUT_REQUIRED</code> 保住了已有的 Task 上下文，体验和效率都更好。</li>
+          <li><strong>代价 / 注意</strong>：中途态把控制权交还给客户端等待补输入——这个能力很强，但也正是钓鱼攻击的入口（恶意 agent 伪造 <code>INPUT_REQUIRED</code> 骗用户重交敏感信息，04 章<a href="04-pitfalls.html#s46">§4.6</a>）。</li>
+        </ul>
+        <p>填空：</p>
+<pre><code class="language-python"># 未在本机验证
+from a2a.helpers import new_text_message
+
+if not query:
+    await updater.update_status(
+        state=TaskState.TASK_STATE_INPUT_REQUIRED,
+        message=new_text_message("请补一句要转成大写的文本。"),
+    )
+    return   # 让出控制权，等客户端补输入后框架再次调 execute
+</code></pre>
+        <p>锚 02 章生命周期中途态（<a href="02-principles.html#s25">§2.5</a>）。</p>
+      </details>
+
+      <div class="callout warning">
+        <span class="label">forward → 04 失败模式 · 声明与实现不符</span>
+        <p>决策 (a) 里若 Card 声明了 <code>streaming=True</code> 却没真流式地发，或决策 (c) 用 <code>INPUT_REQUIRED</code> 暂停后再没人来续——任务就永远卡在中途态。能力声明与实际行为不一致、中途态无兜底，都是 04 章会展开的协议-实现耦合与失败模式（<a href="04-pitfalls.html#s48">§4.8</a>）。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           3.4 Open
+           ════════════════════════════════════════════════════════ -->
+      <h2 id="s34"><span class="num">3.4</span>Open · 把它改成流式</h2>
+
+      <p>3.2 是一次性产出（请求/响应）。开放练习把同一个 agent 改成<strong>流式</strong>：server 声明 <code>capabilities.streaming=True</code>，在 <code>execute</code> 里<strong>逐块</strong>把结果发出去——一个字符一个字符（或一词一词）地 emit，让 client 能边收边显示，像看 LLM 打字。</p>
+
+      <p>这条练习要求你用到 01 章的 <strong>≥2 个概念</strong>——<a href="01-concepts.html#s13">Artifact / Part §1.3</a>（分块产出仍是 Artifact 的 Part）和 <a href="01-concepts.html#s12">Card 的 capabilities §1.2</a>（声明 streaming）——以及 02 章的<strong>某个权衡</strong>：<a href="02-principles.html#s24">§2.4</a> 推送/流式 vs 请求/响应，或 <a href="02-principles.html#s26">§2.6</a> 表里「有状态长任务 + 推送」那一行（流式拿到实时进度，代价是要维持长连接、处理重连）。<strong>先自己写完，再对照参考实现要点。</strong></p>
+
+      <div class="callout tip">
+        <span class="label">起步提示</span>
+        <p>SSE 流式的 wire 形态（02 章<a href="02-principles.html#s24">§2.4</a>）：server 先发 Task，再连发若干 <code>TaskStatusUpdateEvent</code>（进度）和 <code>TaskArtifactUpdateEvent</code>（产出分块）。SDK 里这两类事件由 <code>TaskUpdater.update_status(...)</code> 和带 <code>append=True</code> / <code>last_chunk=True</code> 的 <code>TaskUpdater.add_artifact(...)</code> 发出。client 端<strong>不用改</strong>——3.2 的 <code>async for</code> 会自动逐帧收（这正是上面那道 predict 的结论）。</p>
+      </div>
+
+      <details>
+        <summary>参考实现要点 · 流式版（写完自己的版本再展开）</summary>
+        <p><strong>第一步，Card 声明流式</strong>（<code>server.py</code> 里）：</p>
+<pre><code class="language-python">capabilities=AgentCapabilities(streaming=True)   # 把 3.2 的 False 改成 True
+</code></pre>
+        <p><strong>第二步，<code>execute</code> 里分块 emit</strong>：把整段 <code>.upper()</code> 拆成块，用同一个 <code>artifact_id</code> 连发，<code>append=True</code> 表示「拼到上一块后面」，最后一块 <code>last_chunk=True</code>：</p>
+<pre><code class="language-python"># 未在本机验证 —— 流式版 execute 的核心改动
+import asyncio
+from a2a.helpers import get_message_text, new_task_from_user_message, new_text_part
+from a2a.server.tasks import TaskUpdater
+from a2a.types.a2a_pb2 import TaskState
+
+async def execute(self, context, event_queue) -&gt; None:
+    if context.current_task:
+        task = context.current_task
+    else:
+        task = new_task_from_user_message(context.message)
+        await event_queue.enqueue_event(task)
+
+    updater = TaskUpdater(
+        event_queue=event_queue,
+        task_id=task.id,
+        context_id=task.context_id,
+    )
+    await updater.update_status(state=TaskState.TASK_STATE_WORKING)
+
+    text = (get_message_text(context.message) or "").upper()
+    artifact_id = "out-1"                      # 同一 Artifact，分多块
+    for i, ch in enumerate(text):
+        await updater.add_artifact(
+            parts=[new_text_part(text=ch, media_type="text/plain")],
+            artifact_id=artifact_id,
+            name="uppercased",
+            append=(i &gt; 0),                     # 第一块不 append，其后都拼接
+            last_chunk=(i == len(text) - 1),   # 标出最后一块
+        )
+        await asyncio.sleep(0.05)              # 模拟逐字产出的节奏
+
+    await updater.update_status(state=TaskState.TASK_STATE_COMPLETED)
+</code></pre>
+        <p><strong>关键决策说明：</strong></p>
+        <ul>
+          <li><strong>为什么用同一个 <code>artifact_id</code> + <code>append</code></strong>：流式产出的语义是「<em>一份</em>成果分多块陆续到」，不是「多份成果」。同一 <code>artifact_id</code> 让 client 知道这些块属于同一个 Artifact，<code>append=True</code> 告诉它拼接而非替换，<code>last_chunk=True</code> 标出收尾。锚 01 章 Artifact / Part（<a href="01-concepts.html#s13">§1.3</a>）。</li>
+          <li><strong>client 为什么不用改</strong>：3.2 的 client 已是 <code>async for chunk in client.send_message(...)</code>。server 一旦流式，同一个迭代会逐帧吐回每个 <code>TaskArtifactUpdateEvent</code>——SDK 抹平了请求/响应与 SSE 的差异（上面 predict 的结论）。把 <code>ClientConfig(streaming=True)</code> 打开，让 client 优先走流式即可。</li>
+          <li><strong>权衡（锚 02 章<a href="02-principles.html#s24">§2.4</a> / <a href="02-principles.html#s26">§2.6</a>）</strong>：流式换来「实时进度、边收边显示」，代价是 server 与 client 要维持一条 <code>text/event-stream</code> 长连接，断了得靠 resubscribe 续；对一个 50ms 就算完的 <code>.upper()</code> 其实不值——流式真正的用武之地是 LLM 逐字生成、长报告这类「产出本身就是渐进的」任务。能力该不该开，取决于产出形态，不是越多越好。</li>
+        </ul>
+      </details>
+
+      <div class="callout warning">
+        <span class="label">forward → 04 失败模式 · 版本 wire 不兼容</span>
+        <p>流式响应的 <code>Content-Type</code> 在版本间有差异（v1.0.1 倾向 <code>application/a2a+json</code>，某些 v0.x 实现对 <code>application/json</code> 与 <code>text/event-stream</code> 处理不一致）。一个 v0.x 的 client 连 v1.0 的流式 server，哪怕都用 JSON-RPC，也可能因 Content-Type 协商失败而收不到流——这是 04 章版本 wire 不兼容失败模式（<a href="04-pitfalls.html#s47">§4.7</a>）的一种。</p>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           §self-check
+           ════════════════════════════════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span>本章 self-check</h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 14px;">
+          先合上代码，把答案写下来，再展开对照。直接展开等于把这一节当又读了一遍。
+        </p>
+        <ol>
+          <li>你写 <code>client.send_message(...)</code>（snake_case）。这次调用在 wire 上发出的 JSON-RPC 请求里，<code>"method"</code> 字段的字面值是什么？这说明 SDK 与 wire 是什么关系？</li>
+          <li>3.2 的 server 端 <code>execute</code> 里，产出为什么不是 <code>return "HELLO A2A"</code>，而要走 <code>add_artifact(parts=[...])</code>？对应 01 章哪个概念？</li>
+          <li>本例 server 声明了 <code>capabilities.streaming=False</code>，client 却仍用 <code>async for</code> 迭代收 <code>send_message</code>。为什么 client 不能简单写成 <code>result = await client.send_message(...)</code>？</li>
+          <li>客户端发来空文本时，把任务置成 <code>TASK_STATE_INPUT_REQUIRED</code> 然后 <code>return</code>，与直接置 <code>TASK_STATE_FAILED</code>，行为上有什么本质区别？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>字面值是 <code>SendMessage</code>（PascalCase，v1.0 的 wire 方法名）。Python 方法名 <code>send_message</code> 只是 SDK 的人体工学，<strong>SDK 命名 ≠ wire 协议</strong>——方法名、<code>TASK_STATE_*</code> 状态值、Card 字段名都由 SDK 在 Python 风格与 wire 风格之间来回翻译。锚 02 章<a href="02-principles.html#s23">§2.3</a>。</li>
+            <li>因为 A2A 的产出是 <strong>Artifact</strong>（带 <code>artifactId</code>、内容是 <code>Part[]</code>），不是裸字符串。<code>execute</code> 不直接返回值，而是把事件 enqueue 到 <code>EventQueue</code>；结果包成 Artifact 的一个 <code>text</code> Part 发出去。对应 01 章<a href="01-concepts.html#s13">§1.3</a> 的 Artifact = 任务产出。</li>
+            <li>因为 1.1.0 的 <code>send_message</code> 签名固定返回 <code>AsyncIterator</code>，把请求/响应和 SSE 流<strong>统一成同一个 API</strong>：非流式时 SDK 把单个响应也包成只迭代一两次的迭代器。这样调用方代码不必随交互模式（02 章<a href="02-principles.html#s24">§2.4</a>）改写——3.4 把 server 改流式时，client 一个字都不用动。</li>
+            <li><code>INPUT_REQUIRED</code> 是<strong>可中断的中途态</strong>（02 章<a href="02-principles.html#s25">§2.5</a>）：任务暂停、保住已有 Task 上下文，等客户端补输入后框架带着<em>同一个</em> Task 再次调 <code>execute</code>、原地续。<code>FAILED</code> 是<strong>终态</strong>：任务就此结束，客户端得从头发一个新 Task。前者可恢复，后者不可。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>让 client 主动 GetTask 回查，而不是同步等结果</h3>
+        <p>3.2 的 client 是「发了 <code>SendMessage</code> 就地等结果」。改成<strong>异步回查</strong>风格：client 发完消息、拿到 Task 的 <code>id</code> 后<strong>不</strong>就地等，而是稍后用 <code>GetTask</code> 主动查这个 Task 现在到哪一步了。要求：</p>
+        <ol>
+          <li>从 <code>send_message</code> 收回的对象里取出 Task 的 <code>id</code> 与当前 <code>status.state</code>。</li>
+          <li>构造一个 <code>GetTaskRequest(name=...)</code>（task 资源标识），调 <code>client.get_task(...)</code> 回查。</li>
+          <li>轮询到 <code>status.state</code> 进入终态（<code>TASK_STATE_COMPLETED</code> / <code>FAILED</code> / …）才停，读出 Artifact。</li>
+          <li>想清楚：这种「发完不等、稍后回查」对应 02 章三种交互里的哪一种思路？它和 webhook 推送的差别在哪？</li>
+        </ol>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>从 <code>a2a.types.a2a_pb2</code> 导入 <code>GetTaskRequest</code>；<code>client.get_task(request)</code> 返回一个 <code>Task</code>，读它的 <code>status.state</code> 判终态、读 <code>artifacts</code> 取产出。轮询用 <code>while</code> + <code>asyncio.sleep</code>，并<strong>务必设一个最大轮询次数/超时兜底</strong>，否则任务卡在中途态时会死循环。这对应 02 章<a href="02-principles.html#s24">§2.4</a> 的「客户端轮询」思路——与 webhook 推送的关键差别：轮询是<strong>客户端反复主动问</strong>（多数次拿到「没变化」，浪费且有延迟），推送是<strong>服务端在有变化时反向 POST</strong>（省往返，但引入反向信任，客户端要验来源真伪，04 章<a href="04-pitfalls.html#s44">§4.4</a>）。<code>GetTask</code> 的 wire 方法名同样是 PascalCase（<code>GetTask</code>），见 02 章<a href="02-principles.html#s23">§2.3</a> 的方法映射表。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════════════════════════════════════════════
+           参考
+           ════════════════════════════════════════════════════════ -->
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://pypi.org/project/a2a-sdk/">a2a-sdk · PyPI</a>（版本 1.1.0，2026-05-29；实现 spec v1.0 + v0.3 兼容模式）</li>
+          <li><a href="https://github.com/a2aproject/a2a-python">a2aproject/a2a-python</a>（v1.1.0 源码：<code>AgentExecutor</code> / <code>TaskUpdater</code> / <code>ClientFactory</code> / 路由函数）</li>
+          <li><a href="https://github.com/a2aproject/a2a-samples/tree/main/samples/python/agents/helloworld">a2a-samples · helloworld</a>（server + client 最小示例，本章代码以此对照）</li>
+          <li><a href="https://a2a-protocol.org/latest/sdk/python/">A2A Python SDK 文档</a>（API 参考；方法名 ↔ wire 方法名的来回翻译）</li>
+        </ul>
+      </footer>
+
+      <!-- ════════════════════════════════════════════════════════
+           章节导航
+           ════════════════════════════════════════════════════════ -->
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="02-principles.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">02 · 原理:wire 与三种交互</span>
+        </a>
+        <a href="04-pitfalls.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 失败模式:compliant ≠ secure</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 环境准备</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 Worked · server + client</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 Partial · 三决策</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 Open · 改成流式</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">§ self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermillion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 训练与推理 · Transformer 深挖教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+.chapter-opener .meta-row {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin: 12px 0 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 心智模型</a><span class="sep">—</span>
+    <a href="02-attention.html">02 注意力</a><span class="sep">—</span>
+    <a href="03-architecture.html">03 整体架构</a><span class="sep">—</span>
+    <a href="04-training-inference.html" class="current">04 训练与推理</a><span class="sep">—</span>
+    <a href="05-modern.html">05 经典到现代</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04</p>
+        <h1>训练与推理：并行与自回归的不对称</h1>
+        <p class="recap">第 03 章给了静态网络结构——本章讲它如何"跑起来"：训练时全位置并行、推理时一次一个 token 自回归，这套不对称是最大的认知陷阱，也是 KV-cache 与 O(n²) 成本的来源。</p>
+        <p class="meta-row"><strong>本章交付</strong>：训练并行机制 + 推理自回归循环 + KV-cache 原理与成本公式 + O(n²) 的显存本质　|　<strong>带走的能力</strong>：能解释为什么训练和推理的前向传播逻辑不同，能估算给定配置下 KV-cache 的显存占用</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">读完本章，你的脑子里会多出这几条</p>
+        <ul>
+          <li>训练用 <strong>teacher forcing</strong> + 因果掩码一次算完所有位置（并行）——因果掩码让每个位置只看左边，但所有位置的 loss 通过一次矩阵乘同时得到。</li>
+          <li>推理无 ground truth，必须把上一步生成的 token 追加回输入，再跑一次前向，得到下一个——这是串行自回归，不可并行。</li>
+          <li><strong>KV-cache</strong> 缓存过去 token 每层每头的 K、V 投影（不是权重），省去每步重算整片；代价是显存随序列长度<strong>线性</strong>增长。</li>
+          <li>attention 的 <strong>O(n²)</strong> 源于 QKᵀ 产生 n×n 分数矩阵，长上下文下 attention 是<strong>显存</strong>瓶颈，不只是算力瓶颈。</li>
+        </ul>
+      </section>
+
+      <!-- ══════════════════════════════ §4.1 ══════════════════════════════ -->
+      <h2 id="training"><span class="num">4.1</span><span>训练：teacher forcing + 全位置并行</span></h2>
+
+      <p class="one-liner">训练时将真实 token 序列整体喂入，因果掩码（第 02 章）防止每个位置偷看未来，所有位置的 next-token loss 经一次矩阵乘同时计算完毕。</p>
+
+      <p>训练的输入是一段真实文本序列，例如 <code>[BOS, the, cat, sat, on, the, mat]</code>。模型不需要知道"正确答案是什么"——答案就是序列本身向右移一位：输入位置 0 预测位置 1，位置 1 预测位置 2，以此类推。这种做法叫 <strong>teacher forcing</strong>（教师强制）：每个位置的输入永远是真实 token，而不是模型上一步的预测结果，因此不存在误差累积。</p>
+
+      <p>能并行的关键在于：<a href="02-attention.html#causal-mask">第 02 章介绍的因果掩码</a>把注意力矩阵的上三角（未来位置）在 softmax 前置为 −∞，softmax 后权重归零——位置 <em>t</em> 只能看到位置 0…<em>t</em> 的信息，而这个约束对所有位置<em>同时</em>成立。于是一整个序列的 Q、K、V 可以同时投影、同时做矩阵乘，<strong>所有位置的注意力分数和 loss 通过单次前向传播同时得到</strong>，梯度也通过单次反向传播同时更新。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">训练前向 · 伪代码</span>
+          <span class="lang">Python</span>
+        </div>
+        <pre><code class="language-python"># tokens: (batch, seq_len)  — 整段真实序列
+logits = model(tokens[:, :-1])      # 输入：去掉最后一个 token
+targets = tokens[:, 1:]             # 标签：去掉第一个 token（右移一位）
+loss = cross_entropy(logits, targets)  # 所有位置一次算完
+loss.backward()                     # 单次反向传播，全部梯度</code></pre>
+      </div>
+
+      <p>交叉熵 loss 的形式：对每个位置 <em>t</em>，取 logits[t] 经 softmax 后在真实 token 上的负对数概率，再对整个序列平均：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">next-token 交叉熵</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">L = -1/T · Σₜ log P(xₜ₊₁ | x₁..xₜ)
+
+  T       : 序列长度
+  P(·|·)  : 模型 softmax 输出的概率
+  xₜ      : 位置 t 处的真实 token</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>训练时所有位置能并行计算，但推理时却只能一步一步生成。两者用的是<strong>同一套</strong>模型权重——为什么同一套权重会产生这种差异？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>差异不在权重，在<strong>输入从哪里来</strong>。训练时每个位置的输入都是真实 token（teacher forcing），整段序列已知，因此可以批量矩阵乘一次算完。推理时位置 <em>t</em> 的输入是模型刚才生成的 token——它在生成位置 <em>t</em> 之前根本不存在，必须先生成 <em>t</em>，才能把它追加进去，再生成 <em>t+1</em>。这个"生成 → 追加 → 再生成"的依赖链决定了推理必须串行。</p>
+        </details>
+      </div>
+
+      <!-- 图 4.1 -->
+      <figure>
+        <svg viewBox="0 0 810 400" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="训练并行（左侧，所有位置一次前向）与推理串行（右侧，逐 token 循环）对照图">
+          <defs>
+            <marker id="ti-ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="ti-ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- vertical divider -->
+          <line x1="390" y1="16" x2="390" y2="384" class="diagram-soft"/>
+
+          <!-- ===== LEFT: 训练并行 ===== -->
+          <text x="195" y="32" text-anchor="middle" class="node-label" font-weight="700">训练（并行）</text>
+
+          <!-- 输入 token 序列 -->
+          <rect x="44" y="50" width="60" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="74" y="72" text-anchor="middle" class="node-label">the</text>
+          <rect x="114" y="50" width="60" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="144" y="72" text-anchor="middle" class="node-label">cat</text>
+          <rect x="184" y="50" width="60" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="214" y="72" text-anchor="middle" class="node-label">sat</text>
+          <rect x="254" y="50" width="60" height="34" rx="4" class="diagram-ink node-fill"/>
+          <text x="284" y="72" text-anchor="middle" class="node-label">on</text>
+          <text x="195" y="100" text-anchor="middle" class="edge-label">输入序列（teacher forcing）</text>
+
+          <!-- causal mask grid -->
+          <text x="195" y="122" text-anchor="middle" class="edge-label">▼ 因果掩码（下三角可见）</text>
+          <!-- grid: 4×4 cells at x=44..324, y=130 -->
+          <rect x="44"  y="132" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="61"  y="151" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="79"  y="132" width="35" height="28" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="96"  y="151" text-anchor="middle" class="edge-label" style="fill:var(--ink-faint)">✗</text>
+          <rect x="114" y="132" width="35" height="28" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="131" y="151" text-anchor="middle" class="edge-label" style="fill:var(--ink-faint)">✗</text>
+          <rect x="149" y="132" width="35" height="28" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="166" y="151" text-anchor="middle" class="edge-label" style="fill:var(--ink-faint)">✗</text>
+
+          <rect x="44"  y="160" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="61"  y="179" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="79"  y="160" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="96"  y="179" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="114" y="160" width="35" height="28" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="131" y="179" text-anchor="middle" class="edge-label" style="fill:var(--ink-faint)">✗</text>
+          <rect x="149" y="160" width="35" height="28" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="166" y="179" text-anchor="middle" class="edge-label" style="fill:var(--ink-faint)">✗</text>
+
+          <rect x="44"  y="188" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="61"  y="207" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="79"  y="188" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="96"  y="207" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="114" y="188" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="131" y="207" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="149" y="188" width="35" height="28" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="166" y="207" text-anchor="middle" class="edge-label" style="fill:var(--ink-faint)">✗</text>
+
+          <rect x="44"  y="216" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="61"  y="235" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="79"  y="216" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="96"  y="235" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="114" y="216" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="131" y="235" text-anchor="middle" class="edge-label">✓</text>
+          <rect x="149" y="216" width="35" height="28" class="diagram-ink node-fill"/>
+          <text x="166" y="235" text-anchor="middle" class="edge-label">✓</text>
+
+          <text x="195" y="260" text-anchor="middle" class="edge-label">↓ 所有位置同时</text>
+
+          <!-- loss row -->
+          <rect x="44"  y="272" width="60" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="74"  y="292" text-anchor="middle" class="node-label" font-size="12">L₁</text>
+          <rect x="114" y="272" width="60" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="144" y="292" text-anchor="middle" class="node-label" font-size="12">L₂</text>
+          <rect x="184" y="272" width="60" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="214" y="292" text-anchor="middle" class="node-label" font-size="12">L₃</text>
+          <rect x="254" y="272" width="60" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="284" y="292" text-anchor="middle" class="node-label" font-size="12">L₄</text>
+          <text x="195" y="318" text-anchor="middle" class="edge-label">各位置 loss，求均值</text>
+
+          <!-- mean loss box -->
+          <rect x="120" y="330" width="150" height="34" rx="6" class="diagram-ink node-fill"/>
+          <text x="195" y="352" text-anchor="middle" class="node-label" font-size="12">mean(L) → backward</text>
+
+          <!-- ===== RIGHT: 推理串行 ===== -->
+          <text x="590" y="32" text-anchor="middle" class="node-label-accent">推理（串行自回归）</text>
+
+          <!-- step 1 -->
+          <rect x="420" y="50" width="340" height="34" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="590" y="72" text-anchor="middle" class="node-label">prompt: "the cat sat"</text>
+          <line x1="590" y1="84" x2="590" y2="118" class="diagram-accent" marker-end="url(#ti-ar-verm)"/>
+          <rect x="500" y="118" width="180" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="590" y="138" text-anchor="middle" class="node-label">前向传播 → logits</text>
+          <line x1="590" y1="148" x2="590" y2="178" class="diagram-accent" marker-end="url(#ti-ar-verm)"/>
+          <rect x="520" y="178" width="140" height="30" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="590" y="198" text-anchor="middle" class="node-label-accent">生成 token: "on"</text>
+
+          <!-- arrow: 追加 -->
+          <line x1="590" y1="208" x2="590" y2="238" class="diagram-accent" marker-end="url(#ti-ar-verm)"/>
+          <text x="640" y="228" class="branch-label">追加</text>
+
+          <!-- step 2 -->
+          <rect x="420" y="238" width="340" height="34" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="590" y="260" text-anchor="middle" class="node-label">输入: "the cat sat on"</text>
+          <line x1="590" y1="272" x2="590" y2="302" class="diagram-accent" marker-end="url(#ti-ar-verm)"/>
+          <rect x="500" y="302" width="180" height="30" rx="4" class="diagram-ink node-fill"/>
+          <text x="590" y="322" text-anchor="middle" class="node-label">前向传播 → logits</text>
+          <line x1="590" y1="332" x2="590" y2="362" class="diagram-accent" marker-end="url(#ti-ar-verm)"/>
+          <rect x="520" y="362" width="140" height="30" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="590" y="382" text-anchor="middle" class="node-label-accent">生成 token: "the"</text>
+
+          <!-- loop arrow: back to step2 input (simplified) -->
+          <path d="M 760 382 L 772 382 L 772 244 L 760 244" class="diagram-accent" marker-end="url(#ti-ar-verm)"/>
+          <text x="782" y="316" text-anchor="middle" class="branch-label" transform="rotate(90,782,316)">循环直到 EOS</text>
+        </svg>
+        <figcaption>
+          <span class="fig-num">图 4.1</span>
+          <strong>左：训练并行</strong>——因果掩码构成下三角可见矩阵（✓=可见，✗=被掩盖），所有位置的 loss 经一次前向传播同时得到。<strong>右：推理串行</strong>——每步只生成一个 token，追加进输入后再跑一次前向，循环至 EOS 或达到长度上限。<strong>注意</strong>：两侧使用完全相同的权重，差异只在"输入从哪来"——训练时来自真实序列，推理时来自模型自己上一步的输出。
+        </figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §4.2 ══════════════════════════════ -->
+      <h2 id="inference"><span class="num">4.2</span><span>推理：自回归循环</span></h2>
+
+      <p class="one-liner">推理没有 ground truth 可供 teacher forcing，每步把刚生成的 token 追加到输入序列，重新前向传播，取最后一位的 logits 采样或 argmax，循环至 EOS 或达到长度上限。</p>
+
+      <p>推理的全过程：</p>
+      <ol>
+        <li>以 prompt（可以是 <code>[BOS]</code> 或用户的问题 token 序列）作为初始输入。</li>
+        <li>前向传播，取<strong>最后一个位置</strong>的 logits，经 softmax 得到 next-token 概率分布。</li>
+        <li>从分布中采样（temperature 采样、top-k、top-p 等）或取 argmax，得到 token <em>t</em>。</li>
+        <li>把 token <em>t</em> 追加到输入末尾，回到步骤 2。</li>
+        <li>直到生成 <code>&lt;EOS&gt;</code> 或序列长度达到上限，停止。</li>
+      </ol>
+
+      <p>关键：步骤 3 生成的 token <em>t</em> 在步骤 2 之前根本不存在，所以步骤 2→3→4→2 的循环无法被展开成并行矩阵操作——这是<strong>数据依赖</strong>带来的串行性，不是工程局限。</p>
+
+      <div class="callout tip">
+        <span class="label">贪心 vs 采样</span>
+        <p>argmax（每步选概率最大的 token，即贪心解码）速度最快、结果确定，但容易陷入重复或过于保守的输出。temperature 采样引入随机性，temperature &gt; 1 使分布更平坦（更多样）、&lt; 1 使分布更尖锐（更保守）。top-k 和 top-p（nucleus sampling）截断低概率的长尾，在质量与多样性之间取平衡。这些策略都在步骤 3 改变如何从 logits 取 token，不影响模型权重本身。</p>
+      </div>
+
+      <!-- ══════════════════════════════ §4.3 ══════════════════════════════ -->
+      <h2 id="asymmetry"><span class="num">4.3</span><span>不对称是最大的认知陷阱</span></h2>
+
+      <p class="one-liner">这套并行训练 / 串行推理的不对称，是初学者最高频的卡点：用训练式前向实现"推理"，输出永远是垃圾——因为少了把输出喂回输入的循环。</p>
+
+      <p>按上下文的 §5 所记：很多人实现 transformer 时，先写出 <code>logits = model(tokens)</code> 的训练前向，然后直接拿 <code>logits[-1]</code> 当"生成结果"，却发现无论怎么调参，输出都像随机噪声。症结在这里：</p>
+
+      <ul>
+        <li><strong>训练前向</strong>：一次喂入完整 token 序列，同时得到所有位置的 logits。这里的 <code>logits[t]</code> 预测 token <em>t+1</em>，是拿 <em>t</em> 之前的真实 token 算的。</li>
+        <li><strong>推理前向</strong>：每次只取最后位置的 logits 采样一个新 token，<strong>把这个 token 追加进去</strong>，再跑整个序列——少了这个追加步骤，模型永远在对同一段 prompt 重复预测，不是在"生成"。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">失败模式</span>
+        <p>nanoGPT（Karpathy）的 <code>generate()</code> 函数之所以是经典参考，正是因为它把这个循环写得清清楚楚：<code>for _ in range(max_new_tokens): logits = model(idx); next_token = sample(logits[:, -1, :]); idx = cat(idx, next_token)</code>。去掉 <code>cat(idx, next_token)</code> 这一行，"推理"就退化成反复对 prompt 打分，产不出任何新 token 序列。</p>
+      </div>
+
+      <p>这也是 aha #3 的核心：两个阶段的前向传播在数学上<strong>调用的是同一套 attention + FFN 权重</strong>（第 03 章介绍的完整 block），差异纯粹在输入构造和调用方式上。理解了这一点，KV-cache 的必要性就立刻显现——既然推理每步都要重跑整个序列，所有过去 token 的 K、V 投影每次都要重算，这是巨大的浪费。
+
+      <!-- ══════════════════════════════ §4.4 ══════════════════════════════ -->
+      <h2 id="kv-cache"><span class="num">4.4</span><span>KV-cache：别重算过去</span></h2>
+
+      <p class="one-liner">推理时每一步新生成的 token 只需要计算自己的 Q，过去 token 的 K 和 V 已经算过且不会改变——KV-cache 把它们存下来，把每步复杂度从 O(n) 次矩阵乘降到 O(1) 次。</p>
+
+      <p>理解 KV-cache 需要先回忆 <a href="02-attention.html#scaled-dot">第 02 章的 scaled dot-product attention</a>：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">self-attention 前向（单头）</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">Q = X · Wq    (n, d_k)
+K = X · Wk    (n, d_k)   ← 过去 token 的 K 每步都一样
+V = X · Wv    (n, d_v)   ← 过去 token 的 V 每步都一样
+
+scores = Q · Kᵀ / √d_k   (n, n)
+out    = softmax(scores) · V   (n, d_v)</code></pre>
+      </div>
+
+      <p>生成 token <em>t+1</em> 时，新输入只有 token <em>t+1</em> 本身。位置 0…<em>t</em> 的 X 没变，所以它们的 K 和 V 投影与上一步<strong>完全相同</strong>。KV-cache 做的事：在每层每头把已算过的 K、V 矩阵拼接存入缓存，新 token 只算自己的 Q（以及自身新的 K、V 追加入缓存），再和缓存里的 K、V 做 attention。</p>
+
+      <p>重要区分：缓存的是 <strong>K 和 V 的投影结果</strong>（形状 <code>(past_len, d_k)</code> 和 <code>(past_len, d_v)</code>），<strong>不是</strong>权重矩阵 <code>Wk</code>、<code>Wv</code>（权重在整个推理过程中始终不变，本来就无需重算）。</p>
+
+      <h3>显存成本公式</h3>
+
+      <p>KV-cache 的显存占用可以精确估算：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">KV-cache 显存</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">KV_cache_bytes = seq_len × layers × heads × head_dim × 2 × dtype_bytes
+
+  seq_len    : 上下文窗口长度（已生成 + prompt 的 token 数）
+  layers     : Transformer 层数
+  heads      : 每层注意力头数（KV 头，GQA 下小于 Q 头数）
+  head_dim   : 每头的维度 = d_model / heads
+  × 2        : K 和 V 各一份
+  dtype_bytes: fp16 = 2 bytes, bf16 = 2 bytes, int8 = 1 byte</code></pre>
+      </div>
+
+      <p>以 7B 规模的典型配置（Llama-2-7B 同规格）具体计算：</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">7B 模型 · 8K 上下文 · fp16 的 KV-cache</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">seq_len    = 8 192
+layers     = 32
+heads      = 32        （MHA，KV 头 = Q 头）
+head_dim   = 128       （d_model=4096 / 32头）
+dtype      = fp16 = 2 bytes
+
+KV = 8192 × 32 × 32 × 128 × 2 × 2
+   = 8192 × 32 × 32 × 512
+   ≈ 4 294 967 296 bytes
+   ≈ 4 GB  ×  2  （K 和 V）
+   ≈ 8 GB
+
+结论：7B / 32层 / 32头 / d128 / 8K上下文 / fp16
+     ≈ 8 GB KV-cache（不含模型权重本身的 ~14 GB）</code></pre>
+      </div>
+
+      <p>这 8 GB 随序列长度<strong>线性</strong>增长：上下文翻倍到 16K，KV-cache 也翻倍到 16 GB。GQA（Grouped Query Attention，第 05 章）通过让多个 Q 头共享一组 KV 头，直接按比例压缩这个数字——32 头 GQA 分成 8 组，则 KV 头数从 32 降到 8，缓存降至约 2 GB。</p>
+
+      <!-- 图 4.2 -->
+      <figure>
+        <svg viewBox="0 0 760 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="有 KV-cache 与无 KV-cache 的推理对比：左侧无缓存每步重算所有 K/V，右侧有缓存只算新 token，显存随长度线性增长">
+          <defs>
+            <marker id="kv-ar-ink" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="kv-ar-verm" viewBox="0 0 10 10" refX="9" refY="5"
+                    markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- divider -->
+          <line x1="380" y1="16" x2="380" y2="344" class="diagram-soft"/>
+
+          <!-- ===== LEFT: 无 cache ===== -->
+          <text x="190" y="30" text-anchor="middle" class="node-label" font-weight="700">无 KV-cache（每步重算）</text>
+
+          <!-- step t+1 -->
+          <text x="190" y="54" text-anchor="middle" class="edge-label">生成 token t+1 时</text>
+          <!-- token sequence -->
+          <rect x="20"  y="62" width="40" height="28" rx="3" class="diagram-ink node-fill"/>
+          <text x="40"  y="81" text-anchor="middle" class="edge-label">t₀</text>
+          <rect x="68"  y="62" width="40" height="28" rx="3" class="diagram-ink node-fill"/>
+          <text x="88"  y="81" text-anchor="middle" class="edge-label">t₁</text>
+          <rect x="116" y="62" width="40" height="28" rx="3" class="diagram-ink node-fill"/>
+          <text x="136" y="81" text-anchor="middle" class="edge-label">t₂</text>
+          <text x="172" y="81" text-anchor="middle" class="edge-label">…</text>
+          <rect x="186" y="62" width="40" height="28" rx="3" class="diagram-ink node-fill"/>
+          <text x="206" y="81" text-anchor="middle" class="edge-label">tₜ</text>
+          <rect x="243" y="62" width="64" height="28" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="275" y="81" text-anchor="middle" class="node-label-accent" font-size="12">new tₜ₊₁</text>
+
+          <!-- recompute K/V for all -->
+          <text x="155" y="110" text-anchor="middle" class="edge-label">▼ 重算所有 K, V</text>
+          <rect x="20" y="118" width="280" height="42" rx="4" class="diagram-ink node-fill"/>
+          <text x="160" y="136" text-anchor="middle" class="node-label">X · Wk, X · Wv</text>
+          <text x="160" y="152" text-anchor="middle" class="edge-label">全部 t+1 个 token 重算</text>
+
+          <line x1="160" y1="160" x2="160" y2="190" class="diagram-ink" marker-end="url(#kv-ar-ink)"/>
+          <rect x="70" y="190" width="180" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="160" y="213" text-anchor="middle" class="node-label">Attention → 新 token</text>
+
+          <!-- cost annotation -->
+          <rect x="20" y="242" width="280" height="50" rx="4" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="160" y="263" text-anchor="middle" class="node-label" font-size="12">每步计算量</text>
+          <text x="160" y="280" text-anchor="middle" class="edge-label">O(t²) — 随长度平方增长</text>
+          <text x="160" y="296" text-anchor="middle" class="edge-label">t=1000 步：重算 ~10⁶ K/V 对</text>
+
+          <!-- ===== RIGHT: 有 cache ===== -->
+          <text x="570" y="30" text-anchor="middle" class="node-label-accent" font-weight="700">有 KV-cache（只算新 token）</text>
+
+          <!-- step t+1 -->
+          <text x="570" y="54" text-anchor="middle" class="edge-label">生成 token t+1 时</text>
+          <!-- past tokens cached -->
+          <rect x="400" y="62" width="180" height="28" rx="3" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="490" y="81" text-anchor="middle" class="edge-label">t₀…tₜ（K,V 已在缓存）</text>
+          <!-- new token -->
+          <rect x="613" y="62" width="64" height="28" rx="3" class="diagram-accent node-fill-accent"/>
+          <text x="645" y="81" text-anchor="middle" class="node-label-accent" font-size="12">new tₜ₊₁</text>
+
+          <text x="570" y="110" text-anchor="middle" class="edge-label">▼ 只算新 token 的 Q（及 K, V 追加缓存）</text>
+          <!-- new Q only -->
+          <rect x="500" y="118" width="140" height="36" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="570" y="138" text-anchor="middle" class="node-label">新 Q = tₜ₊₁ · Wq</text>
+          <text x="570" y="154" text-anchor="middle" class="edge-label">只算 1 个 token</text>
+
+          <!-- cache read -->
+          <rect x="400" y="166" width="330" height="36" rx="4" class="diagram-ink node-fill"/>
+          <text x="565" y="182" text-anchor="middle" class="node-label">读缓存 K[0…t], V[0…t]</text>
+          <text x="565" y="198" text-anchor="middle" class="edge-label">无重算，直接读显存</text>
+
+          <line x1="570" y1="202" x2="570" y2="226" class="diagram-accent" marker-end="url(#kv-ar-verm)"/>
+          <rect x="470" y="226" width="200" height="36" rx="4" class="diagram-accent node-fill-accent"/>
+          <text x="570" y="249" text-anchor="middle" class="node-label">Attention → 新 token</text>
+
+          <!-- memory growth annotation -->
+          <rect x="400" y="276" width="330" height="60" rx="4" class="diagram-soft" style="fill:var(--bg-soft);"/>
+          <text x="565" y="297" text-anchor="middle" class="node-label" font-size="12">显存随长度</text>
+          <text x="565" y="314" text-anchor="middle" class="node-label-accent" font-size="12">线性增长</text>
+          <text x="565" y="330" text-anchor="middle" class="edge-label">7B/32L/8K/fp16 ≈ 8 GB</text>
+        </svg>
+        <figcaption>
+          <span class="fig-num">图 4.2</span>
+          <strong>左：无 KV-cache</strong>——每步生成新 token 时，整段历史序列的 K、V 投影全部重算，计算量随 token 数平方增长。<strong>右：有 KV-cache</strong>——过去 token 的 K、V 只算一次后存入缓存，新步只算当前 token 的 Q，并把新 K、V 追加入缓存。<strong>注意</strong>：节省的是计算，代价是显存——缓存大小随序列长度线性增长，这直接催生了第 05 章的 GQA/MQA/MLA 优化。
+        </figcaption>
+      </figure>
+
+      <!-- ══════════════════════════════ §4.5 ══════════════════════════════ -->
+      <h2 id="on2"><span class="num">4.5</span><span>O(n²)：长上下文为什么贵</span></h2>
+
+      <p class="one-liner">attention 的 O(n²) 根源在于 QKᵀ 产生 n×n 分数矩阵，这个矩阵必须落地（或用 FlashAttention 分块重算避免）；在长上下文下，显存瓶颈先于算力瓶颈到来。</p>
+
+      <p>回到 <a href="02-attention.html#scaled-dot">第 02 章的公式</a>：<code>scores = Q·Kᵀ / √d_k</code>，其中 Q 形状 (n, d_k)，Kᵀ 形状 (d_k, n)，相乘结果是 (n, n)——n 个 query 对 n 个 key 各算一个相似度分数。</p>
+
+      <p>这个 n×n 矩阵的问题有两个维度：</p>
+
+      <ul>
+        <li><strong>算力</strong>：矩阵乘的浮点操作数是 O(n²·d_k)，随序列长度平方增长。</li>
+        <li><strong>显存</strong>：n×n 矩阵要暂存在 GPU SRAM 或 HBM（高带宽存储）中以便后续 softmax 和乘 V。n=8192 时，每头分数矩阵有 8192×8192 ≈ 6700 万个 float16 元素 ≈ 128 MB；32 头 × 32 层 = 超过 100 GB，远超单卡 HBM 容量。</li>
+      </ul>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">n=8192 时每头 scores 矩阵大小</span>
+          <span class="lang">数学</span>
+        </div>
+        <pre><code class="language-none">n = 8 192
+每头 scores = n × n = 8192 × 8192 ≈ 67 108 864 个元素
+fp16: 67 108 864 × 2 bytes ≈ 128 MB / 头
+
+32 层 × 32 头 × 128 MB ≈ 128 GB（scores 矩阵总量）
+→ 这是为什么朴素 attention 在长上下文下首先触达显存天花板
+  而不是算力天花板</code></pre>
+      </div>
+
+      <p>朴素实现将整个 n×n scores 矩阵写入 HBM，再读回来做 softmax，再写一次，再读回来乘 V——<strong>内存带宽</strong>是真正的瓶颈（HBM 带宽约 2 TB/s，但矩阵反复读写造成大量浪费）。FlashAttention（第 05 章）的核心思路正是把这个矩阵"分块留在 SRAM 里"，避免落地 HBM，从根本上规避这一瓶颈——且数学输出完全等价，不是近似。</p>
+
+      <div class="callout insight">
+        <span class="label">洞察 · 显存先于算力成为瓶颈</span>
+        <p>GPT-4 / Claude 3 等的长上下文支持（128K+ token）之所以需要 FlashAttention，不是因为算力不够，而是因为标准 attention 的 n×n 矩阵根本放不进 GPU 显存。这一约束催生了第 05 章的 FlashAttention IO-aware 设计以及 sliding-window attention 等长上下文方案。</p>
+      </div>
+
+      <!-- ══════════════════════════════ §4.6 ══════════════════════════════ -->
+      <h2 id="bridge"><span class="num">4.6</span><span>这些成本催生了下一章的优化</span></h2>
+
+      <p class="one-liner">KV-cache 的线性显存增长和 O(n²) 的平方瓶颈，是第 05 章所有现代优化的直接动机——不理解成本的来源，就无法理解那些方案在解决什么。</p>
+
+      <p>本章揭示的两条成本线，在第 05 章各对应一簇优化方案：</p>
+
+      <table class="compare-table">
+        <caption>表 4.1 · 本章成本 → 第 05 章对应优化</caption>
+        <thead>
+          <tr><th>本章揭示的成本</th><th>量级</th><th>第 05 章对应方案</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>KV-cache 显存随 seq_len 线性增长</td>
+            <td>7B/8K/fp16 ≈ 8 GB</td>
+            <td>GQA / MQA（减少 KV 头数）/ MLA（DeepSeek 低秩压缩 KV）</td>
+          </tr>
+          <tr>
+            <td>attention O(n²) 算力 + 显存</td>
+            <td>n=8K 每头 128 MB scores</td>
+            <td>FlashAttention 1/2/3（IO-aware 分块）/ sliding-window / attention sinks</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>第 05 章在这两条线上都会给出机制级解释：GQA 如何把 KV 头数从 32 压到 8；FlashAttention 如何用 SRAM 分块消除 HBM 落地；MLA 如何把 K/V 压成低秩潜向量再按需解压（DeepSeek-V2，2024-05）。把本章的成本公式和第 05 章的优化方案对照起来看，才能真正理解那些方案在省什么、代价是什么。</p>
+
+      <!-- ══════════════════════════════ self-check ══════════════════════════════ -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">
+          先合上教程，把能想到的答案写在纸上或编辑器里，写完再展开对照。
+        </p>
+        <ol>
+          <li>训练时为什么所有位置可以并行计算 loss？第 02 章的哪个机制保证了并行不等于"偷看答案"？</li>
+          <li>推理时"自回归"的具体步骤是什么？少了哪一步会导致生成永远是垃圾？</li>
+          <li>KV-cache 缓存的是什么（精确到矩阵名称）？为什么不用也不能缓存权重矩阵 Wk、Wv？</li>
+          <li>对于一个 32 层、32 头、head_dim=128、上下文 4K 的 fp16 模型，KV-cache 大约占多少显存？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>teacher forcing 让每个位置的输入都是真实 token，整段序列已知，因此 Q、K、V 可以整批矩阵乘。<strong>因果掩码</strong>（第 02 章）把注意力矩阵的上三角在 softmax 前置 −∞，保证位置 <em>t</em> 只能看到 0…<em>t</em>，不泄露未来——在此约束下所有位置一次算完。</li>
+            <li>步骤：① 前向传播取最后位置 logits；② 采样或 argmax 得到新 token <em>t</em>；③ <strong>把 token <em>t</em> 追加进输入序列</strong>；④ 回到步骤 ①，循环至 EOS。少了步骤 ③，模型一直对同一段 prompt 打分，输出永远是对初始 prompt 末尾的预测，不是真正的生成。</li>
+            <li>缓存的是每层每头的 <strong>K 投影结果</strong>（<code>X·Wk</code>）和 <strong>V 投影结果</strong>（<code>X·Wv</code>）。权重矩阵 Wk、Wv 在整个推理过程中<strong>从不改变</strong>，始终在显存里，根本不需要缓存——缓存是为了避免对同一段历史 token 重复做 <code>X·Wk</code> 和 <code>X·Wv</code> 的乘法。</li>
+            <li>4096 × 32 × 32 × 128 × 2 × 2 bytes = 4 096 × 32 × 32 × 512 ≈ 2 147 483 648 bytes ≈ <strong>2 GB</strong>（约为 8K 情形的一半）。</li>
+          </ol>
+        </details>
+      </section>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a>（Vaswani 等，2017）——decoder 因果掩码与 teacher forcing 的原始来源</li>
+          <li><a href="https://github.com/karpathy/nanoGPT">nanoGPT</a>（Karpathy）——<code>generate()</code> 函数是自回归推理循环的最简洁参考实现</li>
+          <li><a href="https://lilianweng.github.io/posts/2023-01-10-inference-optimization/">Lil'Log · Large Transformer Model Inference Optimization</a>（Weng，2023）——KV-cache 原理、显存成本分析与优化综述</li>
+          <li><a href="https://arxiv.org/abs/2205.14135">FlashAttention: Fast and Memory-Efficient Exact Attention</a>（Dao 等，2022）——O(n²) 显存瓶颈的直接解法，第 05 章展开</li>
+          <li><a href="https://arxiv.org/abs/2305.13245">GQA: Training Generalized Multi-Query Transformer Models</a>（Ainslie 等，2023）——KV-cache 压缩的现代主流方案，第 05 章展开</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a class="prev" href="03-architecture.html">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 整体架构</span>
+        </a>
+        <a class="next" href="05-modern.html">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 经典到现代</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#training" data-toc-target="training">4.1 训练：teacher forcing</a></li>
+        <li><a href="#inference" data-toc-target="inference">4.2 推理：自回归循环</a></li>
+        <li><a href="#asymmetry" data-toc-target="asymmetry">4.3 不对称：认知陷阱</a></li>
+        <li><a href="#kv-cache" data-toc-target="kv-cache">4.4 KV-cache</a></li>
+        <li><a href="#on2" data-toc-target="on2">4.5 O(n²) 瓶颈</a></li>
+        <li><a href="#bridge" data-toc-target="bridge">4.6 催生下一章</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自检</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

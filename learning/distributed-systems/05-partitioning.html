@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update the page title, breadcrumb, article, and TOC.
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分区与路由 · 分布式系统教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-foundations.html">01 为什么难</a><span class="sep">—</span>
+    <a href="02-time-order.html">02 时间与序</a><span class="sep">—</span>
+    <a href="03-consistency.html">03 一致性</a><span class="sep">—</span>
+    <a href="04-replication.html">04 复制</a><span class="sep">—</span>
+    <a href="05-partitioning.html" class="current">05 分区</a><span class="sep">—</span>
+    <a href="06-consensus.html">06 共识</a><span class="sep">—</span>
+    <a href="07-transactions.html">07 事务</a><span class="sep">—</span>
+    <a href="08-cap-tradeoffs.html">08 CAP权衡</a><span class="sep">—</span>
+    <a href="09-self-check.html">09 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+<header class="chapter-opener">
+  <p class="chapter-label">Chapter 05</p>
+  <h1>分区与路由：把不同数据切到不同节点</h1>
+  <p class="recap">第 04 章建立了复制——同一份数据存在多个副本，代价是要协调写顺序和副本漂移。这一章转向数据分布的另一个轴：分区（partitioning / sharding），把不同数据切到不同节点，以突破单机容量和吞吐上限。复制与分区通常叠加使用：先分区，每个分区再复制。</p>
+</header>
+
+<section class="schema-panel">
+  <p class="label">本章你将建立的 schema</p>
+  <ul>
+    <li>范围分区与哈希分区各牺牲了什么——有序扫描 vs 均匀分布，鱼与熊掌</li>
+    <li>一致性哈希为何把再平衡的搬迁量从全量降到 K/N——环上只动相邻段</li>
+    <li>虚拟节点（vnode）解决了朴素一致性哈希的负载不均与异构机器问题</li>
+    <li>哈希消不掉的热点——单 key 内在热度，以及随机后缀的写扩散代价</li>
+  </ul>
+</section>
+
+<!-- §5.1 范围分区 vs 哈希分区 -->
+<h2 id="s51"><span class="num">5.1</span><span>范围分区 vs 哈希分区</span></h2>
+
+<p class="one-liner">分区的根本选择：保留 key 的顺序（范围分区），还是打乱顺序换来均匀分布（哈希分区）。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要分区</span>
+  <p>单机的存储容量、内存、I/O 带宽都有上限。当数据量或请求量超出单机极限，唯一的出路是把数据水平切割，分散到多台机器——这正是分区要解决的问题。没有分区，工程师只能靠垂直扩容（更贵的机器）或手动在应用层按业务逻辑拆库，两者都难以自动扩展。</p>
+</div>
+
+<h3>范围分区（key-range）</h3>
+<p>范围分区把 key 空间切成若干有序连续区间，每个区间分配给一个节点。类比百科全书分卷：A–D 卷、E–H 卷……路由表只需记录每个区间的边界，节点收到请求后，按边界做二分查找即可定位分区。</p>
+<p><strong>优势</strong>：key 在磁盘上有序存储，范围扫描（range scan）高效——<code>SELECT * WHERE ts BETWEEN t1 AND t2</code> 只需访问一个或少量相邻分区。</p>
+
+<div class="callout warning">
+  <span class="label">陷阱：时间前缀导致热点分区</span>
+  <p>以 <code>sensor_id:timestamp</code> 作 key 时，所有"现在"的写请求哈希落在同一时间段对应的分区，形成写热点。修复方案之一：反转时间戳（<code>sensor_id:(MAX_TS - ts)</code>），让最新数据散布到多个分区；或在 key 前加随机桶前缀，把写流量打散。</p>
+</div>
+
+<h3>哈希分区（hash）</h3>
+<p>对 key 计算哈希值（Cassandra 用 Murmur3，MongoDB 用 MD5），将哈希值均匀映射到哈希空间，再按哈希区间分配分区。哈希函数的均匀性保证：即使原始 key 分布极度倾斜，哈希后落点接近均匀。</p>
+<p><strong>代价</strong>：相邻 key 哈希后不再相邻，范围查询退化为 scatter-gather——必须广播到所有分区并合并结果，延迟和 CPU 均上升。</p>
+
+<figure>
+  <svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="哈希分区把倾斜的 key 分布打散成均匀分布">
+    <defs>
+      <marker id="arrow-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+    </defs>
+    <!-- Left side: skewed key distribution -->
+    <text x="130" y="24" text-anchor="middle" class="edge-label" font-weight="700">原始 key 分布（倾斜）</text>
+    <!-- Bars of varying height showing skew -->
+    <rect x="30" y="140" width="18" height="50" class="diagram-ink node-fill"/>
+    <rect x="54" y="80"  width="18" height="110" class="diagram-ink node-fill-accent"/>
+    <rect x="78" y="100" width="18" height="90"  class="diagram-ink node-fill-accent"/>
+    <rect x="102" y="130" width="18" height="60" class="diagram-ink node-fill"/>
+    <rect x="126" y="150" width="18" height="40" class="diagram-ink node-fill"/>
+    <rect x="150" y="110" width="18" height="80" class="diagram-ink node-fill-accent"/>
+    <rect x="174" y="145" width="18" height="45" class="diagram-ink node-fill"/>
+    <rect x="198" y="135" width="18" height="55" class="diagram-ink node-fill"/>
+    <line x1="22" y1="190" x2="228" y2="190" class="diagram-ink"/>
+    <text x="130" y="208" text-anchor="middle" class="edge-label">key 空间</text>
+
+    <!-- Arrow -->
+    <line x1="270" y1="110" x2="330" y2="110" class="diagram-accent" marker-end="url(#arrow-ink)"/>
+    <text x="300" y="103" text-anchor="middle" class="branch-label">hash()</text>
+
+    <!-- Right side: uniform distribution -->
+    <text x="510" y="24" text-anchor="middle" class="edge-label" font-weight="700">哈希后分布（均匀）</text>
+    <rect x="370" y="130" width="18" height="60" class="diagram-ink node-fill"/>
+    <rect x="394" y="125" width="18" height="65" class="diagram-ink node-fill"/>
+    <rect x="418" y="120" width="18" height="70" class="diagram-ink node-fill"/>
+    <rect x="442" y="125" width="18" height="65" class="diagram-ink node-fill"/>
+    <rect x="466" y="130" width="18" height="60" class="diagram-ink node-fill"/>
+    <rect x="490" y="122" width="18" height="68" class="diagram-ink node-fill"/>
+    <rect x="514" y="128" width="18" height="62" class="diagram-ink node-fill"/>
+    <rect x="538" y="124" width="18" height="66" class="diagram-ink node-fill"/>
+    <line x1="362" y1="190" x2="568" y2="190" class="diagram-ink"/>
+    <text x="466" y="208" text-anchor="middle" class="edge-label">哈希值空间</text>
+  </svg>
+  <figcaption><span class="fig-num">图 5.1</span>哈希函数把倾斜的 key 分布打散为近似均匀的哈希值分布。<strong>注意</strong>：代价是相邻 key 哈希后不再相邻，范围扫描失效。</figcaption>
+</figure>
+
+<table class="compare-table">
+  <caption>范围分区 vs 哈希分区——核心取舍</caption>
+  <thead>
+    <tr><th>维度</th><th>范围分区</th><th>哈希分区</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>路由信息</td><td>区间边界表，O(log N) 查找</td><td>哈希区间映射表</td></tr>
+    <tr><td>范围查询</td><td>高效，单分区顺序扫描</td><td>scatter-gather，全分区广播</td></tr>
+    <tr><td>写分布</td><td>可能倾斜（时间 key 等）</td><td>均匀（取决于哈希质量）</td></tr>
+    <tr class="selected"><td>热点根因</td><td>key 分布本身倾斜</td><td>单 key 内在热度（哈希消不掉）</td></tr>
+    <tr><td>典型系统</td><td>HBase、BigTable、TiKV</td><td>Cassandra、Dynamo、MongoDB</td></tr>
+  </tbody>
+</table>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>电商订单表按 <code>order_id</code> 做哈希分区，产品经理要求"查询某用户最近 30 天的所有订单"。这个查询在哈希分区下会遇到什么问题？有哪些解法？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>同一用户的订单 <code>order_id</code> 哈希后散落在所有分区，查询变成全分区 scatter-gather，延迟线性增长。解法：①按 <code>user_id</code> 而非 <code>order_id</code> 做分区 key（同一用户的订单聚集）；②引入二级索引（本地索引或全局索引）；③双写一张以 <code>user_id</code> 为前缀的辅助表。这指向一个设计洞察：分区 key 的选择必须与最常见的查询模式对齐。</p>
+  </details>
+</div>
+
+<!-- §5.2 一致性哈希 -->
+<h2 id="s52"><span class="num">5.2</span><span>一致性哈希</span></h2>
+
+<p class="one-liner">把节点和 key 都映射到同一个环，每个 key 归顺时针方向最近的节点——节点变动时只搬环上相邻一段，而非全量。</p>
+
+<div class="rationale">
+  <span class="label">为什么需要一致性哈希</span>
+  <p>用 <code>hash(key) mod N</code> 分区时，节点数 N 一旦变化（加节点 N→N+1，或节点故障 N→N-1），绝大多数 key 的 <code>hash % N</code> 都变，几乎所有数据需要搬迁，形成"再平衡风暴"（rebalancing storm），在搬迁期间磁盘和网络被打满。一致性哈希把搬迁量的理论下界降到 K/N（K = key 总数，N = 节点数），这是它存在的根本理由。</p>
+</div>
+
+<h3>机制：哈希环</h3>
+<p>将哈希空间定义为一个闭合环 [0, 2<sup>32</sup>)。每个节点的标识符（IP + 端口）也经过同一哈希函数映射到环上某个位置。每个 key 顺时针找到的第一个节点，即为其归属节点。</p>
+<p><strong>加节点时</strong>：新节点 P 插入环上位置 X。X 到 X 的前驱节点 Q 之间的那段 key，从 Q 迁移到 P；环上其他位置的 key 不动。平均搬迁量 ≈ K/N。</p>
+<p><strong>对比 <code>hash mod N</code></strong>：N→N+1 后，对于大多数 key，<code>hash(key) % (N+1) ≠ hash(key) % N</code>，要读取旧节点的数据写入新节点，几乎全量搬迁，是一次性能瓦解事件。</p>
+
+<div class="callout insight">
+  <span class="label">类比 · 带边界</span>
+  <p>一致性哈希像时钟表盘：节点是刻度，key 是指针，指针顺时针转到下一个刻度即停。加一个刻度，只有"上一个刻度到新刻度"这段指针需要重新停靠。类比的边界在于：真实的哈希环上节点位置不是等间距的，一个邻居节点会承接过大的弧段。</p>
+</div>
+
+<h3>虚拟节点（vnode）</h3>
+<p>朴素一致性哈希的缺陷：节点在环上只有一个位置，新节点加入仅从一个邻居抢走一段 key，该邻居承载减轻，其他节点毫无变化——负载不均。强机器和弱机器分配权重相同——无法异构。节点故障时，其负载全压给一个后继节点——足以压垮单点。</p>
+<p>vnode 方案：每个物理节点在环上映射到多个位置（Cassandra 和 Dynamo 默认 100–1000 个 token）。</p>
+<ul>
+  <li><strong>负载均衡</strong>：新节点的 vnode 分散在环的多处，从许多现有节点各抢一小段，汇总后负载均衡。</li>
+  <li><strong>异构支持</strong>：性能强的机器分配更多 vnode，承担更多数据和流量。</li>
+  <li><strong>故障容忍</strong>：节点故障时，其 vnode 分散到所有其他节点，而不是全部压给单一后继节点。</li>
+</ul>
+
+<figure>
+  <svg viewBox="0 0 680 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="一致性哈希环：新节点加入时只搬前驱到新节点之间的数据段">
+    <defs>
+      <marker id="arr-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+      <marker id="arr-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+      </marker>
+    </defs>
+
+    <!-- Hash ring circle -->
+    <circle cx="340" cy="200" r="130" class="diagram-ink" fill="none"/>
+
+    <!-- Existing nodes: A(top), B(right), C(bottom), D(left) -->
+    <!-- Node A at top (340, 70) -->
+    <circle cx="340" cy="70" r="20" class="diagram-ink node-fill"/>
+    <text x="340" y="75" text-anchor="middle" class="node-label">A</text>
+
+    <!-- Node B at right (470, 200) -->
+    <circle cx="470" cy="200" r="20" class="diagram-ink node-fill"/>
+    <text x="470" y="205" text-anchor="middle" class="node-label">B</text>
+
+    <!-- Node C at bottom (340, 330) -->
+    <circle cx="340" cy="330" r="20" class="diagram-ink node-fill"/>
+    <text x="340" y="335" text-anchor="middle" class="node-label">C</text>
+
+    <!-- Node D at left (210, 200) -->
+    <circle cx="210" cy="200" r="20" class="diagram-ink node-fill"/>
+    <text x="210" y="205" text-anchor="middle" class="node-label">D</text>
+
+    <!-- New node P at ~45 deg (upper-right), coords on ring: 340+130*cos(-45°), 200+130*sin(-45°) = 432, 108 -->
+    <circle cx="432" cy="108" r="20" class="diagram-accent node-fill-accent"/>
+    <text x="432" y="113" text-anchor="middle" class="node-label-accent">P</text>
+    <text x="432" y="82" text-anchor="middle" class="branch-label">新节点</text>
+
+    <!-- Highlight the arc from A to P (the migrated segment) — arc from ~90° to ~45° (clockwise from A to P is short) -->
+    <!-- Arc from A (top, 340,70) going clockwise to P (432,108) -->
+    <!-- Using a path arc: center 340,200 r=130, start angle=-90deg (top), end angle=-45deg -->
+    <!-- Start: 340+130*cos(-90)=340, 200+130*sin(-90)=70 -->
+    <!-- End: 340+130*cos(-45)=432, 200+130*sin(-45)=108 -->
+    <path d="M 340 70 A 130 130 0 0 1 432 108" stroke="#B73B2F" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <text x="405" y="72" text-anchor="middle" class="branch-label">迁移段</text>
+
+    <!-- Key dots on the ring (between A and P arc) -->
+    <!-- ~350, ~375 degrees on ring (just clockwise from A toward P) -->
+    <!-- k1 at -80deg: 340+130*cos(-80)=362.6, 200+130*sin(-80)=72 => ~363,72 -->
+    <circle cx="363" cy="72" r="4" fill="#B73B2F"/>
+    <text x="374" y="68" class="edge-label" fill="#B73B2F">k₁</text>
+    <!-- k2 at -65deg: 340+130*cos(-65)=395, 200+130*sin(-65)=82 => ~395, 82 -->
+    <circle cx="395" cy="82" r="4" fill="#B73B2F"/>
+    <text x="404" y="78" class="edge-label" fill="#B73B2F">k₂</text>
+
+    <!-- other keys on ring (not in migration zone) -->
+    <!-- key near B: 460, 165 -->
+    <circle cx="460" cy="165" r="3" class="diagram-ink" fill="#525252"/>
+    <!-- key near C: 310, 328 -->
+    <circle cx="310" cy="328" r="3" class="diagram-ink" fill="#525252"/>
+    <!-- key near D: 212, 170 -->
+    <circle cx="212" cy="170" r="3" class="diagram-ink" fill="#525252"/>
+
+    <!-- Labels -->
+    <text x="340" y="386" text-anchor="middle" class="node-label">顺时针方向 →</text>
+    <text x="30" y="30" class="edge-label">k₁, k₂ 原属 A</text>
+    <text x="30" y="46" class="edge-label">P 插入后迁到 P</text>
+
+    <!-- Arrow showing clockwise direction -->
+    <path d="M 330 332 A 132 132 0 0 0 208 206" stroke="#A3A3A3" stroke-width="1.2" fill="none" stroke-dasharray="4 3" marker-end="url(#arr-ink)"/>
+  </svg>
+  <figcaption><span class="fig-num">图 5.2</span>一致性哈希环：新节点 P 插入后，只有 A→P 这段（红弧）的 key（k₁、k₂）需要从 A 迁移到 P，其余节点数据不动。<strong>注意</strong>：迁移量 ≈ K/N，与 <code>hash mod N</code> 的全量搬迁形成本质区别。</figcaption>
+</figure>
+
+<div class="callout insight">
+  <span class="label">Karger 1997 四性质</span>
+  <p>Karger 等人在提出一致性哈希时证明了四条性质：<strong>balance</strong>（key 均衡分布到各节点）、<strong>monotonicity</strong>（加节点时，key 只往新节点迁移，不在旧节点之间乱动）、<strong>spread</strong>（client 视角不一致时 key 仍稳定）、<strong>load</strong>（节点负载有上界）。monotonicity 是最关键的——它保证加节点不触发旧节点间的数据洗牌，只做增量搬迁。</p>
+</div>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>用 <code>hash mod N</code> 分区，当前 N=4，某 key 的 <code>hash(key)=17</code>，归属节点 3。现在加一个节点 N=5，<code>17 % 5 = 2</code>，归属节点变为 2。哈希环下同样的 key 会发生什么？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>在哈希环上，key 的哈希值 17 落在环的固定位置，归属节点取决于"顺时针方向最近的节点"。新节点 P 若其哈希值在 hash(key)=17 和其前驱节点之间，则 key 从前驱迁往 P；否则 key 完全不动。无论如何，不会触发其他任意节点间的数据移动，这正是 monotonicity 性质。</p>
+  </details>
+</div>
+
+<!-- §5.3 再平衡策略 -->
+<h2 id="s53"><span class="num">5.3</span><span>再平衡策略</span></h2>
+
+<p class="one-liner">节点加入或离开时，如何把分区在节点间重新分配——三种策略各有固定代价与灵活性取舍。</p>
+
+<div class="rationale">
+  <span class="label">为什么再平衡不可避免</span>
+  <p>生产集群中节点会扩容（容量不足）、缩容（成本优化）、或故障下线（硬件/网络）。每次拓扑变化后，若不重新平衡分区，部分节点承载过多，其余节点闲置，系统整体资源利用率低下，热节点成为瓶颈。</p>
+</div>
+
+<table class="compare-table">
+  <caption>三种再平衡策略对比</caption>
+  <thead>
+    <tr><th>策略</th><th>原理</th><th>优势</th><th>缺陷</th><th>典型系统</th></tr>
+  </thead>
+  <tbody>
+    <tr class="selected">
+      <td>固定分区数</td>
+      <td>建库时创建远多于节点的分区（如 10 节点配 1000 个分区），加节点时从每个现有节点各抢几个分区，分区总数不变</td>
+      <td>路由逻辑简单；分区大小随数据量自动稳定</td>
+      <td>初始分区数选大了浪费元数据，选小了后期扩展受限；分区数不能动态增长</td>
+      <td>Riak、Elasticsearch</td>
+    </tr>
+    <tr>
+      <td>动态分区</td>
+      <td>分区超过阈值（如 10 GB）自动分裂为两个；过小时与邻居合并</td>
+      <td>分区数随数据量自适应，适合数据量差异大的场景</td>
+      <td>新建数据库只有一个分区，所有写请求打到单节点直到第一次分裂（单点瓶颈）；HBase 用预分裂（pre-split）缓解</td>
+      <td>HBase、MongoDB</td>
+    </tr>
+    <tr>
+      <td>比例分区</td>
+      <td>每节点维持固定数量的分区，加节点时按比例增加总分区数</td>
+      <td>节点数与分区数线性增长，分区大小稳定</td>
+      <td>分区分裂逻辑略复杂；分裂时目标节点需随机选取以避免偏斜</td>
+      <td>Cassandra（vnode 变体）</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout warning">
+  <span class="label">陷阱：用 hash mod N 做再平衡</span>
+  <p><code>hash mod N</code> 不是再平衡策略——它是一个路由公式。每次节点数 N 变化，公式的结果对几乎所有 key 都变，触发全量数据搬迁。生产系统的再平衡必须建立在稳定的分区映射表（partition map）之上，通过移动分区而非重算映射来完成。</p>
+</div>
+
+<!-- §5.4 请求路由与热点 -->
+<h2 id="s54"><span class="num">5.4</span><span>请求路由与热点</span></h2>
+
+<p class="one-liner">客户端请求如何找到正确分区，以及哈希分区消不掉的热点如何处理。</p>
+
+<div class="rationale">
+  <span class="label">为什么路由是独立问题</span>
+  <p>分区方案确定后，每个请求必须被路由到持有目标分区的节点。路由信息（分区→节点映射）在集群拓扑变化时会更新，不同节点的视图会短暂不一致。路由层的设计决定了：谁存储分区表、谁负责更新、客户端是否需要感知拓扑。</p>
+</div>
+
+<h3>三种路由架构</h3>
+<p>三种架构在"谁知道分区表"这个问题上给出不同答案，并因此在延迟、复杂度、一致性上取得不同取舍。</p>
+
+<figure>
+  <svg viewBox="0 0 680 330" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="三种路由架构：协调节点路由、客户端感知、外部路由层">
+    <defs>
+      <marker id="ra-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+      </marker>
+      <marker id="ra-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+      </marker>
+    </defs>
+
+    <!-- ── 架构 ①：外部路由层 (ZooKeeper) ── x region: 0-200 -->
+    <text x="100" y="22" text-anchor="middle" class="edge-label" font-weight="700">① 外部路由层</text>
+    <!-- Client -->
+    <rect x="30" y="36" width="140" height="38" rx="4" class="diagram-ink node-fill"/>
+    <text x="100" y="60" text-anchor="middle" class="node-label">客户端</text>
+    <!-- ZK -->
+    <rect x="30" y="110" width="140" height="44" rx="4" class="diagram-accent node-fill-accent"/>
+    <text x="100" y="128" text-anchor="middle" class="node-label-accent">ZooKeeper</text>
+    <text x="100" y="146" text-anchor="middle" class="edge-label">路由表</text>
+    <!-- Node -->
+    <rect x="30" y="196" width="140" height="38" rx="4" class="diagram-ink node-fill"/>
+    <text x="100" y="219" text-anchor="middle" class="node-label">分区节点</text>
+    <!-- Arrows -->
+    <line x1="100" y1="74" x2="100" y2="110" class="diagram-ink" marker-end="url(#ra-ink)"/>
+    <text x="112" y="96" class="edge-label">查询分区</text>
+    <line x1="100" y1="154" x2="100" y2="196" class="diagram-ink" marker-end="url(#ra-ink)"/>
+    <text x="112" y="180" class="edge-label">直连节点</text>
+    <text x="100" y="256" text-anchor="middle" class="edge-label">Kafka(pre-KRaft)</text>
+
+    <!-- ── 架构 ②：任意节点转发 ── x region: 240-440 -->
+    <text x="340" y="22" text-anchor="middle" class="edge-label" font-weight="700">② 任意节点转发</text>
+    <!-- Client -->
+    <rect x="270" y="36" width="140" height="38" rx="4" class="diagram-ink node-fill"/>
+    <text x="340" y="60" text-anchor="middle" class="node-label">客户端</text>
+    <!-- Any node -->
+    <rect x="270" y="110" width="140" height="44" rx="4" class="diagram-ink node-fill"/>
+    <text x="340" y="128" text-anchor="middle" class="node-label">任意节点</text>
+    <text x="340" y="146" text-anchor="middle" class="edge-label">gossip 路由表</text>
+    <!-- Target node -->
+    <rect x="270" y="196" width="140" height="38" rx="4" class="diagram-ink node-fill"/>
+    <text x="340" y="219" text-anchor="middle" class="node-label">目标分区节点</text>
+    <!-- Arrows -->
+    <line x1="340" y1="74" x2="340" y2="110" class="diagram-ink" marker-end="url(#ra-ink)"/>
+    <text x="352" y="96" class="edge-label">任意发送</text>
+    <line x1="340" y1="154" x2="340" y2="196" class="diagram-ink" marker-end="url(#ra-ink)"/>
+    <text x="352" y="180" class="edge-label">内部转发</text>
+    <text x="340" y="256" text-anchor="middle" class="edge-label">Cassandra gossip</text>
+
+    <!-- ── 架构 ③：分区感知客户端 ── x region: 480-680 -->
+    <text x="575" y="22" text-anchor="middle" class="edge-label" font-weight="700">③ 客户端感知</text>
+    <!-- Client with local map -->
+    <rect x="505" y="36" width="160" height="56" rx="4" class="diagram-ink node-fill"/>
+    <text x="585" y="57" text-anchor="middle" class="node-label">客户端</text>
+    <text x="585" y="74" text-anchor="middle" class="edge-label">本地分区表</text>
+    <!-- Node -->
+    <rect x="505" y="140" width="160" height="38" rx="4" class="diagram-ink node-fill"/>
+    <text x="585" y="163" text-anchor="middle" class="node-label">分区节点</text>
+    <!-- ZK watch -->
+    <rect x="505" y="222" width="160" height="38" rx="4" class="diagram-soft node-fill"/>
+    <text x="585" y="245" text-anchor="middle" class="node-label">ZK/gossip 更新</text>
+    <!-- Arrows -->
+    <line x1="585" y1="92" x2="585" y2="140" class="diagram-ink" marker-end="url(#ra-ink)"/>
+    <text x="597" y="120" class="edge-label">直连</text>
+    <line x1="585" y1="178" x2="585" y2="222" class="diagram-soft" marker-end="url(#ra-ink)"/>
+    <text x="597" y="206" class="edge-label">异步更新</text>
+    <text x="585" y="280" text-anchor="middle" class="edge-label">Redis Cluster 客户端</text>
+
+    <!-- vertical dividers -->
+    <line x1="228" y1="14" x2="228" y2="300" class="diagram-soft"/>
+    <line x1="468" y1="14" x2="468" y2="300" class="diagram-soft"/>
+  </svg>
+  <figcaption><span class="fig-num">图 5.3</span>三种请求路由架构：①外部路由层集中存分区表（强一致，单点依赖）；②任意节点转发靠 gossip 扩散（去中心化，最终一致）；③客户端本地缓存分区表（延迟最低，需处理陈旧路由）。<strong>注意</strong>：三种架构本质上是在"谁维护分区表"与"谁承担路由一致性代价"之间取舍。</figcaption>
+</figure>
+
+<h3>热点与"明星问题"</h3>
+<p>哈希分区消除了 key 分布倾斜导致的热点——但无法消除单 key 内在热度。一个被百万用户同时访问的明星用户 ID，哈希后落在唯一一个分区，该分区的节点成为瓶颈，任何分区策略都无法自动分散这类热点。</p>
+<p><strong>缓解手段</strong>：</p>
+<ul>
+  <li><strong>随机后缀（写扩散）</strong>：给热 key 加 0–99 的随机后缀，把同一逻辑 key 的写请求分散到 100 个物理 key（分散到多个分区）。代价：读请求必须查询所有 100 个子 key 再合并（scatter-gather），读代价线性上升。</li>
+  <li><strong>应用层缓存</strong>：热数据在 Redis/本地内存缓存，降低对存储层分区的压力。</li>
+  <li><strong>CDN 与预聚合</strong>：内容类热 key（视频、图片）走 CDN；计数类热 key（点赞数）在内存聚合后批量写入。</li>
+</ul>
+
+<div class="callout warning">
+  <span class="label">陷阱：随机后缀的读一致性</span>
+  <p>写时加随机后缀后，读请求必须知道哪些后缀存在并行并发查询，否则会漏读。工程上通常的做法是：维护一个"热 key 列表"（配置下发或自动检测），只对热 key 启用后缀扩散，冷 key 保持原样，避免给所有 key 引入不必要的读放大。</p>
+  </div>
+
+<div class="predict">
+  <span class="question-label">想一想</span>
+  <p>微博上某明星发了一条微博（热 key = 微博 ID），未来 10 分钟会有数百万次读请求。用哈希分区存储微博内容，这条微博所在的分区节点会遇到什么问题？随机后缀方案是否适用于这种场景？</p>
+  <details>
+    <summary>展开答案（先停 10 秒）</summary>
+    <p>微博 ID 哈希到固定分区节点，数百万次读请求打到单台机器，CPU 和网络带宽被打满，其他分区的正常请求延迟也受影响（共享节点资源）。随机后缀方案<strong>不适用</strong>于纯读场景——该方案针对写扩散，读时需 scatter-gather 合并，对纯读的热 key 反而增加延迟。此场景的正确方案是：分层缓存（Redis/CDN），让热内容在缓存命中而不落到存储层；或者存储层支持分区内副本分读（复制 + 读负载均衡，第 04 章的内容）。</p>
+  </details>
+</div>
+
+<!-- Self-check -->
+<section class="self-check" id="self-check">
+  <h2>自测题</h2>
+  <ol>
+    <li>用 <code>hash mod N</code> 分区，为什么加一个节点会引发几乎全量数据搬迁？一致性哈希怎么把搬迁量降到约 K/N？</li>
+    <li>虚拟节点（vnode）解决了朴素一致性哈希的哪两个核心问题？</li>
+    <li>哈希分区消除了所有热点吗？它消不掉哪一种热点，为什么？</li>
+    <li>范围分区和哈希分区各自牺牲了什么能力？分别举一个场景说明这个代价何时不可接受。</li>
+  </ol>
+  <details>
+    <summary>展开参考答案（先独立作答）</summary>
+    <p><strong>1.</strong> <code>hash mod N</code> 中，N 变为 N+1 后，对绝大多数 key 有 <code>hash(key) % N ≠ hash(key) % (N+1)</code>，导致它们被分配到不同节点，几乎所有数据需要搬迁。一致性哈希把 key 和节点都映射到同一个环，新节点 P 插入位置 X，只有 X 与其前驱节点之间的那段 key（占整体的 1/N）需要从前驱迁往 P；其余位置的 key 归属节点不变，搬迁量平均 ≈ K/N。</p>
+    <p><strong>2.</strong> ①负载均衡：vnode 让新节点从环上多处各抢一小段，汇总负载均衡，而非只从一个邻居抢一大段。②异构支持：性能强的机器分配更多 vnode，按比例承担更多数据和流量。</p>
+    <p><strong>3.</strong> 哈希分区消除了 key 分布倾斜（统计热点），但消不掉单 key 内在热度（明星问题）。单个热 key（如明星用户 ID）哈希到唯一分区，该分区节点收到全部请求，哈希函数无论多均匀都无法把同一 key 的请求分到多个节点。</p>
+    <p><strong>4.</strong> 范围分区牺牲了均匀写分布——时间前缀 key 让"当前"分区成为写热点，在时序写入场景（IoT 传感器、日志）中代价不可接受。哈希分区牺牲了有序范围查询——相邻 key 哈希后不相邻，范围扫描退化为全分区 scatter-gather，在需要时间范围查询或地理范围查询的场景中代价不可接受。</p>
+  </details>
+</section>
+
+<!-- Challenge -->
+<div class="challenge">
+  <span class="label">进阶挑战 · 刚好够不着</span>
+  <h3>一致性哈希 × 副本放置：vnode 的拓扑陷阱</h3>
+  <p>一致性哈希决定 key 归属哪个节点（主分区），但第 04 章指出每个分区还需要 N 个副本。环上某个 key 的 N 个副本应该放在哪几个节点？naïve 方案是顺时针取随后 N−1 个 vnode 对应的节点——但 vnode 带来了什么拓扑陷阱？如何避免？</p>
+  <details>
+    <summary>提示（卡住再展开）</summary>
+    <p>vnode 让同一个物理节点在环上有多个位置。顺时针取 N−1 个 vnode 时，这些 vnode 可能属于同一台物理机器——甚至同一个机架。副本全部落在同一机器/机架，物理故障（断电、交换机失联）会导致所有副本同时不可用，副本的容错意义消失。Cassandra 的 NetworkTopologyStrategy 在选副本节点时跳过同一物理节点和同一机架的 vnode，确保 N 个副本跨机器/跨机架，这需要节点在注册时上报自己的 rack 和 datacenter 标签（snitch）。</p>
+  </details>
+</div>
+
+<!-- References -->
+<footer class="references">
+  <h3>参考资料</h3>
+  <ul>
+    <li>Kleppmann, M. <em>Designing Data-Intensive Applications</em>, Chapter 6: Partitioning. O'Reilly, 2017.</li>
+    <li>DeCandia, G. et al. "Dynamo: Amazon's Highly Available Key-value Store." <em>SOSP 2007</em>.</li>
+    <li>Karger, D. et al. "Consistent Hashing and Random Trees: Distributed Caching Protocols for Relieving Hot Spots on the World Wide Web." <em>STOC 1997</em>.</li>
+    <li>Apache Cassandra Documentation: <a href="https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html">Dynamo Architecture — vnodes &amp; partitioning</a>.</li>
+  </ul>
+</footer>
+
+<!-- Chapter nav -->
+<nav class="chapter-nav" aria-label="章节导航">
+  <a href="04-replication.html" class="prev">
+    <span class="label">上一章</span>
+    <span class="title">04 · 复制</span>
+  </a>
+  <a href="06-consensus.html" class="next">
+    <span class="label">下一章</span>
+    <span class="title">06 · 共识</span>
+  </a>
+</nav>
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+<li><a href="#s51" data-toc-target="s51">5.1 范围分区 vs 哈希分区</a></li>
+<li><a href="#s52" data-toc-target="s52">5.2 一致性哈希</a></li>
+<li><a href="#s53" data-toc-target="s53">5.3 再平衡策略</a></li>
+<li><a href="#s54" data-toc-target="s54">5.4 请求路由与热点</a></li>
+<li><a href="#self-check" data-toc-target="self-check">自测题</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
