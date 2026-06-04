@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update <title>
+    3. Update the .learning-path breadcrumb (mark current chapter with .current)
+    4. Fill in <article> with chapter content using the reusable HTML
+       snippets defined in references/tutorial_template.md
+    5. Update sticky TOC links (aside.toc-sidebar > ul) to match in-article anchors
+    6. Update prev/next nav at bottom
+
+  Class names you'll use (full reference in tutorial_template.md):
+    .learning-path   .chapter-opener (now uses .chapter-label, not .numeral)
+    .schema-panel   .one-liner   .rationale   .annotations
+    .code-block (with .header > .filename .lang .copy)
+    .callout (.warning .tip .example .insight — only .warning shows accent)
+    .compare-table (tr.selected)
+    figure > svg > figcaption (figcaption > .fig-num)
+    .predict   details > summary
+    .self-check   .challenge   .references   .chapter-nav
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>前沿与可观测性 · 大规模分布式系统设计教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+
+/* ============================================================
+   Multi-tutorial library: hub index + 相关教程 cross-links
+   (see SKILL.md "Building a knowledge library")
+   ============================================================ */
+.theme-cluster          { margin: 2.4rem 0; }
+.theme-cluster > h2     { margin-bottom: 1rem; }
+.tutorial-cards         { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+.tutorial-cards > li    { border: 1px solid var(--ink-faint); border-left: 3px solid var(--ink); border-radius: 4px; padding: 0.7rem 0.9rem; transition: border-color .15s ease; }
+.tutorial-cards > li:hover { border-left-color: var(--vermilion); }
+.tutorial-cards a       { text-decoration: none; }
+.tutorial-cards .schema { display: block; margin-top: 0.3rem; font-size: 13px; color: var(--ink-soft); line-height: 1.45; }
+.related-tutorials      { margin-top: 2.6rem; padding-top: 1.4rem; border-top: 1px solid var(--ink-faint); }
+.related-tutorials .label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin: 0.9rem 0 0.3rem; }
+.related-tutorials ul   { margin: 0.2rem 0 0.6rem; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-foundations.html">01 地基</a><span class="sep">—</span>
+    <a href="02-scaling.html">02 扩展</a><span class="sep">—</span>
+    <a href="03-partitioning.html">03 分区</a><span class="sep">—</span>
+    <a href="04-replication.html">04 复制</a><span class="sep">—</span>
+    <a href="05-consistency.html">05 一致性</a><span class="sep">—</span>
+    <a href="06-transactions.html">06 事务</a><span class="sep">—</span>
+    <a href="07-cache-async.html">07 缓存与异步</a><span class="sep">—</span>
+    <a href="08-resilience.html">08 容错</a><span class="sep">—</span>
+    <a href="09-frontier.html" class="current">09 前沿</a><span class="sep">—</span>
+    <a href="10-self-check.html">10 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 09</p>
+        <h1>前沿与可观测性</h1>
+        <p class="recap">上一章把"机器一定会挂、依赖一定会慢"当成前提，给出了一整套在故障中活下来的手段：熔断保护资源、限流削峰、重试要配退避加抖动加幂等、超时预算加舱壁止血、quorum 加 fencing token 防脑裂、混沌工程主动逼出潜伏的故障切换缺陷。本章给前八章建立的整套工具箱"标上时间戳"——哪些已是定论、哪些还在动、哪些别再学，并补上一块前面一直缺的拼图：当系统真的在线上跑起来，怎么把它看清楚。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章建立的认知</p>
+        <ul>
+          <li>把知识分成三态——稳定核心、正在变化、已被取代——按时间戳判断一个技术现在还该不该学、该不该用。</li>
+          <li>正在变化的几股力量（分布式 SQL、Ambient Mesh、OpenTelemetry 加 eBPF、微服务边界回潮）背后都有一个具体的经济或正确性动因，而不只是版本号在涨。</li>
+          <li>可观测性的骨架是 SLI／SLO／错误预算加 RED／USE 两个视角：用可测的比率给"够好"下定义，用错误预算把可靠性变成可以花的额度。</li>
+          <li>错误预算反直觉——预算有剩说明发布太保守，100% 可用是错误目标，因为它扼杀迭代速度。</li>
+        </ul>
+      </section>
+
+      <p>前八章一直在回答"怎么设计"，每个机制都配了代价和失效条件。但工程师在真实评审里还要回答两个文档不写的问题：<strong>这套知识里哪些已经过期了</strong>，以及<strong>系统上线之后我靠什么知道它好不好</strong>。这两件事正是本章的主题——前者是"前沿"，后者是"可观测性"。它们看似无关，其实指向同一件事：让你对一个跑着的分布式系统的判断，建立在事实而非记忆和直觉上。</p>
+
+      <div class="callout warning">
+        <span class="label">阅读提示 · 别读成版本号流水账</span>
+        <p>本章会出现不少产品名和日期，但记住版本号没有价值。每一处"正在变化"都要追到那一个驱动它的原因——为什么这个变化现在发生、它对<strong>选型决策</strong>意味着什么。读完应该能回答的是"我这个新项目该不该上服务网格"，而不是"Istio ambient 哪个版本 GA"。所有日期截至 2026-06，技术演进会让这一节比其他章更快过期，这正是本章要教的元技能：给知识标时间戳。</p>
+      </div>
+
+      <h2 id="s1"><span class="num">9.1</span><span>把知识三态化：稳定核心 · 正在变化 · 已被取代</span></h2>
+
+      <p>一个工程师踩的最隐蔽的陷阱，不是不会某个技术，而是<strong>把一个已经过期的技术当成当下最佳实践</strong>。静态的 <code>hash mod N</code> 分片、跨微服务的 XA／2PC、ZooKeeper 版的 Kafka，这些在十年前的资料里都是"正确答案"，今天照搬就是在给系统埋雷。判断一个技术现在的状态，需要把它放进一条时间轴上的三个区间。</p>
+
+      <ul>
+        <li><strong>稳定核心（stable）</strong>：经过多年生产检验、机制层面没有更优替代、可以放心当地基的东西。学这些的投资回报最高，因为它们短期内不会变。</li>
+        <li><strong>正在变化（in-flux）</strong>：近两三年正在重塑选型的趋势。值得跟踪，但要理解驱动力而非追版本——因为它们还没尘埃落定。</li>
+        <li><strong>已被取代（superseded）</strong>：曾经的标准答案，今天有了机制上更优的替代。识别它们是为了<strong>不再学、不再用</strong>，并能在 code review 里指出"这是老做法"。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 860 400" role="img" aria-labelledby="fig91-title">
+          <title id="fig91-title">分布式系统知识的三态分区：稳定核心、正在变化、已被取代</title>
+          <defs>
+            <marker id="arrow-ink" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrow-vermilion" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- time axis -->
+          <line class="diagram-ink" x1="40" y1="360" x2="820" y2="360" marker-end="url(#arrow-ink)"/>
+          <text class="edge-label" x="780" y="382" text-anchor="middle">时间</text>
+
+          <!-- three columns -->
+          <text class="branch-label" x="150" y="40" text-anchor="middle">已被取代</text>
+          <text class="node-label" x="150" y="58" text-anchor="middle" font-size="11">superseded · 别再学</text>
+          <text class="node-label-accent" x="430" y="40" text-anchor="middle">正在变化</text>
+          <text class="node-label" x="430" y="58" text-anchor="middle" font-size="11">in-flux · 追原因</text>
+          <text class="branch-label" x="710" y="40" text-anchor="middle">稳定核心</text>
+          <text class="node-label" x="710" y="58" text-anchor="middle" font-size="11">stable · 放心学</text>
+
+          <!-- superseded boxes -->
+          <rect class="node-fill" x="40" y="80" width="220" height="30" rx="3" stroke="#A3A3A3" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text class="node-label" x="150" y="100" text-anchor="middle" font-size="12" fill="#A3A3A3">hash mod N 分片</text>
+          <rect class="node-fill" x="40" y="120" width="220" height="30" rx="3" stroke="#A3A3A3" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text class="node-label" x="150" y="140" text-anchor="middle" font-size="12" fill="#A3A3A3">跨服务 XA / 2PC</text>
+          <rect class="node-fill" x="40" y="160" width="220" height="30" rx="3" stroke="#A3A3A3" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text class="node-label" x="150" y="180" text-anchor="middle" font-size="12" fill="#A3A3A3">ZooKeeper 版 Kafka</text>
+          <rect class="node-fill" x="40" y="200" width="220" height="30" rx="3" stroke="#A3A3A3" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text class="node-label" x="150" y="220" text-anchor="middle" font-size="12" fill="#A3A3A3">Hystrix · 无脑全微服务</text>
+
+          <!-- in-flux boxes -->
+          <rect class="node-fill-accent" x="320" y="80" width="220" height="30" rx="3" stroke="#B73B2F" stroke-width="1.4"/>
+          <text class="node-label" x="430" y="100" text-anchor="middle" font-size="12">分布式 SQL（24–25）</text>
+          <rect class="node-fill-accent" x="320" y="120" width="220" height="30" rx="3" stroke="#B73B2F" stroke-width="1.4"/>
+          <text class="node-label" x="430" y="140" text-anchor="middle" font-size="12">Ambient Mesh（24-11）</text>
+          <rect class="node-fill-accent" x="320" y="160" width="220" height="30" rx="3" stroke="#B73B2F" stroke-width="1.4"/>
+          <text class="node-label" x="430" y="180" text-anchor="middle" font-size="12">OTel + eBPF（24–25）</text>
+          <rect class="node-fill-accent" x="320" y="200" width="220" height="30" rx="3" stroke="#B73B2F" stroke-width="1.4"/>
+          <text class="node-label" x="430" y="220" text-anchor="middle" font-size="12">微服务边界回潮（23–25）</text>
+
+          <!-- stable boxes -->
+          <rect class="node-fill" x="600" y="80" width="220" height="30" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="710" y="100" text-anchor="middle" font-size="12">CAP / PACELC · quorum</text>
+          <rect class="node-fill" x="600" y="120" width="220" height="30" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="710" y="140" text-anchor="middle" font-size="12">一致性哈希 + vnode</text>
+          <rect class="node-fill" x="600" y="160" width="220" height="30" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="710" y="180" text-anchor="middle" font-size="12">Raft（已替代 Paxos）</text>
+          <rect class="node-fill" x="600" y="200" width="220" height="30" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="710" y="220" text-anchor="middle" font-size="12">cache-aside + TTL · 幂等</text>
+
+          <!-- migration arrows: superseded -> in-flux/stable -->
+          <line class="diagram-soft" x1="260" y1="95" x2="316" y2="95" marker-end="url(#arrow-ink)"/>
+          <line class="diagram-soft" x1="260" y1="135" x2="316" y2="135" marker-end="url(#arrow-ink)"/>
+          <text class="edge-label" x="290" y="262" text-anchor="middle" font-size="10">被替代 →</text>
+
+          <!-- in-flux maturing arrow -->
+          <line class="diagram-accent" x1="540" y1="265" x2="596" y2="265" marker-end="url(#arrow-vermilion)"/>
+          <text class="edge-label" x="568" y="285" text-anchor="middle" font-size="10">成熟后 →</text>
+          <text class="node-label" x="430" y="262" text-anchor="middle" font-size="11" fill="#525252">部分将沉淀为新的稳定核心</text>
+        </svg>
+        <figcaption><span class="fig-num">图 9.1</span>同一条时间轴上，技术从右向左迁移：稳定核心被新趋势挑战，旧答案被取代退出。<strong>注意</strong>：箭头方向是"被替代"和"成熟为新核心"，不是"越新越好"——正在变化的东西恰恰是最不该盲目押注的一栏，它还没经过生产时间的检验。</figcaption>
+      </figure>
+
+      <h2 id="s2"><span class="num">9.2</span><span>稳定核心：前八章学到的，绝大多数都站得住</span></h2>
+
+      <p>好消息是，本教程前八章的主干几乎全在稳定核心里。这些机制的根基是数学（多数派交集是集合相交，不是流行度）或被光速、网络分区这类物理与拓扑现实钉死，不会因为某个新框架出现而失效。</p>
+
+      <ul>
+        <li><strong>CAP／PACELC（05 章）</strong>：分区时在一致性与可用性间取舍、健康时在延迟与一致性间取舍——这是 Gilbert-Lynch 证明出来的，不是工程惯例，永远成立。</li>
+        <li><strong>多数派 quorum 与 W+R&gt;N（04、05 章）</strong>：任意两个多数派必相交这条性质来自鸽巢原理，是一切共识安全性的地基。</li>
+        <li><strong>一致性哈希 + 虚拟节点（03 章）</strong>：成员变更时只搬约 <code>1/N</code> 的 key，虚拟节点负责把负载摊匀——这是当下分区的默认做法。</li>
+        <li><strong>Raft（05 章）</strong>：已经取代 Paxos 成为新系统的默认共识算法，etcd、Consul、TiKV、Kafka KRaft 全用它。Raft 本身从前沿沉淀成了稳定核心，这是个值得记住的演进样本。</li>
+        <li><strong>cache-aside + TTL（07 章）、at-least-once + 幂等（06、07 章）、指数退避 + 抖动（08 章）</strong>：这些工程模式被无数生产系统验证过，是面对缓存一致性、投递语义、重试风暴的标准答案。</li>
+      </ul>
+
+      <div class="callout insight">
+        <span class="label">为什么这些稳得住</span>
+        <p>稳定核心的共同点是：它们解决的问题源于<em>不会变的约束</em>。光速不会变，所以跨地域延迟墙（01 章）一直在；网络一定会分区，所以 CAP 的取舍一直在；多数派一定相交，所以 quorum 的安全性一直在。一个技术越靠近"应对物理或数学约束"，它越稳；越靠近"某种实现的工程权衡"，它越可能被取代。这条标尺本身就是判断一个新技术能撑多久的工具。</p>
+      </div>
+
+      <h2 id="s3"><span class="num">9.3</span><span>正在变化：四股力量与它们背后的驱动力</span></h2>
+
+      <p>下面四个趋势在 2023–2025 年正在重塑选型。每一个都要追问同一个问题：<strong>驱动它的到底是什么</strong>——是新能力，还是成本，还是对旧做法的纠偏。</p>
+
+      <h3>分布式 SQL / NewSQL：抹平 SQL 与 NoSQL 的老二分</h3>
+
+      <p>Spanner、CockroachDB、TiDB 这类系统在 2024–2025 年走向主流。它们做的事，是把前面几章里需要工程师手工拼装的能力<strong>打包进数据库本身</strong>：自动把表的行切成一个个 range（呼应 03 章的范围分区），每个 range 用 Raft 复制到多个副本（呼应 04 章的复制与 05 章的共识），并在这之上提供全局可串行化的事务。换句话说，它把"分区 + 复制 + 共识 + 事务"这条从 03 到 06 的主线，做成了开箱即用。</p>
+
+      <p>最难的一环是给全球分布的事务分配一个<strong>全局有序的时间戳</strong>——没有它就无法判断两个跨地域事务谁先谁后。这里两条路线分野：</p>
+
+      <ul>
+        <li><strong>Spanner 用 TrueTime</strong>：靠机房里的 GPS 和原子钟把时钟误差收进一个已知的不确定区间 <code>ε</code>。提交时执行 <em>commit-wait</em>——主动等待 <code>ε</code> 这么久，确保这个事务的时间戳一定早于任何之后开始的事务。代价是每次提交都要等掉这段 <code>ε</code>（通常几毫秒）的延迟。</li>
+        <li><strong>CockroachDB／TiDB 用混合逻辑时钟（HLC）</strong>：没有专用硬件，用物理时钟加逻辑计数器近似出因果有序的时间戳。省掉了原子钟成本，但在时钟偏移较大时要靠重试等机制兜底。</li>
+      </ul>
+
+      <p>共同代价是：跨多个 range 的事务仍要走 2PC（06 章那条阻塞协议），加上 commit-wait 的延迟。所以分布式 SQL 不是免费午餐——它把复杂度从应用层挪进了数据库层，让你不必手写分库分表和 Saga，但你付出的是写延迟和对底层时钟假设的依赖。它真正的意义是<strong>抹平了"要强一致就只能用单机 SQL、要扩展就只能上 NoSQL"这个老二分</strong>。</p>
+
+      <h3>服务网格：从每 Pod 一个 sidecar 到 Ambient Mesh</h3>
+
+      <p>服务网格（service mesh）把限流、重试、mTLS、遥测这些 08 章讲的弹性能力从应用代码里抽出来，下沉到基础设施。经典做法是 sidecar：给每个 Pod 注入一个 Envoy 代理，所有进出流量都经过它。问题出在<strong>乘数</strong>上——一个有几千个 Pod 的集群，就有几千个 Envoy，每个都常驻几十到上百 MB 内存和一份 CPU，其中大量在空转。</p>
+
+      <p>Istio 的 Ambient Mesh（ambient 模式 1.24 在 2024-11 GA）重构了这个分层：</p>
+
+      <ul>
+        <li><strong>每个节点一个共享的 ztunnel</strong>（用 Rust 写的轻量代理）负责 L4 层的 mTLS 加密和基础遥测。一个节点上的所有 Pod 共用它，而不是一人一个。</li>
+        <li><strong>L7 能力（HTTP 路由、授权策略）移到 waypoint 代理</strong>，按 namespace 维度部署、按需伸缩——只有真正需要七层处理的流量才经过它。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 820 420" role="img" aria-labelledby="fig92-title">
+          <title id="fig92-title">sidecar 模式与 ambient 模式的代理分布对比</title>
+          <defs>
+            <marker id="arrow-ink2" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <!-- LEFT: sidecar -->
+          <text class="branch-label" x="200" y="34" text-anchor="middle">sidecar 模式</text>
+          <text class="node-label" x="200" y="52" text-anchor="middle" font-size="11" fill="#525252">每个 Pod 一个 Envoy</text>
+
+          <rect class="node-fill" x="40" y="70" width="320" height="300" rx="4" stroke="#A3A3A3" stroke-width="1.2"/>
+          <text class="edge-label" x="60" y="90" text-anchor="start">Node</text>
+
+          <!-- pod 1 -->
+          <rect class="node-fill" x="70" y="104" width="120" height="78" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="130" y="126" text-anchor="middle" font-size="12">Pod A</text>
+          <rect class="node-fill-accent" x="86" y="138" width="88" height="30" rx="2" stroke="#B73B2F" stroke-width="1.3"/>
+          <text class="node-label-accent" x="130" y="157" text-anchor="middle" font-size="11">Envoy</text>
+          <!-- pod 2 -->
+          <rect class="node-fill" x="210" y="104" width="120" height="78" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="270" y="126" text-anchor="middle" font-size="12">Pod B</text>
+          <rect class="node-fill-accent" x="226" y="138" width="88" height="30" rx="2" stroke="#B73B2F" stroke-width="1.3"/>
+          <text class="node-label-accent" x="270" y="157" text-anchor="middle" font-size="11">Envoy</text>
+          <!-- pod 3 -->
+          <rect class="node-fill" x="70" y="200" width="120" height="78" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="130" y="222" text-anchor="middle" font-size="12">Pod C</text>
+          <rect class="node-fill-accent" x="86" y="234" width="88" height="30" rx="2" stroke="#B73B2F" stroke-width="1.3"/>
+          <text class="node-label-accent" x="130" y="253" text-anchor="middle" font-size="11">Envoy</text>
+          <!-- pod 4 -->
+          <rect class="node-fill" x="210" y="200" width="120" height="78" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="270" y="222" text-anchor="middle" font-size="12">Pod D</text>
+          <rect class="node-fill-accent" x="226" y="234" width="88" height="30" rx="2" stroke="#B73B2F" stroke-width="1.3"/>
+          <text class="node-label-accent" x="270" y="253" text-anchor="middle" font-size="11">Envoy</text>
+
+          <text class="branch-label" x="200" y="312" text-anchor="middle" font-size="11">4 个 Pod = 4 个 Envoy</text>
+          <text class="node-label" x="200" y="332" text-anchor="middle" font-size="11" fill="#525252">内存／CPU 随 Pod 数线性叠加</text>
+          <text class="node-label" x="200" y="352" text-anchor="middle" font-size="11" fill="#525252">大量代理在空转</text>
+
+          <!-- RIGHT: ambient -->
+          <text class="branch-label" x="610" y="34" text-anchor="middle">ambient 模式</text>
+          <text class="node-label" x="610" y="52" text-anchor="middle" font-size="11" fill="#525252">每节点一个 ztunnel + 可选 waypoint</text>
+
+          <rect class="node-fill" x="450" y="70" width="320" height="300" rx="4" stroke="#A3A3A3" stroke-width="1.2"/>
+          <text class="edge-label" x="470" y="90" text-anchor="start">Node</text>
+
+          <!-- pods (no sidecar) -->
+          <rect class="node-fill" x="480" y="104" width="86" height="48" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="523" y="132" text-anchor="middle" font-size="12">Pod A</text>
+          <rect class="node-fill" x="580" y="104" width="86" height="48" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="623" y="132" text-anchor="middle" font-size="12">Pod B</text>
+          <rect class="node-fill" x="480" y="166" width="86" height="48" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="523" y="194" text-anchor="middle" font-size="12">Pod C</text>
+          <rect class="node-fill" x="580" y="166" width="86" height="48" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="623" y="194" text-anchor="middle" font-size="12">Pod D</text>
+
+          <!-- shared ztunnel -->
+          <rect class="node-fill-accent" x="480" y="234" width="186" height="34" rx="2" stroke="#B73B2F" stroke-width="1.5"/>
+          <text class="node-label-accent" x="573" y="256" text-anchor="middle" font-size="12">ztunnel（L4 mTLS）</text>
+
+          <!-- pods -> ztunnel -->
+          <line class="diagram-soft" x1="523" y1="152" x2="523" y2="232" marker-end="url(#arrow-ink2)"/>
+          <line class="diagram-soft" x1="623" y1="214" x2="600" y2="232" marker-end="url(#arrow-ink2)"/>
+
+          <!-- waypoint optional -->
+          <rect class="node-fill" x="690" y="234" width="68" height="34" rx="2" stroke="#0A0A0A" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <text class="node-label" x="724" y="251" text-anchor="middle" font-size="10">waypoint</text>
+          <text class="node-label" x="724" y="263" text-anchor="middle" font-size="9" fill="#525252">L7 可选</text>
+
+          <text class="branch-label" x="610" y="312" text-anchor="middle" font-size="11">4 个 Pod = 1 个 ztunnel</text>
+          <text class="node-label" x="610" y="332" text-anchor="middle" font-size="11" fill="#525252">省 90%+ 闲置代理的内存／CPU</text>
+          <text class="node-label" x="610" y="352" text-anchor="middle" font-size="11" fill="#525252">L7 按需才走 waypoint</text>
+        </svg>
+        <figcaption><span class="fig-num">图 9.2</span>从"每 Pod 一个 Envoy"到"每节点一个 ztunnel"，代理数量从随 Pod 数线性增长降为随节点数增长。<strong>注意</strong>：ambient 的主要动因是<em>经济性</em>——去掉 N 个闲置 Envoy 的乘数，省下 90%+ 的内存和 CPU，而不是它带来了什么新的 L7 能力。L7 能力反而被拆出来变成按需的 waypoint。</figcaption>
+      </figure>
+
+      <h3>可观测性：OpenTelemetry 成标准，eBPF 让采集零侵入</h3>
+
+      <p>两件事正在改写"怎么把系统看清楚"：</p>
+
+      <ul>
+        <li><strong>OpenTelemetry（OTel）成了跨厂商标准</strong>：一套统一的 SDK 和协议描述 traces、metrics、logs，应用只对接 OTel，背后换 Jaeger、Prometheus、各家云厂商都不用改代码。到 2024–2025，tracing 部分已稳定，logs 部分在成熟中。它的价值是<strong>打破了厂商私有埋点 SDK 的锁定</strong>。</li>
+        <li><strong>eBPF 让采集零代码侵入</strong>：eBPF 是在 Linux 内核里安全运行小程序的机制，可以 hook 系统调用和 socket 读写，直接在内核层观察 HTTP／gRPC 流量，免改一行应用代码就产出 RED 指标和调用链。Grafana 的 Beyla 在 2025-05 捐给 OTel 成为 OBI（OpenTelemetry eBPF Instrumentation）。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">常见误解 · "免费全链路追踪"被夸大了</span>
+        <p>eBPF 采集的卖点常被讲成"零侵入拿到完整的分布式追踪"，这话只对了一半。L4 层的连接信息和单服务的 RED 指标（速率／错误／时延），eBPF 确实能在内核轻松拿到。但真正难的两件事它仍解决不好：<strong>跨服务的上下文传播</strong>（要把同一个请求在 A、B、C 三个服务的 span 串成一条链，需要 trace-id 跟着请求头传递，这是应用层语义，内核看不见）和 <strong>userspace TLS 加密的载荷</strong>（在用户态加密的内容内核读不到明文）。所以现实是 eBPF 把"基础指标"做到了零侵入，但"完整因果链"仍需要应用配合传播上下文。把这两者混为一谈，会在选型时高估它能省掉的工作量。</p>
+      </div>
+
+      <h3>微服务边界回潮：从"什么都拆"到"按合适粒度拆"</h3>
+
+      <p>2023–2025 年的一个明显转向是：业界不再无条件推崇"把一切都拆成微服务"，转而强调<strong>把服务边界划在合适的粒度上</strong>。这个转向最常被引用、也最常被误读的，是 Prime Video 的那个案例。</p>
+
+      <div class="rationale">
+        <span class="label">机制深一层 · Prime Video 的故事到底说了什么</span>
+        <p>流传的版本是"亚马逊放弃微服务回到单体"，这是误读。真实情况是：一个团队原本用 step-function 编排一串 Lambda，各步骤之间通过 S3 互相传递数据——每一步都要往 S3 写一次、下一步再读一次，于是大量成本和延迟耗在这些 S3 往返上。他们把这条链合并成一个进程，去掉了 S3 中转。<strong>合并后的产物更像一个"粒度更粗的微服务"，而不是回到了单体</strong>。教训是"把边界画对（right-sizing）"，不是"微服务是错的"。</p>
+      </div>
+
+      <p>真正要警惕的反模式是<strong>分布式单体（distributed monolith）</strong>：一堆名义上的"微服务"共享同一个数据库。这种结构同时付出了两份代价——它有微服务的网络延迟和部分失败复杂度（跨服务调用会超时、会失败，08 章的所有问题都在），却拿不到微服务真正的好处（独立部署、独立伸缩、故障隔离），因为共享库把它们死死耦合在一起。改一张表所有服务都得协调上线，和单体没区别，还多了一层网络的不可靠。判断一个微服务架构是否健康，一个最直接的问题是：<strong>这些服务能不能各自独立部署、各自拥有自己的数据</strong>。答案是否，就是分布式单体。</p>
+
+      <table class="compare-table">
+        <caption>正在变化的四股力量 · 驱动力与对选型的含义</caption>
+        <thead>
+          <tr><th>趋势</th><th>真正的驱动力</th><th>主要代价</th><th>对选型意味着什么</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>分布式 SQL</td>
+            <td>把分区+复制+共识+事务打包，抹平 SQL／NoSQL 二分</td>
+            <td>commit-wait 延迟、跨 range 仍走 2PC、依赖时钟假设</td>
+            <td>新项目要强一致+水平扩展时，先考虑它，少手写分库分表</td>
+          </tr>
+          <tr>
+            <td>Ambient Mesh</td>
+            <td>经济性：去掉每 Pod 一个 Envoy 的乘数</td>
+            <td>较新、L7 路径多一跳 waypoint、生态仍在补齐</td>
+            <td>规模大、sidecar 资源占用痛时值得评估；不是为了新功能</td>
+          </tr>
+          <tr>
+            <td>OTel + eBPF</td>
+            <td>打破厂商锁定 + 零代码采集基础指标</td>
+            <td>跨服务上下文传播、TLS 载荷仍难，"全链路免费"被夸大</td>
+            <td>埋点统一用 OTel；eBPF 补基础指标，链路追踪仍要应用配合</td>
+          </tr>
+          <tr>
+            <td>微服务边界回潮</td>
+            <td>对"无脑全拆"的纠偏，强调右尺寸</td>
+            <td>—（这是认知纠偏，不是新技术）</td>
+            <td>别盲目全拆；警惕共享库的分布式单体</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">预测一下</span>
+        <p>一个团队把三个"微服务"接到了同一个 MySQL 上，对外宣称这是微服务架构。和真正各自独立拥有数据库的微服务相比，它<strong>多付出</strong>了什么、又<strong>没拿到</strong>什么？</p>
+        <details>
+          <summary>展开参考答案</summary>
+          <p><strong>多付出的</strong>：服务之间的调用变成了网络调用，引入了超时、重试、部分失败这些 08 章的全部复杂度——一个服务慢会拖累调用它的服务，要熔断、要舱壁。这些在单进程里本不存在。</p>
+          <p><strong>没拿到的</strong>：微服务最核心的两个好处都没有。① 不能独立部署——改一张共享表的 schema，所有用到它的服务都得协调发布；② 不能独立伸缩和故障隔离——共享库一旦成为瓶颈或挂掉，所有服务一起受影响。它本质是一个被网络切开的单体，即分布式单体，是两头不讨好的结构。判别标准就一句：服务能不能各自独立部署且独占自己的数据。</p>
+        </details>
+      </div>
+
+      <h2 id="s4"><span class="num">9.4</span><span>可观测性：用 SLI/SLO/错误预算给"够好"下定义</span></h2>
+
+      <p>前面所有章节都假设你<em>知道</em>系统现在好不好——但这个"知道"靠什么来？靠监控大盘上一堆五颜六色的曲线，并不能回答"我们达标了吗""现在该不该发版"。可观测性框架要做的，是把模糊的"系统挺稳"翻译成可测、可对账的指标。</p>
+
+      <p>骨架是三层递进：</p>
+
+      <ul>
+        <li><strong>SLI（Service Level Indicator，服务等级指标）</strong>：一个<em>实测的比率</em>。比如"成功请求数 ÷ 总请求数"，或"p95 延迟低于 300ms 的请求占比"。关键是它是测出来的事实，不是愿望。</li>
+        <li><strong>SLO（Service Level Objective，服务等级目标）</strong>：给 SLI 定的<em>目标线</em>。比如"99.9% 的请求成功"。SLO 是团队对自己的承诺，是工程决策的依据。</li>
+        <li><strong>错误预算（error budget）</strong>：<code>100% − SLO</code>，即<em>允许坏掉多少</em>。SLO 99.9% 就意味着每月约有 0.1%（约 43 分钟）的"可以坏"的额度。坏超了就触发动作——通常是<strong>冻结发布</strong>，把精力全转到可靠性上，直到预算恢复。</li>
+      </ul>
+
+      <div class="callout warning">
+        <span class="label">反直觉 · 错误预算有剩，是该更激进发布的信号</span>
+        <p>大多数人的直觉是"可用性越高越好，最好 100%"。错误预算把这个直觉推翻了。如果月底错误预算还剩很多，说明这个月发布太保守、迭代太慢——<strong>预算没花完就是浪费</strong>，应该更频繁地发版、冒更多合理的险。反过来，100% 可用是一个错误的目标：追求它会让团队不敢动任何东西，把迭代速度扼杀掉，而用户从 99.9% 到 99.99% 的体感提升，往往远不值得为之放弃的产品演进速度。错误预算的真正作用，是把"可靠性"从一个含糊的道德要求，变成一笔可以理性花掉的额度，让稳定和速度之间的张力有了可量化的仲裁规则。</p>
+      </div>
+
+      <p>有了"够好"的定义，还需要知道<strong>看哪些指标</strong>。这里有两个互补的视角，覆盖问题的两端：</p>
+
+      <ul>
+        <li><strong>RED（Rate / Errors / Duration）——面向请求</strong>：请求速率、错误率、耗时分布。站在"用户发来的请求"这一侧看服务，回答"用户感受到的服务好不好"。</li>
+        <li><strong>USE（Utilization / Saturation / Errors）——面向资源</strong>：利用率、饱和度、错误数。站在"CPU／内存／磁盘／连接池"这一侧看机器，回答"哪个资源快撑不住了"。</li>
+      </ul>
+
+      <p>两者是<strong>因果两端</strong>：RED 告诉你"用户那头出问题了"（症状），USE 帮你定位"是哪个资源饱和导致的"（病因）。Google 的"四个黄金信号"基本是 RED 再加上一个饱和度（saturation），把请求视角和资源视角缝在一起。</p>
+
+      <figure>
+        <svg viewBox="0 0 780 360" role="img" aria-labelledby="fig93-title">
+          <title id="fig93-title">错误预算与 RED/USE 两个观测视角</title>
+          <defs>
+            <marker id="arrow-ink3" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="arrow-verm3" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+              <path d="M0,0 L8,4 L0,8 Z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- error budget bar -->
+          <text class="branch-label" x="40" y="36" text-anchor="start">错误预算 = 100% − SLO</text>
+          <rect class="node-fill" x="40" y="50" width="700" height="36" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <rect x="40" y="50" width="630" height="36" rx="0" fill="#FAFAFA"/>
+          <rect x="670" y="50" width="70" height="36" class="node-fill-accent"/>
+          <line class="diagram-ink" x1="670" y1="50" x2="670" y2="86"/>
+          <rect class="node-fill" x="40" y="50" width="700" height="36" rx="3" stroke="#0A0A0A" stroke-width="1.4" fill="none"/>
+          <text class="node-label" x="355" y="73" text-anchor="middle" font-size="12">SLO 99.9% — 必须保住</text>
+          <text class="node-label-accent" x="705" y="72" text-anchor="middle" font-size="11">0.1%</text>
+          <text class="edge-label" x="705" y="104" text-anchor="middle" font-size="10">可花的额度</text>
+
+          <!-- request flow -->
+          <rect class="node-fill" x="40" y="170" width="120" height="44" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="100" y="197" text-anchor="middle" font-size="12">用户请求</text>
+
+          <rect class="node-fill" x="320" y="160" width="160" height="64" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="400" y="186" text-anchor="middle" font-size="12">服务</text>
+          <text class="node-label" x="400" y="206" text-anchor="middle" font-size="11" fill="#525252">（请求经过、消耗资源）</text>
+
+          <rect class="node-fill" x="620" y="170" width="120" height="44" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="680" y="197" text-anchor="middle" font-size="12">资源池</text>
+
+          <line class="diagram-ink" x1="160" y1="192" x2="316" y2="192" marker-end="url(#arrow-ink3)"/>
+          <line class="diagram-ink" x1="480" y1="192" x2="616" y2="192" marker-end="url(#arrow-ink3)"/>
+
+          <!-- RED view -->
+          <rect class="node-fill-accent" x="300" y="262" width="200" height="60" rx="3" stroke="#B73B2F" stroke-width="1.4"/>
+          <text class="node-label-accent" x="400" y="284" text-anchor="middle" font-size="12">RED · 面向请求</text>
+          <text class="node-label" x="400" y="304" text-anchor="middle" font-size="11">速率 / 错误率 / 耗时</text>
+          <line class="diagram-accent" x1="360" y1="262" x2="380" y2="228" marker-end="url(#arrow-verm3)"/>
+          <text class="edge-label" x="320" y="248" text-anchor="middle" font-size="10">症状</text>
+
+          <!-- USE view -->
+          <rect class="node-fill" x="600" y="262" width="160" height="60" rx="3" stroke="#0A0A0A" stroke-width="1.4"/>
+          <text class="node-label" x="680" y="284" text-anchor="middle" font-size="12">USE · 面向资源</text>
+          <text class="node-label" x="680" y="304" text-anchor="middle" font-size="11">利用率/饱和度/错误</text>
+          <line class="diagram-ink" x1="680" y1="262" x2="680" y2="218" marker-end="url(#arrow-ink3)"/>
+          <text class="edge-label" x="712" y="248" text-anchor="middle" font-size="10">病因</text>
+        </svg>
+        <figcaption><span class="fig-num">图 9.3</span>错误预算是 SLO 留出的那一小段"可以坏"的额度；RED 从请求侧看症状、USE 从资源侧找病因，两个视角咬合在一起。<strong>注意</strong>：RED 红了先看 USE 找根因——用户侧的"慢和错"往往是某个资源饱和的下游表现，单看任一侧都会断链。</figcaption>
+      </figure>
+
+      <div class="callout insight">
+        <span class="label">interleaving · 可观测性接住前面所有章的失败模式</span>
+        <p>这套指标不是孤立的——它正是前几章那些失败模式的探针。USE 的饱和度直接对应 07 章的<strong>背压</strong>（队列堆积、消费跟不上）；RED 的错误率突增往往是 08 章<strong>熔断器跳到 OPEN</strong> 或重试风暴的信号；p99 耗时拉长常是 04 章<strong>复制延迟</strong>或某个分片热点（03 章）的外在表现。可观测性是把前八章的理论失效条件，变成线上能被看见、被告警的具体曲线。</p>
+      </div>
+
+      <h2 id="s5"><span class="num">9.5</span><span>已被取代：这些别再学、别再用</span></h2>
+
+      <p>识别过期技术是为了止损。下表把曾经的标准答案和今天的替代并排，每一行都对应着前面某一章讲过的机制——这也是对全书的一次回扣。</p>
+
+      <table class="compare-table">
+        <caption>旧做法 → 新做法 · 及被取代的原因</caption>
+        <thead>
+          <tr><th>已被取代（旧）</th><th>现在用（新）</th><th>为什么换</th><th>对应章</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>hash mod N 分片</td>
+            <td>一致性哈希 + 虚拟节点</td>
+            <td>mod N 在节点数变化时几乎要重排所有 key、打爆网络冷掉缓存；一致性哈希只搬约 1/N</td>
+            <td>03</td>
+          </tr>
+          <tr>
+            <td>跨服务 XA / 2PC</td>
+            <td>Saga / 发件箱（outbox）</td>
+            <td>2PC 是按构造阻塞的协议，跨微服务持锁会拖垮线程池</td>
+            <td>06</td>
+          </tr>
+          <tr>
+            <td>ZooKeeper 版 Kafka</td>
+            <td>KRaft（Kafka 内置 Raft）</td>
+            <td>去掉外部 ZooKeeper 依赖，元数据用 Raft 自管，运维更简单、扩展性更好</td>
+            <td>05</td>
+          </tr>
+          <tr>
+            <td>Hystrix</td>
+            <td>Resilience4j / 服务网格</td>
+            <td>Hystrix 已停止维护；弹性能力下沉到网格或用更轻的库</td>
+            <td>08</td>
+          </tr>
+          <tr>
+            <td>无脑全微服务</td>
+            <td>右尺寸服务 / 模块化单体</td>
+            <td>无差别拆分带来分布式单体的复杂度却没好处</td>
+            <td>09</td>
+          </tr>
+          <tr>
+            <td>厂商私有埋点 SDK</td>
+            <td>OpenTelemetry</td>
+            <td>统一标准打破厂商锁定，换后端不用改代码</td>
+            <td>09</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>选中标红的那一行（hash mod N → 一致性哈希）是这张表里最该刻进肌肉记忆的一条：它出现频率最高、踩中代价最大，也是 03 章最核心的机制。看到任何代码或设计还在用 <code>hash(key) % N</code> 决定数据落点，几乎都是一个该被替换的信号。</p>
+
+      <h2 id="s6"><span class="num">9.6</span><span>往哪走：克制的前瞻</span></h2>
+
+      <p>以下是趋势外推，是<strong>判断而非定论</strong>——写下来是为了给思考一个方向，不是要你照着押注。</p>
+
+      <ul>
+        <li><strong>弹性模式继续下沉到 sidecar / 网格</strong>：限流、重试、熔断这些 08 章的能力，越来越不该写进业务代码，而是交给基础设施统一提供。Ambient Mesh 把这条路的成本又压低了一截。</li>
+        <li><strong>分布式 SQL 继续吃掉手工分库分表</strong>：随着 commit-wait 延迟优化和生态成熟，越来越多原本要手写分片+Saga 的场景会被分布式 SQL 直接覆盖。手工分库分表会越来越像一种"特殊场景下的优化"，而非默认起点。</li>
+        <li><strong>eBPF + OTel 让可观测性更趋零侵入</strong>：基础指标的采集成本会持续下降，但前面强调过的"跨服务上下文传播"这道坎短期内仍在——零侵入会覆盖更多，但不会覆盖全部。</li>
+      </ul>
+
+      <p>这些方向有一个共同主题：<strong>把分布式系统里反复出现的复杂度，从应用层不断下沉到平台层</strong>。但无论下沉到哪里，第 01 章那条主线都不会变——状态一旦跨机器存在，分区、复制、一致性的取舍就永远在那里。平台能替你<em>实现</em>这些取舍，但<strong>替你做不了"该牺牲什么"的决定</strong>。那始终是设计者的判断，也正是这整本教程想交到你手上的东西。</p>
+
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <p>先合上教程，把答案写下来或讲出来，再展开对照。能讲清"为什么"比记住名词重要。</p>
+        <ol>
+          <li>一份新代码里看到用 <code>hash(key) % N</code> 决定数据落到哪个节点。这个做法现在还该用吗？该换成什么，换的理由是什么？</li>
+          <li>错误预算这个概念为什么说"预算有剩反而是问题"？追求 100% 可用为什么是错误目标？</li>
+          <li>有人说 eBPF 能"零侵入拿到完整的分布式全链路追踪"。这句话哪一半是对的、哪一半被夸大了？被夸大的部分卡在什么地方？</li>
+          <li>怎么一句话判断一个号称"微服务"的架构其实是分布式单体？它两头不讨好在哪？</li>
+        </ol>
+        <details>
+          <summary>展开参考答案</summary>
+          <p><strong>1.</strong> 不该用。<code>hash mod N</code> 的致命问题是节点数 N 一变（加机器或某节点挂），<code>% N</code> 的结果几乎对所有 key 都变了，于是几乎所有数据都要搬家——打爆网络、把所有缓存冷掉。该换成<strong>一致性哈希 + 虚拟节点</strong>（03 章）：成员变更时只重映射环上相邻弧段、约 <code>1/N</code> 的 key 需要搬动，虚拟节点再负责把负载摊匀。</p>
+          <p><strong>2.</strong> 错误预算 = <code>100% − SLO</code>，是"允许坏掉多少"的额度。月底还剩很多，说明发布太保守、迭代太慢——预算没花完等于浪费了可以承担的合理风险，应该更激进地发版。追求 100% 可用是错误目标，因为它会让团队不敢改动任何东西，用迭代速度去换一点用户几乎无感的可用性提升；错误预算的意义正是把可靠性变成一笔可理性花掉的额度，给"稳定 vs 速度"一个可量化的仲裁。</p>
+          <p><strong>3.</strong> 对的一半：L4 连接信息和单服务的 RED 指标（速率/错误/时延），eBPF 在内核 hook 系统调用和 socket 就能零代码拿到。被夸大的一半：<em>完整</em>的跨服务因果链做不到零侵入——把同一请求在多个服务里的 span 串成一条链，需要 trace-id 跟着请求头传播，这是应用层语义，内核看不见；另外用户态 TLS 加密的载荷内核读不到明文。所以基础指标零侵入、完整链路仍需应用配合。</p>
+          <p><strong>4.</strong> 一句话判别：这些"微服务"能不能各自独立部署、各自独占自己的数据？若它们共享同一个数据库，就是分布式单体。两头不讨好：付出了微服务的网络延迟和部分失败复杂度（跨服务调用会超时会失败），却拿不到独立部署和独立伸缩/故障隔离的好处——共享库把它们死死耦合，本质是被网络切开的单体。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战</span>
+        <h3>一个团队问你"我们要不要引入服务网格"，你该先问哪 3 个问题</h3>
+        <p>不要直接答要或不要。列出 3 个能决定答案的问题，并说明每个问题的"什么答案"会把决策推向"上"或"不上"。提示：从 09 章讲的驱动力（经济性、能力、纠偏）反推，一个工具值不值得引入，取决于它解决的痛是不是你真有的痛。</p>
+        <details>
+          <summary>展开思路（不是唯一解）</summary>
+          <p><strong>问题 1 · 你现在的痛是什么？</strong>是反复在每个服务里手写重试/熔断/mTLS、想统一下沉（→ 倾向上网格，这正是它的强项）；还是只是觉得"大厂都用所以该用"（→ 没有真实痛点，先别上，网格本身有显著运维和延迟成本）。</p>
+          <p><strong>问题 2 · 你的规模到了吗、能吃下它的代价吗？</strong>网格会给每次调用加一跳代理（延迟）、增加可观测性和排障的复杂度。服务数和团队规模小的时候，这笔成本往往盖过收益。若规模大、且 sidecar 的资源占用已成痛点，可重点评估 ambient 模式（经济性是它的核心动因，09.3）。</p>
+          <p><strong>问题 3 · 这些能力有没有更轻的替代？</strong>如果只需要重试/熔断/限流，Resilience4j 这类库或网关层就够了，不必为此背上整个网格的运维负担。把"网格"和"它声称解决的具体能力"分开问——能力可以单独获取时，未必要整套引入。</p>
+          <p>核心判断法：工具值不值得引入，取决于它解决的痛是不是你<em>真有</em>的痛，以及你能否吃下它的代价——而不是它有多先进。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li>Istio 官方博客 — Ambient Mesh GA 公告（ztunnel / waypoint 架构与动因）：<a href="https://istio.io/latest/blog/2024/ambient-reaches-ga/">istio.io</a>。</li>
+          <li>Google SRE Book（监控与四黄金信号）与 SRE Workbook，<em>Implementing SLOs</em>（SLI/SLO/错误预算）：<a href="https://sre.google/workbook/implementing-slos/">sre.google</a>。</li>
+          <li>OpenTelemetry eBPF Instrumentation（OBI，原 Grafana Beyla）项目文档：<a href="https://opentelemetry.io/docs/zero-code/obi/">opentelemetry.io</a>。</li>
+          <li>Adrian Cockcroft — 对 Prime Video 案例的澄清（"right-sizing"而非"放弃微服务"）。</li>
+          <li>CockroachDB distributed SQL 架构文档；Google Spanner / TrueTime 论文（commit-wait 与全局时间戳）。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="08-resilience.html">
+          <span class="label">← 上一章</span>
+          <span class="title">08 高可用与容错</span>
+        </a>
+        <a class="next" href="10-self-check.html">
+          <span class="label">下一章 →</span>
+          <span class="title">10 自测题库</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">9.1 知识三态化</a></li>
+        <li><a href="#s2" data-toc-target="s2">9.2 稳定核心</a></li>
+        <li><a href="#s3" data-toc-target="s3">9.3 正在变化</a></li>
+        <li><a href="#s4" data-toc-target="s4">9.4 可观测性</a></li>
+        <li><a href="#s5" data-toc-target="s5">9.5 已被取代</a></li>
+        <li><a href="#s6" data-toc-target="s6">9.6 往哪走</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>

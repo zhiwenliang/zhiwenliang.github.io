@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 架构与陷阱 · DDD 领域驱动设计深入</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear; }
+.learning-path { max-width: var(--page-max); margin: 0 auto; padding: 16px 40px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--ink-faint); }
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px; max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px; }
+@media (max-width: 1080px) { .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; } .toc-sidebar { display: none; } }
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin: 0 0 8px; font-weight: 500; }
+.chapter-opener h1 { font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink); }
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin: 0 0 8px; font-weight: 500; }
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+.schema-panel p { margin: 4px 0; font-size: 15.5px; }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code { font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft); padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule); }
+article a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint); text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms; }
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 { font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3; margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em; }
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner { font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500; margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint); }
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block; }
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft); }
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy { border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft); cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms; }
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block; }
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary { cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block; }
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption { text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); padding: 0 0 8px; font-weight: 500; }
+.compare-table thead th { text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink); padding: 8px 10px; border-bottom: 1px solid var(--ink); }
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child { border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative; }
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block; }
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 500; margin: 0 0 8px; }
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar { position: sticky; top: 24px; align-self: start; padding-top: 24px; font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 48px); overflow-y: auto; }
+.toc-sidebar .toc-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a { display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none; border-left: 2px solid transparent; transition: all 150ms; font-size: 11px; }
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 总览</a><span class="sep">—</span>
+    <a href="01-concepts.html">01 领域与语言</a><span class="sep">—</span>
+    <a href="02-strategic-design.html">02 战略设计</a><span class="sep">—</span>
+    <a href="03-bounded-context.html">03 限界上下文</a><span class="sep">—</span>
+    <a href="04-event-storming-bridge.html">04 事件风暴</a><span class="sep">—</span>
+    <a href="05-aggregate.html">05 聚合</a><span class="sep">—</span>
+    <a href="06-tactical-patterns.html">06 战术构件</a><span class="sep">—</span>
+    <a href="07-domain-events.html">07 领域事件</a><span class="sep">—</span>
+    <a href="08-architecture-pitfalls.html" class="current">08 架构与陷阱</a><span class="sep">—</span>
+    <a href="09-self-check.html">09 自检</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 08</p>
+        <h1>架构与陷阱：把构件装进容器，并校准判断力</h1>
+        <p class="recap">前面建好了所有构件——聚合、值对象、领域事件、仓储、领域服务。本章把它们装进"依赖指向内"的容器，并校准判断力：分清 DDD 说什么、架构说怎么，知道何时该退回 CRUD。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>一条依赖规则：源码依赖只指向内，领域不依赖任何东西——六边形、整洁、洋葱是同一规则的三种画法</li>
+          <li>用了六边形 ≠ 在做 DDD：架构是交付机制，统一语言/聚合/上下文映射才是 DDD</li>
+          <li>CQRS 与事件溯源都是"按需"补充，不是 DDD 的前置条件</li>
+          <li>限界上下文 ≠ 微服务 1:1：模块化单体优先，服务从边界涌现</li>
+          <li>何时不用 DDD：通用/支撑域、短命工具、无领域专家 → 退回事务脚本 / CRUD</li>
+        </ul>
+      </section>
+
+      <p>前七章造的是构件。本章问两个不同的问题：这些构件<strong>装在什么形状的代码结构里</strong>（架构），以及——更要紧的——<strong>这一摊业务到底该不该上全套 DDD</strong>（判断力）。前一半讲六边形/整洁/洋葱与两个补充模式（CQRS、事件溯源）；后一半把刀口转向自己，列出何时退回 CRUD，以及一张陷阱合集。贯穿全章的还是「云市」：销售上下文的 <code>Order</code> 聚合、它的 <code>OrderRepository</code>，以及库存上下文的 <code>StockItem</code>。</p>
+
+      <!-- ========================= 8.1 六边形 ========================= -->
+      <h2 id="s1"><span class="num">8.1</span><span>六边形架构 / 端口与适配器 Hexagonal：依赖只指向内</span></h2>
+
+      <p class="one-liner">六边形架构（Hexagonal Architecture，又名端口与适配器 Ports &amp; Adapters）：领域在最里层、不依赖任何外部技术；所有数据库、HTTP、UI 都是外层适配器，源码依赖一律指向内。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前面六章把领域逻辑（不变量、状态机、定价规则）当宝贝一样保护起来。但只要 <code>Order</code> 这个类 <code>import javax.persistence.*</code>、字段上挂 <code>@Entity</code>、方法里调 JDBC，领域就被数据库技术绑死了——换存储、写单元测试、跨上下文复用都被拖累。六边形给出一条硬规则把这件事制度化：<strong>领域不许知道任何外部技术的存在</strong>。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：六边形的全部内容是一条<strong>依赖规则（dependency rule）</strong>——源码层面的 <code>import</code> 依赖<strong>只能指向内</strong>，最内层是领域模型，它不 <code>import</code> 任何东西（除了语言标准库）。问题随之而来：领域要存订单，怎么存？它又不许依赖数据库。答案是<strong>依赖倒置（Dependency Inversion）</strong>：领域层<strong>自己声明一个端口接口</strong>（如 <code>OrderRepository</code>），表达"我需要一个能存取订单的东西"；基础设施层写一个<strong>适配器</strong>（如 <code>JpaOrderRepository</code>）去 <code>implements</code> 这个接口。这样接口归领域、实现归基础设施，依赖箭头就从"基础设施"指向"领域"——而不是反过来。运行期靠 IoC 容器把适配器实例注入领域用到的端口（这正是 01 章 Spring 的 DI 在 DDD 里的位置）。</p>
+
+      <h3>场景走查：OrderRepository 端口 + JpaOrderRepository 适配器</h3>
+      <p>「云市」销售上下文要存订单。端口接口放在领域层，用领域语言说话（<code>add</code> / <code>orderOfId</code>，不是 <code>save</code> / <code>findById</code>）；JPA 适配器放在基础设施层，去实现它。</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">领域层：端口接口（领域只声明"需要什么"）</span><span class="lang">Java</span><button class="copy" data-copy-target="c-port">复制</button></div>
+<pre id="c-port"><code class="language-java">// 包: com.yunshi.sales.domain —— 领域层
+// 不 import 任何 JPA / SQL / Spring 持久化类型。整个文件只认识领域概念。
+public interface OrderRepository {
+    void add(Order order);                 // 加入一个新聚合
+    Order orderOfId(OrderId orderId);      // 按标识取回聚合
+    void remove(Order order);
+}</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">基础设施层：适配器实现（依赖倒置：实现指向领域）</span><span class="lang">Java</span><button class="copy" data-copy-target="c-adapter">复制</button></div>
+<pre id="c-adapter"><code class="language-java">// 包: com.yunshi.sales.infrastructure —— 基础设施层
+// 这里才允许 import JPA。它依赖领域（implements 领域的接口），领域不依赖它。
+@Repository
+public class JpaOrderRepository implements OrderRepository {
+
+    private final OrderJpaMapper jpa;     // Spring Data 仓库，纯技术细节
+
+    public JpaOrderRepository(OrderJpaMapper jpa) { this.jpa = jpa; }
+
+    @Override
+    public void add(Order order) {
+        jpa.save(OrderRecord.fromDomain(order));   // 领域对象 ↔ 持久化记录互转
+    }
+
+    @Override
+    public Order orderOfId(OrderId orderId) {
+        return jpa.findById(orderId.value())
+                  .map(OrderRecord::toDomain)
+                  .orElseThrow(() -&gt; new OrderNotFound(orderId));
+    }
+
+    @Override
+    public void remove(Order order) { jpa.deleteById(order.id().value()); }
+}</code></pre>
+      </div>
+
+      <p>关键不在代码量，而在<strong>箭头方向</strong>：<code>JpaOrderRepository</code> 这个文件 <code>import</code> 了领域的 <code>Order</code> / <code>OrderRepository</code>；领域那个文件<strong>一行都没</strong> <code>import</code> 基础设施。删掉整个基础设施包，领域仍能编译、仍能用内存假实现做单元测试。这就是"领域不依赖任何东西"落到 <code>import</code> 语句上的样子。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 420" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="六边形架构：领域核心在最内，外面一圈端口接口，再外面是数据库、HTTP、UI 三个适配器，所有依赖箭头都指向内">
+          <defs>
+            <marker id="hex-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- domain core -->
+          <rect x="290" y="160" width="180" height="100" rx="10" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="198" text-anchor="middle" class="node-label-accent">领域核心</text>
+          <text x="380" y="220" text-anchor="middle" class="edge-label">Order 聚合 / 不变量</text>
+          <text x="380" y="240" text-anchor="middle" class="edge-label">不 import 任何技术</text>
+
+          <!-- port ring labels -->
+          <rect x="204" y="186" width="80" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="244" y="206" text-anchor="middle" class="edge-label">端口</text>
+          <text x="244" y="224" text-anchor="middle" class="edge-label">OrderRepo</text>
+          <rect x="476" y="186" width="80" height="48" rx="6" class="diagram-ink node-fill"/>
+          <text x="516" y="206" text-anchor="middle" class="edge-label">端口</text>
+          <text x="516" y="224" text-anchor="middle" class="edge-label">PlaceOrder</text>
+
+          <!-- adapters -->
+          <rect x="60" y="60" width="170" height="56" rx="8" class="diagram-ink node-fill"/>
+          <text x="145" y="84" text-anchor="middle" class="node-label">适配器：HTTP</text>
+          <text x="145" y="103" text-anchor="middle" class="edge-label">REST Controller</text>
+
+          <rect x="60" y="304" width="170" height="56" rx="8" class="diagram-ink node-fill"/>
+          <text x="145" y="328" text-anchor="middle" class="node-label">适配器：DB</text>
+          <text x="145" y="347" text-anchor="middle" class="edge-label">JpaOrderRepository</text>
+
+          <rect x="530" y="304" width="170" height="56" rx="8" class="diagram-ink node-fill"/>
+          <text x="615" y="328" text-anchor="middle" class="node-label">适配器：UI</text>
+          <text x="615" y="347" text-anchor="middle" class="edge-label">页面 / 网关回调</text>
+
+          <!-- dependency arrows all point inward -->
+          <line x1="218" y1="104" x2="296" y2="172" class="diagram-accent" marker-end="url(#hex-acc)"/>
+          <line x1="218" y1="332" x2="296" y2="248" class="diagram-accent" marker-end="url(#hex-acc)"/>
+          <line x1="542" y1="332" x2="466" y2="248" class="diagram-accent" marker-end="url(#hex-acc)"/>
+
+          <text x="380" y="392" text-anchor="middle" class="branch-label">所有源码依赖箭头都指向内</text>
+        </svg>
+        <figcaption><span class="fig-num">图 8.1</span>六边形：领域核心 + 一圈端口（接口）+ 外层适配器（DB / HTTP / UI）。<strong>注意</strong>：箭头全部指向内——适配器 <code>import</code> 领域、实现领域声明的端口；领域反过来一无所知。换数据库 = 换一个适配器，碰不到核心。</figcaption>
+      </figure>
+
+      <p><strong>与下一节的关系</strong>：这条"依赖指向内"的规则不止六边形一种画法。整洁架构和洋葱架构画的是同一件事，只是换成同心圆。</p>
+
+      <!-- ========================= 8.2 整洁 / 洋葱 ========================= -->
+      <h2 id="s2"><span class="num">8.2</span><span>整洁 / 洋葱架构 Clean / Onion：同一规则的同心圆，且 ≠ DDD</span></h2>
+
+      <p class="one-liner">整洁架构（Clean Architecture）与洋葱架构（Onion Architecture）是同一条依赖规则的同心圆表述；它们是交付机制，用了它们不等于在做 DDD。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>团队常把"我们上了整洁架构"当成"我们在做 DDD"的证明。这是一次概念混淆，代价是真把领域当回事的功夫没下：分了层，但 <code>Order</code> 仍是贫血数据袋，业务逻辑全在 Service 里——架构对了，领域空了。要拆掉这层误会，先看清这两件事处在<strong>不同维度</strong>。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：洋葱（Palermo）和整洁（Martin）都把代码画成同心圆——最内是领域模型/实体，外面一圈是应用服务/用例，再外面是接口适配器，最外是框架与驱动。圆环之间只有一条约束，<strong>和六边形那条字字相同</strong>：依赖只能从外指向内，内层不知道外层。换句话说，六边形、整洁、洋葱是<strong>同一规则的三种画法</strong>，不是三种架构。它们解决的是"代码怎么分层、依赖怎么摆"，属于<strong>怎么做（how）</strong>。</p>
+
+      <p>而 DDD 解决的是<strong>做什么（what）</strong>：和领域专家一起提炼<strong>统一语言（Ubiquitous Language）</strong>、按真正不变量划<strong>聚合（Aggregate）</strong>、在限界上下文之间做<strong>上下文映射（Context Mapping）</strong>。这些都是关于"模型长什么样"的决定，一行架构图都画不出来。所以——</p>
+
+      <div class="callout warning">
+        <span class="label">关键澄清 · 用了它们 ≠ 在做 DDD</span>
+        <p>整洁 / 洋葱 / 六边形给你一个干净的容器。容器里装的是不是真领域模型，是另一回事。一个有统一语言、有富血聚合、有显式上下文映射的<strong>分层 MVC</strong>，比一个画着完美同心圆、内层却是贫血数据袋的工程<strong>更接近 DDD</strong>。架构是必要的脚手架，不是 DDD 的充分条件。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：上面三种架构都假设"读和写共用一个模型"。当读写的形状真正分叉时，CQRS 把这个假设拆开。</p>
+
+      <!-- ========================= 8.3 CQRS ========================= -->
+      <h2 id="s3"><span class="num">8.3</span><span>CQRS：读写分模型，是补充不是前置</span></h2>
+
+      <p class="one-liner">CQRS（Command Query Responsibility Segregation，命令查询职责分离）：写用领域模型走聚合保不变量，读用专门的查询模型直接拼成页面要的形状——两边是两套模型。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>「云市」的 <code>Order</code> 聚合为了守不变量长得很"立体"（聚合根 + <code>OrderLine[]</code> + 状态机）。但订单列表页只想要一张扁平表：订单号、买家名、总额、状态、下单时间。用聚合去拼这张列表，要么把聚合撑大、要么 N+1 查询。写和读的<strong>最优形状</strong>不一样，硬塞进同一个模型，两头都别扭。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：CQRS 把<strong>命令（改状态）</strong>和<strong>查询（读状态）</strong>分给两套模型。命令侧：应用服务 load 出 <code>Order</code> 聚合、调方法、过仓储——这条路必须走聚合，因为它要保不变量、用乐观锁（05 章）。查询侧：直接对着读库或视图写 SQL，组装成 <code>OrderSummaryView</code> 这样的扁平 DTO，<strong>完全绕过聚合和仓储</strong>，不经过任何领域不变量。轻量做法（CQRS-lite）两侧共库，只是分两条代码路径；重量做法两侧分库，写库发事件、读库异步投影，于是引入最终一致（07 章那条线又出现了）。</p>
+
+      <div class="callout warning">
+        <span class="label">使用边界 · 别给每个聚合都套</span>
+        <p>CQRS 是<strong>补充，不是前置条件</strong>。只在<strong>读写形状或负载真正分叉</strong>时用：复杂报表/列表、读远多于写、读写要独立扩展。给「云市」每一个聚合都配一套命令模型 + 查询模型 + 投影器，是把一个局部优化升级成全局复杂度——大多数支撑型聚合，一个仓储 + 几个查询方法就够了。</p>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：CQRS 的重量版要写库发事件。再往前一步——干脆<strong>只存事件、不存当前状态</strong>——就是事件溯源。</p>
+
+      <!-- ========================= 8.4 事件溯源 ========================= -->
+      <h2 id="s4"><span class="num">8.4</span><span>事件溯源 Event Sourcing：按需用，且 Kafka 不是事件存储</span></h2>
+
+      <p class="one-liner">事件溯源（Event Sourcing）：不存对象的当前状态，只存它经历过的事件序列；当前状态靠把事件依次重放（replay）算出来。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>传统持久化只留"现在余额是 100"，丢掉了"怎么变成 100 的"。有些领域里，<strong>历史本身就是业务</strong>：账务要逐笔审计、风控要回放当时决策、运营要看一个 <code>Order</code> 从 <code>CREATED</code> 到 <code>COMPLETED</code> 每一步谁在何时做了什么。事件溯源把这串过程当作唯一真相来源（source of truth）存下来。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：聚合的每一次状态变更都先产出一个领域事件（<code>OrderPlaced</code>、<code>OrderPaid</code>、<code>StockReserved</code>……，命名仍用 07 章的过去式），按发生顺序追加进事件存储。要取回聚合当前状态，就把它的事件序列<strong>从头重放</strong>。这天然带来审计、时间旅行、按需重建读模型的能力。代价也实打实：查询当前状态要重放（常配快照优化）、事件 schema 演化很难、整个团队的心智模型要换。所以——</p>
+
+      <div class="callout warning">
+        <span class="label">使用边界 · 默认不用</span>
+        <p>事件溯源是<strong>按需</strong>的重型工具，只在<strong>审计 / 回放 / 强时序</strong>是核心需求时用，且通常只用在<strong>核心域的少数聚合</strong>上。CRUD 业务、MVP、短命系统<strong>不要用</strong>——你会为一个用不上的能力付全部的复杂度。「云市」里，账务和订单状态轨迹这类才值得；一个后台的"运营公告"聚合绝不值得。</p>
+      </div>
+
+      <div class="callout insight">
+        <span class="label">现状速览 · Kafka 不是事件存储</span>
+        <p>一个反复出现的失败模式：拿 Kafka 当事件存储来做事件溯源。Kafka 是<strong>分发层（消息总线）</strong>，不是事件存储。事件溯源要求<strong>按实体（聚合实例）取回那一条事件流</strong>，并在追加时做<strong>乐观并发控制</strong>（防止两个写入者基于同一版本并发追加）——这正是 05 章聚合作为版本号单位的延伸。Kafka 按分区/主题组织，<strong>不提供"按聚合 ID 取流 + 版本冲突检测"</strong>这两件事。要做事件溯源，用 EventStoreDB 这类<strong>事件存储</strong>；Kafka 留给"把已落库的事件分发出去"。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队说："我们已经用 Kafka 发 <code>OrderPlaced</code> 给库存上下文了，那把订单的全部历史事件也都堆进一个 Kafka 主题，不就等于事件溯源了？" 这个推理哪里断了？</p>
+        <details>
+          <summary>停 10 秒，再展开</summary>
+          <p>断在"取回单个聚合的状态"这一步。事件溯源要能<strong>只读出 orderId=42 这一条订单的全部事件、按序重放</strong>得到它的当前状态，并在写入时检测版本冲突。Kafka 主题是按分区顺序消费的日志，没有"给我 orderId=42 的事件流"这种按实体的随机检索，也没有针对某个聚合实例的乐观锁。它能<strong>分发</strong>事件，不能<strong>当聚合的真相来源被按实例查询和并发保护</strong>。发事件用 Kafka 没问题；把它当事件存储用，缺的恰是事件溯源赖以成立的两件事。</p>
+        </details>
+      </div>
+
+      <p><strong>与下一节的关系</strong>：CQRS、事件溯源都是"按上下文、仅核心域投入"的局部决定。同样的克制，要用在一个更大的边界上——限界上下文和微服务的关系。</p>
+
+      <!-- ========================= 8.5 BC ≠ 微服务 ========================= -->
+      <h2 id="s5"><span class="num">8.5</span><span>限界上下文 ≠ 微服务 1:1：服务从边界涌现</span></h2>
+
+      <p class="one-liner">一个限界上下文可以、但不必对应一个微服务；模块化单体优先，服务在有真实部署/扩展/团队压力时才从边界涌现。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"一个限界上下文 = 一个微服务"曾是被广泛传播的硬规则。照做的团队拿到的常是：五个上下文五个服务，本可进程内调用的 <code>OrderPlaced</code> 被迫走网络、跨服务事务变成分布式难题、运维成本翻几倍——而业务量根本不需要独立扩展。这是把<strong>语义边界</strong>误当成了<strong>部署边界</strong>。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：限界上下文（03 章）是<strong>语义/模型边界</strong>——同一个词在边界两侧是不同的类（「云市」的 <code>Product</code> 在 Catalog 是胖展示对象、在 Sales 是下单快照）。微服务是<strong>部署/运行时边界</strong>——能独立部署、独立扩展、独立数据库、独立团队负责。这是<strong>两个维度</strong>：前者关于代码怎么建模，后者关于进程怎么切分。它们可以对齐，但不强制 1:1。</p>
+
+      <p>当前共识（2026）已经把硬规则推翻，换成更克制的顺序：</p>
+      <ul>
+        <li><strong>先做模块化单体（modular monolith）</strong>：上下文之间用模块/包边界划清，进程内调用，一套部署。边界在代码里是真实的，运维成本却接近单体。</li>
+        <li><strong>让服务从边界涌现</strong>：当某个上下文出现<strong>真实的</strong>独立部署节奏、独立扩展需求（如库存上下文流量是订单的十倍）、或独立团队所有权时，再沿那条已经划好的上下文边界把它<strong>切出去</strong>成一个服务。</li>
+        <li>边界划对了，这一刀很好切；边界没划对，拆成微服务只是把烂泥摊到网络上。<strong>所以先把上下文边界做对，比先拆服务重要得多。</strong></li>
+      </ul>
+
+      <p><strong>与下一节的关系</strong>：以上全是"上了 DDD 之后怎么摆"。但有一个更前置的问题没问——这摊业务<strong>到底该不该上 DDD</strong>。</p>
+
+      <!-- ========================= 8.6 何时不用 DDD ========================= -->
+      <h2 id="s6"><span class="num">8.6</span><span>何时不用 DDD：退回事务脚本 / CRUD</span></h2>
+
+      <p class="one-liner">通用域、支撑域、短命工具、拿不到领域专家的场景，应退回事务脚本 / Active Record / CRUD 脚手架；对这类子域，贫血 + Service 层是合理默认。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>02 章的核心论断是<strong>均匀地用 DDD 最贵</strong>：聚合、值对象、仓储、领域服务、上下文映射这套功夫只在<strong>复杂的核心域</strong>上回本。把它平铺到每个 CRUD 后台，得到的是大量样板、被架构淹没的简单逻辑、以及团队对 DDD 的反感。所以"不用 DDD"是一个<strong>需要被主动做出</strong>的设计决定，不是偷懒。</p>
+      </div>
+
+      <p><strong>底层机制（比文档深一层）</strong>：三个信号指向"退回简单做法"——</p>
+      <ul>
+        <li><strong>子域类型是通用/支撑</strong>：通用域（如「云市」的发票、对账）能买就买、能用现成框架就用；支撑域（如运营后台、字典维护）逻辑浅，CRUD 足够。只有<strong>核心域</strong>（Sales 的下单与定价）值得全套。</li>
+        <li><strong>短命工具 / MVP</strong>：活不过半年的内部脚本、待验证的原型，建模投资来不及回本。</li>
+        <li><strong>没有领域专家</strong>：统一语言要和懂业务的人共建。没有专家，提炼不出真正不变量，建出来的"聚合"是凭空想象，还不如老实 CRUD。</li>
+      </ul>
+
+      <p>退回的具体形态：<strong>事务脚本（Transaction Script）</strong>——一个用例一段过程式代码，从上到下把这件事办完；<strong>Active Record</strong>——对象直接映射一行表、自带增删改查；<strong>CRUD 脚手架</strong>——框架按表生成的标准增删改查。对这些子域，<code>OrderController → OrderService → OrderDao</code> 这种<strong>贫血对象 + Service 层</strong>结构是<strong>合理默认</strong>，不是反模式。</p>
+
+      <div class="callout insight">
+        <span class="label">平衡 · Fowler 的后期软化</span>
+        <p>Fowler 早年那篇《Anemic Domain Model》把"贫血模型"列为反模式。但后续讨论里他和社区都软化了立场：<strong>贫血是不是反模式，取决于子域</strong>。在一个本质就是 CRUD 的支撑子域上，把数据和行为分开（贫血对象 + Service 层）<strong>是恰当的、甚至更清晰的</strong>选择——它只在<strong>复杂核心域</strong>里才是问题，因为那里业务规则散进 Service、对象退化成数据袋会让真正的复杂度无处安放。一句话：贫血模型是"用错地方"的反模式，不是"哪都不能用"的反模式。</p>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="判别流程：先看子域类型，核心域且复杂且有领域专家才用全套 DDD，否则退回 CRUD 或事务脚本">
+          <defs>
+            <marker id="dec-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#525252"/>
+            </marker>
+            <marker id="dec-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+          <!-- Q1 子域类型 -->
+          <rect x="280" y="24" width="200" height="50" rx="8" class="diagram-ink node-fill"/>
+          <text x="380" y="46" text-anchor="middle" class="node-label">① 是核心域吗？</text>
+          <text x="380" y="64" text-anchor="middle" class="edge-label">通用 / 支撑 → 右走</text>
+
+          <!-- Q2 复杂度 -->
+          <rect x="280" y="124" width="200" height="50" rx="8" class="diagram-ink node-fill"/>
+          <text x="380" y="146" text-anchor="middle" class="node-label">② 逻辑够复杂吗？</text>
+          <text x="380" y="164" text-anchor="middle" class="edge-label">浅 / 短命 → 右走</text>
+
+          <!-- Q3 专家 -->
+          <rect x="280" y="224" width="200" height="50" rx="8" class="diagram-ink node-fill"/>
+          <text x="380" y="246" text-anchor="middle" class="node-label">③ 有领域专家吗？</text>
+          <text x="380" y="264" text-anchor="middle" class="edge-label">没有 → 右走</text>
+
+          <!-- left outcome: full DDD -->
+          <rect x="262" y="312" width="236" height="52" rx="8" class="diagram-accent node-fill-accent"/>
+          <text x="380" y="334" text-anchor="middle" class="node-label-accent">全套 DDD</text>
+          <text x="380" y="353" text-anchor="middle" class="edge-label">聚合 / 值对象 / 仓储 / 上下文映射</text>
+
+          <!-- right outcome: CRUD -->
+          <rect x="560" y="124" width="184" height="64" rx="8" class="diagram-ink node-fill"/>
+          <text x="652" y="148" text-anchor="middle" class="node-label">退回简单做法</text>
+          <text x="652" y="168" text-anchor="middle" class="edge-label">事务脚本 / Active Record</text>
+          <text x="652" y="184" text-anchor="middle" class="edge-label">贫血 + Service 层 / CRUD</text>
+
+          <!-- yes path arrows (down) -->
+          <line x1="380" y1="74" x2="380" y2="124" class="diagram-accent" marker-end="url(#dec-acc)"/>
+          <text x="398" y="102" class="branch-label">是</text>
+          <line x1="380" y1="174" x2="380" y2="224" class="diagram-accent" marker-end="url(#dec-acc)"/>
+          <text x="398" y="202" class="branch-label">是</text>
+          <line x1="380" y1="274" x2="380" y2="312" class="diagram-accent" marker-end="url(#dec-acc)"/>
+          <text x="398" y="298" class="branch-label">是</text>
+
+          <!-- no path arrows (right, merge to CRUD) -->
+          <line x1="480" y1="49" x2="640" y2="124" class="diagram-ink" marker-end="url(#dec-ink)"/>
+          <line x1="480" y1="149" x2="560" y2="156" class="diagram-ink" marker-end="url(#dec-ink)"/>
+          <line x1="480" y1="249" x2="640" y2="188" class="diagram-ink" marker-end="url(#dec-ink)"/>
+          <text x="556" y="70" text-anchor="middle" class="edge-label">否</text>
+        </svg>
+        <figcaption><span class="fig-num">图 8.2</span>判别图：三个"是"全过——核心域 + 够复杂 + 有专家——才走全套 DDD（朱红）；任一为"否"就退回 CRUD / 事务脚本（黑）。<strong>注意</strong>：默认终点是右边那个简单框，全套 DDD 是需要被三道关卡放行的<strong>例外投资</strong>，不是起点。</figcaption>
+      </figure>
+
+      <p><strong>与下一节的关系</strong>：把上面所有判断浓缩成一张表——常见陷阱各自的根因和修复。</p>
+
+      <!-- ========================= 8.7 陷阱合集 ========================= -->
+      <h2 id="s7"><span class="num">8.7</span><span>常见陷阱合集：根因 → 修复</span></h2>
+
+      <p class="one-liner">把前八章踩过的失败模式列在一张表里：每一行先点根因（违反了哪条原则），再给修复方向。</p>
+
+      <table class="compare-table">
+        <caption>表 8.1 · 常见陷阱：根因与修复</caption>
+        <thead><tr><th>陷阱</th><th>根因（违反了哪条）</th><th>修复方向</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>上帝聚合（God Aggregate）</td>
+            <td>把 has-a 对象图当聚合，按对象关联而非真正不变量划边界 → 巨大聚合成乐观锁争用热点（05 章）</td>
+            <td>按真正不变量重切：只把"必须同事务保持一致"的对象留在内；其余按标识引用、移到独立聚合，跨聚合走最终一致</td>
+          </tr>
+          <tr>
+            <td>按表建聚合</td>
+            <td>从数据库表关联倒推聚合，让存储结构决定领域模型（02 / 05 章）</td>
+            <td>先从行为和不变量推出聚合，再让仓储把它映射到表；表是适配器的事，不是领域的形状</td>
+          </tr>
+          <tr>
+            <td>ORM 注解泄漏进领域</td>
+            <td><code>@Entity</code> / <code>@Column</code> 打在 <code>Order</code> 上，领域 <code>import</code> 了持久化技术，违反依赖规则（8.1）</td>
+            <td>领域类保持纯净；在基础设施层用独立的持久化记录 + 映射器（<code>OrderRecord.fromDomain</code>）做转换</td>
+          </tr>
+          <tr>
+            <td>跨聚合事务</td>
+            <td>一个事务里改多个聚合（下单同时扣 <code>StockItem</code>），违反"一个事务一个聚合"（05 / 07 章）</td>
+            <td>一个事务只改一个聚合；跨聚合用领域事件 + 最终一致（<code>OrderPlaced</code> → 异步预留库存）</td>
+          </tr>
+          <tr>
+            <td>共享内核腐化</td>
+            <td>把本该各自建模的 <code>Product</code> 塞进一个"共享"模块，两个上下文被迫共用一个长满矛盾字段的类（03 章一词多义）</td>
+            <td>共享内核只留真正稳定、双方都同意的极小核；其余在边界处用防腐层（ACL）翻译，各上下文留各自的模型</td>
+          </tr>
+          <tr>
+            <td>把 EDA 当领域事件</td>
+            <td>把技术集成消息（"缓存失效""行已更新"）当领域事件，事件里没有领域语言（07 章）</td>
+            <td>领域事件是业务事实、用统一语言命名过去式（<code>OrderPaid</code>）；纯技术消息归集成层，别混进领域</td>
+          </tr>
+          <tr>
+            <td>给 CRUD 套全套 DDD</td>
+            <td>在通用/支撑域、短命工具上铺聚合 + 仓储 + 上下文映射，违反"均匀用 DDD 最贵"（8.6）</td>
+            <td>对这类子域退回事务脚本 / Active Record / CRUD；把建模预算省给核心域</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>七行陷阱可以归到一句话：<strong>DDD 的每个构件都对应一条原则，越界用就成陷阱。</strong>聚合对应一致性边界、依赖规则对应技术隔离、领域事件对应业务事实、全套 DDD 对应核心域投资——把它们用在违背各自前提的地方，就是这张表里的每一行。</p>
+
+      <!-- ========================= self-check ========================= -->
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把答案写在纸上或编辑器里。写完再点开对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>六边形 / 整洁 / 洋葱共有的那条"依赖规则"具体指向哪个方向？领域层为什么能声明 <code>OrderRepository</code> 接口、却由基础设施层去实现它而不违反这条规则？</li>
+          <li>一个团队画了完美的整洁架构同心圆，但 <code>Order</code> 仍是只有 getter/setter 的数据袋。它在做 DDD 吗？用一句话说清架构和 DDD 处在什么关系。</li>
+          <li>CQRS 和事件溯源分别在什么条件下才该用？为什么说它们是补充而不是 DDD 的前置？</li>
+          <li>为什么"一个限界上下文 = 一个微服务"是被推翻的硬规则？限界上下文和微服务各自是哪个维度的边界？</li>
+          <li>给出至少两个"应该退回 CRUD / 事务脚本、不上全套 DDD"的信号。在这类子域里，贫血 + Service 层是反模式吗？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>源码依赖<strong>只指向内</strong>，最内层领域不依赖任何外部技术。靠<strong>依赖倒置</strong>：接口（端口）属于领域层、由领域自己声明；<code>JpaOrderRepository</code> 在基础设施层 <code>implements</code> 它，于是依赖箭头从基础设施指向领域——符合"指向内"。</li>
+            <li>不算（或至少没在做 DDD 的核心）。架构（整洁/洋葱/六边形）是<strong>怎么做</strong>的交付机制，DDD 是<strong>做什么</strong>——统一语言、按不变量划聚合、上下文映射。有干净容器但装着贫血模型，离 DDD 比一个富血的分层 MVC 更远。</li>
+            <li>CQRS：读写形状/负载<strong>真正分叉</strong>时（复杂列表报表、读远多于写、读写要独立扩展）；事件溯源：<strong>审计/回放/强时序</strong>是核心需求时，且通常只用在核心域少数聚合。它们都是按上下文、仅核心域投入的补充，不是 DDD 成立的前提——CRUD/MVP 不该用。</li>
+            <li>因为它把<strong>语义边界</strong>误当<strong>部署边界</strong>：强行 1:1 会把进程内调用变网络、把单聚合事务变分布式难题。限界上下文是<strong>模型/语义</strong>维度的边界，微服务是<strong>部署/运行时</strong>维度的边界。共识：模块化单体优先，服务在有真实压力时从边界涌现。</li>
+            <li>信号：①子域是通用/支撑而非核心；②短命工具/MVP；③拿不到领域专家。在这类子域里，贫血 + Service 层<strong>不是</strong>反模式，而是合理默认（Fowler 后期也软化为"贫血是否反模式取决于子域"）——它只在复杂核心域里才是问题。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给这个"全套 DDD 包了 CRUD 后台"的场景判过度设计</h3>
+        <p>「云市」团队给<strong>运营后台的"系统公告"模块</strong>上了全套 DDD：建了 <code>Announcement</code> 聚合根（内含 <code>AnnouncementContent</code> 值对象、<code>PublishWindow</code> 值对象）、<code>AnnouncementRepository</code> 端口 + JPA 适配器、<code>AnnouncementPublishingService</code> 领域服务，发布时还发 <code>AnnouncementPublished</code> 领域事件走异步投影到一个 CQRS 读模型。该模块的全部业务是：标题、正文、起止时间，增删改查，运营手动点发布。请判断这是不是过度设计，指出违反了本章哪条判断，并给出替代方案。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>是过度设计。对照 8.6 的三道关卡：①子域类型——运营公告是<strong>支撑域</strong>，不是核心域；②复杂度——只有标题/正文/时间 + 增删改查，<strong>没有真正不变量</strong>（"起 ≤ 止"这种校验一个 if 就够，撑不起聚合）；③这里也谈不上需要领域专家深挖。三关全不过，按图 8.2 应走右边那个简单框。CQRS + 事件溯源式的异步投影更是无源之水：读写形状没分叉、没有审计/回放需求（8.3 / 8.4 的使用边界都不满足）。<strong>替代</strong>：一张 <code>announcement</code> 表 + <code>Announcement</code>（Active Record 或贫血实体）+ <code>AnnouncementService</code> 做几个增删改查方法 + 标准 CRUD 控制器。把省下的聚合/事件/CQRS 预算，留给 Sales 的下单与定价那个真正的核心域。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://alistair.cockburn.us/hexagonal-architecture/">Alistair Cockburn · Hexagonal Architecture（端口与适配器原文）</a>（作者）</li>
+          <li><a href="https://www.amazon.com/Implementing-Domain-Driven-Design-Vaughn-Vernon/dp/0321834577">Vaughn Vernon ·《实现领域驱动设计》ch4 架构（六边形/CQRS/事件溯源）</a>（红皮书）</li>
+          <li><a href="https://microservices.io/patterns/data/event-sourcing.html">microservices.io · Event Sourcing / CQRS / Database per Service 模式</a>（社区）</li>
+          <li><a href="https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/">learn.microsoft.com · DDD &amp; CQRS patterns（依赖规则与读写分离）</a>（官方）</li>
+          <li><a href="https://martinfowler.com/bliki/AnemicDomainModel.html">Martin Fowler · AnemicDomainModel（及后续关于"取决于子域"的软化讨论）</a>（作者）</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="07-domain-events.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">07 · 领域事件</span>
+        </a>
+        <a href="09-self-check.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">09 · 自检</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">8.1 六边形 / 端口适配器</a></li>
+        <li><a href="#s2" data-toc-target="s2">8.2 整洁 / 洋葱 ≠ DDD</a></li>
+        <li><a href="#s3" data-toc-target="s3">8.3 CQRS</a></li>
+        <li><a href="#s4" data-toc-target="s4">8.4 事件溯源</a></li>
+        <li><a href="#s5" data-toc-target="s5">8.5 上下文 ≠ 微服务</a></li>
+        <li><a href="#s6" data-toc-target="s6">8.6 何时不用 DDD</a></li>
+        <li><a href="#s7" data-toc-target="s7">8.7 陷阱合集</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent; btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

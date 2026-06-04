@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<!--
+  ════════════════════════════════════════════════════════════════
+  tech-tutorial · HTML layout template
+  ════════════════════════════════════════════════════════════════
+
+  Aesthetic: minimalist monochrome + single vermillion accent
+    - White background, neutral grays, single warm-red accent.
+    - Sans-serif body (Noto Sans SC) for information density.
+    - No textures, no decorative numerals, no rainbow callouts.
+    - Vermillion is used sparingly: warning callout, current
+      breadcrumb, code keywords, selected table row, link hover,
+      challenge & predict labels.
+
+  Tech stack:
+    - Google Fonts: Noto Sans SC + JetBrains Mono only
+    - Prism.js (CDN) for syntax highlighting — custom theme overrides palette
+    - Zero CSS framework, zero JS framework, no build step
+
+  How to use:
+    1. Copy this entire file as the starting point for each chapter
+       (index.html, 01-concepts.html, 02-principles.html, etc.)
+    2. Update <title>
+    3. Update the .learning-path breadcrumb (mark current chapter with .current)
+    4. Fill in <article> with chapter content using the reusable HTML
+       snippets defined in references/tutorial_template.md
+    5. Update sticky TOC links (aside.toc-sidebar > ul) to match in-article anchors
+    6. Update prev/next nav at bottom
+
+  Class names you'll use (full reference in tutorial_template.md):
+    .learning-path   .chapter-opener (now uses .chapter-label, not .numeral)
+    .schema-panel   .one-liner   .rationale   .annotations
+    .code-block (with .header > .filename .lang .copy)
+    .callout (.warning .tip .example .insight — only .warning shows accent)
+    .compare-table (tr.selected)
+    figure > svg > figcaption (figcaption > .fig-num)
+    .predict   details > summary
+    .self-check   .challenge   .references   .chapter-nav
+  ════════════════════════════════════════════════════════════════
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>缓存与异步消息 · 大规模分布式系统设计教程</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 24px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+
+/* ============================================================
+   Multi-tutorial library: hub index + 相关教程 cross-links
+   (see SKILL.md "Building a knowledge library")
+   ============================================================ */
+.theme-cluster          { margin: 2.4rem 0; }
+.theme-cluster > h2     { margin-bottom: 1rem; }
+.tutorial-cards         { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+.tutorial-cards > li    { border: 1px solid var(--ink-faint); border-left: 3px solid var(--ink); border-radius: 4px; padding: 0.7rem 0.9rem; transition: border-color .15s ease; }
+.tutorial-cards > li:hover { border-left-color: var(--vermilion); }
+.tutorial-cards a       { text-decoration: none; }
+.tutorial-cards .schema { display: block; margin-top: 0.3rem; font-size: 13px; color: var(--ink-soft); line-height: 1.45; }
+.related-tutorials      { margin-top: 2.6rem; padding-top: 1.4rem; border-top: 1px solid var(--ink-faint); }
+.related-tutorials .label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin: 0.9rem 0 0.3rem; }
+.related-tutorials ul   { margin: 0.2rem 0 0.6rem; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <!--
+    Learning path breadcrumb. Mark the current chapter with class="current".
+    Replace links with relative paths to your tutorial's chapters.
+  -->
+  <nav class="learning-path" aria-label="学习路径">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-foundations.html">01 地基</a><span class="sep">—</span>
+    <a href="02-scaling.html">02 扩展</a><span class="sep">—</span>
+    <a href="03-partitioning.html">03 分区</a><span class="sep">—</span>
+    <a href="04-replication.html">04 复制</a><span class="sep">—</span>
+    <a href="05-consistency.html">05 一致性</a><span class="sep">—</span>
+    <a href="06-transactions.html">06 事务</a><span class="sep">—</span>
+    <a href="07-cache-async.html" class="current">07 缓存与异步</a><span class="sep">—</span>
+    <a href="08-resilience.html">08 容错</a><span class="sep">—</span>
+    <a href="09-frontier.html">09 前沿</a><span class="sep">—</span>
+    <a href="10-self-check.html">10 自测</a>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 07</p>
+        <h1>缓存与异步消息</h1>
+        <p class="recap">前六章解决了状态怎么存、怎么切分（03）、怎么复制（04）、复制后还能拿到什么一致性保证（05），以及一个操作横跨多个节点时怎么保正确（06）。那些都是把状态摆放对。本章换一个视角：当状态已经摆好、流量却把它压垮时，用两个横切手段把读写流量"扛"下来——缓存（把热数据搬到离请求更近的地方）和异步消息（把同步调用拆成"先收下、后处理"以削峰解耦）。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章建立的 schema</p>
+        <ul>
+          <li>缓存读写有四种模式（cache-aside / read-through / write-through / write-behind），每种在<strong>一致性、延迟、谁负责写 DB</strong> 三者间换位置。</li>
+          <li>缓存的三种崩法——穿透、击穿、雪崩——触发条件不同，修复手段也各不相同，不能用一招通杀。</li>
+          <li>缓存与数据库的一致性只能做到 best-effort：双删、TTL、binlog 失效都在"尽量"层面，没有传输层意义上的强保证。</li>
+          <li>投递语义只有 at-most-once / at-least-once 两种基石；"exactly-once"在传输层不存在，工程上靠 at-least-once + 幂等去重凑出 effectively-once，再配背压防止消费者被压垮。</li>
+        </ul>
+      </section>
+
+      <h2 id="s1"><span class="num">7.1</span><span>缓存读写模式：四种摆位</span></h2>
+
+      <p>缓存的本质是把一份数据的副本放在离请求更近、读取更快的地方。<a href="01-foundations.html">第 01 章</a>的延迟阶梯给了它存在的理由：内存读取约 100ns、同机房一次 RTT 约 0.5ms、缓存命中比一次回源数据库调用快约三个数量级。差距越大，缓存的杠杆越大。但缓存是数据的第二份拷贝——按本教程主线那把尺子说，凡是<strong>复制状态</strong>就要付一致性的账：源数据一变，缓存里的旧值就成了谎言。四种模式的差别，正是这笔账记在谁头上、什么时候记。</p>
+
+      <h3>cache-aside（旁路缓存）</h3>
+
+      <p>应用代码直接编排缓存与数据库，缓存库自己不碰数据库。读：先查缓存，命中就返回；未命中（cache miss）就回源数据库、把结果写回缓存、再返回。写：更新数据库，然后<strong>删除</strong>缓存里对应的键（不是更新它）。这是最常见的模式，Redis + 关系库的组合默认就是它。</p>
+
+      <p>它真正的难点藏在"读未命中回填"和"写后删"是<strong>两条独立、各自非原子</strong>的序列里。设想一个慢读：线程 A 读 miss，从数据库取到旧值 v1，正准备写回缓存，此刻被调度器挂起；线程 B 完成一次写，把数据库更新成 v2 并删掉缓存（此刻缓存是空的，正确）；然后 A 醒来，把手里早已过期的 v1 写进缓存。结果缓存里稳定地躺着 v1，而数据库是 v2——这个错值会一直存在，直到 TTL 到期或下一次写再次删它。<strong>这就是 cache-aside 的不一致窗口：它来自两条非原子序列的交错，不是"网络抖动"。</strong></p>
+
+      <div class="predict">
+        <p class="question-label">先想一下，再展开</p>
+        <p>cache-aside 的写操作，为什么是"删缓存"而不是"更新缓存"？直觉上更新缓存岂不是省了下次 miss 的回源？</p>
+        <details>
+          <summary>展开答案</summary>
+          <p>两个并发写如果都去<strong>更新</strong>缓存，可能产生乱序：写 v2 先更新数据库、写 v3 后更新数据库，但两者更新缓存的顺序被网络/调度打乱，缓存最终停在 v2——一个稳定的错值，且不会自愈。<strong>删除是幂等的、与顺序无关</strong>：无论几个并发写、按什么顺序删，结果都是"缓存为空"，下次读自然回源拿到数据库当前值。删把"维护一致性"的责任推给了"下次读回填"，代价只是多一次 miss——用一次回源换掉一类难以排查的脏数据。所以删优于更新。</p>
+        </details>
+      </div>
+
+      <h3>read-through / write-through（读穿 / 写穿）</h3>
+
+      <p>把缓存与数据库的 I/O 编排<strong>下沉到缓存层自己</strong>（如本地 Caffeine + CacheLoader，或带 loader 的缓存服务），应用只跟缓存对话。read-through：miss 时缓存自己去加载数据库并回填，应用感知不到回源。write-through：写时缓存同步地把值写进自己<em>和</em>数据库，两者都成功才返回。好处是一致性比 cache-aside 强（写时缓存与库同步刷新，不靠"删后回填"）、应用代码更干净；代价是每一次写都要付一次数据库写延迟——它把缓存的"加速读"优势让出一部分去买写一致性，因此适合<strong>读远多于写</strong>的场景。</p>
+
+      <h3>write-behind（写回 / write-back）</h3>
+
+      <p>写命中缓存就立即返回，缓存把脏数据先攒在内存里，由后台线程批量、异步地刷回数据库。这是四种里写延迟最低的——写操作完全不等数据库。代价也最重：缓存节点在刷盘前崩溃，那些"已经向客户端确认成功"的写就<strong>真的丢了</strong>。这与 <a href="04-replication.html">第 04 章</a>异步复制的失效模式同构：返回得越早，崩溃窗口里丢的就是已确认数据。要让 write-behind 不丢，必须给它配 WAL（write-ahead log，预写日志，先把变更落到顺序日志再异步应用）——这正是数据库自己用来兼顾"快"和"不丢"的老办法。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 380" role="img" aria-labelledby="fig71-title">
+          <title id="fig71-title">cache-aside 读路径与写路径，标出不一致窗口</title>
+          <defs>
+            <marker id="arrow-ink-71" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"></path>
+            </marker>
+            <marker id="arrow-verm-71" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B73B2F"></path>
+            </marker>
+          </defs>
+
+          <!-- READ PATH (top) -->
+          <text x="40" y="34" class="node-label" font-weight="700">读路径</text>
+          <!-- nodes -->
+          <rect x="40" y="50" width="120" height="48" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="100" y="79" text-anchor="middle" class="node-label">应用</text>
+
+          <rect x="300" y="50" width="120" height="48" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="360" y="79" text-anchor="middle" class="node-label">缓存</text>
+
+          <rect x="560" y="50" width="160" height="48" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="640" y="79" text-anchor="middle" class="node-label">数据库</text>
+
+          <!-- read: app -> cache (查) -->
+          <line x1="160" y1="66" x2="296" y2="66" class="diagram-ink" marker-end="url(#arrow-ink-71)"></line>
+          <text x="228" y="58" text-anchor="middle" class="edge-label">① 查缓存</text>
+          <!-- miss: cache -> db -->
+          <line x1="420" y1="66" x2="556" y2="66" class="diagram-ink" marker-end="url(#arrow-ink-71)"></line>
+          <text x="488" y="58" text-anchor="middle" class="edge-label">② miss 回源</text>
+          <!-- db -> cache 回填 -->
+          <line x1="556" y1="86" x2="420" y2="86" class="diagram-ink" marker-end="url(#arrow-ink-71)"></line>
+          <text x="488" y="106" text-anchor="middle" class="edge-label">③ 回填</text>
+
+          <!-- divider -->
+          <line x1="40" y1="140" x2="720" y2="140" class="diagram-soft"></line>
+
+          <!-- WRITE PATH (bottom) -->
+          <text x="40" y="174" class="node-label" font-weight="700">写路径</text>
+          <rect x="40" y="190" width="120" height="48" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="100" y="219" text-anchor="middle" class="node-label">应用</text>
+
+          <rect x="560" y="190" width="160" height="48" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="640" y="219" text-anchor="middle" class="node-label">数据库</text>
+
+          <rect x="300" y="190" width="120" height="48" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="360" y="219" text-anchor="middle" class="node-label">缓存</text>
+
+          <!-- write: app -> db (更新) -->
+          <line x1="160" y1="206" x2="556" y2="206" class="diagram-ink" marker-end="url(#arrow-ink-71)"></line>
+          <text x="360" y="198" text-anchor="middle" class="edge-label">① 更新数据库 → v2</text>
+          <!-- write: app -> cache (删) -->
+          <path d="M120,238 L120,300 L360,300 L360,242" class="diagram-accent" fill="none" marker-end="url(#arrow-verm-71)"></path>
+          <text x="240" y="318" text-anchor="middle" class="branch-label">② 删缓存（幂等）</text>
+
+          <!-- inconsistency window callout -->
+          <rect x="430" y="262" width="300" height="92" rx="4" class="diagram-soft node-fill-accent"></rect>
+          <text x="446" y="284" class="node-label-accent" font-size="12">不一致窗口</text>
+          <text x="446" y="306" class="node-label" font-size="11.5">慢读在「②删」之后把</text>
+          <text x="446" y="324" class="node-label" font-size="11.5">旧值 v1 写回 → 缓存停在</text>
+          <text x="446" y="342" class="node-label" font-size="11.5">v1，DB 是 v2，直到 TTL</text>
+        </svg>
+        <figcaption><span class="fig-num">图 7.1</span>cache-aside 把"维护一致性"的责任拆成两条独立的非原子序列，错值正诞生于它们的交错处。<strong>注意</strong>：写路径选"删"而非"更新"，是因为删是幂等的、与并发顺序无关；TTL 是这个窗口最终能自愈的唯一兜底。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>四种缓存模式对照</caption>
+        <thead>
+          <tr><th>模式</th><th>一致性</th><th>写延迟</th><th>谁写数据库</th><th>何时选 / 为什么不选</th></tr>
+        </thead>
+        <tbody>
+          <tr class="selected">
+            <td>cache-aside</td>
+            <td>弱（有不一致窗口，靠 TTL 兜底）</td>
+            <td>低（写库 + 删缓存）</td>
+            <td>应用代码</td>
+            <td>通用默认：读写比例不极端、能容忍秒级陈旧。绝大多数业务起步选它。</td>
+          </tr>
+          <tr>
+            <td>read-through</td>
+            <td>同 cache-aside 读侧</td>
+            <td>—</td>
+            <td>缓存层（loader）</td>
+            <td>想让应用代码不写回源逻辑；与 write-through 配套。</td>
+          </tr>
+          <tr>
+            <td>write-through</td>
+            <td>较强（写时同步刷库+缓存）</td>
+            <td>高（每写付一次库延迟）</td>
+            <td>缓存层</td>
+            <td>读远多于写、要求缓存不轻易陈旧时选；写密集场景不选，写延迟扛不住。</td>
+          </tr>
+          <tr>
+            <td>write-behind</td>
+            <td>弱（异步刷库，崩溃丢已确认写）</td>
+            <td>最低（不等库）</td>
+            <td>缓存层（后台批量）</td>
+            <td>写吞吐极高、可容忍少量丢失或已配 WAL 时选；金额类强持久数据不选。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <p class="label">陷阱</p>
+        <p>write-through 之后缓存节点崩溃、缓存与数据库分叉，若这份缓存被当成"权威只读源"且<strong>没设 TTL</strong>，分叉会永久存在、无法自愈。规则很硬：哪怕是"权威"缓存，也要给它一个 TTL 作为最后的一致性兜底——TTL 不是性能旋钮，它是缓存唯一不依赖外部修复就能纠错的机制。</p>
+      </div>
+
+      <h2 id="s2"><span class="num">7.2</span><span>缓存的三种崩法：穿透 / 击穿 / 雪崩</span></h2>
+
+      <p>这三个中文术语在社区里固定下来、含义彼此独立，混用是排障时的常见错误。它们的区别不在"现象都是数据库被打爆"，而在<strong>触发条件</strong>不同——所以修复手段也完全不同，没有一招通杀。</p>
+
+      <h3>穿透（cache penetration）：查一个根本不存在的键</h3>
+
+      <p>请求的键<strong>既不在缓存、也不在数据库</strong>。cache-aside 的回填逻辑只在数据库查到结果时才写缓存，于是这类"查不到"的请求每次都 miss、每次都打到数据库——缓存形同虚设。攻击者用海量随机不存在的 ID 刷接口，就是冲着这条路来的。修复有两条：① 把"不存在"这个结果本身也缓存起来（缓存空值，配一个较短的 TTL，避免占满内存）；② 布隆过滤器（Bloom filter，一种概率型集合，能在 O(1) 内回答"一定不存在"或"可能存在"），把所有合法键预先放进去，请求先问它，答"一定不存在"就直接拒绝、连数据库都不碰。</p>
+
+      <div class="callout warning">
+        <p class="label">陷阱</p>
+        <p>标准布隆过滤器<strong>不支持删除</strong>——一旦某个键被删除（从数据库下线），布隆过滤器仍会对它回答"可能存在"，于是这个已删除的键会永远漏过滤、继续打数据库。要支持删除得换计数布隆过滤器（counting Bloom filter）或周期性重建。选布隆过滤器前先确认键集合是否会频繁删除。</p>
+      </div>
+
+      <h3>击穿（hotspot invalidation）：单个热键瞬间过期</h3>
+
+      <p>某个<strong>极热的单键</strong>（如明星主页、爆款商品）TTL 到期的那一瞬间，成百上千个并发请求同时 miss、同时回源重建同一份数据——数据库在一刹那被同一个键的重复查询砸穿。这与穿透的根本区别是：击穿的键在数据库里<em>是存在的</em>，问题出在"过期瞬间的并发回源"，而非"查不到"。修复：① 互斥重建（singleflight，让同一键的并发回源只放一个请求去重建、其余等待结果），把 N 次回源压成 1 次；② 逻辑过期——值永不真正从缓存删除，而是携带一个逻辑过期时间戳，读到"逻辑已过期"时由后台异步刷新、前台先返回旧值，用一点陈旧换"永不击穿"。</p>
+
+      <h3>雪崩（cache avalanche）：大批键同时失效或缓存层整体宕</h3>
+
+      <p>两种成因：① 大量键被设置了<em>相同</em>的 TTL（比如启动时批量预热），到点同时过期，瞬间把所有读压力一起推给数据库；② 缓存节点/集群整体宕机，所有读直接穿到数据库。它与击穿的区别是"<strong>规模</strong>"——击穿是一个热键，雪崩是成片的键或整层。修复：① 给 TTL 加随机抖动（如基础 TTL ± 一个随机量），把过期时刻打散、避免同时到点；② 缓存层做高可用（多副本、主从），别让整层成为单一故障域；③ 配熔断/降级，缓存挂了就限流保护数据库，而不是让它被流量冲垮（熔断与降级的完整机制在 <a href="08-resilience.html">第 08 章</a>）。</p>
+
+      <figure>
+        <svg viewBox="0 0 780 430" role="img" aria-labelledby="fig72-title">
+          <title id="fig72-title">穿透、击穿、雪崩的触发条件、后果与修复对照</title>
+          <defs>
+            <marker id="arrow-ink-72" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"></path>
+            </marker>
+          </defs>
+
+          <!-- column headers -->
+          <text x="120" y="30" text-anchor="middle" class="node-label" font-weight="700">触发条件</text>
+          <text x="390" y="30" text-anchor="middle" class="node-label" font-weight="700">后果</text>
+          <text x="660" y="30" text-anchor="middle" class="node-label" font-weight="700">修复</text>
+
+          <!-- ROW 1: 穿透 -->
+          <rect x="20" y="50" width="200" height="78" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="120" y="76" text-anchor="middle" class="node-label-accent">穿透</text>
+          <text x="120" y="98" text-anchor="middle" class="node-label" font-size="11.5">键在缓存和库里</text>
+          <text x="120" y="116" text-anchor="middle" class="node-label" font-size="11.5">都不存在</text>
+
+          <rect x="290" y="50" width="200" height="78" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="390" y="84" text-anchor="middle" class="node-label" font-size="11.5">每次都 miss 回源，</text>
+          <text x="390" y="102" text-anchor="middle" class="node-label" font-size="11.5">缓存形同虚设</text>
+
+          <rect x="560" y="50" width="200" height="78" rx="4" class="diagram-ink node-fill-accent"></rect>
+          <text x="660" y="84" text-anchor="middle" class="node-label" font-size="11.5">缓存空值（短 TTL）</text>
+          <text x="660" y="102" text-anchor="middle" class="node-label" font-size="11.5">或布隆过滤器</text>
+
+          <line x1="220" y1="89" x2="286" y2="89" class="diagram-ink" marker-end="url(#arrow-ink-72)"></line>
+          <line x1="490" y1="89" x2="556" y2="89" class="diagram-ink" marker-end="url(#arrow-ink-72)"></line>
+
+          <!-- ROW 2: 击穿 -->
+          <rect x="20" y="160" width="200" height="78" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="120" y="186" text-anchor="middle" class="node-label-accent">击穿</text>
+          <text x="120" y="208" text-anchor="middle" class="node-label" font-size="11.5">单个热键过期，</text>
+          <text x="120" y="226" text-anchor="middle" class="node-label" font-size="11.5">并发同时回源</text>
+
+          <rect x="290" y="160" width="200" height="78" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="390" y="194" text-anchor="middle" class="node-label" font-size="11.5">同一键被重复查询</text>
+          <text x="390" y="212" text-anchor="middle" class="node-label" font-size="11.5">瞬间砸穿数据库</text>
+
+          <rect x="560" y="160" width="200" height="78" rx="4" class="diagram-ink node-fill-accent"></rect>
+          <text x="660" y="194" text-anchor="middle" class="node-label" font-size="11.5">互斥重建</text>
+          <text x="660" y="212" text-anchor="middle" class="node-label" font-size="11.5">或逻辑过期异步刷</text>
+
+          <line x1="220" y1="199" x2="286" y2="199" class="diagram-ink" marker-end="url(#arrow-ink-72)"></line>
+          <line x1="490" y1="199" x2="556" y2="199" class="diagram-ink" marker-end="url(#arrow-ink-72)"></line>
+
+          <!-- ROW 3: 雪崩 -->
+          <rect x="20" y="270" width="200" height="78" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="120" y="296" text-anchor="middle" class="node-label-accent">雪崩</text>
+          <text x="120" y="318" text-anchor="middle" class="node-label" font-size="11.5">大批键同时过期</text>
+          <text x="120" y="336" text-anchor="middle" class="node-label" font-size="11.5">或缓存层整体宕</text>
+
+          <rect x="290" y="270" width="200" height="78" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="390" y="304" text-anchor="middle" class="node-label" font-size="11.5">成片流量一起推给</text>
+          <text x="390" y="322" text-anchor="middle" class="node-label" font-size="11.5">数据库，可能压垮</text>
+
+          <rect x="560" y="270" width="200" height="78" rx="4" class="diagram-ink node-fill-accent"></rect>
+          <text x="660" y="296" text-anchor="middle" class="node-label" font-size="11.5">TTL 加随机抖动</text>
+          <text x="660" y="314" text-anchor="middle" class="node-label" font-size="11.5">+ 缓存高可用</text>
+          <text x="660" y="332" text-anchor="middle" class="node-label" font-size="11.5">+ 熔断降级</text>
+
+          <line x1="220" y1="309" x2="286" y2="309" class="diagram-ink" marker-end="url(#arrow-ink-72)"></line>
+          <line x1="490" y1="309" x2="556" y2="309" class="diagram-ink" marker-end="url(#arrow-ink-72)"></line>
+
+          <!-- scale note -->
+          <text x="390" y="392" text-anchor="middle" class="edge-label">规模轴：穿透=不存在的键 · 击穿=一个热键 · 雪崩=成片键 / 整层</text>
+        </svg>
+        <figcaption><span class="fig-num">图 7.2</span>三种崩法按"触发条件 → 后果 → 修复"逐行分类，关键差异在第一列。<strong>注意</strong>：击穿和雪崩都是"键存在但失效"，区别只在规模（一个热键 vs 成片）；穿透则根本是"键不存在"，所以唯有它需要布隆过滤器/空值缓存这类"提前否定"的手段。</figcaption>
+      </figure>
+
+      <h2 id="s3"><span class="num">7.3</span><span>缓存与数据库一致性：只能做到"尽量"</span></h2>
+
+      <p>一个被反复追问的问题：缓存和数据库怎么保证强一致？诚实的回答是——做不到，只能 best-effort。原因回到 <a href="05-consistency.html">第 05 章</a>：缓存和数据库是两个独立的存储系统，跨两个系统的写无法原子完成（这正是 <a href="06-transactions.html">第 06 章</a>双写问题的同一面）。一旦接受这一点，"一致性方案"就都退化成"把不一致窗口压到多小、多快自愈"。</p>
+
+      <h3>延迟双删：面试常考，但不是正确性保证</h3>
+
+      <p>流程是：先删缓存 → 更新数据库 → 睡几百毫秒 → 再删一次缓存。第二次删是为了清掉"第一次删之后、数据库更新生效之前"被并发读回填进来的旧值。问题在那个"睡几百毫秒"：睡多久才够，取决于从库复制延迟、慢查询、GC 暂停等无法预知的量。睡短了清不干净，睡长了白白增加写延迟，且无论睡多久，总存在边缘情况让旧值在第二次删之后才被回填。</p>
+
+      <div class="callout warning">
+        <p class="label">辨清</p>
+        <p>延迟双删是一个 best-effort 的工程 hack，它把不一致窗口<em>变小</em>，但不<em>消除</em>。它常出现在面试题里，却不是数据库厂商或缓存最佳实践推荐的正确性手段。把它当成"强一致方案"写进设计文档，是对自己和评审的误导。</p>
+      </div>
+
+      <h3>binlog 驱动失效：现代生产更倾向的做法</h3>
+
+      <p>与其让应用代码同步地协调"删缓存 + 写库"（双写，天然有原子性漏洞），不如让缓存失效由数据库的变更日志单向驱动：订阅 MySQL 的 binlog（Canal、Debezium 这类 CDC 工具，CDC = change data capture，变更数据捕获），数据库一旦提交变更，就由订阅方去删/更新对应缓存。它的优势是：失效事件的<strong>源头就是数据库已提交的事实</strong>，不再依赖应用代码记得删、也不怕应用删缓存时崩在半路；缓存失效从"双写的一侧"变成了"对已提交事实的单向投影"。代价是引入一条 CDC 链路（多一个组件、有自己的延迟和投递语义）——而这条链路的投递语义，正是下一节要讲的 at-least-once，所以消费端删缓存的动作必须幂等（删本来就幂等，天然契合）。</p>
+
+      <h2 id="s4"><span class="num">7.4</span><span>投递语义：为什么 exactly-once 是神话</span></h2>
+
+      <p>从缓存切到异步消息。消息系统给出三种"听起来"的投递语义，但只有两种是真正的基石：</p>
+
+      <ul>
+        <li><strong>at-most-once（至多一次）</strong>：发出去就不管、不重试。可能丢，但绝不重复。适合能容忍丢失的数据（如可降采样的指标、日志）。</li>
+        <li><strong>at-least-once（至少一次）</strong>：重试直到收到 ack（acknowledgement，确认回执）。绝不丢，但可能重复。是绝大多数业务消息的默认选择。</li>
+        <li><strong>"exactly-once（恰好一次）"</strong>：每条消息不丢不重——<strong>在传输层这是不可能的</strong>。</li>
+      </ul>
+
+      <p>为什么不可能？这是"两将军问题"的直接后果。发送方发出消息后在等 ack，结果 ack 一直没回来。此刻发送方<strong>无法区分</strong>两种情形：是消息根本没送达（该重发），还是消息送达了、但回来的 ack 在网络里丢了（重发就会重复）。两种情形在发送方看来完全一样，而它必须做出选择：要么不重发（接受可能丢——退回 at-most-once），要么重发（接受可能重——退回 at-least-once）。没有第三条路。所以传输层的真实选项永远只有"可能丢"和"可能重"两种，"恰好一次"在传输层不存在。</p>
+
+      <div class="callout insight">
+        <p class="label">真正可行的目标</p>
+        <p>工程上能做到的不是 exactly-once，而是 <strong>effectively-once（效果上恰好一次）= at-least-once + 幂等/去重</strong>。底层照样可能重复投递，但消费端用幂等设计让"重复处理"不产生重复的副作用——效果上等价于只处理了一次。这是一个关于<em>效果</em>而非<em>传输</em>的保证，区别至关重要。</p>
+      </div>
+
+      <p>那 Kafka 宣传的 exactly-once 是怎么回事？它是真的，但有严格边界：Kafka 的 exactly-once 只在 <strong>Kafka 内部</strong>成立——"读一个 topic、处理、写另一个 topic 并提交 offset"这一串若全在 Kafka 事务里，能做到对 Kafka 自己恰好一次。可一旦处理过程里有<strong>外部副作用</strong>（调用一次 RPC、往关系库写一行、发一封邮件），那个副作用就不在 Kafka 的事务边界内，Kafka 管不了它的重复。所以只要消费逻辑触碰外部系统，就仍然必须自己实现幂等键——Kafka 的事务不是"端到端 exactly-once"的免罪符。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 290" role="img" aria-labelledby="fig73-title">
+          <title id="fig73-title">at-least-once 叠加幂等去重得到 effectively-once</title>
+          <defs>
+            <marker id="arrow-ink-73" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"></path>
+            </marker>
+            <marker id="arrow-verm-73" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B73B2F"></path>
+            </marker>
+          </defs>
+
+          <!-- producer -->
+          <rect x="30" y="100" width="120" height="56" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="90" y="124" text-anchor="middle" class="node-label">生产者</text>
+          <text x="90" y="143" text-anchor="middle" class="node-label" font-size="11">at-least-once</text>
+
+          <!-- broker -->
+          <rect x="250" y="100" width="120" height="56" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="310" y="132" text-anchor="middle" class="node-label">broker</text>
+
+          <!-- consumer with dedup -->
+          <rect x="470" y="100" width="140" height="56" rx="4" class="diagram-ink node-fill-accent"></rect>
+          <text x="540" y="124" text-anchor="middle" class="node-label-accent">消费者</text>
+          <text x="540" y="143" text-anchor="middle" class="node-label" font-size="11">幂等键去重</text>
+
+          <!-- producer -> broker (重发) -->
+          <line x1="150" y1="120" x2="246" y2="120" class="diagram-ink" marker-end="url(#arrow-ink-73)"></line>
+          <text x="198" y="112" text-anchor="middle" class="edge-label">投递</text>
+          <!-- 重试回环 -->
+          <path d="M150,140 C190,172 210,172 246,140" class="diagram-accent" fill="none" marker-end="url(#arrow-verm-73)"></path>
+          <text x="198" y="182" text-anchor="middle" class="branch-label">丢 ack → 重发（可能重复）</text>
+
+          <!-- broker -> consumer -->
+          <line x1="370" y1="120" x2="466" y2="120" class="diagram-ink" marker-end="url(#arrow-ink-73)"></line>
+          <text x="418" y="112" text-anchor="middle" class="edge-label">可能重复</text>
+
+          <!-- result -->
+          <text x="540" y="200" text-anchor="middle" class="node-label" font-size="11.5">同一幂等键只生效一次</text>
+          <text x="540" y="220" text-anchor="middle" class="node-label-accent" font-size="12.5">= effectively-once</text>
+
+          <!-- top label -->
+          <text x="30" y="48" class="node-label" font-weight="700">传输层只有「可能丢 / 可能重」两种基石</text>
+          <text x="30" y="72" class="node-label" font-size="11.5" fill="#525252">选 at-least-once（可能重）+ 消费端幂等，把「重」吸收掉</text>
+        </svg>
+        <figcaption><span class="fig-num">图 7.3</span>effectively-once 不是一种投递语义，而是"at-least-once 的重复"被"消费端幂等"在下游吸收后的<em>效果</em>。<strong>注意</strong>：去重逻辑必须落在消费者一侧的外部副作用处——broker 内部的 exactly-once 管不到你写关系库或调 RPC 的那一步。</figcaption>
+      </figure>
+
+      <h2 id="s5"><span class="num">7.5</span><span>幂等消费与背压：把重复和过载都吸收掉</span></h2>
+
+      <h3>幂等消费：去重表必须和副作用同事务</h3>
+
+      <p>幂等（idempotent，同一操作执行一次和执行多次，对系统状态的影响相同）是 effectively-once 的落脚点。给每条消息一个全局唯一的幂等键（业务上的订单号、或生产端生成的消息 ID），消费端处理前先查去重表：见过这个键就跳过，没见过才执行并记录该键。这套话术里藏着一个最容易被忽略、却最致命的细节——</p>
+
+      <div class="callout warning">
+        <p class="label">陷阱（重复扣款的真凶）</p>
+        <p>"记录幂等键"和"执行副作用（扣款）"如果不在<strong>同一个本地事务</strong>里，重复就会从缝隙里漏出来：消费者扣了款，正要写去重表时崩溃；重启后重新消费同一条消息，去重表里查不到这个键，于是<em>又扣一次</em>——静默的重复扣款。正确做法是把"写去重表"和"业务副作用"放进一个数据库事务，要么一起成功、要么一起回滚。这与 <a href="06-transactions.html">第 06 章</a>发件箱（outbox）把业务行和事件行塞进同一事务的思路完全同源：原子性来自共用一个本地事务。</p>
+      </div>
+
+      <p>Kafka 自 3.0 起默认开启的<strong>幂等生产者</strong>解决的是另一段路：它用 PID（producer ID，生产者 ID）加每个分区的递增序列号，让 broker 能识别并丢弃"因网络重试而重发的同一条消息"，避免生产侧重发导致的重复写入 broker。但它管的只是生产者到 broker 这一跳的重发去重——<strong>消费者的重复处理和外部副作用，它一概管不了</strong>。这两段去重职责必须分清，否则又会陷入"以为 Kafka 帮我兜底了"的错觉。</p>
+
+      <h3>背压：跟不上时向上游说"慢点"，而不是无界缓冲</h3>
+
+      <p>背压（backpressure，下游处理不过来时主动向上游施加的反向压力）回答的是一个生死问题：消费者的处理速度跟不上生产速度时怎么办。错误答案是把积压的消息无界地缓冲在内存里——队列只会越堆越长，最终 OOM（out of memory，内存耗尽）让消费者崩溃，问题没解决还多了一次宕机。正确答案是让消费者把"我跟不上"这个信号传回上游，迫使上游放慢或暂停发送。</p>
+
+      <p>不同 broker 实现背压的机制不同：<strong>Kafka 是 pull 模型</strong>——消费者主动按自己的节奏拉取，拉得慢了上游自然就压着没人取，背压是天然的、不需要额外信令。<strong>RabbitMQ 是 push 模型</strong>——broker 主动把消息推给消费者，所以要靠 prefetch（预取上限，限制 broker 向单个消费者"在途未 ack"的消息数）来卡住推送速度，叠加 TCP 流控做底层兜底。理解这点能解释一个常见困惑：为什么 Kafka 很少听到"消费者被推爆"，而 RabbitMQ 不设 prefetch 就容易把慢消费者冲垮。</p>
+
+      <h2 id="s6"><span class="num">7.6</span><span>日志型 vs 队列型 broker</span></h2>
+
+      <p>消息中间件分成两个谱系，差别不在"快慢"，而在<strong>消息读完之后还在不在</strong>、以及<strong>消费进度由谁记</strong>。这一个设计选择，决定了它们各自擅长和不擅长什么。</p>
+
+      <h3>队列型（RabbitMQ 为代表）：ack 即删，broker 记账</h3>
+
+      <p>消息被消费者 ack 之后就从队列里删除，broker 逐条跟踪每条消息投递给了谁、是否已确认。这是"聪明的 broker + 简单的消费者"模型：路由（exchange/binding）、重试、死信、延迟投递这些复杂逻辑都由 broker 承担，消费者只管收和 ack。它擅长任务分发型场景（一个任务被某一个 worker 处理掉就行），灵活的路由是它的强项。代价：消息一旦被消费就没了，无法重放；broker 要为每条消息记账，海量堆积时压力大。</p>
+
+      <h3>日志型（Kafka 为代表）：append-only，消费者记 offset</h3>
+
+      <p>消息以 append-only（只追加）的方式写进分区日志，按时间或大小保留（比如保留 7 天），<strong>消费完不删除</strong>。消费进度不由 broker 记，而是每个消费者组自己记一个 offset（偏移量，标记"我读到日志的哪个位置了"）。这是"简单的 broker + 聪明的消费者"模型，带来两个队列型给不了的能力：① 多个消费者组各记各的 offset，能<strong>独立、互不干扰地重放</strong>同一份日志（一组做实时计算、另一组重跑历史，互不影响）；② broker 不为每条消息记投递状态，吞吐极高。</p>
+
+      <p>代价同样清晰：顺序和并行度被<strong>分区数</strong>钉死——Kafka 只在单个分区内保证顺序，消费并行度上限就是分区数；而且同一分区内，一条处理很慢的消息会<strong>阻塞它后面所有消息</strong>（head-of-line blocking，队头阻塞），因为 offset 是按顺序推进的，绕不过去。所以"一个慢 key 拖慢整条分区"是 Kafka 的固有失效模式，不是配置问题。</p>
+
+      <div class="callout warning">
+        <p class="label">陷阱</p>
+        <p>Kafka 分区数设得太少，消费并行度就被锁死——无论加多少消费者实例，超过分区数的那些都只能空闲（一个分区同一时刻只能被组内一个消费者持有）。分区数是要预先规划的容量参数，临时加分区还会打乱按 key 的顺序保证。上线前按目标吞吐和并行度算好分区数，是日志型 broker 的必修课。</p>
+      </div>
+
+      <table class="compare-table">
+        <caption>队列型 vs 日志型 broker</caption>
+        <thead>
+          <tr><th>维度</th><th>队列型（RabbitMQ）</th><th>日志型（Kafka）</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>消费后</td>
+            <td>ack 即删，不可重放</td>
+            <td>保留期内不删，可多组重放</td>
+          </tr>
+          <tr>
+            <td>进度由谁记</td>
+            <td>broker 逐条记账</td>
+            <td>消费者组各记 offset</td>
+          </tr>
+          <tr>
+            <td>路由能力</td>
+            <td>强（exchange/binding 灵活）</td>
+            <td>弱（按分区，靠下游处理）</td>
+          </tr>
+          <tr>
+            <td>顺序 / 并行</td>
+            <td>无强顺序，并行灵活</td>
+            <td>分区内有序，并行≤分区数；慢消息队头阻塞</td>
+          </tr>
+          <tr class="selected">
+            <td>适合</td>
+            <td>任务分发、复杂路由、即时处理</td>
+            <td>高吞吐事件流、多消费方、需重放/回溯</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 760 340" role="img" aria-labelledby="fig74-title">
+          <title id="fig74-title">队列型 ack 删除 vs 日志型 offset 回放对照</title>
+          <defs>
+            <marker id="arrow-ink-74" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"></path>
+            </marker>
+            <marker id="arrow-verm-74" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="#B73B2F"></path>
+            </marker>
+          </defs>
+
+          <!-- QUEUE side (left) -->
+          <text x="40" y="34" class="node-label" font-weight="700">队列型：ack 即删</text>
+          <!-- queue cells -->
+          <rect x="40" y="56" width="40" height="40" rx="3" class="diagram-ink node-fill"></rect>
+          <rect x="80" y="56" width="40" height="40" rx="3" class="diagram-ink node-fill"></rect>
+          <rect x="120" y="56" width="40" height="40" rx="3" class="diagram-soft node-fill"></rect>
+          <text x="140" y="81" text-anchor="middle" class="edge-label" fill="#A3A3A3">已删</text>
+          <text x="60" y="81" text-anchor="middle" class="node-label" font-size="11">m5</text>
+          <text x="100" y="81" text-anchor="middle" class="node-label" font-size="11">m4</text>
+
+          <rect x="230" y="50" width="110" height="52" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="285" y="81" text-anchor="middle" class="node-label">消费者</text>
+
+          <line x1="160" y1="76" x2="226" y2="76" class="diagram-ink" marker-end="url(#arrow-ink-74)"></line>
+          <path d="M285,102 L285,140 L120,140 L120,100" class="diagram-accent" fill="none" marker-end="url(#arrow-verm-74)"></path>
+          <text x="200" y="158" text-anchor="middle" class="branch-label">ack → broker 删除该消息</text>
+          <text x="40" y="196" class="node-label" font-size="11.5" fill="#525252">消息读完即消失，无法二次消费</text>
+
+          <!-- divider -->
+          <line x1="380" y1="40" x2="380" y2="300" class="diagram-soft"></line>
+
+          <!-- LOG side (right) -->
+          <text x="420" y="34" class="node-label" font-weight="700">日志型：append-only + offset</text>
+          <!-- log cells -->
+          <rect x="420" y="56" width="34" height="40" rx="3" class="diagram-ink node-fill"></rect>
+          <rect x="454" y="56" width="34" height="40" rx="3" class="diagram-ink node-fill"></rect>
+          <rect x="488" y="56" width="34" height="40" rx="3" class="diagram-ink node-fill"></rect>
+          <rect x="522" y="56" width="34" height="40" rx="3" class="diagram-ink node-fill"></rect>
+          <rect x="556" y="56" width="34" height="40" rx="3" class="diagram-ink node-fill"></rect>
+          <text x="437" y="81" text-anchor="middle" class="node-label" font-size="10">0</text>
+          <text x="471" y="81" text-anchor="middle" class="node-label" font-size="10">1</text>
+          <text x="505" y="81" text-anchor="middle" class="node-label" font-size="10">2</text>
+          <text x="539" y="81" text-anchor="middle" class="node-label" font-size="10">3</text>
+          <text x="573" y="81" text-anchor="middle" class="node-label" font-size="10">4</text>
+          <text x="420" y="120" class="edge-label">保留期内消息不删除 →</text>
+
+          <!-- consumer group A -->
+          <rect x="430" y="160" width="130" height="44" rx="4" class="diagram-ink node-fill"></rect>
+          <text x="495" y="187" text-anchor="middle" class="node-label" font-size="12">消费组 A · offset=4</text>
+          <line x1="573" y1="96" x2="540" y2="156" class="diagram-ink" marker-end="url(#arrow-ink-74)"></line>
+
+          <!-- consumer group B -->
+          <rect x="430" y="230" width="130" height="44" rx="4" class="diagram-ink node-fill-accent"></rect>
+          <text x="495" y="257" text-anchor="middle" class="node-label" font-size="12">消费组 B · offset=1</text>
+          <line x1="471" y1="96" x2="471" y2="226" class="diagram-accent" marker-end="url(#arrow-verm-74)"></line>
+
+          <text x="420" y="306" class="node-label" font-size="11.5" fill="#525252">两组各记 offset，独立回放同一份日志</text>
+        </svg>
+        <figcaption><span class="fig-num">图 7.4</span>同一份消息在两个谱系里的命运截然不同：队列型 ack 后即删、读完即逝；日志型保留原样、由各消费组自己的 offset 决定读到哪。<strong>注意</strong>："能否重放"不是性能差异而是模型差异——它源于"进度由 broker 记"还是"由消费者记 offset"这一个根本选择。</figcaption>
+      </figure>
+
+      <section class="self-check" id="self-check">
+        <h2>自测</h2>
+        <p>先合上教程、用自己的话写下答案，再展开对照。能复述定义不算会，能说清"代价/何时失效"才算。</p>
+        <ol>
+          <li>cache-aside 的不一致窗口具体是怎么产生的？为什么写操作要"删缓存"而不是"更新缓存"？</li>
+          <li>穿透、击穿、雪崩各自的触发条件是什么？为什么布隆过滤器只对其中一种有效，对另外两种无效？</li>
+          <li>为什么 exactly-once 在传输层根本不存在？工程上"effectively-once"是靠哪两件事拼出来的，缺一会怎样？</li>
+          <li>at-least-once 配一个非幂等的消费者，会出现什么具体故障？把"写去重表"和"扣款"分到两个事务里又会怎样？</li>
+        </ol>
+        <details>
+          <summary>展开参考答案</summary>
+          <p><strong>1.</strong> 窗口来自"读 miss 回填"和"写后删"两条独立非原子序列的交错：慢读取到旧值 v1 后被挂起，期间一个写更新库到 v2 并删了缓存，慢读再醒来把 v1 写回缓存——缓存稳定停在 v1、库是 v2，直到 TTL 或下次写。用"删"是因为删幂等、与并发顺序无关；"更新"在并发下可能乱序产生稳定错值且不自愈。</p>
+          <p><strong>2.</strong> 穿透=键在缓存和库里都不存在（修复：缓存空值 / 布隆过滤器）；击穿=单个热键过期瞬间并发回源（修复：互斥重建 / 逻辑过期）；雪崩=大批键同时过期或缓存层整体宕（修复：TTL 加随机抖动 + 缓存高可用 + 熔断降级）。布隆过滤器只对穿透有效，因为它解决的是"提前判定键不存在"；击穿和雪崩的键<em>是存在的</em>，布隆过滤器一律答"可能存在"，帮不上忙。</p>
+          <p><strong>3.</strong> 因为两将军问题：发送方收不到 ack 时无法区分"消息没送达"和"消息送达但 ack 丢了"，只能在"不重发（可能丢）"和"重发（可能重）"之间选，没有第三种。工程上靠 <strong>at-least-once + 消费端幂等去重</strong> 拼出 effectively-once：前者保证不丢，后者把重复在下游吸收掉。缺幂等就会重复处理产生重复副作用；缺重试（退回 at-most-once）就会丢消息。</p>
+          <p><strong>4.</strong> 非幂等消费者遇到重复投递会重复执行副作用——典型就是静默重复扣款。即便加了去重表，若"写去重表"和"扣款"分在两个事务：扣款成功、写去重表前崩溃，重启后查不到幂等键，于是再扣一次。必须把去重记录和业务副作用放进同一个本地事务（同 06 章 outbox 的原子性思路），重复才被真正堵住。</p>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <p class="label">进阶挑战</p>
+        <h3>明星发微博击穿主页缓存，设计三层防御</h3>
+        <p>某明星刚发了一条微博，主页缓存恰在此刻 TTL 到期，瞬间数百万请求并发回源、把数据库砸穿。给出<strong>三层</strong>互补的防御，并说清每一层挡住的是哪一段、各自的代价：</p>
+        <details>
+          <summary>展开思路（先自己写满三层再看）</summary>
+          <p><strong>第一层 · 互斥重建（singleflight）</strong>：同一热键的并发回源只放一个请求去重建、其余短暂等待它的结果，把 N 次回源压成 1 次。代价：等待者多了一点延迟。挡住的是"过期瞬间的并发回源"本身。</p>
+          <p><strong>第二层 · 逻辑过期 / 永不物理删除</strong>：热键的值携带逻辑过期时间戳、不真正从缓存删除，读到"逻辑已过期"时前台先返回旧值、后台异步刷新。代价：短时间内读到略陈旧的数据。它让"过期瞬间"根本不存在硬 miss。</p>
+          <p><strong>第三层 · TTL 随机抖动 + 缓存高可用 + 熔断降级</strong>：给一批热键的 TTL 加随机量避免同时到点（防止单点击穿升级成片雪崩）；缓存做主从避免整层宕；万一仍打到库就限流/降级保护数据库（机制见 08 章）。代价：额外组件与少量降级体验。它是兜底，确保即使前两层失手，数据库也不被冲垮。</p>
+          <p>三层覆盖了"并发回源 → 过期瞬间 → 整体过载"三个不同层级，缺任何一层都会在对应层级留缺口。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>参考</h3>
+        <ul>
+          <li>Martin Kleppmann，《Designing Data-Intensive Applications》第 11 章（流处理与消息系统、投递语义）。</li>
+          <li>Confluent，<a href="https://www.confluent.io/blog/exactly-once-semantics-are-possible-heres-how-apache-kafka-does-it/">"Exactly-Once Semantics Are Possible: Here's How Kafka Does It"</a>（Kafka 内部 exactly-once 的边界）。</li>
+          <li>Jack Vanlightly，<a href="https://jack-vanlightly.com/">RabbitMQ vs Kafka 系列</a>（队列型 vs 日志型 broker 的模型差异）。</li>
+          <li>Alibaba Cloud / 社区，缓存与数据库一致性（cache-aside 删优于更新、binlog 驱动失效、延迟双删辨析）。</li>
+          <li>AWS Builders' Library，<a href="https://aws.amazon.com/builders-library/caching-challenges-and-strategies/">"Caching challenges and strategies"</a>（缓存模式与失效策略）。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="06-transactions.html">
+          <span class="label">上一章</span>
+          <span class="title">06 分布式事务</span>
+        </a>
+        <a class="next" href="08-resilience.html">
+          <span class="label">下一章</span>
+          <span class="title">08 高可用与容错</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s1" data-toc-target="s1">7.1 缓存读写模式</a></li>
+        <li><a href="#s2" data-toc-target="s2">7.2 穿透/击穿/雪崩</a></li>
+        <li><a href="#s3" data-toc-target="s3">7.3 缓存一致性</a></li>
+        <li><a href="#s4" data-toc-target="s4">7.4 投递语义</a></li>
+        <li><a href="#s5" data-toc-target="s5">7.5 幂等与背压</a></li>
+        <li><a href="#s6" data-toc-target="s6">7.6 日志型 vs 队列型</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">自测</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
