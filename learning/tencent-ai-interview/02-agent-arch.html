@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 · Agent 架构 · 腾讯AI应用开发一面</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+/* ============================================================
+   tech-tutorial design system v2 (minimalist mono + accent)
+   ============================================================ */
+
+:root {
+  /* Color — neutral palette; vermillion is the sole accent */
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;    /* code & callout subtle bg */
+  --bg-edge:     #F4F4F4;    /* code header */
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;    /* the only accent — used sparingly */
+  --vermilion-soft: rgba(183,59,47,0.06);
+
+  /* Code token colors — muted, restricted palette */
+  --code-string: #2D6A4F;    /* muted green */
+  --code-number: #8B6914;    /* muted amber */
+  --code-fn:     #2C3E50;    /* muted blue */
+
+  /* Typography */
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+
+  /* Rhythm */
+  --measure:     880px;       /* main reading column */
+  --page-max:    1280px;      /* page outer max */
+  --line:        1.6;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15.5px;
+  line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+main { position: relative; }
+
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion);
+  z-index: 100; transition: width 80ms linear;
+}
+
+/* Learning path breadcrumb at top */
+.learning-path {
+  position: sticky;
+  top: 0;
+  z-index: 50;            /* below .progress-bar (100), above page content */
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  padding: 16px 40px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path > .inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+.learning-path a {
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 2px 0; margin: 0 4px;
+}
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current {
+  color: var(--vermilion);
+  font-weight: 700;
+}
+
+/* Page layout: article + sticky TOC */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 48px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+
+article { max-width: var(--measure); min-width: 0; }
+
+/* Chapter opener */
+.chapter-opener {
+  padding: 24px 0 16px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 24px;
+}
+.chapter-opener .chapter-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.chapter-opener .recap {
+  font-size: 14px;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 640px;
+}
+@media (max-width: 640px) {
+  .chapter-opener h1 { font-size: 24px; }
+}
+
+/* Schema panel */
+.schema-panel {
+  border-left: 2px solid var(--ink);
+  padding: 4px 0 4px 16px;
+  margin: 16px 0 32px;
+}
+.schema-panel .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+  font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li {
+  padding: 4px 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+
+/* Body prose */
+article p, article li {
+  font-size: 15.5px; line-height: var(--line);
+  color: var(--ink);
+  margin: 0.9em 0;
+}
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+
+article :not(pre) > code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  background: var(--bg-soft);
+  padding: 1px 5px;
+  border-radius: 2px;
+  color: var(--vermilion);
+  border: 1px solid var(--rule);
+}
+
+article a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+
+/* Section headings */
+article h2 {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  letter-spacing: -0.005em;
+}
+article h2 .num {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+article h3 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 20px 0 8px;
+  color: var(--ink);
+}
+
+/* One-liner definition */
+article .one-liner {
+  font-size: 16px; line-height: 1.55;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 8px 0 18px;
+  padding-left: 12px;
+  border-left: 2px solid var(--ink-faint);
+}
+
+/* "为什么需要它" rationale block */
+article .rationale {
+  background: var(--bg-soft);
+  padding: 12px 16px;
+  border-left: 2px solid var(--ink-soft);
+  margin: 16px 0;
+  font-size: 14.5px;
+}
+article .rationale > .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: block;
+}
+article .rationale p { margin: 4px 0; }
+
+/* Code block */
+.code-block {
+  margin: 16px 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-soft);
+}
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-edge);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent;
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ink-soft); cursor: pointer;
+  padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase;
+  transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre {
+  margin: 0; padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13px; line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg-soft);
+}
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+
+/* Prism theme — restrained palette: 4 token colors + neutrals */
+.token.keyword,
+.token.boolean,
+.token.constant     { color: var(--vermilion); font-weight: 500; }
+.token.string,
+.token.char         { color: var(--code-string); }
+.token.number       { color: var(--code-number); }
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata        { color: var(--ink-faint); font-style: italic; }
+.token.function     { color: var(--code-fn); font-weight: 500; }
+.token.class-name   { color: var(--ink); font-weight: 700; }
+.token.operator,
+.token.punctuation  { color: var(--ink-soft); }
+.token.builtin      { color: var(--vermilion); }
+.token.property     { color: var(--ink); }
+.token.tag,
+.token.attr-name    { color: var(--code-fn); }
+.token.attr-value   { color: var(--code-string); }
+
+/* Annotations after code (line-ref pills) */
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule);
+  padding: 1px 6px;
+  border-radius: 2px;
+  margin-right: 4px;
+  color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Predictive question block */
+.predict {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.predict > .question-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion);
+  font-weight: 500;
+  margin: 0 0 4px;
+  display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+
+/* <details> answer reveal */
+details {
+  margin: 10px 0 0;
+  border-top: 1px dashed var(--rule);
+  padding-top: 10px;
+}
+details > summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  padding: 4px 0;
+  transition: color 150ms;
+  user-select: none;
+  display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  color: var(--ink-faint);
+  transition: transform 200ms, color 150ms;
+  font-size: 9px;
+}
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* Callouts — neutral by default; only .warning shows accent */
+.callout {
+  margin: 16px 0;
+  padding: 10px 16px;
+  border-left: 2px solid var(--ink-soft);
+  background: var(--bg-soft);
+  font-size: 14.5px;
+}
+.callout .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 0 0 4px;
+  display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+/* tip / example / insight: keep semantic class for HTML clarity, render neutral */
+.callout.tip     { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+
+/* Comparison table */
+.compare-table {
+  margin: 20px 0;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.compare-table caption {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left;
+  font-family: var(--sans);
+  font-weight: 600; font-size: 13px;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion);
+  padding-left: 8px;
+  color: var(--vermilion);
+  position: relative;
+}
+
+/* Figures (SVG diagrams) */
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+figcaption .fig-num {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--vermilion);
+  margin-right: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* Self-check block */
+.self-check {
+  margin: 32px 0 20px;
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+}
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+
+/* Advanced challenge */
+.challenge {
+  margin: 24px 0;
+  padding: 14px 18px;
+  background: var(--bg-soft);
+  border-left: 2px solid var(--vermilion);
+  border-radius: 2px;
+}
+.challenge .label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700;
+  color: var(--vermilion);
+  margin: 0 0 8px;
+  display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+
+/* References + chapter nav */
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500;
+  margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+
+.chapter-nav {
+  margin-top: 28px; padding-top: 16px;
+  border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+.chapter-nav a {
+  display: block; padding: 12px 14px;
+  border: 1px solid var(--rule);
+  text-decoration: none; color: var(--ink);
+  transition: border-color 150ms;
+}
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label {
+  display: block; font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin-bottom: 2px;
+}
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+
+/* Sticky TOC sidebar */
+.toc-sidebar {
+  position: sticky; top: 74px;
+  align-self: start;
+  padding-top: 24px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  max-height: calc(100vh - 98px);
+  overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px;
+  color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: all 150ms;
+  font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active {
+  color: var(--vermilion);
+  border-left-color: var(--vermilion);
+  font-weight: 500;
+}
+
+/* Subtle entrance — single fade, no staggered theatrics */
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel   { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   SVG conventions — utility classes for hand-drawn diagrams
+   (full规约 see references/diagram_guide.md)
+   ============================================================ */
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+
+/* ============================================================
+   Multi-tutorial library: hub index + 相关教程 cross-links
+   (see SKILL.md "Building a knowledge library")
+   ============================================================ */
+.theme-cluster          { margin: 2.4rem 0; }
+.theme-cluster > h2     { margin-bottom: 1rem; }
+.tutorial-cards         { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+.tutorial-cards > li    { border: 1px solid var(--ink-faint); border-left: 3px solid var(--ink); border-radius: 4px; padding: 0.7rem 0.9rem; transition: border-color .15s ease; }
+.tutorial-cards > li:hover { border-left-color: var(--vermilion); }
+.tutorial-cards a       { text-decoration: none; }
+.tutorial-cards .schema { display: block; margin-top: 0.3rem; font-size: 13px; color: var(--ink-soft); line-height: 1.45; }
+.related-tutorials      { margin-top: 2.6rem; padding-top: 1.4rem; border-top: 1px solid var(--ink-faint); }
+.related-tutorials .label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-soft); margin: 0.9rem 0 0.3rem; }
+.related-tutorials ul   { margin: 0.2rem 0 0.6rem; }
+
+/* Anchor targets clear the pinned breadcrumb when jumped to */
+article h2, article h3, article [id] { scroll-margin-top: 64px; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+   <div class="inner">
+    <a href="index.html">起点</a><span class="sep">—</span>
+    <a href="01-memory.html">01 记忆系统</a><span class="sep">—</span>
+    <a href="02-agent-arch.html" class="current">02 Agent 架构</a><span class="sep">—</span>
+    <a href="03-skill.html">03 Skill 机制</a><span class="sep">—</span>
+    <a href="04-engineering.html">04 工程落地</a><span class="sep">—</span>
+    <a href="05-algorithms.html">05 算法题</a><span class="sep">—</span>
+    <a href="06-self-check.html">06 自测</a>
+     </div>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02 · Agent Architecture</p>
+        <h1>Agent 架构</h1>
+        <p class="recap"><a href="01-memory.html">01 章</a>的记忆系统回答"Agent 带着什么上下文行动"，本章回答"Agent 按什么流程行动"——从单 Agent 的 FSM 状态机与 ReAct 循环，到多 Agent 拓扑，再到 LangChain / LangGraph 的运行时选型。</p>
+      </header>
+
+      <div class="schema-panel">
+        <p class="label">本章四题 · 答案骨架</p>
+        <ul>
+          <li><strong>Q3</strong> FSM：五元组形式定义 + Python 实现三档（dict 表 / Enum+match / transitions 库）</li>
+          <li><strong>Q4</strong> ReAct：任务形状决定 Chain、单轮 Tool Use 还是 ReAct loop</li>
+          <li><strong>Q6</strong> 多 Agent：三条正交轴（拓扑 × 协调 × 通信）× 四条划分依据</li>
+          <li><strong>Q12</strong> LangChain = 高层 API，LangGraph = 低层运行时，前者构建在后者之上</li>
+        </ul>
+      </div>
+
+      <!-- ════════════════ Q3 ════════════════ -->
+      <h2 id="q3"><span class="num">Q3</span><span>FSM 状态机分哪几部分？如何代码实现？</span></h2>
+
+      <div class="rationale">
+        <span class="label">面试官在考什么</span>
+        <p>能否把"状态机"从直觉概念落到形式定义与可维护的代码结构，并迁移到 Agent 流程控制的真实场景。</p>
+      </div>
+
+      <h3>参考答案</h3>
+
+      <p>FSM（有限状态机）的形式定义是一个<strong>五元组</strong>：</p>
+      <ul>
+        <li><strong>Q</strong> — 状态集合：系统全部合法状态</li>
+        <li><strong>Σ</strong> — 输入 / 事件集：触发转移的外部输入</li>
+        <li><strong>δ</strong> — 转移函数：δ(状态, 事件) → 新状态</li>
+        <li><strong>q₀</strong> — 初始态</li>
+        <li><strong>F</strong> — 终态集</li>
+      </ul>
+
+      <p>工程实现在五元组之外再补两个构件。其一是<strong>动作 / 副作用</strong>，按挂载位置分两种机型：<strong>Mealy 机</strong>把动作挂在转移边上（出边动作，同一状态因不同事件触发不同副作用），<strong>Moore 机</strong>把动作挂在状态入口（入态动作，副作用集中、易测试）。其二是 <strong>guard 条件</strong>：转移上的布尔谓词，事件到达且 guard 为真才允许转移，用于表达"重试次数未超限才回到执行态"一类约束。</p>
+
+      <figure>
+        <svg viewBox="0 0 760 250" role="img" aria-label="Agent 工具调用循环状态机，标注 FSM 五元组各部分">
+          <defs>
+            <marker id="f1-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"/></marker>
+            <marker id="f1-arr-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B73B2F"/></marker>
+          </defs>
+          <!-- q0 entry -->
+          <line class="diagram-ink" x1="6" y1="110" x2="34" y2="110" marker-end="url(#f1-arr)"/>
+          <text class="edge-label" x="12" y="100">q0</text>
+          <!-- states -->
+          <rect class="diagram-ink node-fill" x="40" y="90" width="104" height="40" rx="8"/>
+          <text class="node-label" x="92" y="115" text-anchor="middle">planning</text>
+          <rect class="diagram-ink node-fill" x="204" y="90" width="104" height="40" rx="8"/>
+          <text class="node-label" x="256" y="115" text-anchor="middle">calling</text>
+          <rect class="diagram-ink node-fill" x="368" y="90" width="104" height="40" rx="8"/>
+          <text class="node-label" x="420" y="115" text-anchor="middle">observing</text>
+          <rect class="diagram-ink node-fill" x="532" y="90" width="104" height="40" rx="8"/>
+          <text class="node-label" x="584" y="115" text-anchor="middle">answering</text>
+          <!-- final state: double circle -->
+          <circle class="diagram-ink node-fill" cx="700" cy="110" r="22"/>
+          <circle class="diagram-ink" cx="700" cy="110" r="17"/>
+          <text class="node-label" x="700" y="114" text-anchor="middle" font-size="12">done</text>
+          <!-- forward edges -->
+          <line class="diagram-ink" x1="144" y1="110" x2="200" y2="110" marker-end="url(#f1-arr)"/>
+          <text class="edge-label" x="172" y="82" text-anchor="middle">need_tool</text>
+          <line class="diagram-ink" x1="308" y1="110" x2="364" y2="110" marker-end="url(#f1-arr)"/>
+          <text class="edge-label" x="336" y="82" text-anchor="middle">tool_result</text>
+          <line class="diagram-ink" x1="472" y1="110" x2="528" y2="110" marker-end="url(#f1-arr)"/>
+          <text class="edge-label" x="500" y="82" text-anchor="middle">enough</text>
+          <line class="diagram-ink" x1="636" y1="110" x2="676" y2="110" marker-end="url(#f1-arr)"/>
+          <text class="edge-label" x="656" y="82" text-anchor="middle">finish</text>
+          <!-- conditional back edge -->
+          <path class="diagram-accent" d="M 420 134 C 420 196, 256 196, 256 134" marker-end="url(#f1-arr-acc)"/>
+          <text class="branch-label" x="338" y="200" text-anchor="middle">need_more · 条件边</text>
+          <!-- legend -->
+          <text class="edge-label" x="380" y="238" text-anchor="middle">五元组对应：Q = 全部节点 ｜ Σ = 边上事件 ｜ δ = 边 ｜ q0 = 入口箭头 ｜ F = done（双圈终态）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 1</span>Agent 工具调用循环建模为 FSM：observing 之后由条件边决定回到 calling 继续取证，还是进入 answering 收束。</figcaption>
+      </figure>
+
+      <p>Python 实现按复杂度分三档。<strong>第一档：dict 转移表</strong>，把 δ 直接写成 <code>{(state, event): next_state}</code> 的字典，配一个 <code>step()</code> 函数，状态与事件少时零依赖、一眼看全：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">fsm_table.py · 第一档：dict 转移表</span><span class="lang">Python</span><button class="copy" data-copy-target="code-q3-table">复制</button></div>
+        <pre><code id="code-q3-table" class="language-python"># δ: (state, event) -> next_state，转移表即状态图本身
+TRANSITIONS = {
+    ("idle",      "user_input"):  "planning",
+    ("planning",  "need_tool"):   "calling",
+    ("planning",  "can_answer"):  "answering",
+    ("calling",   "tool_result"): "observing",
+    ("observing", "need_more"):   "calling",     # 条件回边
+    ("observing", "enough"):      "answering",
+    ("answering", "finish"):      "idle",
+}
+
+def step(state: str, event: str) -&gt; str:
+    key = (state, event)
+    if key not in TRANSITIONS:
+        raise ValueError(f"非法转移: {state} x {event}")
+    return TRANSITIONS[key]</code></pre>
+      </div>
+
+      <p><strong>第二档：Enum + match</strong>，把状态、事件、guard 与副作用全部显式写出，适合 plan → execute → verify → done 一类任务编排：</p>
+
+      <div class="code-block">
+        <div class="header"><span class="filename">task_machine.py · 第二档：Enum + match + guard</span><span class="lang">Python</span><button class="copy" data-copy-target="code-q3-enum">复制</button></div>
+        <pre><code id="code-q3-enum" class="language-python">from enum import Enum, auto
+
+class State(Enum):
+    PLAN = auto(); EXECUTE = auto(); VERIFY = auto()
+    DONE = auto(); FAILED = auto()          # DONE/FAILED ∈ 终态集 F
+
+class TaskMachine:
+    MAX_RETRY = 3
+
+    def __init__(self):
+        self.state = State.PLAN              # q0 初始态
+        self.retries = 0
+
+    def on_event(self, event: str) -&gt; State:
+        match (self.state, event):
+            case (State.PLAN, "plan_ready"):
+                self.state = State.EXECUTE
+            case (State.EXECUTE, "result"):
+                self.state = State.VERIFY
+            case (State.VERIFY, "pass"):
+                self.state = State.DONE
+            case (State.VERIFY, "fail") if self.retries &lt; self.MAX_RETRY:
+                self.retries += 1            # guard 为真：重试回边
+                self.state = State.EXECUTE
+            case (State.VERIFY, "fail"):
+                self.state = State.FAILED    # guard 为假：进失败终态
+            case _:
+                raise ValueError(f"非法转移: {self.state} x {event}")
+        return self.state</code></pre>
+      </div>
+
+      <p><strong>第三档：<code>transitions</code> 库</strong>。声明式定义状态与转移，原生支持 <code>before/after</code> callback（对应 Mealy 出边动作）、<code>on_enter</code>（对应 Moore 入态动作）、<code>conditions</code> guard，以及 <code>HierarchicalMachine</code> 层级状态机与状态图导出。状态、事件数量增长，或需要在 code review 时核对状态图，引入此档。</p>
+
+      <p>Agent 场景中 FSM 出现在三个典型位置：<strong>对话流程控制</strong>（槽位收集、多轮确认）、<strong>任务编排</strong>（plan → execute → verify → done）、<strong>工具调用循环</strong>（calling → observing → answering，即图 1）。</p>
+
+      <div class="callout example">
+        <span class="label">60 秒口头版本</span>
+        <p>FSM 形式上是五元组：状态集合 Q、事件集 Σ、转移函数 δ、初始态 q₀、终态集 F；工程上再补两件事——动作（Mealy 挂在出边、Moore 挂在入态）和 guard 条件。代码实现分三档：最轻是 dict 转移表加一个 step 函数；中间档用 Enum + match 把转移、guard、副作用写显式；再往上用 transitions 库拿声明式定义和层级状态机。Agent 里典型用法是工具调用循环：calling、observing、answering 三态加一条条件回边。</p>
+      </div>
+
+      <h3>加分点</h3>
+      <div class="callout insight">
+        <span class="label">深一层</span>
+        <p><strong>LangGraph 本质是 FSM 的超集</strong>：节点 = 状态，条件边 = 转移函数 δ。差别在执行模型——LangGraph 基于 <strong>Pregel</strong> 模型按超步（super-step）调度，允许多个节点并发激活，与经典 FSM"任意时刻只处于一个状态"不同。图中的环必须由条件边给出退出条件，否则触发 <code>GraphRecursionError</code>（默认 25 步上限）。</p>
+        <p>状态机视角同样覆盖算法题：<a href="05-algorithms.html">05 章</a>股票买卖的状态机 DP（持有 / 不持有两态 + 转移方程）与本题同构。</p>
+      </div>
+
+      <h3>追问预判</h3>
+
+      <div class="predict">
+        <span class="question-label">追问 1</span>
+        <p>状态数量增长导致转移表爆炸，怎么办？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>引入<strong>层级状态机</strong>：子状态共享父状态的转移规则，公共逻辑（如"任意状态收到 cancel 都终止"）只写一次；<code>transitions</code> 的 <code>HierarchicalMachine</code> 直接支持。Agent 场景的等价手段是把子流程下沉为独立子图（LangGraph subgraph），父图只看到子图的入口与出口。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 2</span>
+        <p>Mealy 和 Moore 在工程上怎么取舍？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>Mealy 动作挂在边上，同一状态的不同入边可执行不同副作用，表达力强但副作用散落各处；Moore 动作挂在状态入口，副作用集中、单测友好。工程实践常混用：入态做初始化与不变量检查（Moore），出边做与事件强相关的动作（Mealy）。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 3</span>
+        <p>什么时候从手写 dict 升级到 transitions 库？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>状态 ≤ 5、事件 ≤ 10 时 dict 足够且零依赖；出现 guard / callback / 层级嵌套需求，或团队需要把状态图导出成图片做 review 时引库——声明式定义把状态图从代码中显式化，变更的 diff 即状态图的 diff。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════ Q4 ════════════════ -->
+      <h2 id="q4"><span class="num">Q4</span><span>为什么选择 ReAct，而不是纯 Chain 或 Tool Use？</span></h2>
+
+      <div class="rationale">
+        <span class="label">面试官在考什么</span>
+        <p>架构选型的判断依据——是否理解三种模式各自适用的任务形状，而不是背诵 ReAct 的名词解释。</p>
+      </div>
+
+      <h3>参考答案</h3>
+
+      <p><strong>ReAct</strong>（Yao et al., 2022）的核心是把 Reasoning 与 Acting 交织进同一循环：Thought 决定下一步动作，Action 执行工具调用，Observation 把结果送回推理，推理再据此修正方向。三种模式的本质差异在于<strong>"路径在什么时候被决定"</strong>：</p>
+
+      <table class="compare-table">
+        <caption>三种模式对比</caption>
+        <thead>
+          <tr><th>模式</th><th>路径形状</th><th>决策时机</th><th>适用任务</th><th>局限</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>纯 Chain</td><td>直线（固定流水线）</td><td>构造期一次定死</td><td>步骤可预枚举的确定流程</td><td>处理不了"不知道要几步"的任务</td>
+          </tr>
+          <tr>
+            <td>单轮 Tool Use</td><td>单跳</td><td>运行期决策一次</td><td>单步查询、一次性调用</td><td>调完即止：无法基于结果迭代，无错误恢复</td>
+          </tr>
+          <tr class="selected">
+            <td>ReAct loop</td><td>带环</td><td>每一轮运行期决策</td><td>开放式多步任务</td><td>延迟与 token 随轮数倍增，需 max_iterations 兜底</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 760 310" role="img" aria-label="Chain、单轮 Tool Use、ReAct loop 三列路径形状对比">
+          <defs>
+            <marker id="f2-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"/></marker>
+            <marker id="f2-arr-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B73B2F"/></marker>
+          </defs>
+          <line class="diagram-soft" x1="255" y1="20" x2="255" y2="296"/>
+          <line class="diagram-soft" x1="505" y1="20" x2="505" y2="296"/>
+          <!-- col 1: Chain -->
+          <text class="node-label" x="128" y="32" text-anchor="middle">Chain · 固定流水线</text>
+          <rect class="diagram-ink node-fill" x="78" y="56" width="100" height="32" rx="6"/>
+          <text class="node-label" x="128" y="77" text-anchor="middle" font-size="12">步骤 1</text>
+          <line class="diagram-ink" x1="128" y1="88" x2="128" y2="112" marker-end="url(#f2-arr)"/>
+          <rect class="diagram-ink node-fill" x="78" y="116" width="100" height="32" rx="6"/>
+          <text class="node-label" x="128" y="137" text-anchor="middle" font-size="12">步骤 2</text>
+          <line class="diagram-ink" x1="128" y1="148" x2="128" y2="172" marker-end="url(#f2-arr)"/>
+          <rect class="diagram-ink node-fill" x="78" y="176" width="100" height="32" rx="6"/>
+          <text class="node-label" x="128" y="197" text-anchor="middle" font-size="12">步骤 3</text>
+          <line class="diagram-ink" x1="128" y1="208" x2="128" y2="232" marker-end="url(#f2-arr)"/>
+          <circle cx="128" cy="240" r="5" fill="#0A0A0A"/>
+          <text class="edge-label" x="146" y="244">输出</text>
+          <!-- col 2: single tool use -->
+          <text class="node-label" x="380" y="32" text-anchor="middle">单轮 Tool Use</text>
+          <rect class="diagram-ink node-fill" x="330" y="70" width="100" height="32" rx="6"/>
+          <text class="node-label" x="380" y="91" text-anchor="middle" font-size="12">LLM 决策</text>
+          <line class="diagram-ink" x1="380" y1="102" x2="380" y2="140" marker-end="url(#f2-arr)"/>
+          <text class="edge-label" x="392" y="124">tool call</text>
+          <rect class="diagram-ink node-fill" x="330" y="144" width="100" height="32" rx="6"/>
+          <text class="node-label" x="380" y="165" text-anchor="middle" font-size="12">工具执行</text>
+          <line class="diagram-ink" x1="380" y1="176" x2="380" y2="214" marker-end="url(#f2-arr)"/>
+          <circle cx="380" cy="222" r="5" fill="#0A0A0A"/>
+          <text class="edge-label" x="398" y="226">返回即结束</text>
+          <!-- col 3: ReAct loop -->
+          <text class="node-label" x="630" y="32" text-anchor="middle">ReAct loop</text>
+          <rect class="diagram-ink node-fill" x="575" y="50" width="110" height="32" rx="6"/>
+          <text class="node-label" x="630" y="71" text-anchor="middle" font-size="12">Thought</text>
+          <line class="diagram-ink" x1="630" y1="82" x2="630" y2="108" marker-end="url(#f2-arr)"/>
+          <rect class="diagram-ink node-fill" x="575" y="112" width="110" height="32" rx="6"/>
+          <text class="node-label" x="630" y="133" text-anchor="middle" font-size="12">Action</text>
+          <line class="diagram-ink" x1="630" y1="144" x2="630" y2="170" marker-end="url(#f2-arr)"/>
+          <rect class="diagram-ink node-fill" x="575" y="174" width="110" height="32" rx="6"/>
+          <text class="node-label" x="630" y="195" text-anchor="middle" font-size="12">Observation</text>
+          <path class="diagram-accent" d="M 685 190 C 738 190, 738 66, 685 66" marker-end="url(#f2-arr-acc)"/>
+          <text class="branch-label" x="712" y="134" text-anchor="middle">未完成</text>
+          <line class="diagram-ink" x1="630" y1="206" x2="630" y2="240" marker-end="url(#f2-arr)"/>
+          <text class="edge-label" x="644" y="228">完成/上限</text>
+          <circle cx="630" cy="248" r="5" fill="#0A0A0A"/>
+          <!-- bottom captions -->
+          <text class="edge-label" x="128" y="290" text-anchor="middle">路径：直线，构造期定死</text>
+          <text class="edge-label" x="380" y="290" text-anchor="middle">路径：单跳，调完即止</text>
+          <text class="edge-label" x="630" y="290" text-anchor="middle">路径：带环，运行期决策</text>
+        </svg>
+        <figcaption><span class="fig-num">图 2</span>三种模式的路径形状：Chain 是直线，单轮 Tool Use 是单跳，ReAct 是带条件退出的环。</figcaption>
+      </figure>
+
+      <p>ReAct 的收益由"环"带来：<strong>动态决策</strong>（步数未知也能推进）、<strong>错误恢复</strong>（一条路失败后换工具、换查询重试）、<strong>可观测性</strong>（推理轨迹逐轮留痕，便于调试与审计）。代价同样由"环"带来：多轮交互的延迟、token 用量随轮数倍增、循环失控需要 <code>max_iterations</code> 一类硬上限兜底。</p>
+
+      <p>面试作答的正确顺序是<strong>先确认任务形状，再给结论</strong>：步骤可预枚举 → Chain 更便宜更稳；单步查询 → 一次 Tool Use 足够；开放式多步、步数未知 → 才轮到 ReAct loop。</p>
+
+      <div class="callout example">
+        <span class="label">60 秒口头版本</span>
+        <p>ReAct 把推理和行动交织成 Thought–Action–Observation 循环：推理指导行动，观察结果修正推理。纯 Chain 在构造期定死路径，处理不了步数未知的任务；单轮 Tool Use 调完即止，无法基于结果迭代，也没有错误恢复。所以开放式多步任务才用 ReAct loop，换来的是动态决策和失败重试，代价是延迟和 token 倍增，要配 max_iterations 兜底。反过来，步骤可枚举就退回 Chain，单步查询一次 Tool Use 就够——选型由任务形状决定。</p>
+      </div>
+
+      <h3>加分点</h3>
+      <div class="callout insight">
+        <span class="label">深一层</span>
+        <p><strong>2025 之后的演化</strong>：显式 <code>Thought:/Action:</code> 文本格式已经过时——现代模型把 tool calling 与 reasoning 原生化到 API 层，结构化输出取代了脆弱的文本解析；LangGraph 的 <code>create_react_agent</code> 已废弃，由 LangChain 1.0 的 <code>create_agent</code> 接替。一句话总结：<strong>ReAct 作为 prompt 格式死了，作为 loop 架构思想活着</strong>。</p>
+      </div>
+
+      <h3>追问预判</h3>
+
+      <div class="predict">
+        <span class="question-label">追问 1</span>
+        <p>ReAct 循环不收敛、原地打转，怎么处理？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>三层防线：<code>max_iterations</code> 硬上限（LangGraph 对应 <code>recursion_limit</code>）；把已尝试过的动作与结果写进上下文，避免重复同一查询；失败计数触发降级路径——换工具、直接基于已有信息作答、或升级到人工。条件边必须显式给出退出分支，这是图 1 中"条件边"的工程含义。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 2</span>
+        <p>现在还需要手写 Thought: / Action: 提示词吗？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>不需要。原生 tool calling 由 API 返回结构化的 <code>tool_calls</code> 字段，推理由模型内化；手写文本格式反而引入解析失败的脆弱点。保留的有效做法是要求模型在行动前输出一句简短 rationale——不参与解析，只服务可观测性。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 3</span>
+        <p>Chain 和 ReAct 能混合使用吗？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>能，且是生产系统的常态：外层用固定 workflow（检索 → agent → 校验 → 格式化）保证确定性，把 ReAct loop 收敛为其中一个节点。原则是"确定的部分用 Chain 省成本，开放的部分才交给 loop"。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════ Q6 ════════════════ -->
+      <h2 id="q6"><span class="num">Q6</span><span>多 Agent 框架怎么设计？划分 Agent 的依据是什么？</span></h2>
+
+      <div class="rationale">
+        <span class="label">面试官在考什么</span>
+        <p>系统设计能力：拆分 Agent 是否有明确依据，是否清楚多 Agent 的成本曲线与不适用的边界。</p>
+      </div>
+
+      <h3>参考答案</h3>
+
+      <p>多 Agent 设计沿<strong>三条正交轴</strong>展开，三轴独立选择、组合成最终架构：</p>
+      <ul>
+        <li><strong>拓扑</strong>：supervisor（协调者）星形 / hierarchical 树形 / swarm 任意图 + handoff（交接）；</li>
+        <li><strong>协调</strong>：中心调度（supervisor 统一分派与汇总）vs 去中心交接（执行中把控制权 handoff 给下一个 Agent）；</li>
+        <li><strong>通信</strong>：共享 state vs 消息传递，并按上下文隔离档位决定向对方暴露多少中间态。</li>
+      </ul>
+
+      <figure>
+        <svg viewBox="0 0 760 275" role="img" aria-label="多 Agent 三种拓扑：supervisor 星形、hierarchical 树形、swarm 网状">
+          <defs>
+            <marker id="f3-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"/></marker>
+            <marker id="f3-arr-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#B73B2F"/></marker>
+          </defs>
+          <line class="diagram-soft" x1="255" y1="20" x2="255" y2="262"/>
+          <line class="diagram-soft" x1="505" y1="20" x2="505" y2="262"/>
+          <!-- col 1: supervisor star -->
+          <text class="node-label" x="128" y="32" text-anchor="middle">supervisor · 星形</text>
+          <rect class="diagram-ink node-fill-accent" x="78" y="58" width="100" height="30" rx="6"/>
+          <text class="node-label" x="128" y="78" text-anchor="middle" font-size="12">supervisor</text>
+          <line class="diagram-ink" x1="118" y1="92" x2="76" y2="150" marker-start="url(#f3-arr)" marker-end="url(#f3-arr)"/>
+          <line class="diagram-ink" x1="128" y1="92" x2="128" y2="168" marker-start="url(#f3-arr)" marker-end="url(#f3-arr)"/>
+          <line class="diagram-ink" x1="138" y1="92" x2="180" y2="150" marker-start="url(#f3-arr)" marker-end="url(#f3-arr)"/>
+          <circle class="diagram-ink node-fill" cx="66" cy="170" r="18"/>
+          <text class="node-label" x="66" y="174" text-anchor="middle" font-size="12">W1</text>
+          <circle class="diagram-ink node-fill" cx="128" cy="190" r="18"/>
+          <text class="node-label" x="128" y="194" text-anchor="middle" font-size="12">W2</text>
+          <circle class="diagram-ink node-fill" cx="190" cy="170" r="18"/>
+          <text class="node-label" x="190" y="174" text-anchor="middle" font-size="12">W3</text>
+          <text class="edge-label" x="128" y="248" text-anchor="middle">中心调度，worker 不互联</text>
+          <!-- col 2: hierarchical tree -->
+          <text class="node-label" x="380" y="32" text-anchor="middle">hierarchical · 树形</text>
+          <circle class="diagram-ink node-fill-accent" cx="380" cy="70" r="16"/>
+          <text class="node-label" x="380" y="74" text-anchor="middle" font-size="12">S</text>
+          <line class="diagram-ink" x1="372" y1="84" x2="336" y2="126" marker-end="url(#f3-arr)"/>
+          <line class="diagram-ink" x1="388" y1="84" x2="424" y2="126" marker-end="url(#f3-arr)"/>
+          <circle class="diagram-ink node-fill" cx="330" cy="140" r="16"/>
+          <text class="node-label" x="330" y="144" text-anchor="middle" font-size="12">S1</text>
+          <circle class="diagram-ink node-fill" cx="430" cy="140" r="16"/>
+          <text class="node-label" x="430" y="144" text-anchor="middle" font-size="12">S2</text>
+          <line class="diagram-ink" x1="322" y1="153" x2="304" y2="194" marker-end="url(#f3-arr)"/>
+          <line class="diagram-ink" x1="338" y1="153" x2="350" y2="194" marker-end="url(#f3-arr)"/>
+          <line class="diagram-ink" x1="422" y1="153" x2="410" y2="194" marker-end="url(#f3-arr)"/>
+          <line class="diagram-ink" x1="438" y1="153" x2="456" y2="194" marker-end="url(#f3-arr)"/>
+          <circle class="diagram-ink node-fill" cx="300" cy="208" r="14"/>
+          <text class="node-label" x="300" y="212" text-anchor="middle" font-size="11">W</text>
+          <circle class="diagram-ink node-fill" cx="355" cy="208" r="14"/>
+          <text class="node-label" x="355" y="212" text-anchor="middle" font-size="11">W</text>
+          <circle class="diagram-ink node-fill" cx="406" cy="208" r="14"/>
+          <text class="node-label" x="406" y="212" text-anchor="middle" font-size="11">W</text>
+          <circle class="diagram-ink node-fill" cx="460" cy="208" r="14"/>
+          <text class="node-label" x="460" y="212" text-anchor="middle" font-size="11">W</text>
+          <text class="edge-label" x="380" y="248" text-anchor="middle">分层委派，每层只看直属下级</text>
+          <!-- col 3: swarm -->
+          <text class="node-label" x="630" y="32" text-anchor="middle">swarm · 网状 handoff</text>
+          <circle class="diagram-ink node-fill" cx="575" cy="100" r="20"/>
+          <text class="node-label" x="575" y="104" text-anchor="middle" font-size="12">A</text>
+          <circle class="diagram-ink node-fill" cx="685" cy="100" r="20"/>
+          <text class="node-label" x="685" y="104" text-anchor="middle" font-size="12">B</text>
+          <circle class="diagram-ink node-fill" cx="630" cy="200" r="20"/>
+          <text class="node-label" x="630" y="204" text-anchor="middle" font-size="12">C</text>
+          <line class="diagram-accent" x1="597" y1="100" x2="663" y2="100" marker-start="url(#f3-arr-acc)" marker-end="url(#f3-arr-acc)"/>
+          <text class="branch-label" x="630" y="92" text-anchor="middle">handoff</text>
+          <line class="diagram-ink" x1="585" y1="118" x2="619" y2="184" marker-start="url(#f3-arr)" marker-end="url(#f3-arr)"/>
+          <line class="diagram-ink" x1="675" y1="118" x2="641" y2="184" marker-start="url(#f3-arr)" marker-end="url(#f3-arr)"/>
+          <text class="edge-label" x="630" y="248" text-anchor="middle">去中心交接，无统一调度</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3</span>三种拓扑：supervisor 星形中心调度；hierarchical 树形逐层委派；swarm 网状由当前 Agent 决定 handoff（交接）给谁。</figcaption>
+      </figure>
+
+      <p><strong>划分 Agent 的依据</strong>按优先级排列为四条：</p>
+      <ol>
+        <li><strong>按上下文隔离需求</strong>（最重要）：subagent 拥有独立上下文窗口，长流程的中间产物不污染主线，主 Agent 只接收浓缩结论；</li>
+        <li><strong>按领域 / 职责</strong>：检索、写作、审校各成一职，单一职责降低提示词复杂度；</li>
+        <li><strong>按工具集</strong>：每个 Agent 只挂自己用得到的工具，缩小决策空间、降低误调用率；</li>
+        <li><strong>按模型能力分层</strong>：orchestrator 用强模型做规划与汇总，worker 用便宜模型跑量。</li>
+      </ol>
+
+      <p>工程标杆是 <strong>Anthropic 的多 Agent 研究系统</strong>：orchestrator-worker 拓扑，在内部研究评测上比单 Opus 4 提升 90.2%，代价是约 15 倍 token 消耗。该系统给出的另一条硬经验：<strong>委派指令必须包含目标、输出格式、工具指引、任务边界</strong>四要素，缺失任何一项都会导致 subagent 重复劳动或偏离主题。</p>
+
+      <div class="callout example">
+        <span class="label">60 秒口头版本</span>
+        <p>设计沿三条正交轴：拓扑（supervisor 星形、hierarchical 树形、swarm 网状 handoff）、协调方式（中心调度还是去中心交接）、通信方式（共享 state 还是消息传递）。划分 Agent 的依据按优先级是：上下文隔离需求、领域职责、工具集、模型能力分层——隔离最重要，因为 subagent 独立上下文窗口能防止长流程互相污染。Anthropic 的研究系统验证了 orchestrator-worker 比单模型提升 90.2%，但 token 成本约 15 倍，所以子任务强耦合或步骤可枚举时退回单 Agent。</p>
+      </div>
+
+      <h3>加分点</h3>
+      <div class="callout insight">
+        <span class="label">深一层</span>
+        <p><strong>何时不用多 Agent</strong>：子任务之间强依赖、需要共享大量中间状态、或步骤本身可预枚举时，多 Agent 只增加 token 成本与协调失败面，正确做法是退回单 Agent + 工具，或固定 workflow。设计准则一句话：<strong>架构跟随任务结构</strong>——任务天然可并行分解才配得上多 Agent。</p>
+      </div>
+
+      <h3>追问预判</h3>
+
+      <div class="predict">
+        <span class="question-label">追问 1</span>
+        <p>subagent 之间需要共享大量中间结果，怎么办？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>首先把它识别为"不该拆"的信号——强共享意味着强耦合。确需拆分时，用外置共享介质（文件系统、对象存储、共享 state）存放中间产物，Agent 之间传引用而非全文，避免同一份内容在多个上下文窗口里重复计费。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 2</span>
+        <p>supervisor 和 swarm 怎么选？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>任务能在入口处中心规划、结果需要统一汇总 → supervisor；该谁接手要到执行中才知道（客服路由、专家切换）→ swarm handoff。swarm 省去经由中心的一跳转发，但全局可观测性与失败回滚比中心调度难做。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 3</span>
+        <p>15 倍 token 成本怎么压？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>模型分层（orchestrator 强模型、worker 便宜模型）；限制 subagent 并发数与单任务步数上限；委派指令中明确输出格式与长度上限，禁止 worker 返回原始全文；对重复出现的子任务做结果缓存。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════ Q12 ════════════════ -->
+      <h2 id="q12"><span class="num">Q12</span><span>LangChain 和 LangGraph 的区别？</span></h2>
+
+      <div class="rationale">
+        <span class="label">面试官在考什么</span>
+        <p>对工具栈分层的理解——能否说清两者是"高层 API 与底层运行时"的关系，而非两个并列竞品。</p>
+      </div>
+
+      <h3>参考答案</h3>
+
+      <p>两者在 2025-10-22 同日发布 1.0 GA，分工是<strong>高层 API vs 低层运行时</strong>。<strong>LangChain 1.0</strong> 提供 <code>create_agent</code> + middleware 体系（HITL 人在回路、对话摘要、PII 脱敏等横切能力以中间件形式插入 agent loop）；其 LCEL 链是静态的 <code>RunnableSequence</code>，执行顺序在构造期定死，无法表达回边。<strong>LangGraph 1.0</strong> 提供 <code>StateGraph</code> 运行时：图 = 节点 + 边 + 共享 state（<code>TypedDict</code> + reducer，reducer 即"合并函数"，定义并发写入同一 key 时的合并协议）；条件边支持分支与循环；checkpointer 在每个超步后按 <code>thread_id</code> 持久化 state 快照，由此支撑断点续跑、time-travel 调试、HITL interrupt（checkpointer 也是 <a href="01-memory.html">01 章</a>跨会话记忆的承载机制）。</p>
+
+      <table class="compare-table">
+        <caption>LangChain 1.0 vs LangGraph 1.0</caption>
+        <thead>
+          <tr><th>维度</th><th>LangChain 1.0</th><th>LangGraph 1.0</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>定位</td><td>高层 API（快速路径）</td><td>低层运行时（精控路径）</td></tr>
+          <tr><td>核心抽象</td><td><code>create_agent</code> + middleware；LCEL <code>RunnableSequence</code></td><td><code>StateGraph</code>：节点 + 边 + 共享 state（TypedDict + reducer）</td></tr>
+          <tr><td>控制流</td><td>链为静态序列，构造期定死，无回边</td><td>条件边支持分支与循环，Pregel 模型并发执行</td></tr>
+          <tr><td>持久化</td><td>由底层运行时提供</td><td>checkpointer 按 thread_id 快照：断点续跑 / time-travel / HITL interrupt</td></tr>
+          <tr><td>适用</td><td>标准 tool-calling agent，数行代码可用</td><td>自定义控制流、长时运行、多 Agent 子图编排</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <svg viewBox="0 0 760 250" role="img" aria-label="deepagents、LangChain、LangGraph 三层抽象栈">
+          <defs>
+            <marker id="f4-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0A0A0A"/></marker>
+          </defs>
+          <rect class="diagram-ink node-fill" x="150" y="24" width="400" height="52" rx="6"/>
+          <text class="node-label" x="350" y="45" text-anchor="middle">deepagents · 全装 harness</text>
+          <text class="edge-label" x="350" y="64" text-anchor="middle">write_todos · spawn subagent · 虚拟文件系统 · SKILL.md</text>
+          <line class="diagram-ink" x1="350" y1="76" x2="350" y2="96" marker-end="url(#f4-arr)"/>
+          <text class="edge-label" x="362" y="90">构建于</text>
+          <rect class="diagram-ink node-fill" x="150" y="100" width="400" height="52" rx="6"/>
+          <text class="node-label" x="350" y="121" text-anchor="middle">LangChain 1.0 · create_agent + middleware</text>
+          <text class="edge-label" x="350" y="140" text-anchor="middle">高层 API · 快速路径 · HITL / 摘要 / PII 脱敏</text>
+          <line class="diagram-ink" x1="350" y1="152" x2="350" y2="172" marker-end="url(#f4-arr)"/>
+          <text class="edge-label" x="362" y="166">构建于</text>
+          <rect class="diagram-ink node-fill-accent" x="150" y="176" width="400" height="52" rx="6"/>
+          <text class="node-label" x="350" y="197" text-anchor="middle">LangGraph 1.0 · StateGraph runtime</text>
+          <text class="edge-label" x="350" y="216" text-anchor="middle">低层运行时 · 条件边 / 循环 · checkpointer · Pregel</text>
+        </svg>
+        <figcaption><span class="fig-num">图 4</span>三层抽象栈：deepagents 构建于 create_agent 之上，create_agent 构建于 LangGraph runtime 之上。</figcaption>
+      </figure>
+
+      <p><strong>两者的关系</strong>：<code>create_agent</code> 底层就是 LangGraph runtime——LangChain 是快速路径、LangGraph 是精控路径，不是两条竞争路线。选型规则：标准 tool-calling agent → <code>create_agent</code>；自定义控制流、长时运行、需要持久化 → 直接写 LangGraph；复杂长程任务 → <strong>deepagents</strong>（2025 下半年发布，<code>create_agent</code> 之上的全装 harness：<code>write_todos</code> 任务规划、spawn subagent、虚拟文件系统、SKILL.md 技能装载）。</p>
+
+      <div class="callout example">
+        <span class="label">60 秒口头版本</span>
+        <p>LangChain 1.0 是高层 API：create_agent 加 middleware，几行代码起一个标准 tool-calling agent；LCEL 链是静态序列，构造期定死、做不了循环。LangGraph 1.0 是低层运行时：StateGraph 用节点、条件边和带 reducer 的共享 state 表达任意控制流，checkpointer 按 thread_id 持久化，提供断点续跑、time-travel 和 HITL。关键是两者不是竞争关系——create_agent 底层就是 LangGraph runtime。选型：标准 agent 用 create_agent，自定义控制流或长时运行下沉到 LangGraph，复杂长程任务用 deepagents。</p>
+      </div>
+
+      <h3>加分点</h3>
+      <div class="callout insight">
+        <span class="label">深一层</span>
+        <p>表达"分层"而非"对比"本身就是加分项：从 create_agent 迁到 LangGraph 是"下沉一层"而非重写，middleware 与 checkpointer 在两层之间通用。再补一句 deepagents 的定位（create_agent 之上的全装 harness），即展示出对 2025 下半年生态演进的跟踪。</p>
+      </div>
+
+      <h3>追问预判</h3>
+
+      <div class="predict">
+        <span class="question-label">追问 1</span>
+        <p>LCEL 链为什么做不了循环？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p><code>RunnableSequence</code> 在构造期把步骤编译为固定的有向无环结构，运行期数据只能顺序流过，没有"运行期决定下一步"的控制点。循环需要两样东西：条件边 + 可读写的共享 state，这正是 StateGraph 的核心能力，也是 LangGraph 存在的理由。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 2</span>
+        <p>checkpointer 具体解决什么问题？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>每个超步结束后把整张图的 state 快照按 <code>thread_id</code> 写入存储。由这一个机制派生出四种能力：进程崩溃后断点续跑、time-travel 回放任意历史步、HITL interrupt（暂停等待人工批准后恢复）、跨会话记忆（同一 thread_id 续聊，呼应 01 章）。</p>
+        </details>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">追问 3</span>
+        <p>什么时候从 create_agent 迁移到 LangGraph？</p>
+        <details>
+          <summary>应对思路</summary>
+          <p>出现三类信号即迁移：需要自定义控制流（分支、循环、并行扇出）；需要长时运行与持久化（人工审批卡点、跨天任务）；需要多 Agent 子图编排。迁移成本低于直觉——create_agent 本身跑在 LangGraph runtime 上，迁移是把隐式的图改写为显式的图。</p>
+        </details>
+      </div>
+
+      <!-- ════════════════ 自测 ════════════════ -->
+      <section class="self-check">
+        <h2 id="self-check">本章自测</h2>
+        <ol>
+          <li>
+            写出 FSM 五元组，并说明 Agent 工具调用循环中每一部分分别对应什么。
+            <details>
+              <summary>参考答案</summary>
+              <p>Q 状态集合 = {planning, calling, observing, answering, done}；Σ 事件集 = {need_tool, tool_result, need_more, enough, finish}；δ 转移函数 = 图上的边（如 δ(observing, need_more) = calling）；q₀ = planning；F = {done}。工程上另加条件边上的 guard（如"未达迭代上限"）与转移动作（发起工具调用、写入观察结果）。</p>
+            </details>
+          </li>
+          <li>
+            给出三种任务各自适配 Chain、单轮 Tool Use、ReAct loop 的判断依据。
+            <details>
+              <summary>参考答案</summary>
+              <p>判断维度是"路径何时被决定"：步骤可预枚举的确定流程（如固定的检索→改写→格式化）→ Chain，构造期定死、成本最低；单步明确查询（查天气、查汇率）→ 单轮 Tool Use，一跳完成；步数未知的开放式任务（多跳调研、调试修复）→ ReAct loop，运行期逐轮决策，配 max_iterations 兜底。</p>
+            </details>
+          </li>
+          <li>
+            多 Agent 划分的四条依据是什么？哪条优先级最高，为什么？
+            <details>
+              <summary>参考答案</summary>
+              <p>四条：上下文隔离需求、领域/职责、工具集、模型能力分层。上下文隔离优先级最高——subagent 独立上下文窗口让长流程的中间产物不污染主线，主 Agent 只接收浓缩结论；其余三条解决的是效率与成本，隔离解决的是正确性。</p>
+            </details>
+          </li>
+          <li>
+            create_agent 与 StateGraph 是什么关系？各自的选型信号是什么？
+            <details>
+              <summary>参考答案</summary>
+              <p>create_agent（LangChain 1.0）构建在 LangGraph runtime 之上，是同一栈的高层快速路径与低层精控路径，不是竞品。选 create_agent：标准 tool-calling agent + middleware 即可满足。选 StateGraph：需要自定义控制流（分支/循环/并行）、长时运行与 checkpointer 持久化、多 Agent 子图编排。更长程的任务再考虑 deepagents。</p>
+            </details>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ════════════════ 延伸阅读 ════════════════ -->
+      <div class="references">
+        <h2 id="refs">延伸阅读</h2>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2210.03629">ReAct: Synergizing Reasoning and Acting in Language Models</a> — Yao et al., 2022，ReAct 原始论文</li>
+          <li><a href="https://www.anthropic.com/engineering/multi-agent-research-system">How we built our multi-agent research system</a> — Anthropic 工程博客，orchestrator-worker 的第一手经验</li>
+          <li><a href="https://blog.langchain.com/langchain-langgraph-1dot0/">LangChain &amp; LangGraph 1.0</a> — 官方发布说明，两者分工的权威表述</li>
+          <li><a href="https://github.com/langchain-ai/deepagents">deepagents</a> — create_agent 之上的全装 harness</li>
+          <li>本库相关教程：<a href="../langgraph/index.html">langgraph 教程</a> · <a href="../multi-agent-patterns/index.html">multi-agent-patterns 教程</a></li>
+        </ul>
+      </div>
+
+      <nav class="chapter-nav">
+        <a class="prev" href="01-memory.html"><span class="label">上一章</span><span class="title">01 · 记忆系统</span></a>
+        <a class="next" href="03-skill.html"><span class="label">下一章</span><span class="title">03 · Skill 机制</span></a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#q3" data-toc-target="q3">Q3 FSM 状态机</a></li>
+        <li><a href="#q4" data-toc-target="q4">Q4 ReAct 选型</a></li>
+        <li><a href="#q6" data-toc-target="q6">Q6 多 Agent 设计</a></li>
+        <li><a href="#q12" data-toc-target="q12">Q12 LangChain vs LangGraph</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章自测</a></li>
+        <li><a href="#refs" data-toc-target="refs">延伸阅读</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<!-- Prism syntax highlighter — autoloader fetches grammar files on demand -->
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+/* Three small interactions:
+   1. Scroll progress bar (top, 2px vermilion)
+   2. TOC active-section via IntersectionObserver
+   3. Copy-to-clipboard for code blocks
+*/
+
+// 1. Progress bar
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+// 2. TOC active section highlight
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys())
+  .map(id => document.getElementById(id))
+  .filter(Boolean);
+
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+// 3. Copy code button
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetId = btn.dataset.copyTarget;
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 1400);
+    } catch (e) {
+      btn.textContent = '失败';
+      setTimeout(() => { btn.textContent = '复制'; }, 1400);
+    }
+  });
+});
+</script>
+
+</body>
+</html>
