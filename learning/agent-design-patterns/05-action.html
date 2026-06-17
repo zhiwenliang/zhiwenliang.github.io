@@ -288,7 +288,7 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
         <p class="label">本章你将建立的 schema</p>
         <ul>
           <li>plan 产 token（可回滚、零副作用）vs act 产副作用（可能不可逆）——一切行动模式都在这条相变缝上做文章。</li>
-          <li>ACI 是一等公民：工具命名/参数/文档就是模型的 UI，工具数量是准确率的敌人，poka-yoke 用接口约束代替提示祈祷。</li>
+          <li>ACI 是一等公民：工具命名/参数/文档就是模型的 UI，工具数量是准确率的敌人，poka-yoke 用接口约束代替提示约束。</li>
           <li>「先想后干」的三档——plan-and-execute / ReWOO / LLMCompiler——本质是把昂贵的「想」集中成 1×强、把廉价的「干」摊成 N×弱。</li>
           <li>提示链靠步骤间的程序化 gate 兜底；守卫三明治 + HITL 审批把不可逆动作卡在副作用发生之前。</li>
         </ul>
@@ -350,7 +350,7 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
         <p>面对「agent 老是调错工具」，最自然的反应是「把提示词再写细一点」。这个反应抓错了战场。Anthropic 在 SWE-bench 上的反直觉发现是：<strong>花在优化工具上的时间，多于花在优化整体提示上的时间</strong>。工具定义不是配角，而是模型唯一能触达世界的接口——接口设计错了，再好的提示也救不回来。这是这一节要拆掉的第一个错误先验。</p>
       </div>
 
-      <p><strong>底层机制（比「描述写清楚」深一层）</strong>：工具调用出错有三个互相独立的来源——选错工具、填错参数、误解返回。第一，<strong>选错的根因是工具太多</strong>：相似工具一多，模型选择准确率单调崩塌——约 500 个工具时还有 87%，到 2000 个工具掉到 65%，而且每个工具的 schema 都在吃 token。解法是把「选择」前移成一次检索（Tool RAG）：对工具描述做 embedding，query 进来先语义召回 top-k，只把候选工具塞进 prompt，既缩 prompt 又降噪。第二，<strong>填错参数的根因是格式对模型不自然</strong>——要求转义、数行号都是高开销操作。解法是让格式贴近训练分布里自然出现的文本，并给足思考 token。第三，<strong>防呆（poka-yoke）</strong>：把容易错的自由度从接口里删掉。Anthropic 的经典案例是模型用相对路径常出错，于是把工具改成「永远要求绝对路径」，用约束从结构上消灭整类错误，而非靠提示反复祈求。</p>
+      <p><strong>底层机制（比「描述写清楚」深一层）</strong>：工具调用出错有三个互相独立的来源——选错工具、填错参数、误解返回。第一，<strong>选错的根因是工具太多</strong>：相似工具一多，模型选择准确率单调下降——约 500 个工具时还有 87%，到 2000 个工具掉到 65%，而且每个工具的 schema 都在吃 token。解法是把「选择」前移成一次检索（Tool RAG）：对工具描述做 embedding，query 进来先语义召回 top-k，只把候选工具塞进 prompt，既缩 prompt 又降噪。第二，<strong>填错参数的根因是格式对模型不自然</strong>——要求转义、数行号都是高开销操作。解法是让格式贴近训练分布里自然出现的文本，并给足思考 token。第三，<strong>防呆（poka-yoke）</strong>：把容易错的自由度从接口里删掉。Anthropic 的经典案例是模型用相对路径常出错，于是把工具改成「永远要求绝对路径」，用约束从结构上消除整类错误，而非靠提示反复要求。</p>
 
       <table class="compare-table">
         <caption>表 05.1 · 工具一多，怎么让模型还选得对</caption>
@@ -358,9 +358,9 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
           <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
         </thead>
         <tbody>
-          <tr><td>全部工具塞进 system prompt</td><td>实现零成本，小工具集（&lt;20）够用</td><td>准确率随目录崩塌（2000 个→65%），每个 schema 都吃 token</td></tr>
-          <tr><td>靠提示反复叮嘱「用绝对路径」</td><td>不改接口，改字符串即可</td><td>提示祈求治标不治本，模型仍会在相对路径上间歇出错</td></tr>
-          <tr class="selected"><td>Tool RAG 语义检索 + poka-yoke 接口</td><td>准确率不崩塌、prompt 砍半，整类参数错被接口约束消灭</td><td>选中——代价是多一次检索调用、top-k 召回漏检风险，以及要维护工具向量库</td></tr>
+          <tr><td>全部工具塞进 system prompt</td><td>实现零成本，小工具集（&lt;20）够用</td><td>准确率随目录增大而下降（2000 个→65%），每个 schema 都吃 token</td></tr>
+          <tr><td>靠提示反复叮嘱「用绝对路径」</td><td>不改接口，改字符串即可</td><td>提示约束治标不治本，模型仍会在相对路径上间歇出错</td></tr>
+          <tr class="selected"><td>Tool RAG 语义检索 + poka-yoke 接口</td><td>准确率不再随目录下降、prompt 砍半，整类参数错被接口约束消除</td><td>选中——代价是多一次检索调用、top-k 召回漏检风险，以及要维护工具向量库</td></tr>
         </tbody>
       </table>
 
@@ -391,7 +391,7 @@ def read_file(path: AbsolutePath):                # 类型约束：相对路径�
         <p>团队给 agent 接了 40 个工具，准确率尚可。为追新需求一口气扩到 1800 个 MCP 工具后，调用准确率断崖下跌，且 token 成本暴涨。在「再优化提示词」之前，按本节机制，第一刀该砍向哪里？</p>
         <details>
           <summary>展开答案（先停 10 秒再点）</summary>
-          <p>第一刀是把工具<strong>选择前移成一次检索（Tool RAG）</strong>，而不是优化提示。根因是工具数量本身——约 500→87%、2000→65% 的崩塌曲线说明能力上限不在模型而在「选择」这一步，且每个 schema 都在吃 token。做法：对 1800 个工具的描述做 embedding，query 进来先语义召回 top-k（例如 10 个）候选，只把候选塞进 prompt——既止住准确率崩塌，又砍掉一半 prompt 长度。提示词优化在此之前几乎无效，因为瓶颈是上下文里工具太多、相似工具难区分，不是措辞不够清楚。</p>
+          <p>第一刀是把工具<strong>选择前移成一次检索（Tool RAG）</strong>，而不是优化提示。根因是工具数量本身——约 500→87%、2000→65% 的下降曲线说明能力上限不在模型而在「选择」这一步，且每个 schema 都在吃 token。做法：对 1800 个工具的描述做 embedding，query 进来先语义召回 top-k（例如 10 个）候选，只把候选塞进 prompt——既止住准确率下降，又砍掉一半 prompt 长度。提示词优化在此之前几乎无效，因为瓶颈是上下文里工具太多、相似工具难区分，不是措辞不够清楚。</p>
         </details>
       </div>
 
@@ -476,7 +476,7 @@ def read_file(path: AbsolutePath):                # 类型约束：相对路径�
       </table>
 
       <div class="callout warning">
-        <span class="label">陷阱 · 把规划-执行当银弹用在高动态环境</span>
+        <span class="label">陷阱 · 把规划-执行当通用解用在高动态环境</span>
         <p>规划-执行的计划是<strong>预先固化</strong>的。环境若中途变化，replan 频率上来后，省下的成本会被重规划吃回去，可能还不如 ReAct 的即时反馈稳。同理，<strong>别以为 ReWOO/LLMCompiler 总是更快</strong>：没有可并行分支或任务极短时，DAG 调度与流式解析的额外复杂度是纯负担。架构选型的判据是「环境动态程度 × 可并行度 × 步数」，不是「谁更先进」。</p>
       </div>
 
@@ -614,7 +614,7 @@ def chained(task, max_retry=2):
         <tbody>
           <tr><td>提示注入劫持 agent</td><td>把安全要求全写进 system prompt</td><td>注入骗过主模型；护栏要独立于主通道（专用筛查模型/确定性过滤）</td></tr>
           <tr><td>工具返回里的间接注入</td><td>只设输入护栏防用户</td><td>不可信的是数据通道；要加输出护栏 + 数据后重申原始指令</td></tr>
-          <tr><td>不可逆动作（退款/删库）放飞</td><td>全自动零审批 / 所有动作都人审</td><td>按可逆性+财务+权限评级；仅高风险上 HITL，卡在副作用前</td></tr>
+          <tr><td>不可逆动作（退款/删库）无管控</td><td>全自动零审批 / 所有动作都人审</td><td>按可逆性+财务+权限评级；仅高风险上 HITL，卡在副作用前</td></tr>
           <tr class="selected"><td>守卫三明治 + 分级 HITL 审批</td><td>—</td><td>选中——人类注意力花在刀刃上，低风险仍自动；代价是分级判断本身可能错（高危误判为低危→放行灾难）+ 护栏过严会 over-defense 误杀</td></tr>
         </tbody>
       </table>
@@ -657,7 +657,7 @@ def guarded_act(request):
         <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把你能想到的答案写在纸上或编辑器里。写完再点开答案对照——直接点开等于把这一节当再读一遍。</p>
         <ol>
           <li>plan 和 act 在「可逆性」上有什么本质区别？为什么这道缝是整个行动模块的组织主线？</li>
-          <li>工具目录从约 500 涨到 2000，选择准确率大致从多少掉到多少？该用什么机制止住崩塌？</li>
+          <li>工具目录从约 500 涨到 2000，选择准确率大致从多少掉到多少？该用什么机制止住下降？</li>
           <li>ReWOO 的约 5× token 效率，靠的是哪个看似简单的招？LLMCompiler 相对它的关键增量是什么？</li>
           <li>提示链的可靠性主要来自哪里？为什么 gate 必须是非 LLM 的？</li>
           <li>HITL 审批为什么必须卡在副作用发生之前？间接提示注入说明不可信的是什么？</li>
@@ -666,7 +666,7 @@ def guarded_act(request):
           <summary>答案（先做完再展开）</summary>
           <ol>
             <li>plan 产 token——可丢弃、可重采样、零外部副作用；act 把 token 翻译成系统调用/写操作，一旦发出可能不可逆。一切行动模式都在「让模型内部计划与外部现实对齐」这条缝上做文章，所以它是组织主线。</li>
-            <li>约 <strong>87% → 65%</strong>。用 <strong>Tool RAG</strong>（语义检索）把选择前移成一次召回：对工具描述做 embedding，query 进来先取 top-k 候选再喂模型，既止崩塌又砍半 prompt。小工具集（&lt;20）不值得，直接全列更简单。</li>
+            <li>约 <strong>87% → 65%</strong>。用 <strong>Tool RAG</strong>（语义检索）把选择前移成一次召回：对工具描述做 embedding，query 进来先取 top-k 候选再喂模型，既止住准确率下降又砍半 prompt。小工具集（&lt;20）不值得，直接全列更简单。</li>
             <li>靠<strong>步骤间用变量占位</strong>（<code>#E1</code>/<code>#E2</code>）引用前序输出，从而不必把观测回灌给 planner 重想——「不重复读历史」就是最大的省。LLMCompiler 的关键增量是<strong>并行</strong>：流式 DAG + 依赖就绪即调度，打破 ReWOO 的串行。</li>
             <li>主要来自步骤之间那段<strong>确定性代码（gate）</strong>，不是更好的 prompt。gate 必须非 LLM，因为若用 LLM 当 gate，链的概率脆弱性只是被搬了位置、没被截停；只有确定性校验（schema/正则/断言）才能在接缝处真正阻断错误放大。</li>
             <li>因为这正是 plan（可回滚）→ act（不可回滚）的分水岭——审批放在副作用之后等于不设防。间接提示注入说明不可信的是<strong>数据通道</strong>（工具返回值，如网页/邮件/附件），不只是用户输入。</li>
@@ -677,10 +677,10 @@ def guarded_act(request):
       <div class="challenge">
         <span class="label">进阶挑战 · 刚好够不着</span>
         <h3>给一个会自己加工具的 agent，设计「目录不爆 + 动作不失控」的双闸</h3>
-        <p>设想一个能在运行时向自己注册新 MCP 工具的 agent：工具目录会从几十膨胀到上千（05.1 的崩塌曲线），其中既有 read-only 查询工具，也有 write/不可逆动作工具。设计一套机制，既让它在上千工具下仍选得准（呼应 05.1 的 Tool RAG），又保证任何新注册的不可逆工具默认走 05.4 的 HITL 审批，而不是被当成低风险直放。说清你的机制在「工具注册 / 检索 / 动作评级 / 审批」哪几个阶段介入，以及代价是什么。</p>
+        <p>设想一个能在运行时向自己注册新 MCP 工具的 agent：工具目录会从几十膨胀到上千（05.1 的准确率下降曲线），其中既有 read-only 查询工具，也有 write/不可逆动作工具。设计一套机制，既让它在上千工具下仍选得准（呼应 05.1 的 Tool RAG），又保证任何新注册的不可逆工具默认走 05.4 的 HITL 审批，而不是被当成低风险直放。说清你的机制在「工具注册 / 检索 / 动作评级 / 审批」哪几个阶段介入，以及代价是什么。</p>
         <details>
           <summary>提示（卡住再展开）</summary>
-          <p>关键在<strong>注册</strong>和<strong>评级</strong>两阶段。注册时强制每个新工具带上结构化元数据——是否 write、是否可逆、所需权限、财务影响——并立刻写入工具向量库（供 05.1 的 Tool RAG 检索）；检索阶段照常按 query 语义召回 top-k，止住目录膨胀导致的准确率崩塌。评级阶段把「默认值」设成保守：缺失或未知可逆性的工具一律按高风险处理，强制走 05.4 的 <code>interrupt()</code> 审批，而非默认低风险直放——这把「风险分级拍脑袋误判为低危」的灾难性失败模式从默认路径里删掉（呼应 05.1 的 poka-yoke：用默认约束消错）。代价是探索成本与人类延迟：保守默认会让一部分其实安全的新工具也排队等审批，随着 agent 可信度上升应逐步放宽分级阈值。</p>
+          <p>关键在<strong>注册</strong>和<strong>评级</strong>两阶段。注册时强制每个新工具带上结构化元数据——是否 write、是否可逆、所需权限、财务影响——并立刻写入工具向量库（供 05.1 的 Tool RAG 检索）；检索阶段照常按 query 语义召回 top-k，止住目录膨胀导致的准确率下降。评级阶段把「默认值」设成保守：缺失或未知可逆性的工具一律按高风险处理，强制走 05.4 的 <code>interrupt()</code> 审批，而非默认低风险直放——这把「风险分级无依据地误判为低危」的灾难性失败模式从默认路径里删掉（呼应 05.1 的 poka-yoke：用默认约束消错）。代价是探索成本与人类延迟：保守默认会让一部分其实安全的新工具也排队等审批，随着 agent 可信度上升应逐步放宽分级阈值。</p>
         </details>
       </div>
 

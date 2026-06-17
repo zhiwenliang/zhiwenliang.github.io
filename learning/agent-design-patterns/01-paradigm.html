@@ -280,8 +280,8 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
 
       <header class="chapter-opener">
         <p class="chapter-label">Chapter 01 · 范式觉醒</p>
-        <h1>范式觉醒：从 GoF 崩塌到双轴框架</h1>
-        <p class="recap">起点页给了一句话本质：所有模式都是同一个原子循环在两根轴上的取值。这一章把这句话拆开——先讲为什么旧范式（GoF）会崩、新血脉（分布式系统）从哪来，再立起两根轴并教你用它定位与选型，最后用逆向五步法去验证它。</p>
+        <h1>范式觉醒：从 GoF 失效到双轴框架</h1>
+        <p class="recap">起点页给了一句话本质：所有模式都是同一个原子循环在两根轴上的取值。这一章把这句话拆开——先讲为什么旧范式（GoF）会失效、新机制（分布式系统）从哪来，再立起两根轴并教你用它定位与选型，最后用逆向五步法去验证它。</p>
       </header>
 
       <section class="schema-panel">
@@ -339,9 +339,9 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
         <figcaption><span class="fig-num">图 1.0</span>所有 agent 行为都是这个循环的展开。<strong>注意</strong>：顶上那个节点是<strong>概率</strong>节点，不是确定函数——同样的 context 进去，出来的 token 不保证一样。整门课的所有麻烦和所有模式，都从这一点长出来。</figcaption>
       </figure>
 
-      <h2 id="s11"><span class="num">1.1</span><span>范式之变：GoF 崩塌与分布式血脉</span></h2>
+      <h2 id="s11"><span class="num">1.1</span><span>范式之变：GoF 失效与分布式系统补位</span></h2>
 
-      <p class="one-liner">GoF 设计模式假设 actor 是确定的、控制流编译期已知；LLM agent 两条都破——它是概率节点，控制流在运行时由模型自己决定。</p>
+      <p class="one-liner">GoF 设计模式假设 actor 是确定的、控制流编译期已知；LLM agent 两条假设都不成立——它是概率节点，控制流在运行时由模型自己决定。</p>
 
       <div class="rationale">
         <span class="label">为什么需要它</span>
@@ -350,9 +350,9 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
 
       <p>GoF 那 23 个模式，全部建立在两条前提上：<strong>actor 是确定的</strong>（同样的输入给出同样的输出），<strong>控制流编译期已知</strong>（哪个分支走哪里，写代码时就定死了）。LLM agent 把这两条都打破。第一，执行是概率性的——模型做的是 token 概率的模式匹配，不是逻辑推断。第二，控制流在运行时由模型自己决定——Anthropic 对 agent 的定义就是"LLM 动态地指挥自己的流程和工具使用"。</p>
 
-      <p><strong>底层机制（比"非确定"深一层）</strong>：很多人以为非确定性是采样噪声，把 <code>temperature</code> 设成 0 就能消掉。这是错的。Thinking Machines 在 2025-09 实测：Qwen3-235B 在 <code>temperature=0</code> 下，同一个 prompt 跑 1000 次产生了 80 个不同的补全，而且分叉发生在第 102 个 token。根因不是浮点不结合律本身，而是<strong>服务器负载让 batch size 浮动</strong>，导致 RMSNorm／矩阵乘／注意力的归约（reduction）顺序变化，浮点结果随之变化（batch 不变性缺失）。含义很重：你连"同输入同输出"这条最底层的契约都拿不到，GoF 那套基于确定性的设计从地基塌掉。</p>
+      <p><strong>底层机制（比"非确定"深一层）</strong>：很多人以为非确定性是采样噪声，把 <code>temperature</code> 设成 0 就能消掉。这是错的。Thinking Machines 在 2025-09 实测：Qwen3-235B 在 <code>temperature=0</code> 下，同一个 prompt 跑 1000 次产生了 80 个不同的补全，而且分叉发生在第 102 个 token。根因不是浮点不结合律本身，而是<strong>服务器负载让 batch size 浮动</strong>，导致 RMSNorm／矩阵乘／注意力的归约（reduction）顺序变化，浮点结果随之变化（batch 不变性缺失）。含义很重：你连"同输入同输出"这条最底层的契约都拿不到，GoF 那套基于确定性的设计失去基础。</p>
 
-      <p>那该用什么范式补位？答案是<strong>分布式系统</strong>。一旦 actor 不可靠、步骤之间有网络／工具副作用、又没有跨步骤的事务，你面对的失效集合——部分失败、超时、重复投递、最终一致——正好就是分布式系统十五年前解决过的那一套。这条"血脉"是直接可映射的：消息队列对应 agent 步骤间的任务缓冲；幂等键防止重复的 LLM 调用产生重复副作用；熔断器对应主模型限流时切备用模型；Saga + 补偿处理多步工作流中途失败的回滚；两阶段提交对应不可逆动作前的人工审批门；背压对应并行 LLM 调用的并发上限。下图是这条血脉里最常用的一招：Saga 补偿。</p>
+      <p>那该用什么范式补位？答案是<strong>分布式系统</strong>。一旦 actor 不可靠、步骤之间有网络／工具副作用、又没有跨步骤的事务，你面对的失效集合——部分失败、超时、重复投递、最终一致——正好就是分布式系统十五年前解决过的那一套。这套机制是直接可映射的：消息队列对应 agent 步骤间的任务缓冲；幂等键防止重复的 LLM 调用产生重复副作用；熔断器对应主模型限流时切备用模型；Saga + 补偿处理多步工作流中途失败的回滚；两阶段提交对应不可逆动作前的人工审批门；背压对应并行 LLM 调用的并发上限。下图是这套机制里最常用的一种：Saga 补偿。</p>
 
       <figure>
         <svg viewBox="0 0 740 250" xmlns="http://www.w3.org/2000/svg" role="img"
@@ -400,13 +400,13 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
           <tr><th>把 agent 当成</th><th>带来什么</th><th>为什么没选 / 选中</th></tr>
         </thead>
         <tbody>
-          <tr><td>确定的 OOP 对象<br>（GoF：Strategy / State / Command）</td><td>模式成熟、直觉熟悉，上手零成本</td><td>概率 + 运行时控制流两条假设都破，确定性契约从地基塌；同名映射（Chain≈routing）是"同名不同物"</td></tr>
+          <tr><td>确定的 OOP 对象<br>（GoF：Strategy / State / Command）</td><td>模式成熟、直觉熟悉，上手零成本</td><td>概率 + 运行时控制流两条假设都不成立，确定性契约不再成立；同名映射（Chain≈routing）是"同名不同物"</td></tr>
           <tr><td>更大的 RAG / 写死的 workflow</td><td>可预测、可调试，多数生产场景够用</td><td>只覆盖固定路径，处理不了"模型自主决定步数与停止"——这正是 agent 的定义性能力</td></tr>
           <tr class="selected"><td>分布式系统里的不可靠节点<br>（幂等 / Saga / 补偿 / 背压 / 重放）</td><td>失效集合精确对应；崩溃可恢复、重试安全、部分失败可补偿</td><td>选中——这是与 agent 真实失效结构匹配的范式</td></tr>
         </tbody>
       </table>
 
-      <p>下面这段伪码把这条血脉收成一个可复用的步骤骨架：幂等键挂在"逻辑操作"上而不是每次推理调用上，外部 oracle 验证而非自检，副作用登记补偿、持久化以便崩溃重放。</p>
+      <p>下面这段伪码把这套机制收成一个可复用的步骤骨架：幂等键挂在"逻辑操作"上而不是每次推理调用上，外部 oracle 验证而非自检，副作用登记补偿、持久化以便崩溃重放。</p>
 
       <div class="code-block">
         <div class="header">
@@ -414,7 +414,7 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
           <span class="lang">Python</span>
           <button class="copy" data-copy-target="code-saga">复制</button>
         </div>
-<pre id="code-saga"><code class="language-python"># 分布式血脉流入 agent：每个有副作用的步骤 = 幂等键 + 外部验证 + 补偿 + 重放
+<pre id="code-saga"><code class="language-python"># 分布式系统的机制用于 agent：每个有副作用的步骤 = 幂等键 + 外部验证 + 补偿 + 重放
 def run_step(saga, step, inputs):
     # 1) 幂等键挂在"逻辑操作"上，不是每次 LLM 调用
     key = sha256(f"{step.name}:{stable_json(inputs)}")
@@ -631,7 +631,7 @@ def locate_pattern(task):
 
       <p class="one-liner">你只能看到 LLM API 边界上的字节流；逆向就是从这层字节流逐层向内反推：行为 → 工具 → 系统提示 → 控制流 → 架构。</p>
 
-      <p>前三节给了你一套坐标系和一套分布式血脉。这一节给你验证它们的工具：拿一个成熟 Agent 产品，把它的架构拆出来。这既能让你"带读他人代码"，也是检验你是否真懂双轴框架的试金石——能逆向，才算真懂。逆向的本质约束是：无论产品内部多复杂，它和模型之间只能通过 LLM API 边界上的字节流交互，所有"架构"都是从这层字节流向内反推。</p>
+      <p>前三节给了你一套坐标系和一套来自分布式系统的设计方法。这一节给你验证它们的工具：拿一个成熟 Agent 产品，把它的架构拆出来。这既能让你"带读他人代码"，也是检验你是否真懂双轴框架的试金石——能逆向，才算真懂。逆向的本质约束是：无论产品内部多复杂，它和模型之间只能通过 LLM API 边界上的字节流交互，所有"架构"都是从这层字节流向内反推。</p>
 
       <figure>
         <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"

@@ -462,14 +462,14 @@ article h2, article h3, article [id] { scroll-margin-top: 64px; }
         </tbody>
       </table>
 
-      <p><strong>Step 5 的拆分信号（最反直觉的一步）</strong>：默认单 agent，靠加工具把单 agent 顶满。真正的拆分触发信号是两个可观测的失效——prompt 里 <code>if-then-else</code> 分支爆炸，或模型反复选错工具——而不是"看起来该分开"的职责直觉。关于工具选错，OpenAI 给了一个反直觉判据：问题不在工具<strong>数量</strong>而在<strong>相似/重叠度</strong>——有的实现稳管 &gt;15 个界限清晰的工具，有的 &lt;10 个重叠工具就崩。所以先靠改名、明确参数、写详细描述提升工具清晰度，无效再拆 agent。要拆时分两种形态：<strong>Manager 模式</strong>（agents-as-tools，中心 agent 用 tool call 委派并综合结果）与 <strong>Decentralized 模式</strong>（peers 之间 handoff 单向转移执行权）。这两种可统一建模为图——这正复用了第 01 章<strong>执行拓扑</strong>那根轴：manager 的边是 tool call（可回中心综合），decentralized 的边是 handoff（单向、不回头）。</p>
+      <p><strong>Step 5 的拆分信号（最反直觉的一步）</strong>：默认单 agent，靠加工具把单 agent 顶满。真正的拆分触发信号是两个可观测的失效——prompt 里 <code>if-then-else</code> 分支爆炸，或模型反复选错工具——而不是"看起来该分开"的职责直觉。关于工具选错，OpenAI 给了一个反直觉判据：问题不在工具<strong>数量</strong>而在<strong>相似/重叠度</strong>——有的实现稳管 &gt;15 个界限清晰的工具，有的 &lt;10 个重叠工具就失效。所以先靠改名、明确参数、写详细描述提升工具清晰度，无效再拆 agent。要拆时分两种形态：<strong>Manager 模式</strong>（agents-as-tools，中心 agent 用 tool call 委派并综合结果）与 <strong>Decentralized 模式</strong>（peers 之间 handoff 单向转移执行权）。这两种可统一建模为图——这正复用了第 01 章<strong>执行拓扑</strong>那根轴：manager 的边是 tool call（可回中心综合），decentralized 的边是 handoff（单向、不回头）。</p>
 
       <div class="predict">
         <span class="question-label">想一想</span>
         <p>一个客服 agent 配了 9 个工具就频繁选错，工程师的第一反应是"工具太多了，拆成 3 个专用 agent"。按 OpenAI 的判据，为什么这个反应搞错了方向？正确的第一步是什么？</p>
         <details>
           <summary>展开答案（先停 10 秒再点）</summary>
-          <p>问题判据搞反了：选错工具的根因不是<strong>数量</strong>而是<strong>相似/重叠度</strong>。OpenAI 明确——稳定实现可管 &gt;15 个界限清晰的工具，而 &lt;10 个语义重叠的工具就会崩。9 个工具选错，几乎可以肯定是其中几个职责边界含混（如 <code>refund</code> 与 <code>issue_credit</code> description 雷同）。正确的第一步不是拆 agent（拆分会引入协调开销、上下文丢失、更难观测），而是先提升工具清晰度：改名、明确参数、写更精确的 description。只有清晰度改进无效、或 prompt 里 if-else 分支爆炸，才把它当成拆分信号。</p>
+          <p>问题判据搞反了：选错工具的根因不是<strong>数量</strong>而是<strong>相似/重叠度</strong>。OpenAI 明确——稳定实现可管 &gt;15 个界限清晰的工具，而 &lt;10 个语义重叠的工具就会失效。9 个工具选错，几乎可以肯定是其中几个职责边界含混（如 <code>refund</code> 与 <code>issue_credit</code> description 雷同）。正确的第一步不是拆 agent（拆分会引入协调开销、上下文丢失、更难观测），而是先提升工具清晰度：改名、明确参数、写更精确的 description。只有清晰度改进无效、或 prompt 里 if-else 分支爆炸，才把它当成拆分信号。</p>
         </details>
       </div>
 
@@ -640,7 +640,7 @@ def pick_and_build(task):
             <li>判据是<strong>可预测性</strong>：workflow 是代码预先编排的固定路径，agent 是 LLM 在循环里动态决定流程。物理原因是成本——越往 agent 端走，每个决策点多一次 LLM 调用（延迟×成本线性上升），且错误会在循环里<strong>复合</strong>。对已定义良好的任务，这笔交换是纯亏。</li>
             <li>chaining / routing / parallelization / orchestrator-workers 这四个是 workflow（加上 evaluator-optimizer 也是）。当 agent 部署会无谓背上 agent 循环（每轮多一次 LLM 调用、要设 max turns）与循环护栏的成本。</li>
             <li>三判据：复杂决策（需细腻判断/例外/上下文敏感）、难维护规则（规则臃肿易错）、非结构化数据（重度依赖自然语言/文档/对话）。三条全不满足时 "a deterministic solution may suffice"——上确定性方案，连 workflow 都不必。</li>
-            <li>因为问题在工具的<strong>相似/重叠度</strong>而非个数：稳定实现可管 &gt;15 个清晰工具，&lt;10 个重叠工具就崩。拆之前先提升工具清晰度（改名、明确参数、写详细描述）；只有清晰度无效或 prompt 的 if-else 分支爆炸，才作为拆分信号。</li>
+            <li>因为问题在工具的<strong>相似/重叠度</strong>而非个数：稳定实现可管 &gt;15 个清晰工具，&lt;10 个重叠工具就失效。拆之前先提升工具清晰度（改名、明确参数、写详细描述）；只有清晰度无效或 prompt 的 if-else 分支爆炸，才作为拆分信号。</li>
             <li>因为 compaction 有损、窗口有限，复杂项目无法单窗完成，新 session 失忆会重复劳动丢进度。磁盘工件提供无损、可回滚、可被新 session 重读的状态。三条硬约束：只改 <code>passes</code> 字段、必跑 <code>init.sh</code>、强制 <code>git commit</code>。</li>
           </ol>
         </details>
