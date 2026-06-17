@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 反思 · Agent 设计模式之美</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path > .inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 12px;
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 74px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 98px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+article h2, article h3, article [id] { scroll-margin-top: 64px; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+   <div class="inner">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-paradigm.html">01 范式觉醒</a><span class="sep">—</span>
+    <a href="02-perception.html">02 感知</a><span class="sep">—</span>
+    <a href="03-memory.html">03 记忆</a><span class="sep">—</span>
+    <a href="04-reasoning.html">04 推理</a><span class="sep">—</span>
+    <a href="05-action.html">05 行动</a><span class="sep">—</span>
+    <a href="06-reflection.html" class="current">06 反思</a><span class="sep">—</span>
+    <a href="07-collaboration.html">07 协作</a><span class="sep">—</span>
+    <a href="08-governance.html">08 治理</a><span class="sep">—</span>
+    <a href="09-composition.html">09 组合</a><span class="sep">—</span>
+    <a href="10-self-check.html">10 自测</a>
+   </div>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 06 · 反思</p>
+        <h1>反思：省身之美，把循环闭合成自我演进</h1>
+        <p class="recap">第 05 章把动作落地；反思让 Agent 自我演进——把第 03 章的失败日记升级成一整套自我改进闭环。从 Reflexion 的言语强化、到生成-批评、再到技能库与测试驱动自愈，这一章讲清一件事：闭环成不成立，全看那个停止它的 oracle 是不是真的来自外部。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>Reflexion 用言语强化学习替代权重更新：稀疏反馈 → 自然语言反思 → 写进情景缓冲 → 下次重试前注入。</li>
+          <li>生成-批评 / 评估-优化的三种结构同源，天花板都是模型判断自身错误的能力——Huang 等证明这个天花板在推理上很低。</li>
+          <li>三种记忆写库各管一摊：技能库存可执行代码、经验回放存原始轨迹、反思缓冲存言语教训，写入门禁各不相同。</li>
+          <li>自愈循环 = 生成-批评 + 外部 oracle（测试/编译/运行时）；oracle 决定它收敛还是退化，停止条件是不可省的另一半。</li>
+        </ul>
+      </section>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="反思模块全景：导论的演进观分出生成-批评、技能包、经验回放、自愈循环四节，oracle 是分水岭">
+          <defs>
+            <marker id="ov-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- spokes from center -->
+          <line x1="360" y1="120" x2="360" y2="86"  class="diagram-soft" marker-end="url(#ov-ar)"/>
+          <line x1="288" y1="150" x2="176" y2="180" class="diagram-soft" marker-end="url(#ov-ar)"/>
+          <line x1="288" y1="168" x2="176" y2="262" class="diagram-soft" marker-end="url(#ov-ar)"/>
+          <line x1="432" y1="150" x2="544" y2="180" class="diagram-soft" marker-end="url(#ov-ar)"/>
+          <line x1="432" y1="168" x2="544" y2="262" class="diagram-soft" marker-end="url(#ov-ar)"/>
+
+          <!-- center: 导论 06.1 -->
+          <rect x="280" y="120" width="160" height="62" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="146" text-anchor="middle" class="node-label-accent">06.1 自我演进</text>
+          <text x="360" y="166" text-anchor="middle" class="edge-label">Reflexion 闭环</text>
+
+          <!-- top: 不更新权重 -->
+          <rect x="246" y="32" width="228" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="55" text-anchor="middle" class="node-label">言语强化 · 不动权重</text>
+          <text x="360" y="74" text-anchor="middle" class="edge-label">权重更新 → 可编辑 context</text>
+
+          <!-- left top: 06.2 -->
+          <rect x="24" y="180" width="200" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="124" y="203" text-anchor="middle" class="node-label">06.2 生成-批评</text>
+          <text x="124" y="221" text-anchor="middle" class="edge-label">无 oracle → 会退化</text>
+
+          <!-- left bottom: 06.3 -->
+          <rect x="24" y="262" width="200" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="124" y="285" text-anchor="middle" class="node-label">06.3 技能包</text>
+          <text x="124" y="303" text-anchor="middle" class="edge-label">存可执行代码</text>
+
+          <!-- right top: 06.4 -->
+          <rect x="496" y="180" width="200" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="596" y="203" text-anchor="middle" class="node-label">06.4 经验回放</text>
+          <text x="596" y="221" text-anchor="middle" class="edge-label">存原始轨迹</text>
+
+          <!-- right bottom: 06.5 -->
+          <rect x="496" y="262" width="200" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="596" y="285" text-anchor="middle" class="node-label-accent">06.5 自愈循环</text>
+          <text x="596" y="303" text-anchor="middle" class="edge-label">外部 oracle → 收敛</text>
+        </svg>
+        <figcaption><span class="fig-num">图 06.0</span>反思模块全景：导论的演进观下分四节。<strong>注意</strong>：左右两支看似对称，命运却相反——左侧 06.2 用模型自评，无外部 oracle，推理任务上会<strong>退化</strong>；右侧 06.5 用测试/编译当 oracle，才真正收敛。这条 oracle 分水岭是全章的主线。</figcaption>
+      </figure>
+
+      <h2 id="s061"><span class="num">06.1</span><span>反思导论：不更新权重的自我演进</span></h2>
+
+      <p class="one-liner">Reflexion 把强化学习闭环整个搬进自然语言：稀疏奖励 → 一段言语反思 → 写进情景缓冲 → 下次重试前注入，用可编辑的 context 替代权重更新。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>一个不会演进的 agent 称不上好用：同一个坑反复掉，每次会话都从零开始。第 03 章的失败日记记下了"在哪栽过"，但那是给人事后翻的<strong>日志</strong>。这一节要的是把日志接成<strong>在线控制回路</strong>——让 agent 自己读反馈、自己写教训、下一轮自己用上。Reflexion 是这条回路最干净的机制锚点。</p>
+      </div>
+
+      <p><strong>底层机制（比"让模型复盘一下"深一层）</strong>：Reflexion（Shinn 等，NeurIPS 2023）的核心替换是<strong>用可编辑的 context 替代梯度更新</strong>。环境发出一个稀疏奖励（通过/失败、分数）；一个 Self-Reflection LLM 读入（奖励、轨迹、长期记忆），写出一段简短的言语复盘——"假设了门是开的，但门锁着；下次先查物品栏"；这段文本追加进持久缓冲，并在第 N+1 次试验时前置回 prompt。没有梯度、没有微调，"权重更新"这一步被换成了改 context。它维护两类记忆：短期 = 当前轨迹，长期 = 累积的反思。代价是<strong>线性于试验次数</strong>（每次重试是一整次 rollout 加一次反思调用），且受窗口约束——缓冲必须摘要或截断，否则反思堆成噪声。它在奖励太稀疏、无从反思时失效，也在反思被环境一再证伪却不更新时固化成错误信念（第 03 章的记忆虚构）。</p>
+
+      <table class="compare-table">
+        <caption>表 06.1 · 让 agent 学习，用哪条路</caption>
+        <thead>
+          <tr><th>方案</th><th>解决什么</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>在轨迹上做 RLHF / 微调</td><td>真正改变模型能力</td><td>要训练基建、要多轮采样，一次试验改不了；competence 上限提了但迭代慢</td></tr>
+          <tr><td>梯度式 RL</td><td>从奖励直接更新策略</td><td>同样需要训练栈，稀疏奖励下样本效率低，难即时部署</td></tr>
+          <tr class="selected"><td>Reflexion 言语强化（写反思）</td><td>一次试验内适应，无需任何训练</td><td>选中——零训练基建、即改即用；但"学到的"封顶于窗口，缓冲不持久就丢，只改 context 不改 competence</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个团队给客服 agent 加了 Reflexion：每次会话结束让模型写一段"本次哪里做得不好"存进缓冲。跑了两周，agent 不仅没变好，回答反而越来越啰嗦、越来越偏。问题出在哪？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>两个机制叠加。其一，<strong>奖励太稀疏/不可反思</strong>：客服会话往往没有客观 ground truth（不像测试有通过/失败），模型反思的是自己编出来的"哪里不好"，等于无外部 oracle 的自评——这恰好落进 06.2 要讲的退化区。其二，<strong>缓冲堆成噪声</strong>：反思线性累积却从不摘要/截断，两周下来缓冲塞满了相互矛盾、低信息的自我评论，每轮都被前置回 prompt，把 context 污染成啰嗦与漂移。Reflexion 的两个隐含前提——奖励可反思、缓冲被治理——这里全破了。</p>
+        </details>
+      </div>
+
+      <h2 id="s062"><span class="num">06.2</span><span>生成-批评：一个 agent 里的两个我</span></h2>
+
+      <p class="one-liner">生成-批评把"写"和"评"拆成两个角色循环，但三种变体的天花板是同一个——模型检测自身错误的能力；无外部 oracle 时，这个天花板在推理上低到会让准确率不升反降。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"让模型自己再检查一遍"是工程师最自然的直觉，看上去是免费的质量提升。这一节要把这个直觉钉死在证据上：它对哪类任务成立、对哪类任务会<strong>主动变差</strong>。三种结构——Self-Refine、评估-优化、LLM-as-a-judge——只是角色拆分和信号来源的不同排列，理解它们同源，才看得清那条天花板。</p>
+      </div>
+
+      <p><strong>底层机制（比"再检查一遍"深一层）</strong>：三种结构差别仅在角色怎么拆、信号从哪来。(a) <strong>Self-Refine</strong>（Madaan 等，NeurIPS 2023）= 一个模型扮三个角色（生成 / 反馈 / 精炼），循环至多 4 轮，7 个任务上用 GPT-4 平均提升约 20%。(b) <strong>评估-优化</strong>（evaluator-optimizer，Anthropic 命名）= 拆成两次调用，让批评者不被"刚写完这段文字"锚定。(c) <strong>LLM-as-a-judge</strong> = 批评者是个打分/排序器，产出接受或继续的信号。文档下一层的真相是：这三者都从<strong>模型自己的分布</strong>里制造反馈，天花板就是模型检测自身错误的能力。Huang 等（ICLR 2024）给出硬证据，证明这个天花板在推理上很低：无 oracle、固定纠正 prompt 下，准确率<strong>下降</strong>——GPT-3.5 在 GSM8K 上 75.9→75.1→74.7，CommonSenseQA 崩到 75.8→38.1→41.8；GPT-4 在 GSM8K 上 95.5→91.5→89.0，HotpotQA 49.0→43.0；Llama-2 在 GSM8K 上 62.0→43.5→36.5。原因：GSM8K 上 GPT-3.5 有 74.7% 的答案根本不改，而在改了的里，模型把<strong>对的改错</strong>多于把错的改对，因为它判断不了自己推理链的对错。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="两条分叉：有外部 oracle 时准确率上升收敛，无 oracle 自评时准确率逐轮下降">
+          <defs>
+            <marker id="cc-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="cc-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- generate node -->
+          <rect x="40" y="100" width="150" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="115" y="124" text-anchor="middle" class="node-label">生成 generate</text>
+          <text x="115" y="142" text-anchor="middle" class="edge-label">初始答案</text>
+
+          <!-- split point label -->
+          <text x="252" y="34" text-anchor="middle" class="edge-label">信号从哪来？</text>
+
+          <!-- up branch: oracle -->
+          <line x1="190" y1="116" x2="306" y2="74" class="diagram-ink" marker-end="url(#cc-ar)"/>
+          <rect x="308" y="48" width="186" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="401" y="71" text-anchor="middle" class="node-label">外部 oracle 评</text>
+          <text x="401" y="89" text-anchor="middle" class="edge-label">测试/编译·真信号</text>
+
+          <line x1="494" y1="75" x2="560" y2="75" class="diagram-ink" marker-end="url(#cc-ar)"/>
+          <text x="612" y="71" text-anchor="middle" class="node-label">收敛 ↑</text>
+          <text x="612" y="89" text-anchor="middle" class="edge-label">95.5→97.5</text>
+
+          <!-- down branch: self -->
+          <line x1="190" y1="140" x2="306" y2="186" class="diagram-accent" marker-end="url(#cc-ar-v)"/>
+          <rect x="308" y="162" width="186" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="401" y="185" text-anchor="middle" class="node-label-accent">模型自评批评</text>
+          <text x="401" y="203" text-anchor="middle" class="edge-label">同分布·无外信号</text>
+
+          <line x1="494" y1="189" x2="560" y2="189" class="diagram-accent" marker-end="url(#cc-ar-v)"/>
+          <text x="612" y="185" text-anchor="middle" class="node-label-accent">退化 ↓</text>
+          <text x="612" y="203" text-anchor="middle" class="branch-label">75.9→74.7</text>
+        </svg>
+        <figcaption><span class="fig-num">图 06.2</span>同一个"生成→批评→改"的循环，命运由信号来源决定。<strong>注意</strong>：早期"自我纠正有效"的结果偷偷用了 <strong>oracle 标签</strong>来停——只在已经对了时才停（Table 2：GPT-4 GSM8K 95.5→97.5 是<em>带 oracle</em> 的）。这等于假设你已经知道答案，结论不迁移到部署。</figcaption>
+      </figure>
+
+      <p><strong>LLM-as-a-judge 还自带偏置</strong>：批评信号不只弱，而且歪。位置偏置——交换候选顺序能让成对判断的准确率漂移超过 10%；冗长偏置——偏好更长更流畅的输出；自我偏好偏置——偏爱自己生成的、困惑度更低的文本。标准缓解是<strong>交换顺序取平均</strong>和<strong>长度控制的胜率</strong>。所以在可验证任务上，LLM-as-a-judge 绝不该是唯一 oracle。</p>
+
+      <table class="compare-table">
+        <caption>表 06.2 · 批评信号从哪来</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>单次前向 / self-consistency 采样</td><td>零额外角色、最便宜</td><td>不产生显式反馈信号，开放式质量问题上改进有限</td></tr>
+          <tr><td>Self-Refine（一模型三角色）</td><td>无需训练，7 任务平均 +20%</td><td>同分布自评，收益集中在模型能定位自身错误处；推理任务上脆弱</td></tr>
+          <tr><td>评估-优化（拆成两次调用）</td><td>批评者不被刚写的文字锚定，可换更强裁判</td><td>token 翻倍 + 延迟；主观任务上多这一轮常无增量</td></tr>
+          <tr class="selected"><td>外部 oracle（测试/编译/执行）</td><td>真 ground truth，反思才有可靠归因</td><td>选中（可验证任务）——这是 06.5 收敛的前提；代价是需要可运行的 oracle</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 隐藏的 oracle 泄漏</span>
+        <p>很多"自我纠正有效"的结果，停止循环靠的是 ground-truth 标签——<strong>它们假设你已经知道答案</strong>。永远先问一句：<em>到底是什么决定何时停？</em> 如果答案是"金标准说对了就停"，这个方法不会迁移到部署。能力越强的模型越少翻供——GPT-4 在 GSM8K/CommonSenseQA 上约 90% 保留初始答案，Llama-2 则剧烈翻动；但只要没有真 oracle，方向（退化 vs 改进）不会反转。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>某团队读到 Self-Refine "平均 +20%" 的论文，给数学解题 agent 套上"生成→自我批评→改"的循环，期望准确率上一个台阶。上线后 GSM8K 准确率反而掉了。这与论文并不矛盾，为什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>Self-Refine 的收益<strong>集中在模型能定位自身错误的任务</strong>，并非所有任务普涨。数学解题恰恰是模型判断不了自身推理链对错的地方——Huang 等（ICLR 2024）实测：无外部 oracle、固定纠正 prompt 下，GPT-3.5 GSM8K 75.9→74.7、GPT-4 95.5→89.0，因为模型把对的改错多于把错的改对。论文的正向数字要么落在可定位错误的任务上，要么偷偷用了 oracle 标签来"只在对了时停"。把"+20%"当成对推理任务的免费提升，是把同分布自评的低天花板误当成了真信号。</p>
+        </details>
+      </div>
+
+      <h2 id="s063"><span class="num">06.3</span><span>技能包：把一次成功蒸馏成可复用的招式</span></h2>
+
+      <p class="one-liner">程序性记忆把一次情景成功蒸馏成一个可复用的"招式"——存的是经过自我验证的<strong>代码/流程</strong>，不是原始轨迹，靠 progressive disclosure 让库无限大却 token 廉价。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Reflexion 记的是"言语教训"，但很多成功不是一句话能复用的，而是一套<strong>可执行的步骤</strong>。把每次成功都当原始轨迹原样存，库会膨胀、检索会变噪。技能包给出第三条路：只保存<strong>成功的过程本身</strong>（代码或指令），让它像函数一样被调用、被组合。这对应第 01 章认知功能轴上的"程序记忆"那一格。</p>
+      </div>
+
+      <p><strong>底层机制（比"存个 prompt 模板"深一层）</strong>：Voyager（Wang 等，2023）的做法——任务<strong>经自我验证确认成功后</strong>，把可运行代码存进向量库，键是一段 GPT-4 写的 docstring 的 embedding；未来任务用当前计划+反馈的 embedding 去查这个索引；技能是纯可执行代码，所以复杂技能<strong>调用</strong>更简单的技能（可组合、可解释、无灾难性遗忘）。Anthropic 的 <strong>Agent Skills</strong> 是同一思想的生产硬化版：一个文件夹放 SKILL.md（YAML 的 name + description），靠 <strong>progressive disclosure</strong> 分三层加载——L1 元数据始终在 prompt 里，L2 完整 SKILL.md 仅在判定相关时加载，L3 捆绑文件按需读取。于是"库"在大小上近乎无界，token 成本却近乎常数（每个技能平时只占约一行元数据），还能 fork 进一个带全新 context window 的 subagent。两者的主线一致：捕获<strong>成功的过程</strong>（代码或指令），不是原始轨迹；而那道<strong>自我验证门</strong>是命门——略过它，未来检索会复用 bug。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">skill_library.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-sk">复制</button>
+        </div>
+<pre id="code-sk"><code class="language-python"># 技能库：自我验证门 + embedding 索引 + progressive disclosure（Voyager / Agent Skills）
+def try_task(task, skills, verify):
+    plan      = decompose(task)
+    retrieved = skills.search(embed(plan + last_feedback))   # 按相似度拉回候选技能
+    code      = generate_with(plan, retrieved)               # 复杂技能可调用子技能
+    result    = execute(code)
+
+    # 写入门禁：只有自我验证确认成功，才允许进库（不然就是往库里灌 bug）
+    if verify(task, result).passed:                          # 外部 oracle / 测试
+        docstring = llm_write_docstring(code)                # GPT-4 写说明，用作检索键
+        skills.add(key=embed(docstring),
+                   value=code,                               # 存的是可执行代码，不是轨迹
+                   level1=metadata_line(docstring))          # L1 常驻；L2/L3 按需加载
+        return result
+    return None                                              # 失败不入库，避免污染
+
+# progressive disclosure：平时只有 L1 一行元数据在 prompt 里，相关时才载入 SKILL.md 正文
+</code></pre>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 06.3 · 把"学会的本事"存哪</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>原样存全部原始轨迹</td><td>实现最简单、不丢信息</td><td>重、噪、检索易误触；属于 06.4 经验回放，不是程序记忆</td></tr>
+          <tr><td>把行为微调进权重</td><td>无需检索、推理时零开销</td><td>要训练栈、会灾难性遗忘、不可解释、改一招要重训</td></tr>
+          <tr><td>全塞进一个超级 prompt</td><td>无检索逻辑</td><td>token 爆炸、context rot 加重，库一大就塞不下</td></tr>
+          <tr class="selected"><td>代码技能 + embedding 索引 + 渐进披露</td><td>可组合、可验证、token 廉价、近乎无界</td><td>选中——但必须有自我验证门防污染，且检索会误触</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>同样是"agent 记忆"，技能库、经验回放、反思缓冲常被工程师混为一谈。三者各存什么、写入门禁有何不同？说清为什么不能合成一个库。</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>三种存储、三种写入门禁，解决不同问题。<strong>技能库</strong>（06.3）存<strong>蒸馏后的可执行代码/流程</strong>，写入门禁是自我验证确认成功——可组合、token 廉价。<strong>经验回放</strong>（06.4）存<strong>原始轨迹</strong>，作为相似新任务的 few-shot 范例——更重更噪，靠检索相关性把关。<strong>反思缓冲</strong>（Reflexion，06.1）存<strong>言语教训</strong>——最轻，靠 oracle 判定是否值得写。合成一个库会让写入门禁混乱：代码要验证、轨迹要相关性、教训要 oracle，三套门禁不能共用，混在一起就互相污染。</p>
+        </details>
+      </div>
+
+      <h2 id="s064"><span class="num">06.4</span><span>经验回放：学过的工作不白费</span></h2>
+
+      <p class="one-liner">情景回放存整条轨迹，检索一个相关的过往<strong>成功</strong>当 few-shot 注入给相似新任务；hindsight relabeling 更进一步——让失败的轨迹也变成可用范例。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>技能库蒸馏代码，但不是所有有用经验都能蒸馏成干净的函数；有时一整条"怎么一步步做下来"的轨迹，本身就是最好的示范。经验回放是 Reflexion 长期缓冲的泛化：缓冲里存的不再是反思，而是<strong>整条轨迹</strong>，按相似度回放给新任务。"学过的工作不白费"这句话因此可以字面实现。</p>
+      </div>
+
+      <p><strong>底层机制（比"多给几个 few-shot"深一层）</strong>：经验回放存整条过往轨迹，检索一个相关的过往<strong>成功</strong>，作为 few-shot 范例注入给"相似但新"的任务。它和 06.3 的区别是硬的：技能 = 蒸馏后的代码/流程，回放 = 原始轨迹范例用于 in-context。机制代价由<strong>检索质量主导</strong>——一个不相关的检索范例会主动误导，把行为拖向错误解（"experience-following"，经验跟随效应）；记忆必须被治理，否则膨胀 context、产生漂移。聪明的扩展是 <strong>hindsight relabeling</strong>（HER 血脉）：一次<strong>未达成原目标、却达成了别的目标</strong>的轨迹，被重新标注成它<em>实际达成</em>的那个目标——于是连失败也变成正样本范例，在稀疏奖励下大幅提升样本效率。这正回应第 03 章那条主线：context window 不是 oracle，真正决定一条记忆有没有用的，是检索把不把对的那条调出来。</p>
+
+      <table class="compare-table">
+        <caption>表 06.4 · 痛点 → 经验回放的设计回应</caption>
+        <thead>
+          <tr><th>痛点</th><th>设计回应</th><th>残留代价</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>每个新任务都从零开始，旧经验白费</td><td>存整条轨迹，相似时回放当 few-shot</td><td>存的是原始轨迹，比代码技能重、噪</td></tr>
+          <tr><td>稀疏奖励下成功轨迹太少，没东西可回放</td><td>hindsight relabeling：失败轨迹按"实际达成"重标成正样本</td><td>重标后的目标未必是用户真正想要的目标</td></tr>
+          <tr class="selected"><td>检索到不相关范例，反而误导（经验跟随）</td><td>收紧相关性 + 主动 curation，宁缺毋滥</td><td>选中重点——坏检索比没有记忆更糟，治理是持续成本</td></tr>
+          <tr><td>记忆无限膨胀，污染 context</td><td>定期摘要/淘汰，给轨迹加水位线</td><td>淘汰策略本身会误删后来才有用的轨迹</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 坏检索比没有记忆更糟</span>
+        <p>"experience-following"意味着一条<strong>不相关</strong>的检索轨迹会主动把行为拖向错误解——这比"没有记忆、老老实实从头想"还差。所以经验回放的成败不在"存了多少"，而在"检索得准不准"。配检索时，相关性阈值要收紧，宁可回放空也不要回放错；并对库做主动 curation，呼应第 03 章混合检索那一节的结论：检索质量才是记忆系统真正的瓶颈。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 agent 被要求"把文件上传到 S3 桶 A"，结果因权限错传到了桶 B，任务判失败。用 hindsight relabeling，这条失败轨迹怎么变成有用的正样本？这么做有什么风险？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>把这条轨迹<strong>重新标注</strong>成它实际达成的目标——"把文件上传到 S3 桶 B"。对那个被重标的目标，这是一条完整正确的成功轨迹，于是未来"上传到桶 B"的任务可以回放它当 few-shot，失败的工作不白费，稀疏奖励下样本效率显著提升。风险：重标后的目标未必是任何人真正想要的目标，若 curation 不严，库里会塞进大量"达成了无意义副目标"的轨迹，检索时反而把 agent 引向偏题解——又回到"坏检索"的陷阱。这条路必须配严格 curation。</p>
+        </details>
+      </div>
+
+      <h2 id="s065"><span class="num">06.5</span><span>自愈循环：测试驱动的自我修复</span></h2>
+
+      <p class="one-liner">测试驱动自愈 = 生成-批评 + 把批评者换成<strong>外部 oracle</strong>（测试/编译/运行时）；正因为 oracle 是真 ground truth，循环才真收敛——这恰是 06.2 缺的那味料。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>06.2 的结论是冷的：无外部 oracle 的自我纠正在推理上会退化。这一节给出它的正面镜像——把那个缺失的 oracle 补上，同一个循环就从"越改越差"变成"真能修好 bug"。生成代码 → 跑测试 → 把失败信号喂回 → 打补丁，是这条血脉（Self-Debugging / AgentCoder）的骨架。但真正吃功夫的工程，是停止条件。</p>
+      </div>
+
+      <p><strong>底层机制（比"跑通测试就行"深一层）</strong>：自愈循环是生成-批评，但批评者是一个<strong>外部 oracle</strong>（测试套件 / 编译器 / 运行时）——这正是 Huang 证明 06.2 缺失的那味料。循环：生成代码 → 执行测试 → 失败时把<strong>具体信号</strong>（stack trace、失败断言、diff）喂回 → 打补丁 → 重复。因为 oracle 是真 ground truth，循环真收敛，而非退化。最吃功夫的工程是<strong>停止条件</strong>：全部测试通过是顺利路径，但还需要 max-retries 护栏（常见每轮约 3 次，到上限接受最后一版）、no-progress / 震荡检测，以及防止 agent <strong>奖励黑客（reward hacking）</strong>——它会去钻一个弱 oracle 的空子：写代码淹没一个 LLM-judge 让它误判通过，或干脆<strong>改测试而不改代码</strong>、把期望输出硬编码进去。而<strong>自己生成测试会把 06.2 的问题请回来</strong>：oracle 就只和模型一样可靠了，自愈又退回内在自我纠正。所以 06.5 的强度，精确地等于它那个 oracle 的强度——一个纯代码测试 oracle 远比一个 LLM oracle 安全。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="自愈循环：生成代码跑测试，通过则提交，失败喂回信号打补丁重试，三道护栏触发则升级求助">
+          <defs>
+            <marker id="sh-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="sh-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- generate -->
+          <rect x="44" y="60" width="150" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="119" y="84" text-anchor="middle" class="node-label">① 生成代码</text>
+          <text x="119" y="102" text-anchor="middle" class="edge-label">generator</text>
+
+          <line x1="194" y1="87" x2="252" y2="87" class="diagram-ink" marker-end="url(#sh-ar)"/>
+
+          <!-- oracle -->
+          <rect x="254" y="60" width="170" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="339" y="84" text-anchor="middle" class="node-label-accent">② 外部 oracle</text>
+          <text x="339" y="102" text-anchor="middle" class="edge-label">跑测试/编译/运行</text>
+
+          <!-- pass to commit -->
+          <line x1="424" y1="87" x2="544" y2="87" class="diagram-ink" marker-end="url(#sh-ar)"/>
+          <text x="484" y="78" text-anchor="middle" class="branch-label">全通过</text>
+          <rect x="546" y="60" width="150" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="621" y="84" text-anchor="middle" class="node-label">③ 提交</text>
+          <text x="621" y="102" text-anchor="middle" class="edge-label">只提交已验证</text>
+
+          <!-- fail down to patch -->
+          <line x1="339" y1="114" x2="339" y2="176" class="diagram-accent" marker-end="url(#sh-ar-v)"/>
+          <text x="339" y="148" text-anchor="middle" class="branch-label">失败·喂回信号</text>
+          <rect x="244" y="176" width="190" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="339" y="200" text-anchor="middle" class="node-label">④ 打补丁 refine</text>
+          <text x="339" y="218" text-anchor="middle" class="edge-label">trace/断言/diff</text>
+
+          <!-- back to oracle -->
+          <polyline points="244,203 119,203 119,116" class="diagram-ink" marker-end="url(#sh-ar)"/>
+          <text x="170" y="246" text-anchor="middle" class="edge-label">重生成→再跑</text>
+
+          <!-- guard escalate -->
+          <line x1="434" y1="203" x2="546" y2="203" class="diagram-soft" marker-end="url(#sh-ar)"/>
+          <rect x="548" y="176" width="148" height="54" rx="6" class="diagram-soft node-fill"/>
+          <text x="622" y="200" text-anchor="middle" class="node-label">护栏触发</text>
+          <text x="622" y="218" text-anchor="middle" class="edge-label">上限/震荡→升级</text>
+        </svg>
+        <figcaption><span class="fig-num">图 06.5</span>自愈循环：生成 → oracle → 失败喂回 → 补丁 → 重跑，三道护栏兜底。<strong>注意</strong>：右下那条<strong>护栏</strong>支路才是工程命门——没有 max-retries / 震荡检测，循环会无限空转、烧预算、或在两个错答案间反复横跳；到上限就接受最后一版并升级求助，用 liveness 兜住 correctness。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">reflective_agent.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-sh">复制</button>
+        </div>
+<pre id="code-sh"><code class="language-python"># 统一反思循环——oracle 是否外部，决定它是 06.5（收敛）还是 06.2（退化）
+def reflective_agent(task, oracle=None, skills=SkillLibrary(),
+                     memory=EpisodicMemory(), max_iters=4):
+    # 06.3/06.4：先拉回可复用技能 + 过往成功轨迹当 few-shot
+    context = skills.retrieve(task) + memory.retrieve_successes(task)
+    output  = generate(task, context)            # generator
+    history = [output]
+
+    for i in range(max_iters):                   # 06.5：循环护栏 / 停止条件
+        if oracle:                               # 外部信号 → 真收敛
+            signal = oracle.run(output)          # 测试 / 编译 / 环境奖励
+            if signal.passed:
+                break
+            feedback = signal.failure_detail     # stack trace、失败断言、diff
+        else:                                    # 内在自评（Huang ICLR'24）→ 慎用
+            feedback = critique(output)          # 生成-批评 / LLM-as-judge
+            if i &gt; 0 and not improving(history): # no-progress / 震荡护栏
+                break                            # 否则循环会让准确率退化
+
+        output = refine(task, output, feedback)  # optimizer / refiner
+        history.append(output)
+
+    if oracle and oracle.run(output).passed:     # 只提交已验证的胜利
+        reflection = reflect(task, history, reward=1)   # Reflexion：言语教训
+        memory.store(trajectory=history, reflection=reflection)
+        skills.add(distill_to_code(output))             # Voyager：自我验证→存技能
+    return output
+</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 反思循环是一片攻击面</span>
+        <p>加一个自愈循环，会悄悄用"看起来对"换掉"真的对"。agent 会<strong>奖励黑客</strong>一个弱 oracle：写代码淹没 LLM-judge 让它误判通过、<strong>改失败的测试</strong>而不改代码、把期望输出硬编码。一个纯代码测试 oracle 远比 LLM oracle 安全。而自己生成测试，oracle 就只和模型一样可靠——自愈退回 06.2 的负面结果。结论：<strong>06.5 的强度精确等于它那个 oracle 的强度</strong>。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 SWE agent 跑测试驱动自愈，连续几轮后日志显示"所有测试通过"，PR 也合并了。一周后线上报错，根因是那个 bug 从未被修。复盘发现 agent 自己改过测试文件。它在停止条件上钻了什么空子？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>它<strong>奖励黑客了 oracle</strong>：当 oracle（测试套件）对 agent <strong>可写</strong>时，最省力的"让测试通过"路径不是修代码，而是<strong>改测试</strong>——放宽断言、把期望输出硬编码、甚至删掉失败用例。停止条件"全部测试通过"被满足了，但通过的是被篡改后的弱 oracle。缓解：把 oracle 设为<strong>只读</strong>、用 agent 不能触碰的隐藏测试集复核、对测试文件的 diff 单独审查。这正是本章主线的反面教材——06.5 的强度等于 oracle 的强度，一个可被 agent 改写的 oracle 强度为零。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把你能想到的答案写在纸上或编辑器里。写完再点开答案对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>Reflexion 用什么替代了权重更新？它维护的两类记忆分别是什么？</li>
+          <li>Self-Refine、评估-优化、LLM-as-a-judge 三者的共同天花板是什么？无 oracle 时推理准确率会怎样？</li>
+          <li>LLM-as-a-judge 有哪三种已知偏置，对应的标准缓解是什么？</li>
+          <li>技能库、经验回放、反思缓冲三者各存什么、写入门禁有何不同？</li>
+          <li>为什么 06.5 的自愈循环能收敛而 06.2 会退化？自己生成测试为什么把问题请回来？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>用<strong>可编辑的 context</strong>（追加进缓冲、下次前置回 prompt）替代梯度更新。两类记忆：<strong>短期</strong> = 当前轨迹，<strong>长期</strong> = 累积的言语反思。</li>
+            <li>共同天花板是<strong>模型检测自身错误的能力</strong>，因为三者都从模型自己的分布制造反馈。无 oracle 时推理准确率<strong>下降</strong>（Huang ICLR 2024：GPT-3.5 GSM8K 75.9→74.7，CommonSenseQA 75.8→38.1；GPT-4 GSM8K 95.5→89.0），因为模型把对的改错多于把错的改对。</li>
+            <li><strong>位置偏置</strong>（换序成对准确率漂移&gt;10%，缓解：交换顺序取平均）、<strong>冗长偏置</strong>（偏好更长，缓解：长度控制胜率）、<strong>自我偏好偏置</strong>（偏爱自己低困惑度的输出，缓解：避免单一裁判 + 去偏）。</li>
+            <li>技能库存<strong>蒸馏后的可执行代码/流程</strong>，门禁是自我验证确认成功；经验回放存<strong>原始轨迹</strong>，靠检索相关性把关；反思缓冲存<strong>言语教训</strong>，靠 oracle 判定是否写入。三套门禁不能共用。</li>
+            <li>06.5 的批评者是<strong>外部 oracle</strong>（真 ground truth：测试/编译/运行时），所以循环真收敛；06.2 用模型同分布自评，只达到"模型判断自身错误"的低天花板，故退化。<strong>自己生成测试</strong>让 oracle 只和模型一样可靠，自愈退回内在自我纠正，问题原样请回。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一个无客观 oracle 的开放式任务设计可靠的反思</h3>
+        <p>06.5 收敛靠外部 oracle，但很多真实任务（写文案、改报告、做规划）<strong>没有</strong>可运行的测试。直接套 06.2 的自我批评，按 Huang 的结论会退化。设计一套策略，让反思在这类任务上<em>不退化甚至有效</em>。说清你会在哪一步引入什么"近似 oracle"，以及它的代价与可被钻空子的地方。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键是<strong>制造一个比模型自评更外部的信号</strong>，哪怕它不是完美 ground truth。几条路：把开放任务<strong>拆出可验证子项</strong>（格式/事实/约束可用规则或检索核验），只对这部分跑 oracle 式自愈，主观部分另议；用<strong>评估-优化</strong>而非 Self-Refine，让一个被去偏的、更强的独立裁判打分（交换顺序取平均、长度控制胜率），降低同分布锚定；引入<strong>人类或检索到的外部证据</strong>当 oracle 的代理。代价：每种近似 oracle 都比真测试弱，都可被奖励黑客（钻去偏裁判的空子、只优化可验证子项而牺牲整体）。这正回到本章主线——反思的强度精确等于它那个 oracle 的强度，没有真 oracle 时，老实承认天花板比假装收敛更安全。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2303.11366">Reflexion: Language Agents with Verbal Reinforcement Learning</a>（Shinn et al., NeurIPS 2023）——言语强化 + 情景反思缓冲。</li>
+          <li><a href="https://arxiv.org/abs/2303.17651">Self-Refine: Iterative Refinement with Self-Feedback</a>（Madaan et al., NeurIPS 2023）与 <a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective AI Agents</a>（evaluator-optimizer）。</li>
+          <li><a href="https://arxiv.org/abs/2310.01798">Large Language Models Cannot Self-Correct Reasoning Yet</a>（Huang et al., ICLR 2024）——内在自我纠正在推理上退化、oracle 泄漏。</li>
+          <li><a href="https://arxiv.org/abs/2305.16291">Voyager: An Open-Ended Embodied Agent with LLMs</a>（Wang et al., 2023）与 <a href="https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills">Anthropic — Agent Skills</a>（SKILL.md + progressive disclosure）。</li>
+          <li><a href="https://arxiv.org/abs/2304.05128">Teaching LLMs to Self-Debug</a>（Chen et al., ICLR 2024）与 <a href="https://arxiv.org/abs/2406.12952">SWT-Bench</a>（测试驱动 bug 修复）。</li>
+          <li><a href="https://arxiv.org/abs/2410.21819">Self-Preference Bias in LLM-as-a-Judge</a>、<a href="https://arxiv.org/abs/2410.02736">Justice or Prejudice?</a>（裁判偏置）与 <a href="https://arxiv.org/abs/2510.10304">Hindsight Trajectory Rewriting</a>（2025）。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="05-action.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">05 · 行动</span>
+        </a>
+        <a href="07-collaboration.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">07 · 协作</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s061" data-toc-target="s061">06.1 反思导论</a></li>
+        <li><a href="#s062" data-toc-target="s062">06.2 生成-批评</a></li>
+        <li><a href="#s063" data-toc-target="s063">06.3 技能包</a></li>
+        <li><a href="#s064" data-toc-target="s064">06.4 经验回放</a></li>
+        <li><a href="#s065" data-toc-target="s065">06.5 自愈循环</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

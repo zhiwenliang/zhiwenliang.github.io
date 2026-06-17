@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 推理 · Agent 设计模式之美</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path > .inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 12px;
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 74px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 98px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+article h2, article h3, article [id] { scroll-margin-top: 64px; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+   <div class="inner">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-paradigm.html">01 范式觉醒</a><span class="sep">—</span>
+    <a href="02-perception.html">02 感知</a><span class="sep">—</span>
+    <a href="03-memory.html">03 记忆</a><span class="sep">—</span>
+    <a href="04-reasoning.html" class="current">04 推理</a><span class="sep">—</span>
+    <a href="05-action.html">05 行动</a><span class="sep">—</span>
+    <a href="06-reflection.html">06 反思</a><span class="sep">—</span>
+    <a href="07-collaboration.html">07 协作</a><span class="sep">—</span>
+    <a href="08-governance.html">08 治理</a><span class="sep">—</span>
+    <a href="09-composition.html">09 组合</a><span class="sep">—</span>
+    <a href="10-self-check.html">10 自测</a>
+   </div>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 04 · 推理</p>
+        <h1>推理：用 token 换准确率的艺术</h1>
+        <p class="recap">第 03 章讲了记忆把经验沉淀下来；推理是认知功能轴上"想清楚"的一格，决定 token 花在思考还是行动。这一章把这一格做深：显式推理本质上是一种<strong>花 token 买准确率</strong>的策略，本章每一节都在回答同一个工程问题——这一次的边际准确率，值不值这一次的边际 token 与延迟。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>CoT 为什么管用：中间 token 是把一次前向算不完的多步计算"串行化"的草稿纸；以及它何时反伤（言语遮蔽，最高掉 36.3%）。</li>
+          <li>extended thinking 的计费与控制面：隐藏/摘要 ≠ 省钱，你为每个 thinking token 付费；Opus 4.7/4.8 是 adaptive，手动设 budget 会 400 报错。</li>
+          <li>复杂度路由 vs 级联：5–60x 价差驱动路由，但错路是隐藏成本；级联自纠错却累加延迟。</li>
+          <li>并行探索（自洽性 / Best-of-N / ToT / 编排者-工作者）如何用 token 买方差缩减；以及假设驱动调试如何把"抽盲盒"变成根因修复。</li>
+        </ul>
+      </section>
+
+      <figure>
+        <svg viewBox="0 0 720 360" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="本章主线：一个统一透镜——花 token 买准确率，分出五条推理策略">
+          <defs>
+            <marker id="cm-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- center hub -->
+          <rect x="270" y="150" width="180" height="62" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="178" text-anchor="middle" class="node-label-accent">花 token 买准确率</text>
+          <text x="360" y="198" text-anchor="middle" class="edge-label">推理 = 推理时算力策略</text>
+
+          <!-- spokes (no crossing) -->
+          <line x1="300" y1="150" x2="170" y2="78"  class="diagram-soft" marker-end="url(#cm-ar)"/>
+          <line x1="335" y1="150" x2="300" y2="74"  class="diagram-soft" marker-end="url(#cm-ar)"/>
+          <line x1="420" y1="150" x2="455" y2="74"  class="diagram-soft" marker-end="url(#cm-ar)"/>
+          <line x1="425" y1="212" x2="520" y2="284" class="diagram-soft" marker-end="url(#cm-ar)"/>
+          <line x1="295" y1="212" x2="200" y2="284" class="diagram-soft" marker-end="url(#cm-ar)"/>
+
+          <!-- L17 CoT -->
+          <rect x="52" y="46" width="170" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="137" y="70" text-anchor="middle" class="node-label">04.2 CoT</text>
+          <text x="137" y="90" text-anchor="middle" class="edge-label">草稿纸·可反伤</text>
+
+          <!-- L17b thinking (top mid) -->
+          <rect x="240" y="44" width="120" height="46" rx="6" class="diagram-ink node-fill"/>
+          <text x="300" y="64" text-anchor="middle" class="node-label">thinking</text>
+          <text x="300" y="80" text-anchor="middle" class="edge-label">budget·计费</text>
+
+          <!-- L18 routing -->
+          <rect x="378" y="46" width="170" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="463" y="70" text-anchor="middle" class="node-label">04.3 路由 / 级联</text>
+          <text x="463" y="90" text-anchor="middle" class="edge-label">5–60x 价差</text>
+
+          <!-- L19 parallel -->
+          <rect x="430" y="290" width="200" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="530" y="314" text-anchor="middle" class="node-label">04.4 并行探索</text>
+          <text x="530" y="334" text-anchor="middle" class="edge-label">投票·BoN·ToT·多智能体</text>
+
+          <!-- L20 debug -->
+          <rect x="90" y="290" width="190" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="185" y="314" text-anchor="middle" class="node-label">04.5 假设驱动调试</text>
+          <text x="185" y="334" text-anchor="middle" class="edge-label">观察→假设→实验</text>
+        </svg>
+        <figcaption><span class="fig-num">图 04.1</span>本章的五节挂在同一个透镜上：每种推理技术都用<strong>推理时算力</strong>换准确率。<strong>注意</strong>：Anthropic 多智能体 Research 系统里，单是 token 用量就解释了约 80% 的质量方差——所谓"推理更强"，绝大部分是"算力花得对、花得够"，而不是某种神秘的智慧。</figcaption>
+      </figure>
+
+      <h2 id="s041"><span class="num">04.1</span><span>推理导论：先想清楚，才能做对</span></h2>
+
+      <p class="one-liner">推理是把目标转成"可验证计划"的那一层；落到机制上，显式推理是一种花 token 的策略——它用推理时算力买准确率，工程问题永远是边际准确率值不值边际 token。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>面对"agent 一上来就乱动工具、做错方向"，最自然的反应是"换个更聪明的模型"。这个反应抓错了杠杆。真正缺的不是模型能力，而是<strong>在动手之前先把目标拆成可验证计划</strong>的那一步。第 01 章的<strong>认知功能轴</strong>把推理单列成一格，正因为它和感知、记忆、行动一样是一个可单独施加约束的环节——而约束的方式，全都是"在哪、花多少 token 去想"。</p>
+      </div>
+
+      <p><strong>底层机制（比"先想后做"深一层）</strong>：显式推理不是一种风格偏好，而是一种<strong>消耗 token 的算力策略</strong>。本章五种技术——CoT、路由、自洽性、Tree of Thoughts、假设驱动调试——无一例外都在用推理时算力买准确率。这把统一透镜让选型变得可计算：每一次"要不要想得更深、采更多样、拆更多子任务"，都等价于"边际准确率 ÷ 边际 token 与延迟"是否划算。Anthropic 在多智能体 Research 系统里把这点量化到极致：token 用量单独就解释了约 80% 的性能方差——质量的绝大部分来自"在对的分解上花了足够算力"。这一句把后面四节串成一条线。</p>
+
+      <table class="compare-table">
+        <caption>表 04.1 · 推理这一格，到底在买什么</caption>
+        <thead>
+          <tr><th>痛点</th><th>设计回应</th><th>它换来的代价</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>多步问题一次前向算不出，直接答错</td><td>CoT：把中间步骤显式写成 token</td><td>每题固定多花一段 thinking token（约 3–5x）</td></tr>
+          <tr><td>简单题用顶配模型，贵且慢</td><td>复杂度路由：分级派给最便宜可胜任的模型</td><td>多一个会漂移的分类器，错路静默降质</td></tr>
+          <tr class="selected"><td>单次采样是高方差估计，时对时错</td><td>并行探索：采 N 条路再聚合（投票/验证/搜索）</td><td>选中本章主线——N 倍 token，且要任务可聚合</td></tr>
+          <tr><td>调试时凭直觉乱改、改了又退化</td><td>假设驱动调试：观察→假设→实验→结论</td><td>多几轮真实执行的往返，但拿到可解释的根因</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个团队把同一个 agent 的所有任务都默认开 extended thinking，准确率确实涨了，账单也涨了 4 倍。Leader 说"贵但值，毕竟更准"。按本章透镜，这个判断哪里太草率？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>"全局开 thinking"把一个<strong>逐任务</strong>的边际决策当成了一刀切。准确率的涨幅不是均匀分布的——多步数学/逻辑题边际收益大，而<strong>感知型 / 隐式模式 / 异常密集</strong>的任务上 CoT 会反伤（04.2 量化到最高掉 36.3%）。正确做法是按任务类型给 CoT 开关分档（gate by task type），把 token 花在边际准确率高的那部分上，而不是无差别地为所有任务付 4 倍。</p>
+        </details>
+      </div>
+
+      <h2 id="s042"><span class="num">04.2</span><span>CoT 与 extended thinking：草稿纸、计费与反伤</span></h2>
+
+      <p class="one-liner">CoT 管用是因为自回归模型每个 token 只能做有限计算，中间 token 充当草稿纸、把多步计算串行化；Anthropic 把它落成 thinking 块——但隐藏/摘要不等于省钱。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"让模型一步到位给答案"在多步问题上系统性地失败，因为一次前向传播能做的计算量是<strong>有界</strong>的。CoT（思维链，Wei 等 2022）的本质不是"提示技巧"，而是给模型一块草稿纸：把一次算不完的计算拆成跨多个 token 的串行步骤。Anthropic 把这件事做进了 API——extended thinking 让模型在专门的 <code>thinking</code> 块里先推理，再给出可见答案。</p>
+      </div>
+
+      <p><strong>底层机制（计费是最反直觉的一点）</strong>：thinking 块由 <code>budget_tokens</code> 限定，且必须严格<strong>小于</strong> <code>max_tokens</code>，否则请求报错。关键计费事实：你为<strong>每一个</strong> thinking token 付费，即使 Claude 4 只回一段由更便宜模型生成的<strong>摘要</strong>，或在 Opus 4.7/4.8 上把 thinking 字段设为空、display 设为 <code>omitted</code> 只留一个加密 <code>signature</code>。所以"隐藏/摘要 = 省钱"是错的——omitting 只省流式延迟，不省成本。在最新模型上 thinking 是 <strong>adaptive</strong> 的：深度由模型自己决定，手动设 budget 直接 400 报错；控制面从"你设预算"反转成了"模型自己定速"。提示层面，高层指令"think deeply and try multiple approaches"胜过逐条规定"step 1… step 2…"，因为过度约束推理轨迹会抽掉模型自己需要的自由度——这正是第 01 章<strong>双轴框架</strong>里"结构约束牺牲自由"的具体体现。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="一次 assistant turn 内：thinking 块先推理再产可见答案，计费覆盖全部 thinking token，工具循环间可交错思考">
+          <defs>
+            <marker id="th-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="th-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="40" y="26" class="edge-label" font-weight="700">一次 assistant turn</text>
+
+          <!-- prompt -->
+          <rect x="40" y="56" width="120" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="100" y="80" text-anchor="middle" class="node-label">prompt</text>
+          <text x="100" y="98" text-anchor="middle" class="edge-label">问题进来</text>
+
+          <line x1="160" y1="83" x2="218" y2="83" class="diagram-ink" marker-end="url(#th-ar)"/>
+
+          <!-- thinking -->
+          <rect x="220" y="50" width="180" height="66" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="310" y="76" text-anchor="middle" class="node-label-accent">thinking 块</text>
+          <text x="310" y="96" text-anchor="middle" class="edge-label">budget &lt; max_tokens</text>
+
+          <line x1="400" y1="83" x2="458" y2="83" class="diagram-ink" marker-end="url(#th-ar)"/>
+
+          <!-- answer -->
+          <rect x="460" y="56" width="150" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="535" y="80" text-anchor="middle" class="node-label">可见答案</text>
+          <text x="535" y="98" text-anchor="middle" class="edge-label">摘要/omitted</text>
+
+          <!-- billing bracket under thinking -->
+          <line x1="40" y1="150" x2="610" y2="150" class="diagram-accent" stroke-dasharray="4 3"/>
+          <text x="325" y="172" text-anchor="middle" class="branch-label">计费 = 全部 thinking token（隐藏也照付）</text>
+
+          <!-- interleaved tool loop -->
+          <line x1="310" y1="116" x2="310" y2="206" class="diagram-soft" marker-end="url(#th-ar-v)"/>
+          <rect x="220" y="208" width="200" height="50" rx="6" class="diagram-soft node-fill"/>
+          <text x="320" y="230" text-anchor="middle" class="node-label">交错思考·工具调用</text>
+          <text x="320" y="248" text-anchor="middle" class="edge-label">budget 可跨 turn 超 max_tokens</text>
+        </svg>
+        <figcaption><span class="fig-num">图 04.2</span>thinking 在可见答案之前发生，计费覆盖整段。<strong>注意</strong>：在工具循环里<strong>必须原样回传</strong>之前的 thinking 块（连同其 signature），否则续跑会断；交错思考时 budget 跨整个 turn，因此可以超过单次 <code>max_tokens</code>。</figcaption>
+      </figure>
+
+      <p><strong>CoT 何时反伤（最颠覆"推理永远安全"的一点）</strong>：Liu 等（2024/25）证明，在<strong>隐式 / 感知型 / 异常密集</strong>的任务上（统计模式学习、人脸/视觉识别、规则带大量例外的分类），强制语言化是人类"言语遮蔽效应"的机器版——显式轨迹会<strong>覆盖</strong>掉原本正确的快速直觉。o1-preview 在这类任务上相对 GPT-4o 最高<strong>掉 36.3%</strong>。它只在两个条件同时成立时反伤：深思熟虑会伤害人类完成该任务，<strong>且</strong>这个约束能迁移到 LLM；约束不迁移时（如逻辑谬误识别），CoT 保持中性或正向。设计规则因此是：按任务类型给 CoT/extended thinking 开关分档，绝不全局施加。</p>
+
+      <table class="compare-table">
+        <caption>表 04.2 · 原生 extended thinking vs 手搓 CoT 提示</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>手搓 "let's think step by step" 提示</td><td>透明、可见、模型无关</td><td>占满 context、无法在工具调用之间思考，且易过度约束轨迹</td></tr>
+          <tr><td>另起一次 planner LLM 调用</td><td>规划与执行解耦</td><td>多一次往返与状态同步，规划与执行的上下文割裂</td></tr>
+          <tr class="selected"><td>原生 extended / adaptive thinking</td><td>signature 验证的多轮续跑、Opus 4.7/4.8 模型自控深度</td><td>选中（主流）——代价是可见性丢失（摘要/omitted）且全额计费，最新模型不能手动设 budget</td></tr>
+          <tr><td>对所有任务全局开 thinking</td><td>实现最省事</td><td>感知/隐式任务上反伤（最高掉 36.3%），必须按任务类型 gate</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">extended_thinking.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-think">复制</button>
+        </div>
+<pre id="code-think"><code class="language-python"># extended thinking 的三个机制点：分档、计费、续跑
+def reason(task, model):
+    # 1) 按任务类型 gate——感知/隐式任务上 CoT 会反伤（最高 -36.3%）
+    if task.kind in ("perceptual", "implicit_pattern", "exception_heavy"):
+        return model(task, thinking=None)        # 不开 thinking，别覆盖快速直觉
+
+    # 2) Opus 4.7/4.8 是 adaptive：手动设 budget 会 400，让模型自己定速
+    if model.is_adaptive:
+        resp = model(task, thinking={"type": "enabled"})     # 无 budget_tokens
+    else:
+        resp = model(task, thinking={"type": "enabled",
+                                     "budget_tokens": 8000})  # 必须 &lt; max_tokens
+
+    # 3) 计费 = 全部 thinking token，即使只回摘要或 omitted（隐藏不省钱）
+    bill = resp.usage.thinking_tokens + resp.usage.output_tokens
+
+    # 工具循环：必须原样回传上一轮 thinking 块（连 signature），否则续跑断裂
+    for tool_call in resp.tool_calls:
+        obs = run(tool_call)
+        resp = model(task, prior_thinking=resp.thinking_blocks, observation=obs)
+    return resp.answer
+</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · "隐藏的 thinking 更便宜"</span>
+        <p>最常见的成本误判：以为响应里只看到摘要（Claude 4）或空块 + signature（Opus 4.7/4.8）就没被计费。<strong>错</strong>——你为生成的每一个 thinking token 付费，<code>display: omitted</code> 只削减流式延迟，不削减账单。两条配套陷阱：把 <code>budget_tokens</code> 设成 ≥ <code>max_tokens</code> 会直接报错（交错思考除外，那时预算跨整个 turn）；在 Opus 4.7/4.8 上手动设 budget 返回 400，这些模型只接受 adaptive。</p>
+      </div>
+
+      <h2 id="s043"><span class="num">04.3</span><span>复杂度路由与级联：把算力花在刀刃上</span></h2>
+
+      <p class="one-liner">路由用一个便宜分类器把 prompt 映射到"最便宜可胜任的模型"（Haiku 解析 → Sonnet 推理 → Opus 攻坚）；级联则是 cheap→验证→升级——两者失败模式正好相反。</p>
+
+      <p>04.2 决定"想多深"，这一节决定"在哪个模型上想"。经济驱动是 5–60x 的价差：Haiku 约每百万 token 0.25–1 美元，Opus 约 5–15 美元。<strong>路由</strong>（router）是一个置于模型调用之前的便宜分类器（常用 Haiku 本身，约 430ms），把 prompt 映射到难度档、再派给该档最便宜可胜任的模型，能省 40–70%。它是 Anthropic 五个工作流模式之一。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 330" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="上半路由：分类器一次分档派给三档模型之一；下半级联：便宜模型先跑，验证不过才升级">
+          <defs>
+            <marker id="rt-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="rt-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="40" y="24" class="edge-label" font-weight="700">路由：预测式，一次派定</text>
+
+          <!-- router -->
+          <rect x="40" y="44" width="138" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="109" y="68" text-anchor="middle" class="node-label-accent">分类器</text>
+          <text x="109" y="86" text-anchor="middle" class="edge-label">Haiku·约 430ms</text>
+
+          <line x1="178" y1="58" x2="262" y2="48"  class="diagram-ink" marker-end="url(#rt-ar)"/>
+          <line x1="178" y1="71" x2="262" y2="71"  class="diagram-ink" marker-end="url(#rt-ar)"/>
+          <line x1="178" y1="84" x2="262" y2="94"  class="diagram-ink" marker-end="url(#rt-ar)"/>
+
+          <rect x="264" y="28" width="120" height="38" rx="6" class="diagram-ink node-fill"/>
+          <text x="324" y="52" text-anchor="middle" class="node-label">Haiku · 解析</text>
+          <rect x="264" y="72" width="120" height="38" rx="6" class="diagram-ink node-fill"/>
+          <text x="324" y="96" text-anchor="middle" class="node-label">Sonnet · 推理</text>
+          <rect x="264" y="116" width="120" height="38" rx="6" class="diagram-ink node-fill"/>
+          <text x="324" y="140" text-anchor="middle" class="node-label">Opus · 攻坚</text>
+
+          <text x="470" y="74" text-anchor="middle" class="branch-label">错路 → 静默降质</text>
+          <text x="470" y="92" text-anchor="middle" class="edge-label">无恢复·分类器会漂移</text>
+
+          <!-- divider -->
+          <line x1="40" y1="180" x2="680" y2="180" class="diagram-soft"/>
+          <text x="40" y="208" class="edge-label" font-weight="700">级联：非预测式，失败才升级</text>
+
+          <rect x="40" y="226" width="130" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="105" y="256" text-anchor="middle" class="node-label">便宜模型</text>
+          <line x1="170" y1="251" x2="226" y2="251" class="diagram-ink" marker-end="url(#rt-ar)"/>
+
+          <rect x="228" y="226" width="120" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="288" y="256" text-anchor="middle" class="node-label">验证器</text>
+          <line x1="348" y1="251" x2="404" y2="251" class="diagram-accent" marker-end="url(#rt-ar-v)"/>
+          <text x="376" y="242" text-anchor="middle" class="branch-label">不过</text>
+
+          <rect x="406" y="226" width="130" height="50" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="471" y="256" text-anchor="middle" class="node-label-accent">升级贵模型</text>
+
+          <text x="288" y="300" text-anchor="middle" class="edge-label">代价：每次升级都累加便宜模型的延迟 + token</text>
+        </svg>
+        <figcaption><span class="fig-num">图 04.3</span>路由（上）一次派定、错路无恢复；级联（下）自纠错但累加延迟。<strong>注意</strong>：分类器和验证器<strong>本身都是模型</strong>，是一笔维护负债——语义路由会随意图漂移，所以路由永远要配一个合理的默认值、一条 fallback、以及 trace 日志。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（错路是隐藏成本）</strong>：路由是<strong>预测式</strong>的——一次就把模型选定，一旦把难题误判成简单题派给 Haiku，质量会<strong>静默降级</strong>且无从恢复。<strong>级联</strong>（cascade）反过来：先跑便宜模型，用验证器检查输出，只在失败时升级。它<strong>非预测、自纠错</strong>，不需要预先的分类器，但要为每一次升级付累加的延迟与 token，而且大模型必须等小模型先跑完才能开始。结论是：分类可靠时路由优化延迟/成本；有好的便宜验证器、又能吃下串行延迟时级联优化正确性。两条路上，分类器/验证器都是会漂移的维护负债。</p>
+
+      <table class="compare-table">
+        <caption>表 04.3 · 难度不均，怎么分配模型</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>所有请求都用顶配 Opus</td><td>不会因选错降质</td><td>简单题也付 5–60x 价差，账单与延迟全顶满</td></tr>
+          <tr><td>按端点静态绑定模型</td><td>零运行时开销</td><td>同一端点难度不均，要么过配要么欠配，无法随 prompt 适配</td></tr>
+          <tr class="selected"><td>复杂度路由（一次派定）</td><td>省 40–70%、并行友好、延迟低</td><td>选中（分类可靠时）——但错路静默降质且无恢复，分类器随意图漂移</td></tr>
+          <tr><td>级联（cheap→验证→升级）</td><td>自纠错、无需预先分类器</td><td>累加串行延迟与 token，且依赖一个可靠的便宜验证器</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队上线了一个语义路由器，灰度时省了 55% 成本、准确率不降，于是当作"装好就不用管"的基础设施。三个月后客诉激增，但监控面板上没有任何报错。发生了什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>这是<strong>路由的标志性失败：错路静默降质 + 意图漂移</strong>。三个月里用户的提问分布变了（新功能、新话术），语义路由器的决策边界没跟着更新，于是一批本该上 Opus 的难题被持续派给 Haiku——质量掉了，但因为是"预测式、一次派定、无恢复"，<strong>没有任何异常被抛出</strong>，监控自然全绿。这正是为什么路由不能 fire-and-forget：必须配合理默认值、fallback、以及 trace 日志，并预期意图漂移、定期重训分类边界。</p>
+        </details>
+      </div>
+
+      <h2 id="s044"><span class="num">04.4</span><span>并行探索：用 token 把方差换成准确率</span></h2>
+
+      <p class="one-liner">自洽性、Best-of-N、Tree of Thoughts、编排者-工作者，本质都在对付同一件事——单次采样是模型能力的高方差估计；多采几条再聚合，就能把方差换成准确率。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>贪心解码一次只给一条推理路径，而这条路径是模型真实能力的<strong>高方差</strong>抽样：同一道题，模型有时走对、有时走偏。把这一条样本当成"模型的答案"，就把随机性误当成了能力上限。并行探索的统一思路是：多采几条，再用某种方式聚合，让正确信号从噪声里浮出来。第 03 章的<strong>外部 oracle</strong>在这里再次出现——Best-of-N 的验证器和它是同一类东西。</p>
+      </div>
+
+      <p><strong>四种聚合方式，机制各异</strong>。<strong>自洽性</strong>（CoT-SC，Wang 等 2023）：在 temperature&gt;0 下采 N 条独立 CoT，再对<strong>最终答案</strong>多数投票——正确路径互相一致、错误路径四散，众数因此集中到真值。GSM8K 在 N=40 时从 56.5% 提到 74.4%，不需要任何验证器或训练。<strong>Best-of-N</strong>（BoN）：把投票换成外部验证器/奖励模型打分选最高，能处理不可投票的输出（代码、散文），但验证器需约 ≥90% 准确，否则比朴素投票还差，且会被 reward hacking。<strong>Tree of Thoughts</strong>（ToT，Yao 等 2023）：在生成之上加<strong>搜索</strong>——每步生成 k 个候选"想法"，让模型自评（sure/maybe/impossible），保留 top-b（beam），用 BFS/DFS 配回溯前瞻；Game of 24 从 4% 跳到 74%，代价是每个节点要多次 LLM 调用。<strong>编排者-工作者</strong>是 agent 层的同一招：主 agent 拆解查询、并行派 3–5 个各有独立 context 的子 agent、再综合，Anthropic Research 实测相对单 Opus +90.2%，但 token 成本约 <strong>15x</strong>。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三种并行聚合并列：自洽性多数投票、Best-of-N 验证器选最高、Tree of Thoughts 自评剪枝搜索">
+          <defs>
+            <marker id="pe-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="pe-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- col 1: self-consistency -->
+          <text x="118" y="24" text-anchor="middle" class="edge-label" font-weight="700">自洽性 · 投票</text>
+          <line x1="118" y1="38" x2="70"  y2="70" class="diagram-ink" marker-end="url(#pe-ar)"/>
+          <line x1="118" y1="38" x2="118" y2="70" class="diagram-ink" marker-end="url(#pe-ar)"/>
+          <line x1="118" y1="38" x2="166" y2="70" class="diagram-ink" marker-end="url(#pe-ar)"/>
+          <rect x="44"  y="72" width="50" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="69"  y="94" text-anchor="middle" class="node-label">7</text>
+          <rect x="100" y="72" width="50" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="125" y="94" text-anchor="middle" class="node-label">7</text>
+          <rect x="156" y="72" width="50" height="34" rx="5" class="diagram-soft node-fill"/>
+          <text x="181" y="94" text-anchor="middle" class="node-label">3</text>
+          <line x1="118" y1="106" x2="118" y2="148" class="diagram-accent" marker-end="url(#pe-ar-v)"/>
+          <rect x="66"  y="150" width="106" height="42" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="119" y="170" text-anchor="middle" class="node-label-accent">多数 = 7</text>
+          <text x="119" y="186" text-anchor="middle" class="edge-label">无需验证器</text>
+
+          <!-- col 2: best-of-N -->
+          <text x="360" y="24" text-anchor="middle" class="edge-label" font-weight="700">Best-of-N · 验证器</text>
+          <line x1="360" y1="38" x2="312" y2="70" class="diagram-ink" marker-end="url(#pe-ar)"/>
+          <line x1="360" y1="38" x2="360" y2="70" class="diagram-ink" marker-end="url(#pe-ar)"/>
+          <line x1="360" y1="38" x2="408" y2="70" class="diagram-ink" marker-end="url(#pe-ar)"/>
+          <rect x="286" y="72" width="50" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="311" y="94" text-anchor="middle" class="node-label">A</text>
+          <rect x="342" y="72" width="50" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="367" y="94" text-anchor="middle" class="node-label">B</text>
+          <rect x="398" y="72" width="50" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="423" y="94" text-anchor="middle" class="node-label">C</text>
+          <line x1="360" y1="106" x2="360" y2="148" class="diagram-accent" marker-end="url(#pe-ar-v)"/>
+          <rect x="300" y="150" width="120" height="42" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="170" text-anchor="middle" class="node-label-accent">验证器选 B</text>
+          <text x="360" y="186" text-anchor="middle" class="edge-label">需 ≥90% 准</text>
+
+          <!-- col 3: ToT -->
+          <text x="602" y="24" text-anchor="middle" class="edge-label" font-weight="700">ToT · 搜索剪枝</text>
+          <rect x="576" y="36" width="52" height="32" rx="5" class="diagram-ink node-fill"/>
+          <text x="602" y="57" text-anchor="middle" class="node-label">根</text>
+          <line x1="588" y1="68" x2="552" y2="100" class="diagram-ink" marker-end="url(#pe-ar)"/>
+          <line x1="616" y1="68" x2="652" y2="100" class="diagram-accent" marker-end="url(#pe-ar-v)"/>
+          <rect x="520" y="102" width="62" height="34" rx="5" class="diagram-soft node-fill"/>
+          <text x="551" y="124" text-anchor="middle" class="node-label">剪 ✗</text>
+          <rect x="622" y="102" width="62" height="34" rx="5" class="diagram-ink node-fill"/>
+          <text x="653" y="124" text-anchor="middle" class="node-label">留 ✓</text>
+          <line x1="653" y1="136" x2="653" y2="158" class="diagram-accent" marker-end="url(#pe-ar-v)"/>
+          <rect x="606" y="160" width="94" height="38" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="653" y="183" text-anchor="middle" class="node-label-accent">深入·前瞻</text>
+
+          <!-- shared cost note -->
+          <line x1="40" y1="232" x2="680" y2="232" class="diagram-soft"/>
+          <text x="360" y="258" text-anchor="middle" class="edge-label">三者共同代价：N× token；只在任务可聚合 / 可搜索时划算</text>
+          <text x="360" y="282" text-anchor="middle" class="edge-label">agent 层对应编排者-工作者：+90.2% 但 ~15x token</text>
+        </svg>
+        <figcaption><span class="fig-num">图 04.4</span>三种聚合并列：投票（左）靠路径互相否决、Best-of-N（中）靠验证器打分、ToT（右）靠自评剪枝搜索。<strong>注意</strong>：投票<strong>只</strong>对可投票的离散答案有效；代码/散文/多字段 JSON 不会聚成众数，必须改用带验证器的 Best-of-N，而验证器一旦低于约 90% 准确就会被 reward hack，更多算力反而降质。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 04.4 · 自洽性（投票）vs Best-of-N（验证器）</caption>
+        <thead>
+          <tr><th>方案</th><th>适用 / 优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>单次贪心采样</td><td>最便宜、一条路</td><td>高方差估计，时对时错，浪费了多路径里的信号</td></tr>
+          <tr class="selected"><td>自洽性 · 多数投票</td><td>无需验证器、不可 reward hack（GSM8K 56.5→74.4）</td><td>选中（可投票答案）——但只对离散可投票输出有效，近似答案的信号被丢</td></tr>
+          <tr><td>Best-of-N · 验证器选最高</td><td>处理开放式输出（代码/散文），可更聪明</td><td>只与验证器一样好（需 ≥90% 准，否则不如投票），且引入可被 hack 的奖励面</td></tr>
+          <tr><td>Tree of Thoughts · 搜索</td><td>带前瞻/回溯（Game of 24 4→74%）</td><td>每节点多次 LLM 调用，多数生产任务付不起搜索预算</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>底层机制（并行只在任务可分解时划算）</strong>：编排者-工作者用 token 买并行——Anthropic Research 用约 15x token 换来 +90.2%，且 token 用量单独解释了约 80% 的质量方差。但它<strong>只</strong>在任务能拆成<strong>独立线程</strong>时奏效（广度优先搜索、信息量超过单个 context window）。在紧耦合任务上（写代码、任何需要共享演进状态的事），并行子 agent 会重复劳动、丢失连贯——Anthropic 早期原型甚至给一个琐碎查询派了 50 个子 agent。所以 Anthropic 自己的规则是：<strong>只</strong>在任务价值能覆盖这笔花费时才加这层复杂度。</p>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个团队把自洽性套用到代码生成上：采样 N=20 份候选补丁，对它们多数投票选最常出现的那份。结果质量还不如单次采样。问题出在哪？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>自洽性<strong>只对可投票的离散答案</strong>有效——它假设正确路径会收敛到<strong>同一个</strong>最终答案，错误路径四散。但代码（以及散文、多字段 JSON）几乎不会两份逐字相同，"众数"根本不成立：20 份补丁往往是 20 个不同字符串，多数投票退化成随机选。开放式输出该用 <strong>Best-of-N</strong> 配一个外部验证器（跑测试、编译、reward model）——也就是把第 03 章的<strong>外部 oracle</strong> 接进来，让能跑通测试的那份胜出，而不是让最常见的字符串胜出。</p>
+        </details>
+      </div>
+
+      <h2 id="s045"><span class="num">04.5</span><span>假设驱动调试：把"抽盲盒"变成科学方法</span></h2>
+
+      <p class="one-liner">调试的反模式是"抽盲盒"——凭直觉补丁、试错改症状；修复是科学调试循环：提出可证伪假设 → 设计实验 → 在真实环境观察 → 下结论，循环到证据收敛。</p>
+
+      <p>04.4 决定"采几条路"，这一节决定"怎么在真实世界里验证一条路"。LLM 在调试时天然爱"抽盲盒"：它擅长模式匹配出一个<strong>看着合理</strong>的补丁，于是急着改症状。修复是科学调试循环（AutoSD 的 hypothesize→observe→conclude）：模型先对根因提出一个<strong>可证伪</strong>的假设，设计一个实验（一条调试器命令、一行日志、一个最小复现），在<strong>真实执行环境</strong>里跑、读回实际结果，让生成建立在证据而非先验上，循环到假设被确认或撞上迭代上限。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="假设驱动调试四步环：复现失败、提出可证伪假设、真实环境实验观察、收敛则结论否则回到假设">
+          <defs>
+            <marker id="db-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="db-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- top row arrows -->
+          <line x1="194" y1="74" x2="244" y2="74" class="diagram-ink" marker-end="url(#db-ar)"/>
+          <line x1="416" y1="74" x2="466" y2="74" class="diagram-ink" marker-end="url(#db-ar)"/>
+
+          <rect x="44" y="48" width="150" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="119" y="72" text-anchor="middle" class="node-label">① 复现失败</text>
+          <text x="119" y="90" text-anchor="middle" class="edge-label">先稳定复现</text>
+
+          <rect x="246" y="48" width="170" height="54" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="331" y="72" text-anchor="middle" class="node-label-accent">② 提出假设</text>
+          <text x="331" y="90" text-anchor="middle" class="edge-label">可证伪·指向根因</text>
+
+          <rect x="468" y="48" width="180" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="558" y="72" text-anchor="middle" class="node-label">③ 实验·观察</text>
+          <text x="558" y="90" text-anchor="middle" class="edge-label">真实执行·读回结果</text>
+
+          <!-- down to conclude -->
+          <line x1="558" y1="102" x2="558" y2="150" class="diagram-ink" marker-end="url(#db-ar)"/>
+          <rect x="468" y="152" width="180" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="558" y="176" text-anchor="middle" class="node-label">④ 结论</text>
+          <text x="558" y="194" text-anchor="middle" class="edge-label">收敛→修复+转 CI eval</text>
+
+          <!-- loop back to hypothesis -->
+          <polyline points="468,179 331,179 331,104" class="diagram-accent" marker-end="url(#db-ar-v)"/>
+          <text x="399" y="172" text-anchor="middle" class="branch-label">未收敛 → 改假设</text>
+        </svg>
+        <figcaption><span class="fig-num">图 04.5</span>科学调试是 ReAct 在调试上的特化：第 ③ 步的真实观察是命门。<strong>注意</strong>：bug 往往在浮现处<strong>许多步之前</strong>就产生了，所以必须"先复现失败"再隔离失败步——没有真实 Observation，模型自信但错误的内部模型会一路复利放大。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（这是 ReAct 的特化）</strong>：这个循环就是第 03 章见过的 <strong>ReAct</strong>（Yao 等 2022）在调试上的特化——推理轨迹更新计划、动作把它锚定在外部证据上。Observation 步是命门：它阻止模型"自信但错误"的内部模型一路复利。agentic 调试之所以难，是因为一个 bug 常在<strong>浮现处许多步之前</strong>就已产生，所以纪律是：先复现失败 → 隔离失败步 → 验证修复 → 把这次事故<strong>转成一条永久的 eval/CI 用例</strong>，让同一个 bug 不能再回归。最大的调试增益来自<strong>流程</strong>而非更强的模型。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">scientific_debug.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-debug">复制</button>
+        </div>
+<pre id="code-debug"><code class="language-python"># 假设驱动调试 = ReAct 特化：Observation 来自真实执行，不是模型先验
+def debug(bug_report, max_iters=8):
+    repro = reproduce_failure(bug_report)      # 先稳定复现——否则一切都在猜
+    if not repro.stable:
+        return "无法复现：bug 常在浮现处许多步之前产生，先收窄复现"
+
+    for _ in range(max_iters):
+        # ② 可证伪假设：明确指向某个根因，而不是泛泛"问题在这一带"
+        hypo = llm(f"针对 {repro} 提出一个可证伪的根因假设，并给出验证它的实验")
+
+        # ③ 在真实环境里跑实验，读回实际结果（ReAct 的 Observation）
+        obs = run_in_real_env(hypo.experiment)  # 调试器命令 / 日志 / 最小复现
+
+        # ④ 用证据下结论；收敛则修复并固化成回归用例
+        if hypo.confirmed_by(obs):
+            fix = llm(f"根因已确认为 {hypo}；给出修复")
+            add_ci_eval_case(repro)             # 把事故转成永久 eval，防回归
+            return fix
+        repro = repro.with_evidence(obs)        # 没收敛：带着新证据改假设
+    return escalate_to_human(bug_report)        # 给上限，避免抽盲盒空转
+# 反模式："抽盲盒"——跳过 ③ 直接补丁，会让错误假设一路复利放大。
+</code></pre>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 04.5 · 假设驱动调试 vs 直接生成补丁</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>让模型直接重写有 bug 的代码</td><td>每次尝试快</td><td>"抽盲盒"——改症状不改根因，看不见远端起因的 bug，回归率高</td></tr>
+          <tr><td>暴力重生成直到测试通过</td><td>无需理解 bug</td><td>过拟合测试、掩盖真实根因，token 烧在盲试上</td></tr>
+          <tr class="selected"><td>观察→假设→实验循环（AutoSD）</td><td>可解释、命中根因、可泛化，事故转 CI eval 防回归</td><td>选中——代价是额外往返 + 真实执行/复现工装，但换来根因级修复</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 让调试 agent 直接补症状（"抽盲盒"）</span>
+        <p>没有真实的 observe 步，agent 会把一个<strong>看着合理</strong>的补丁当成修复，于是错误假设一路复利。两条纪律抵消它：其一，<strong>先复现失败</strong>再动手——bug 常在浮现处许多步之前就产生，不复现等于盲猜；其二，把每次事故<strong>转成 CI eval 用例</strong>——真正止住回归的是流程，不是更大的模型。这与第 03 章"失败日记必须靠外部 oracle"是同一条不变式：信号必须可被真实世界证伪。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把你能想到的答案写在纸上或编辑器里。写完再点开答案对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>用"草稿纸"机制解释 CoT 为什么对多步问题有用，再说出它在什么任务上反伤、最高掉多少。</li>
+          <li>"隐藏/摘要的 thinking 更便宜"为什么是错的？omitted 到底省了什么？</li>
+          <li>复杂度路由和级联的失败模式各是什么？它们分别在什么条件下更优？</li>
+          <li>自洽性为什么不能用在代码生成上？该换成什么、它依赖什么？</li>
+          <li>多智能体并行"更聪明"这句话，按 Anthropic 的数据应该怎么修正？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>自回归模型每个 token 只能做有限计算，中间 token 充当<strong>草稿纸</strong>，把一次前向算不完的多步计算串行化。它在<strong>隐式/感知型/异常密集</strong>任务上反伤（言语遮蔽效应，覆盖正确直觉），o1-preview 最高掉 <strong>36.3%</strong>，所以要按任务类型 gate。</li>
+            <li>你为<strong>每一个</strong> thinking token 付费，无论响应只回摘要（Claude 4）还是空块 + signature（Opus 4.7/4.8）。<code>display: omitted</code> 只省<strong>流式延迟</strong>，不省成本。</li>
+            <li><strong>路由</strong>预测式、一次派定，错路<strong>静默降质且无恢复</strong>，分类可靠时优化延迟/成本。<strong>级联</strong>非预测、自纠错，但累加串行延迟与 token，有好的便宜验证器时优化正确性。</li>
+            <li>自洽性只对<strong>可投票的离散答案</strong>有效；代码/散文不会聚成众数。该换成 <strong>Best-of-N</strong> 配外部验证器（跑测试/编译），验证器需约 <strong>≥90%</strong> 准确，否则不如投票且会被 reward hack。</li>
+            <li>应修正为"多智能体更<strong>花钱</strong>"：token 用量单独解释了约 <strong>80%</strong> 的质量方差，+90.2% 的代价是约 <strong>15x</strong> token，且只在任务可拆成独立线程时划算。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>给一条 agent 流水线设计"自适应推理预算"</h3>
+        <p>本章五节都在回答同一个问题：这一次的边际准确率值不值边际 token。把它们组合成一条流水线：一个进来的任务，应该先路由分档（04.3）、再决定开不开 CoT（04.2，注意按任务类型 gate）、难任务才上并行探索（04.4）、输出再过假设驱动验证（04.5）。设计一个<strong>预算分配</strong>策略，让总 token 花在边际收益最高的环节上，并说清在哪个环节、用什么信号决定"加码还是收手"。代价是什么？</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键在把"边际准确率 ÷ 边际 token"做成一个可观测的<strong>升级阶梯</strong>，而不是固定配置。可考虑：路由器先给一个难度分；难度低直接 Haiku 不开 thinking；中档开 adaptive thinking 单次跑；只有当一个便宜<strong>验证器/外部 oracle</strong>（第 03 章那种）判定结果不收敛时，才升级到并行探索或假设驱动循环——也就是把级联（04.3）的"失败才升级"思想套到整条流水线上。代价是每一道闸门本身都是模型调用与维护负债（会漂移的分类器、需 ≥90% 准的验证器），而且串行闸门会累加延迟。这正好呼应本章的统一透镜：每加一层算力，都要先问它的边际准确率能不能覆盖边际 token。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://platform.claude.com/docs/en/build-with-claude/extended-thinking">Anthropic — Building with extended thinking</a>（budget_tokens、summarized/omitted、interleaved、adaptive）与 <a href="https://docs.claude.com/en/docs/build-with-claude/prompt-engineering/extended-thinking-tips">Extended thinking tips</a>（高层 vs 逐条提示）。</li>
+          <li><a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a>（routing、parallelization、simplicity-first）与 <a href="https://www.anthropic.com/engineering/multi-agent-research-system">How we built our multi-agent research system</a>（+90.2%、~15x token、80% 方差）。</li>
+          <li><a href="https://arxiv.org/abs/2410.21333">Liu et al. — Mind Your Step (by Step)</a>（CoT 反伤、最高 -36.3%）。</li>
+          <li><a href="https://arxiv.org/pdf/2203.11171">Wang et al. — Self-Consistency（ICLR 2023）</a>（GSM8K 56.5→74.4）与 <a href="https://proceedings.neurips.cc/paper_files/paper/2023/file/271db9922b8d1f4dd7aaef84ed5ac703-Paper-Conference.pdf">Yao et al. — Tree of Thoughts（NeurIPS 2023）</a>（Game of 24 4→74%）。</li>
+          <li><a href="https://arxiv.org/pdf/2210.03629">Yao et al. — ReAct</a> 与 <a href="https://arxiv.org/pdf/2304.02195">Kang et al. — AutoSD（LLM 驱动的科学调试）</a>。</li>
+          <li><a href="https://arxiv.org/abs/2410.10347">A Unified Approach to Routing and Cascading for LLMs</a> 与 <a href="https://www.morphllm.com/llm-router">Morph — What Is an LLM Router?</a>（约 430ms、5–60x 价差、省 40–70%）。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="03-memory.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">03 · 记忆</span>
+        </a>
+        <a href="05-action.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">05 · 行动</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s041" data-toc-target="s041">04.1 推理导论</a></li>
+        <li><a href="#s042" data-toc-target="s042">04.2 CoT 与 thinking</a></li>
+        <li><a href="#s043" data-toc-target="s043">04.3 路由与级联</a></li>
+        <li><a href="#s044" data-toc-target="s044">04.4 并行探索</a></li>
+        <li><a href="#s045" data-toc-target="s045">04.5 假设驱动调试</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

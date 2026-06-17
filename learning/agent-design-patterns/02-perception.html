@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 感知 · Agent 设计模式之美</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path > .inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 12px;
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 74px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 98px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+article h2, article h3, article [id] { scroll-margin-top: 64px; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+   <div class="inner">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-paradigm.html">01 范式觉醒</a><span class="sep">—</span>
+    <a href="02-perception.html" class="current">02 感知</a><span class="sep">—</span>
+    <a href="03-memory.html">03 记忆</a><span class="sep">—</span>
+    <a href="04-reasoning.html">04 推理</a><span class="sep">—</span>
+    <a href="05-action.html">05 行动</a><span class="sep">—</span>
+    <a href="06-reflection.html">06 反思</a><span class="sep">—</span>
+    <a href="07-collaboration.html">07 协作</a><span class="sep">—</span>
+    <a href="08-governance.html">08 治理</a><span class="sep">—</span>
+    <a href="09-composition.html">09 组合</a><span class="sep">—</span>
+    <a href="10-self-check.html">10 自测</a>
+   </div>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 02 · 感知</p>
+        <h1>感知：把世界塞进有限 context</h1>
+        <p class="recap">第 01 章立起了双轴框架；感知是认知功能轴上"输入侧"的一格——把世界塞进有限 context。Agent 没有眼睛，只有一段 token 序列；这一章拆解它怎么把工具结果、文件、截图统一文本化进 context，又怎么在 context rot 的逼迫下分诊、压实、按需取数、融合多模态。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>感知不是新增模态通道，而是把一切——工具结果、代码输出、图像——统一序列化进同一条 token 流，作为 act→observe→reason 闭环的 observe 一步。</li>
+          <li>context 是有限且会因 context rot 贬值的资源，所以要按"类型 + 优先级"双轴分诊，对抗 n² 注意力与 lost-in-the-middle。</li>
+          <li>逼近窗口上限时用 compaction 把高熵历史换成低 token 的高密度表示；调参顺序是先 recall 后 precision。</li>
+          <li>渐进式披露用轻量标识符替代预加载，让 agentic search（grep/glob）边探边判；computer use 把视觉感知接进同一个 agent loop。</li>
+        </ul>
+      </section>
+
+      <figure>
+        <svg viewBox="0 0 720 410" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="感知层概念图：中心是 context state，五个来源汇入同一条 token 流，四种管理策略约束它">
+          <defs>
+            <marker id="pc-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- inflow spokes (left sources -> center) -->
+          <line x1="208" y1="92"  x2="280" y2="178" class="diagram-soft" marker-end="url(#pc-ar)"/>
+          <line x1="208" y1="205" x2="278" y2="205" class="diagram-soft" marker-end="url(#pc-ar)"/>
+          <line x1="208" y1="318" x2="280" y2="232" class="diagram-soft" marker-end="url(#pc-ar)"/>
+
+          <text x="244" y="130" text-anchor="middle" class="edge-label">序列化</text>
+          <text x="244" y="282" text-anchor="middle" class="edge-label">序列化</text>
+
+          <!-- left sources -->
+          <rect x="34" y="64" width="174" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="121" y="88" text-anchor="middle" class="node-label">tools / MCP 结果</text>
+          <text x="121" y="107" text-anchor="middle" class="edge-label">代码执行·检索</text>
+
+          <rect x="34" y="178" width="174" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="121" y="202" text-anchor="middle" class="node-label">history · examples</text>
+          <text x="121" y="221" text-anchor="middle" class="edge-label">对话·few-shot</text>
+
+          <rect x="34" y="292" width="174" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="121" y="316" text-anchor="middle" class="node-label">screenshot 像素</text>
+          <text x="121" y="335" text-anchor="middle" class="edge-label">下采样为 token</text>
+
+          <!-- center -->
+          <rect x="280" y="170" width="160" height="72" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="200" text-anchor="middle" class="node-label-accent">context state</text>
+          <text x="360" y="221" text-anchor="middle" class="edge-label">同一条 token 流</text>
+          <text x="360" y="236" text-anchor="middle" class="edge-label">有限·会贬值</text>
+
+          <!-- outflow to strategies (right) -->
+          <line x1="440" y1="180" x2="510" y2="96"  class="diagram-soft" marker-end="url(#pc-ar)"/>
+          <line x1="440" y1="198" x2="510" y2="178" class="diagram-soft" marker-end="url(#pc-ar)"/>
+          <line x1="440" y1="214" x2="510" y2="262" class="diagram-soft" marker-end="url(#pc-ar)"/>
+          <line x1="440" y1="232" x2="510" y2="344" class="diagram-soft" marker-end="url(#pc-ar)"/>
+
+          <text x="478" y="146" text-anchor="middle" class="edge-label">策展</text>
+
+          <!-- right strategies -->
+          <rect x="512" y="68" width="174" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="599" y="92" text-anchor="middle" class="node-label">02.2 分诊</text>
+          <text x="599" y="110" text-anchor="middle" class="edge-label">类型 + 优先级</text>
+
+          <rect x="512" y="154" width="174" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="599" y="178" text-anchor="middle" class="node-label">02.3 压实</text>
+          <text x="599" y="196" text-anchor="middle" class="edge-label">摘要重启窗口</text>
+
+          <rect x="512" y="240" width="174" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="599" y="264" text-anchor="middle" class="node-label">02.4 渐进披露</text>
+          <text x="599" y="282" text-anchor="middle" class="edge-label">按需取数</text>
+
+          <rect x="512" y="326" width="174" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="599" y="350" text-anchor="middle" class="node-label">02.5 多模态</text>
+          <text x="599" y="368" text-anchor="middle" class="edge-label">computer use</text>
+        </svg>
+        <figcaption><span class="fig-num">图 02.0</span>感知层的全貌：左侧五类来源汇成同一条 token 流，右侧四种策略对这块稀缺资源做策展。<strong>注意</strong>：截图、工具结果、对话历史进 context 之后<strong>没有类型区别</strong>，都是 token，抢同一份注意力预算——这是后面四节所有取舍的共同根因。</figcaption>
+      </figure>
+
+      <h2 id="s021"><span class="num">02.1</span><span>感知导论：感知即文本化</span></h2>
+
+      <p class="one-liner">Agent 没有眼睛，只有 context window；所谓感知，就是把多模态输入与工具结果统一转写进同一条 token 序列，再作为闭环里的 observe 一步喂回推理。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"给 agent 加感知"最自然的理解是"接更多模态输入通道"——加个视觉、加个语音。这个理解抓错了层次。感知不是新增模块，而是把<strong>一切</strong>（工具返回、代码执行结果、图像）压成同一条 token 流注入 context。把感知当成"独立的输入模块"，是这一章要拆掉的第一个错误——它其实是双轴框架里 act→observe→reason 闭环的 observe 一步。</p>
+      </div>
+
+      <p><strong>底层机制（比"多模态接口"深一层）</strong>：Anthropic 把整块输入称作 <strong>context state</strong>——system instructions、tools、MCP、external data、message history 的总和。Building Effective Agents 把基础积木定义为 augmented LLM = model + retrieval + tools + memory，并强调 agent 每一步都要从环境取得 ground truth（tool 结果、代码执行结果）来评估进度。这正是感知作为"grounding 反馈侧"的精确含义：感知不是看世界，而是把世界的反馈文本化回填。代价随之而来——所有感知内容都占 context 预算，与 system prompt、history 抢同一份稀缺资源。这也是为什么"感知"这一章从头到尾都在讲"怎么省"。</p>
+
+      <table class="compare-table">
+        <caption>表 02.1 · "给 agent 加感知"到底在加什么</caption>
+        <thead>
+          <tr><th>理解</th><th>它假设的动作</th><th>为什么错 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>新增模态输入通道</td><td>给 agent 接一个视觉/语音模块</td><td>把感知当独立模块，忽略了所有输入最终都落到同一条 token 流、抢同一预算</td></tr>
+          <tr><td>一次性把环境读满</td><td>开局把所有沾边的数据全塞进 context</td><td>context rot 让超长 context 召回下降，塞满 ≠ 更聪明</td></tr>
+          <tr class="selected"><td>把环境反馈统一文本化进 context state</td><td>act→observe→reason 闭环的 observe 一步</td><td>选中——感知是 grounding 反馈侧，统一序列化才能让模型在一条流里推理</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">perception_loop.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-loop">复制</button>
+        </div>
+<pre id="code-loop"><code class="language-python"># 感知 = 把世界反馈文本化进同一条 token 流（observe），再喂回推理（reason）
+ctx = ContextState(system, tools, examples, history=[])   # 五类信息同处一条流
+
+while not done:
+    step   = model.reason(ctx)              # reason：基于当前 context 决定下一动作
+    action = step.action                    # act：调工具 / 跑代码 / 点屏幕
+    result = env.execute(action)            # 产生有副作用的真实反馈
+
+    # observe = 感知：把任何反馈（文本、表格、图像）序列化成 token 回填
+    ctx.history.append(serialize(result))   # 工具结果与截图在此不再有类型区别
+    done = step.is_final
+# 关键不变式：observe 的每一项都占 context 预算，与 system/history 抢同一稀缺资源
+</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个团队给客服 agent 接入了图像理解、语音转写、PDF 解析三个新模态，准备好"agent 现在能感知更多了"。上线后发现长对话里 agent 越来越答非所问。新增模态本身没坏，问题出在哪？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>三个模态的输出最终都被序列化成 token，挤进<strong>同一条</strong> context 流。每张图、每段转写、每页 PDF 都消耗注意力预算，且与 system prompt、对话历史抢同一份资源。token 越堆越多，<strong>context rot</strong> 让模型的精确召回随长度渐降——这是性能渐变，不是断崖，所以没报任何错。把感知当"独立通道"就会忽略这个共享预算；正确的心智是：每多感知一项，就在替换 context 里别的东西。这正是 02.2 分诊要解决的问题。</p>
+        </details>
+      </div>
+
+      <h2 id="s022"><span class="num">02.2</span><span>上下文分诊：信息各归其位</span></h2>
+
+      <p class="one-liner">Context engineering 不是一次性写好 prompt，而是每一轮推理都重新决定塞哪些 token——按"类型 + 优先级"双轴把信息各归其位。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>Prompt engineering 把"写指令"当成一次性的事：调好措辞就完工。Context engineering 是它的继任范式——Anthropic 的定义是 curating and maintaining the optimal set of tokens during inference，即每一轮推理都重新策展。因为 context 是有限且会贬值的资源（02.1 的 context rot），不分诊就等于让最稀缺的资源随机分配。</p>
+      </div>
+
+      <p><strong>底层机制（双轴归位）</strong>：分诊有两根轴。<strong>类型轴</strong>把信息分成 system prompt / tools / examples / history / retrieval 五类，各有右尺寸法则——system prompt 求 <em>Goldilocks zone</em>（既不过度硬编码也不空泛，用 XML/Markdown 分区）；tools 是 agent 与信息和行动空间的契约，必须无歧义；examples 选 canonical 的少量样例而非堆 edge case。<strong>优先级轴</strong>对抗 <strong>lost-in-the-middle</strong>：模型对 context 首尾 token 赋予不成比例的权重（首因/近因偏置），中部信息易被忽略，所以高置信信息放头尾、次要放中间。为什么有效：分区标签降低模型在 n² 注意力里定位信息的难度，无歧义 tool 集减少 tool-selection 幻觉。这与 LangChain 的 Write / Select / Compress / Isolate 四策略框架同构。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="上下文分诊：五类信息按优先级排序，高置信放头尾、次要放中部，对抗 lost-in-the-middle">
+          <defs>
+            <marker id="tr-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <text x="360" y="26" text-anchor="middle" class="edge-label">一条 context 流：从头到尾的位置即权重</text>
+
+          <!-- positional weight curve (U-shape: high at ends) -->
+          <path d="M 60 70 Q 360 152 660 70" class="diagram-soft"/>
+          <text x="118" y="60" text-anchor="middle" class="branch-label">首因·高权重</text>
+          <text x="602" y="60" text-anchor="middle" class="branch-label">近因·高权重</text>
+          <text x="360" y="146" text-anchor="middle" class="edge-label">中部·易被忽略</text>
+
+          <!-- five slots laid head->tail -->
+          <rect x="60" y="172" width="118" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="119" y="196" text-anchor="middle" class="node-label-accent">system</text>
+          <text x="119" y="215" text-anchor="middle" class="edge-label">Goldilocks</text>
+
+          <rect x="188" y="172" width="118" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="247" y="196" text-anchor="middle" class="node-label">tools</text>
+          <text x="247" y="215" text-anchor="middle" class="edge-label">无歧义契约</text>
+
+          <rect x="316" y="172" width="118" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="375" y="196" text-anchor="middle" class="node-label">history 中段</text>
+          <text x="375" y="215" text-anchor="middle" class="edge-label">次要放这里</text>
+
+          <rect x="444" y="172" width="118" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="503" y="196" text-anchor="middle" class="node-label">examples</text>
+          <text x="503" y="215" text-anchor="middle" class="edge-label">canonical 少量</text>
+
+          <rect x="572" y="172" width="118" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="631" y="196" text-anchor="middle" class="node-label-accent">retrieval</text>
+          <text x="631" y="215" text-anchor="middle" class="edge-label">最强放近因</text>
+
+          <text x="360" y="262" text-anchor="middle" class="edge-label">RAG 反模式：按 rank 顺序堆叠 → rank1 应放头、rank2 放尾，而非全压在一起</text>
+        </svg>
+        <figcaption><span class="fig-num">图 02.2</span>分诊的两根轴：类型决定"归到哪一格"，位置决定"排在哪一段"。<strong>注意</strong>：把高价值信息埋在 context 中部是常见陷阱——lost-in-the-middle 会让它被忽略；RAG 按 rank 顺序从头堆到尾是反模式，应把最强证据放头尾。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 02.2 · 五类信息的右尺寸法则</caption>
+        <thead>
+          <tr><th>信息类型</th><th>痛点</th><th>设计回应</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>system prompt</td><td>太硬编码则脆，太空泛则无效</td><td>求 Goldilocks zone，用 XML/Markdown 分区标签降低定位难度</td></tr>
+          <tr class="selected"><td>tools</td><td>功能重叠、决策点模糊 → tool-selection 幻觉</td><td>选中为分诊命门——契约无歧义；检验法：人都分不清用哪个 tool，agent 必然更糊涂</td></tr>
+          <tr><td>examples</td><td>堆满 edge case 反噪声</td><td>选 canonical 少而精，覆盖典型而非穷举异常</td></tr>
+          <tr><td>history / retrieval</td><td>全量预载撑爆预算</td><td>走 just-in-time（见 02.4），按需取而非一次塞满</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 agent 配了 12 个工具，其中 <code>search_docs</code>、<code>find_in_files</code>、<code>lookup_reference</code> 功能高度重叠。开发者觉得"工具越多越强"。结果 agent 频繁调错工具、绕远路。怎么用一句话判断这个工具集是不是有病？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>检验法：<strong>人都说不清该用哪个 tool，agent 必然更糊涂</strong>。bloated tool set 的功能重叠和模糊决策点会直接诱发 tool-selection 幻觉——tools 是 agent 与行动空间的契约，契约一旦有歧义，概率节点就会在重叠选项间乱选。修法不是加更多说明，而是<strong>合并</strong>重叠工具、让每个决策点唯一。"更多工具 = 更强"是反直觉的错误：扩张工具集常常降效。这呼应 01 章的核心——agent 是概率节点，歧义直接放大它的不确定性。</p>
+        </details>
+      </div>
+
+      <h2 id="s023"><span class="num">02.3</span><span>语义压缩：逼近预算就压实</span></h2>
+
+      <p class="one-liner">Compaction 是用一次额外推理，把高熵的对话历史换成低 token 的高密度表示，再用摘要重启新窗口——目标是 find the smallest set of high-signal tokens。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>02.2 教会了"怎么摆"，但长任务里 token 只增不减，迟早撞窗口上限。最朴素的反应是"等它撞墙"或"换更大的窗口"。两条都不解决问题：撞墙直接报错，更大窗口让 context rot 更重。compaction 给出第三条路——在逼近上限时主动把历史压实，腾出预算继续跑。</p>
+      </div>
+
+      <p><strong>底层机制（先 recall 后 precision）</strong>：compaction 的本质是用一次 LLM 调用把高熵历史换成低 token 的高密度表示。最轻量的形态是 <strong>clearing tool calls/results</strong>——历史里调用过的 tool 原始输出是信息密度最低的部分，调用过即可丢，已作为 Claude Developer Platform 一等功能上线。更重的形态是摘要：Claude Code 保留架构决策、未解 bug、实现细节，丢弃冗余 tool 输出。代价与失败模式有两个：其一，压缩本身要花一次 LLM 调用（延迟 + token）；其二，过度压缩会丢"当时不知道重要、后来才知道"的细节——这是<strong>不可逆</strong>的信息损失。所以调参顺序是先最大化 <strong>recall</strong>（不漏关键信息）再提 <strong>precision</strong>（去冗余），反过来必丢关键信息。量化上：SWE-bench 实测每 10–15 次 tool call 调度一次压缩可省 22.7% token（14.9M→11.5M）且不掉点；BATS（2025-11）用 Budget Tracker 给出 HIGH/MEDIUM/LOW/CRITICAL 四档剩余预算，达临界即把历史轨迹换成摘要，10x 省预算。</p>
+
+      <table class="compare-table">
+        <caption>表 02.3 · 窗口快满了，怎么腾预算</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>无限增长直到撞窗口上限</td><td>零实现成本</td><td>直接报错，且越长 context rot 越重</td></tr>
+          <tr><td>clearing tool calls/results</td><td>最低风险、丢的是密度最低的内容</td><td>最轻量起点，但只清 tool 输出，对话本体超预算时仍不够</td></tr>
+          <tr class="selected"><td>compaction（摘要重启窗口）</td><td>维持对话连续性、保留高信号</td><td>选中（适合大量来回的对话）——代价是一次 LLM 调用 + 不可逆信息损失风险</td></tr>
+          <tr><td>纯 note-taking / 纯 multi-agent</td><td>记事抗重置；多 agent 可并行</td><td>note-taking 适合有里程碑的迭代开发，multi-agent 适合可并行的复杂研究——是另一类任务的解</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 压缩是有损且 blocking 的</span>
+        <p>compaction 不是"顺手压一下"：它会<strong>停住</strong> agent 跑一次完整 LLM 推理（延迟 + token），长任务里频繁触发是真实的吞吐瓶颈。更危险的是<strong>调参方向反了</strong>——先求 precision 会漏掉关键信息。Anthropic 的选择矩阵把它和别的策略分开：compaction 适合大量来回的对话，note-taking 适合有里程碑的迭代开发，multi-agent 适合可并行的复杂研究。压缩不是万能键，是三选一里的一个。</p>
+      </div>
+
+      <h2 id="s024"><span class="num">02.4</span><span>渐进式披露：按需取数，边探边判</span></h2>
+
+      <p class="one-liner">渐进式披露不预加载全部数据，只持有轻量标识符（file path / query / link），运行时用 tool 动态拉取——元数据本身即信号。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>02.3 在"已经塞太多"之后做补救；渐进式披露在<strong>源头</strong>就不塞满。开局把所有沾边的数据填进 context，是最浪费 attention budget 的做法。just-in-time 反过来：只持有指向数据的轻量标识符，需要时才用 tool 取回，让每次交互的结果指导下一步决策。这与 03 章"记忆"里 just-in-time / agentic search 是同一根血脉。</p>
+      </div>
+
+      <p><strong>底层机制（为什么 grep 在 agent 场景胜过 RAG）</strong>：progressive disclosure 用轻量标识符替代预加载，运行时按需取数。<strong>元数据本身即信号</strong>——文件大小约等于复杂度、命名揭示用途、时间戳揭示相关性，agent 边看元数据边判断要不要钻进去。关键决策是检索策略：Anthropic 早期试过 RAG，最终发现 <strong>agentic search</strong>（模型自己 grep/glob/head/tail，看结果再决定钻不钻）大幅胜出，且绕开 stale index 与复杂语法树。arXiv 2605.15184 实证：inline grep 在所有 harness-model 对上胜过 vector，最高 +23.3pt，因为任务答案多落在 verbatim span（精确日期、计数）。代价：runtime exploration 比预取慢，且需要工程师精心设计 tool 与启发式让模型"会探"。落地形态是混合加载——CLAUDE.md 朴素预载求速度，glob/grep 按需即时取文件求新鲜度。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">progressive_disclosure.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-pd">复制</button>
+        </div>
+<pre id="code-pd"><code class="language-python"># 渐进式披露：先持轻量标识符，看元数据再决定钻不钻（just-in-time）
+hits = grep(pattern) or glob("**/*.py")        # 不预加载，只取路径/名字
+for f in hits:
+    meta = stat(f)                             # 元数据本身即信号：
+    #   大小 ~ 复杂度，命名 ~ 用途，时间戳 ~ 相关性
+    if not promising(meta):                    # 边探边判：不值得就跳过
+        continue
+    snippet = head(f, n=50)                    # 按需深入，逐层 disclosure
+    ctx.history.append(snippet)                # 只把值钱的那几十行塞进 context
+
+# 混合加载：CLAUDE.md 预载求速度，grep 按需取求新鲜度
+ctx.preload("CLAUDE.md")                       # 朴素塞进 context，绕过 index 同步
+# 对比 RAG：grep 是确定性精确匹配，无 stale index、无 embedding 语义噪声
+</code></pre>
+      </div>
+
+      <table class="compare-table">
+        <caption>表 02.4 · 给 agent 配检索：预加载 vs 按需</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>开局预加载全量数据</td><td>运行时零延迟</td><td>撑爆 attention budget、加重 context rot，多数预载的数据从没被用到</td></tr>
+          <tr><td>预建 embedding 向量库 + RAG</td><td>懂语义改写</td><td>stale index 要同步维护；verbatim-span 任务上 inline grep 胜 vector 最高 +23.3pt</td></tr>
+          <tr class="selected"><td>agentic search（grep/glob 现查）+ 混合加载</td><td>无索引维护、确定性精确匹配、元数据成探索信号</td><td>选中——代价是 runtime 探索比预取慢、要精心设计 tool 与启发式</td></tr>
+          <tr><td>structured note-taking（写到 context 外）</td><td>跨数千步维持精确状态、抗 reset</td><td>长程对策（Claude 打 Pokémon 案例），与按需取数互补而非替代</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>"agentic search 永远胜 RAG"听起来像一条定律。但同一篇 2605.15184 实测里，有两种情况向量检索反而追平甚至反超 grep。是哪两种？并且实验还发现一个让"换检索策略"显得没那么重要的因素，是什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>两种反超场景：其一，答案需要<strong>跨多文档语义聚合</strong>而非落在 verbatim span 时，纯 grep 召回不足；其二，<strong>file-based 交付</strong>下 vector 反超。第三个因素更关键——<strong>harness 设计的影响可达 ±16pt</strong>，与换整套检索策略的影响相当。所以检索策略不是孤立的准确率决定项，它和 scaffolding 纠缠在一起。结论：默认从 agentic search 起步，但别把它当定律；混合加载（CLAUDE.md 预载 + grep 按需）才是 Anthropic 的实际落地。</p>
+        </details>
+      </div>
+
+      <h2 id="s025"><span class="num">02.5</span><span>多模态融合：截图进 context 的 agent loop</span></h2>
+
+      <p class="one-liner">Computer use 把视觉感知接进同一个 agent loop：Claude 收 screenshot，回 coordinate-based 的鼠标键盘动作，harness 执行后回新 screenshot——循环本身就是 agent loop。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>前四节都在管文本与工具结果。但很多任务的接口只有 GUI——没有 API、没有文件。为每个应用造专用 tool 不可扩展；computer use 反过来教会 agent <strong>通用</strong>电脑技能：任何人类能用的软件都能操控。它把 02.1 的"感知即文本化"推到极致——连屏幕像素也被序列化成 token 进同一条流。</p>
+      </div>
+
+      <p><strong>底层机制（grounding 为何脆）</strong>：computer use 把视觉接进 agent loop——screenshot 进 context（每张约 1,000–1,800 input token），模型输出坐标动作，harness 在沙箱执行回传新图。当前 beta 头是 <code>computer-use-2025-11-24</code>（Opus 4.8/4.7/4.6、Sonnet 4.6、Opus 4.5）。最大的失败源是 <strong>GUI grounding</strong>——把"点哪里"的语义意图对齐到像素坐标。API 把图下采样到 ≤1568px（早期模型）/~1.15MP，模型在缩小空间返回坐标，点击却发生在原始屏幕空间，错位即来；macOS Retina 2x、4K 源尤其严重。对策有四：指令文本放在 screenshot 之前（先给目标描述再处理图像提升点击精度）、enable_zoom 让模型放大看小字、基线分辨率用 1280x720、提示用键盘快捷键绕开难点的下拉/滚动条。Anthropic 明确承认三大局限：延迟太慢（只适合非实时场景）、计算机视觉坐标会幻觉、tool 选择在小众/多应用场景可靠性下降。OSWorld（真实 OS + 截图/a11y 树）是事实标准 benchmark，早期 SOTA 仅约 20%，说明 grounding 远未解决。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 270" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="computer use 闭环：截图下采样进 context，模型出坐标动作，沙箱执行回传新图，坐标空间错位是失败源">
+          <defs>
+            <marker id="cu-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="cu-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <line x1="186" y1="82" x2="262" y2="82" class="diagram-ink" marker-end="url(#cu-ar)"/>
+          <line x1="458" y1="82" x2="534" y2="82" class="diagram-ink" marker-end="url(#cu-ar)"/>
+
+          <rect x="38" y="56" width="148" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="112" y="80" text-anchor="middle" class="node-label">① 截图</text>
+          <text x="112" y="99" text-anchor="middle" class="edge-label">下采样≤1568px</text>
+
+          <rect x="264" y="56" width="194" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="361" y="80" text-anchor="middle" class="node-label-accent">② 模型出坐标动作</text>
+          <text x="361" y="99" text-anchor="middle" class="edge-label">在缩小空间给 (x,y)</text>
+
+          <rect x="536" y="56" width="148" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="610" y="80" text-anchor="middle" class="node-label">③ 沙箱执行</text>
+          <text x="610" y="99" text-anchor="middle" class="edge-label">原始空间点击</text>
+
+          <!-- mismatch callout -->
+          <line x1="361" y1="112" x2="361" y2="166" class="diagram-accent" marker-end="url(#cu-ar-v)"/>
+          <text x="361" y="142" text-anchor="middle" class="branch-label">缩小空间≠原始空间 → 错位</text>
+
+          <!-- return loop -->
+          <polyline points="610,112 610,206 112,206 112,114" class="diagram-ink" marker-end="url(#cu-ar)"/>
+          <text x="361" y="200" text-anchor="middle" class="edge-label">回传新截图 → 下一轮，每动作 = 一次完整往返 + 一张图 token</text>
+
+          <text x="361" y="236" text-anchor="middle" class="edge-label">缓存友好修剪：保留最近 3 张、每 25 轮剪一次，保前缀字节稳定</text>
+        </svg>
+        <figcaption><span class="fig-num">图 02.5</span>computer use 闭环：截图→坐标→执行→回传新图，循环即 agent loop。<strong>注意</strong>：每轮丢一张旧截图看似省 token，实则<strong>每轮改变 prompt cache 前缀</strong>使缓存全失效，反而更贵。必须 batch 修剪（保留最近 3 张、每 25 轮剪一次）保前缀字节一致。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 02.5 · GUI 感知接口怎么选</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>为每个应用造专用 API tool</td><td>精确、无坐标问题</td><td>不可扩展，逐应用集成成本高，覆盖不了长尾软件</td></tr>
+          <tr><td>纯 accessibility tree / DOM</td><td>结构化、比像素精确</td><td>覆盖不全、依赖应用主动暴露 a11y 信息</td></tr>
+          <tr class="selected"><td>screenshot 像素 + 坐标动作</td><td>通用——任何人类能用的软件都能操控，无需逐应用集成</td><td>选中——代价是 grounding 脆（坐标-像素错位）、每图 1–1.8K token、延迟高、小 UI 易失败</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 agent 跑 computer use，开发者为省 token 在每一轮都丢掉最旧那一张截图。账单不降反升，延迟也变差。明明 context 里 token 更少了，为什么更贵？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>问题在 <strong>prompt cache</strong>。每轮丢最旧一张截图，会<strong>改变 context 的前缀字节</strong>，让整个 prompt cache 前缀失效——下一轮所有 token 都得重新计算、重新计费，缓存命中率归零。这就是"省了几百 token，赔上整段缓存"。正确做法是 <strong>batch 修剪</strong>：保留最近 3 张、每 25 轮才剪一次，让前缀字节在多数轮里保持稳定，维持缓存命中。代价只是 context 里多留几张已过期截图。这是"局部省 token"与"全局省钱"冲突的典型——感知层管理永远要算整条流的账。</p>
+        </details>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 坐标空间错位与 prompt injection</span>
+        <p>两个高频失败模式。其一，把 <code>display_width_px</code>/<code>display_height_px</code> 设得与实际发送图像尺寸不符，或图超 API 限被静默下采样，点击就会系统性偏移；macOS Retina 2x 必须先 downscale 或把坐标减半。其二，<strong>prompt injection</strong>——网页或图像里的指令会覆盖用户意图。必须沙箱隔离、限域名白名单、关键动作人工确认。computer use 只适合后台信息收集、自动化测试等<strong>非实时</strong>场景。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把你能想到的答案写在纸上或编辑器里。写完再点开答案对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>"给 agent 加感知 = 接更多模态通道"错在哪？用"同一条 token 流"和 context 预算解释。</li>
+          <li>上下文分诊的两根轴分别是什么？优先级轴对抗的是哪个具体现象？</li>
+          <li>compaction 调参为什么必须先 recall 后 precision？反过来会丢什么？</li>
+          <li>在 agent 场景，agentic search（grep/glob）相对预建向量库的三个具体优势是什么？又在哪两种情况会被 vector 反超？</li>
+          <li>computer use 里每轮丢一张旧截图为什么反而更贵？正确的修剪策略是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>所有模态输入最终都被序列化成 token、进<strong>同一条</strong> context 流，与 system prompt、history 抢同一份 attention budget。token 越多 context rot 让精确召回越差（性能渐变非断崖）。感知是 act→observe→reason 闭环的 observe 一步，不是独立通道。</li>
+            <li><strong>类型轴</strong>（system / tools / examples / history / retrieval，各有右尺寸法则）与<strong>优先级轴</strong>。优先级轴对抗 <strong>lost-in-the-middle</strong>：模型首尾权重高、中部易丢，故高置信信息放头尾。</li>
+            <li>过度压缩会丢"当时不知道重要、后来才知道"的细节，且这是<strong>不可逆</strong>损失。先求 precision（去冗余）会先削掉这些尚未显现价值的内容。正确顺序是先最大化 recall 再提 precision。</li>
+            <li>三优势：无 stale index 要维护、确定性精确匹配（绕开 embedding 语义噪声）、元数据成为探索信号。verbatim-span 任务上 inline grep 胜 vector 最高 +23.3pt。两种反超：跨多文档语义聚合任务、file-based 交付。</li>
+            <li>每轮丢最旧截图会改变 prompt cache 前缀字节，使整段缓存失效、所有 token 重新计费。正确做法是 batch 修剪：保留最近 3 张、每 25 轮剪一次，保前缀稳定维持缓存命中。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>为一个跨数百步的 GUI 自动化 agent 设计感知预算策略</h3>
+        <p>一个 computer use agent 要在真实桌面上跑数百步（OSWorld 风格任务）。它面对三股相互拉扯的压力：截图累积极快撑爆 context；compaction 会丢掉早期看似无关、后来才关键的界面状态；每轮乱丢截图又会击穿 prompt cache。设计一套策略，让它在数百步里既保住 grounding 精度、又不爆预算、还不击穿缓存。说清你的策略在四节（分诊 / 压实 / 渐进披露 / 多模态）的哪几处介入，以及每处的代价。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>四节都得用上。<strong>多模态</strong>：batch 修剪保留最近 3 张截图、每 25 轮剪一次保缓存前缀，并把指令文本放在图像之前提升点击精度。<strong>渐进披露</strong>：不要每步都全屏截图，能用 a11y 树或裁剪到相关区域就别送全图，元数据（窗口标题、焦点元素）先判再决定要不要送像素。<strong>压实</strong>：在压缩阈值<em>之前</em>就把"已完成的子目标 + 当前界面状态摘要"用 structured note-taking 写到 context 外（呼应 03 章把状态外化到文件），这样 compaction 丢掉早期截图也无所谓——状态已经在文件里。<strong>分诊</strong>：把当前目标描述和最近一张截图放在 context 头尾（对抗 lost-in-the-middle），中间放历史轨迹。代价：a11y 树覆盖不全、裁剪有漏掉关键区域的风险、写笔记要花额外推理、batch 修剪让 context 多留几张过期图。这正好把本章四节串成一条"为长程而设计的感知预算"的链。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Anthropic — Effective Context Engineering for AI Agents</a>（context state、context rot、注意力预算、compaction、just-in-time）。</li>
+          <li><a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective AI Agents</a>（augmented LLM、从环境取 ground truth 的反馈闭环）。</li>
+          <li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/computer-use-tool">Computer use tool — Claude API Docs</a> 与 <a href="https://www.anthropic.com/news/3-5-models-and-computer-use">Anthropic — Introducing computer use</a>（截图-坐标循环、下采样、三大局限）。</li>
+          <li><a href="https://www.anthropic.com/engineering/writing-tools-for-agents">Anthropic — Writing Effective Tools for AI Agents</a>（无歧义 tool 契约、bloated tool set）与 <a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Effective Harnesses for Long-Running Agents</a>。</li>
+          <li><a href="https://arxiv.org/html/2605.15184v1">Is Grep All You Need? How Agent Harnesses Reshape Agentic Search（arXiv 2605.15184）</a>（inline grep 胜 vector +23.3pt、harness 影响 ±16pt）。</li>
+          <li><a href="https://www.langchain.com/blog/context-engineering-for-agents">LangChain — Context Engineering for Agents</a>（Write/Select/Compress/Isolate 四策略）与 <a href="https://arxiv.org/html/2406.16008v1">Lost in the Middle / positional bias（arXiv 2406.16008）</a>。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-paradigm.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 范式觉醒</span>
+        </a>
+        <a href="03-memory.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">03 · 记忆</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s021" data-toc-target="s021">02.1 感知导论</a></li>
+        <li><a href="#s022" data-toc-target="s022">02.2 上下文分诊</a></li>
+        <li><a href="#s023" data-toc-target="s023">02.3 语义压缩</a></li>
+        <li><a href="#s024" data-toc-target="s024">02.4 渐进式披露</a></li>
+        <li><a href="#s025" data-toc-target="s025">02.5 多模态融合</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

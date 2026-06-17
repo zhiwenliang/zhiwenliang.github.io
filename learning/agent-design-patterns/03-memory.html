@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 记忆 · Agent 设计模式之美</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path > .inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 12px;
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 74px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 98px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+article h2, article h3, article [id] { scroll-margin-top: 64px; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+   <div class="inner">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-paradigm.html">01 范式觉醒</a><span class="sep">—</span>
+    <a href="02-perception.html">02 感知</a><span class="sep">—</span>
+    <a href="03-memory.html" class="current">03 记忆</a><span class="sep">—</span>
+    <a href="04-reasoning.html">04 推理</a><span class="sep">—</span>
+    <a href="05-action.html">05 行动</a><span class="sep">—</span>
+    <a href="06-reflection.html">06 反思</a><span class="sep">—</span>
+    <a href="07-collaboration.html">07 协作</a><span class="sep">—</span>
+    <a href="08-governance.html">08 治理</a><span class="sep">—</span>
+    <a href="09-composition.html">09 组合</a><span class="sep">—</span>
+    <a href="10-self-check.html">10 自测</a>
+   </div>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 03 · 记忆</p>
+        <h1>记忆：知识与经验的长期沉淀</h1>
+        <p class="recap">第 01 章把记忆定位成认知功能轴上的一格——"把经历写回长期记忆、按需检索回来"的 learning + retrieval 动作。这一章把这一格做深：记忆为什么不等于更大的 context、怎么分层、怎么检索、怎么追踪进度、怎么从失败里学到"绝不贰过"。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>context window 为什么不是记忆，以及 CoALA 的四类记忆（工作 / 情景 / 语义 / 程序）。</li>
+          <li>分层记忆的"换页"机制：RAM/disk、水位线驱逐、递归摘要，以及它有损的硬代价。</li>
+          <li>Agent 友好的检索：混合检索 + RRF + rerank，以及 just-in-time / agentic search 何时胜过预建向量库。</li>
+          <li>进度追踪为什么要把状态外化到文件；失败日记如何靠外部 oracle 让 agent 不贰过。</li>
+        </ul>
+      </section>
+
+      <h2 id="s31"><span class="num">3.1</span><span>记忆导论：context window ≠ memory</span></h2>
+
+      <p class="one-liner">记忆不是更大的 context；context window 是每次推理重填的易失工作台（像 RAM），记忆是窗口之外、需主动写入并按需检索回来的持久存储。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>面对"agent 老是忘事"，最自然的反应是"换个上下文更大的模型"。这个反应抓错了问题。窗口再大也是<strong>易失</strong>的——每次推理都从空白重填整个 prompt，它本身无状态；而且窗口越大，记得越不准。把"记忆"和"更大的 context"画等号，是这一章要拆掉的第一个错误。</p>
+      </div>
+
+      <p><strong>底层机制（比"窗口有限"深一层）</strong>：Transformer 每个 token 要与其余所有 token 做注意力，n 个 token 产生 n² 对关系，这就是 Anthropic 所谓的"注意力预算（attention budget）"。窗口越长，每对关系分到的预算越薄，于是出现 <strong>context rot</strong>——召回率随 token 数下降。关键是它是<strong>渐进退化而非硬悬崖</strong>：没爆窗口不等于读得准。所以"塞满大窗口"≠"记得住"，记忆必须是窗口之外、需要主动写入（consolidate）并按需读回（retrieve）的持久存储。CoALA 把这层持久存储切成四类。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 430" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="CoALA 四类记忆：中心是 Agent 记忆，工作记忆在 context window 内，情景、语义、程序三类长期记忆在窗口外">
+          <defs>
+            <marker id="mem-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#A3A3A3"/>
+            </marker>
+          </defs>
+
+          <!-- spokes -->
+          <line x1="360" y1="178" x2="360" y2="90"  class="diagram-soft" marker-end="url(#mem-ar)"/>
+          <line x1="282" y1="212" x2="234" y2="212" class="diagram-soft" marker-end="url(#mem-ar)"/>
+          <line x1="438" y1="212" x2="486" y2="212" class="diagram-soft" marker-end="url(#mem-ar)"/>
+          <line x1="360" y1="246" x2="360" y2="332" class="diagram-soft" marker-end="url(#mem-ar)"/>
+
+          <text x="375" y="140" text-anchor="middle" class="edge-label">短期·RAM</text>
+          <text x="258" y="204" text-anchor="middle" class="edge-label">经历</text>
+          <text x="462" y="204" text-anchor="middle" class="edge-label">知识</text>
+          <text x="376" y="295" text-anchor="middle" class="edge-label">怎么做事</text>
+
+          <!-- center -->
+          <rect x="280" y="178" width="160" height="68" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="360" y="208" text-anchor="middle" class="node-label-accent">Agent 记忆</text>
+          <text x="360" y="228" text-anchor="middle" class="edge-label">写入 → 检索 两个动作</text>
+
+          <!-- top: working -->
+          <rect x="255" y="32" width="210" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="56" text-anchor="middle" class="node-label">工作记忆 · 短期</text>
+          <text x="360" y="76" text-anchor="middle" class="edge-label">活在 context window 里</text>
+
+          <!-- left: episodic -->
+          <rect x="34" y="182" width="200" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="134" y="206" text-anchor="middle" class="node-label">情景记忆 episodic</text>
+          <text x="134" y="226" text-anchor="middle" class="edge-label">过往经历·few-shot</text>
+
+          <!-- right: semantic -->
+          <rect x="486" y="182" width="200" height="60" rx="6" class="diagram-ink node-fill"/>
+          <text x="586" y="206" text-anchor="middle" class="node-label">语义记忆 semantic</text>
+          <text x="586" y="226" text-anchor="middle" class="edge-label">事实·偏好·结论</text>
+
+          <!-- bottom: procedural -->
+          <rect x="255" y="332" width="210" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="360" y="356" text-anchor="middle" class="node-label">程序记忆 procedural</text>
+          <text x="360" y="376" text-anchor="middle" class="edge-label">技能·规则·agent 代码</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.1</span>CoALA 四类记忆：只有工作记忆活在窗口里，其余三类都在窗口外、需主动读写。<strong>注意</strong>：改<strong>程序记忆</strong>（改 agent 代码 / system prompt 规则）比改情景、语义记忆危险得多——记忆不只是数据，程序记忆就是行为本身，写错会让 agent 崩坏。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 3.1 · 需求到底要的是哪一种</caption>
+        <thead>
+          <tr><th>方案</th><th>解决什么</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>换更大的 context window</td><td>一次能塞更多历史</td><td>窗口无状态、每次重填，且 token 越多 context rot 越重，长会话照样忘</td></tr>
+          <tr><td>一次 RAG 检索</td><td>把外部知识读进来（只读取）</td><td>只解决"读取"，没有 agent 自主决定"记什么/改什么/忘什么"的写入路径</td></tr>
+          <tr class="selected"><td>带写入路径的记忆系统</td><td>写入 + 存储 + 检索 + 遗忘的完整闭环</td><td>选中——这条 agent 自主掌控的写入路径，正是记忆区别于 RAG 的硬边界</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 agent 用了 LangGraph 的 checkpointer 持久化状态，开发者以为它"有记忆了"。用户下周开一个新会话回来，agent 却什么都不记得。问题出在哪？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>checkpointer 存的是<strong>单个 thread 内</strong>的图状态快照（短期、thread-scoped），换一个 <code>thread_id</code>（新会话）就全丢。真正的跨会话长期记忆必须显式用 <strong>Store</strong>（按 namespace 跨 thread 存）。把 thread 内的状态快照当成了长期记忆，是最常见的混淆——短期记忆（checkpointer / compaction，run 内）和长期记忆（Store / 文件 / memory tool，跨 run）是两套机制、两种成本。</p>
+        </details>
+      </div>
+
+      <h2 id="s32"><span class="num">3.2</span><span>分层保留：给记忆建货架</span></h2>
+
+      <p class="one-liner">分层记忆用一套"换页"协议，让固定大小的 context window 假装无限——和操作系统用虚拟内存假装 RAM 无限是同一个把戏。</p>
+
+      <p>§3.1 立住了"窗口之外才是记忆"。这一节讲那层窗口外存储怎么组织。MemGPT 给的隐喻是操作系统：<strong>context window = RAM，外部存储 = disk</strong>，LLM 用函数调用在两层之间"分页"，造出"无限上下文"的假象。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="三层记忆货架：in-context 是 RAM，recall 和 archival 是 disk，靠驱逐和换入在两层间搬运">
+          <defs>
+            <marker id="tier-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="tier-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="40" y="26" class="edge-label" font-weight="700">RAM</text>
+          <text x="40" y="206" class="edge-label" font-weight="700">DISK</text>
+
+          <!-- RAM layer -->
+          <rect x="90" y="36" width="540" height="64" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="360" y="62" text-anchor="middle" class="node-label-accent">in-context（实际进 prompt 的 token）</text>
+          <text x="360" y="82" text-anchor="middle" class="edge-label">系统指令 + memory blocks + FIFO 队列</text>
+
+          <!-- disk layers -->
+          <rect x="90" y="150" width="258" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="219" y="174" text-anchor="middle" class="node-label">recall</text>
+          <text x="219" y="192" text-anchor="middle" class="edge-label">落盘对话历史·可搜</text>
+
+          <rect x="372" y="150" width="258" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="501" y="174" text-anchor="middle" class="node-label">archival</text>
+          <text x="501" y="192" text-anchor="middle" class="edge-label">知识库·向量检索</text>
+
+          <!-- eviction down (accent) -->
+          <line x1="200" y1="100" x2="200" y2="148" class="diagram-accent" marker-end="url(#tier-ar-v)"/>
+          <text x="200" y="128" text-anchor="middle" class="branch-label">驱逐·递归摘要(有损)</text>
+
+          <!-- page-in up (ink) -->
+          <line x1="500" y1="148" x2="500" y2="102" class="diagram-ink" marker-end="url(#tier-ar)"/>
+          <text x="500" y="128" text-anchor="middle" class="edge-label">工具调用换入</text>
+
+          <!-- watermarks -->
+          <text x="360" y="250" text-anchor="middle" class="edge-label">水位线：用满 70% → 插系统消息预警；用满 100% → flush，驱逐约 50% 窗口</text>
+          <text x="360" y="284" text-anchor="middle" class="edge-label">实测代价：摘要跨会话留存仅 37%、保真 3.4–4.0/5（约 1/5 事实被扭曲或丢失）</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.2</span>三层货架：RAM 装活跃 token，两层 disk 装冷数据，靠驱逐（向下）和换入（向上）搬运。<strong>注意</strong>：驱逐不是删除——被驱逐的消息进 recall 仍可搜回，做的是"换出到 disk"。但递归摘要是<strong>有损</strong>的，精确细节（文件路径、错误码）最容易被压掉，而那往往正是后面要用的。</figcaption>
+      </figure>
+
+      <p><strong>失效循环（这是分层记忆最该警惕的故障）</strong>：摘要把"文件路径、错误信息"这类精确细节压成泛泛的转述丢了 → agent 发现缺了这个细节 → 重新搜索 → 搜索结果重新填满上下文 → 再次触发摘要 → 再次丢掉同一个细节。这个"丢失 → 重搜 → 重填 → 再摘要"的死循环，是摘要式压缩的标志性故障，也是为什么有统计把 65% 的 agent 失败归因于"上下文漂移 / 记忆丢失"而非模型能力不足。</p>
+
+      <table class="compare-table">
+        <caption>表 3.2 · 窗口快满了，怎么腾地方</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>直接上 128K/1M 长窗口全塞</td><td>实现零成本</td><td>context rot：n² 注意力被摊薄、召回随长度渐降，且每 token 全长计费</td></tr>
+          <tr><td>硬截断丢最旧消息（sliding window）</td><td>零推理成本</td><td>丢得彻底，被截掉的信息无法搜回</td></tr>
+          <tr class="selected"><td>分层 + 递归摘要 / compaction</td><td>保留语义连贯、被驱逐内容可搜回</td><td>选中（主流）——但有损（留存 37%）且是 blocking（每次烧一次推理），所以进度要在触发前写出去</td></tr>
+          <tr><td>结构化驱逐（CWL，2026 前沿）</td><td>确定性、无需 LLM、避开有损与幻觉</td><td>需先把轨迹标注成带依赖的 typed episodes，工程前置成本高、尚未成生产默认</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">tiered_memory.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-tier">复制</button>
+        </div>
+<pre id="code-tier"><code class="language-python"># 分层记忆 + 水位线驱逐 + 递归摘要（MemGPT/Letta 核心思路）
+MAIN_CTX = [system_instructions, memory_blocks, fifo_queue]   # in-context = RAM
+RECALL, ARCHIVAL = db(), vector_db()                          # out-of-context = disk
+
+def step(user_msg):
+    fifo_queue.append(user_msg)
+    used = count_tokens(MAIN_CTX)
+
+    # 水位线 1：70% 预警，给"LLM 自己"看，让它先抢救要点
+    if used &gt; 0.70 * WINDOW:
+        fifo_queue.append(sys("memory pressure：把要长期保留的写入 memory_block 或 archival"))
+
+    # 水位线 2：100% 触发 flush（约驱逐半个窗口）
+    if used &gt;= WINDOW:
+        evicted = fifo_queue.pop_oldest(n=0.5 * WINDOW)       # 不丢弃：转入 recall
+        RECALL.insert(evicted)
+        running_summary = llm_summarize(running_summary + evicted)   # 有损 + blocking
+        fifo_queue.prepend(sys(f"[summary so far] {running_summary}"))
+
+    # LLM 自编辑 + 换页（工具调用），带 heartbeat 则链式续跑
+    while True:
+        out = llm(MAIN_CTX)
+        if out.tool == "archival_memory_insert": ARCHIVAL.add(out.args)   # 写 disk
+        elif out.tool == "archival_memory_search": page_in(ARCHIVAL.search(out.q))
+        else: return out.reply
+        if not out.request_heartbeat: break    # 无 heartbeat 则让出控制，等下次外部事件
+</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 摘要是有损且 blocking 的</span>
+        <p>compaction 不是"顺手压一下"：它会<strong>停住</strong> agent 跑一次 LLM 推理（blocking），长任务里频繁触发是真实的吞吐瓶颈；而且实测跨会话只留存约 37%、保真 3.4–4.0/5。调压缩参数时，先<strong>最大化召回</strong>再提精度——Anthropic 原话是"重要性往往要到后来才显现"，激进压缩会丢掉当时看着冗余、后来才关键的上下文。</p>
+      </div>
+
+      <h2 id="s33"><span class="num">3.3</span><span>检索增强生成：Agent 友好的外挂知识库</span></h2>
+
+      <p class="one-liner">Agent 里的 RAG 不是"生成前一次性检索 top-k 塞进 context"，而是 agent 可反复调用、自己决定何时检索的一个工具。</p>
+
+      <p>§3.2 的 archival 层是向量库，检索就是从那一层读回内容。先看经典 RAG 的三阶段机制：召回要宽、融合要稳、精排要准。</p>
+
+      <figure>
+        <svg viewBox="0 0 740 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="RAG 三阶段：query 并行走 BM25 和向量召回，RRF 按排名融合，cross-encoder 精排出 top-k">
+          <defs>
+            <marker id="rag-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <text x="240" y="28" text-anchor="middle" class="edge-label">① 召回（各取 top-200，要宽）</text>
+          <text x="430" y="28" text-anchor="middle" class="edge-label">② 融合</text>
+          <text x="585" y="28" text-anchor="middle" class="edge-label">③ 精排</text>
+
+          <!-- query -->
+          <rect x="24" y="105" width="86" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="67" y="135" text-anchor="middle" class="node-label">query</text>
+
+          <!-- recall split -->
+          <line x1="110" y1="120" x2="168" y2="78" class="diagram-ink" marker-end="url(#rag-ar)"/>
+          <line x1="110" y1="140" x2="168" y2="182" class="diagram-ink" marker-end="url(#rag-ar)"/>
+
+          <rect x="170" y="52" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="245" y="76" text-anchor="middle" class="node-label">向量 · HNSW</text>
+          <text x="245" y="94" text-anchor="middle" class="edge-label">懂语义改写</text>
+
+          <rect x="170" y="158" width="150" height="50" rx="6" class="diagram-ink node-fill"/>
+          <text x="245" y="182" text-anchor="middle" class="node-label">BM25 倒排</text>
+          <text x="245" y="200" text-anchor="middle" class="edge-label">抓罕见精确词</text>
+
+          <!-- merge to RRF -->
+          <line x1="320" y1="78" x2="378" y2="118" class="diagram-ink" marker-end="url(#rag-ar)"/>
+          <line x1="320" y1="182" x2="378" y2="142" class="diagram-ink" marker-end="url(#rag-ar)"/>
+
+          <rect x="380" y="104" width="120" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="440" y="128" text-anchor="middle" class="node-label-accent">RRF 融合</text>
+          <text x="440" y="146" text-anchor="middle" class="edge-label">按排名·零调参</text>
+
+          <!-- rerank -->
+          <line x1="500" y1="130" x2="538" y2="130" class="diagram-ink" marker-end="url(#rag-ar)"/>
+          <rect x="540" y="104" width="130" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="605" y="128" text-anchor="middle" class="node-label">cross-encoder</text>
+          <text x="605" y="146" text-anchor="middle" class="edge-label">联合编码精排</text>
+
+          <text x="605" y="190" text-anchor="middle" class="edge-label">→ top-k → LLM</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.3</span>经典 RAG 三阶段：召回宽（top-200）、融合稳（RRF）、精排准（cross-encoder）。<strong>注意</strong>：融合<strong>不能</strong>用分数加权平均——BM25 是无界正分、余弦在 [-1,1]，尺度不可比；RRF 干脆扔掉分数只用名次，反而更稳、零调参。</figcaption>
+      </figure>
+
+      <p><strong>Agent 化的关键转变</strong>：检索不再是"生成前一次性预处理"，而是 agent 工具循环里可反复调用的工具——retrieve → read → 自评 → 不够好就改写 query 重检。更激进的 just-in-time 路线根本不预建索引：只存文件路径、query、URL 等轻量标识符，运行时用 <code>grep</code>/<code>glob</code>/<code>read</code> 现查现 load。Anthropic 内测发现，对代码，这种 agentic search "<strong>大幅胜出</strong>"，还省掉了索引同步、陈旧、外部 embedding 供应商的安全负担。</p>
+
+      <table class="compare-table">
+        <caption>表 3.3 · 给 agent 配检索</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>纯稠密向量检索</td><td>懂语义改写</td><td>漏罕见精确词（代码标识符、SKU、错误码），这类 query 上静默失败</td></tr>
+          <tr><td>分数加权融合 BM25 + 向量</td><td>看着最自然</td><td>分数尺度不可比，加权平均在生产里漂移失效、要逐库调 alpha</td></tr>
+          <tr class="selected"><td>混合 + RRF + cross-encoder rerank</td><td>补盲区、零调参、精排准（失败率 5.7%→1.9%）</td><td>选中（生产标准）——代价是两套索引 + 一层融合 + 二阶段成本</td></tr>
+          <tr><td>just-in-time / agentic search（grep 现查）</td><td>无索引同步/陈旧、对代码大幅胜出</td><td>每次现查较慢；对超大非结构化语料的语义模糊查询仍需语义层</td></tr>
+        </tbody>
+      </table>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队默认"高级 = 语义向量检索一定比关键词 grep 强"，准备给代码库建一套 embedding 向量库做检索。按 Anthropic 的实测，这个默认在代码场景为什么反而常常更差？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>三点。其一，代码里大量是<strong>精确标识符</strong>（函数名、变量、错误码），确定性的关键词工具检索更准；纯向量在这类 query 上静默漏。其二，向量库要<strong>索引同步</strong>——源码一改就得重嵌入，否则静默返回过时内容；grep 现查永远是最新的。其三，引入外部 embedding 供应商有安全负担。Amazon Science 2026 实测：关键词工具检索能达到 RAG 90%+ 的性能而无需向量库。官方建议默认从 agentic search 起步、性能不够再加语义层。</p>
+        </details>
+      </div>
+
+      <h2 id="s34"><span class="num">3.4</span><span>进度追踪：工作记录与行动轨迹</span></h2>
+
+      <p class="one-liner">长任务里真正的 source of truth 不是 context window，而是写在外部的进度文件——窗口是昂贵会衰减的层，文件是便宜持久的层。</p>
+
+      <p>前三节都在管"窗口里和窗口外"。这一节回答一个更尖锐的问题：跨越多个上下文窗口、甚至多次 agent 进程的长任务，状态该活在哪里？答案是<strong>外部文件</strong>，原因有三个可测量的机制。</p>
+
+      <p><strong>其一，轨迹有界且会退化</strong>。ReAct 循环里的工作状态是不断累积的 Thought/Action/Observation 转录，每轮整段重放，单调增长。ReAct 论文实测：在 HotpotQA/Fever 上 agent 跑 5–7 步后开始生成<strong>重复的 thought 和 action</strong>——一个自我强化的失败，越长的转录越毒化后续推理。<strong>其二，文件是 O(1) 且能扛住重置</strong>：写进度到外部文件只花一次写、一次读，不是每轮重新计费整段历史，还能扛住两件会摧毁轨迹的事——compaction 和新的 agent 进程。<strong>其三，compaction 有损，所以进度必须在它触发前写出去</strong>。下图是 Anthropic 长任务 harness 的循环骨架。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="长任务三段循环：RESUME 读进度文件重建状态，ACT 跑 ReAct 并在 70% flush，PERSIST 写 passes 并 git commit，崩溃后从文件续跑">
+          <defs>
+            <marker id="lh-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+          </defs>
+
+          <line x1="222" y1="92" x2="268" y2="92" class="diagram-ink" marker-end="url(#lh-ar)"/>
+          <line x1="452" y1="92" x2="498" y2="92" class="diagram-ink" marker-end="url(#lh-ar)"/>
+
+          <rect x="42" y="64" width="180" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="132" y="88" text-anchor="middle" class="node-label">① RESUME</text>
+          <text x="132" y="108" text-anchor="middle" class="edge-label">读 progress + git log</text>
+
+          <rect x="270" y="64" width="182" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="361" y="88" text-anchor="middle" class="node-label-accent">② ACT</text>
+          <text x="361" y="108" text-anchor="middle" class="edge-label">ReAct，70% flush 到文件</text>
+
+          <rect x="500" y="64" width="180" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="590" y="88" text-anchor="middle" class="node-label">③ PERSIST</text>
+          <text x="590" y="108" text-anchor="middle" class="edge-label">passes=True + git commit</text>
+
+          <!-- return loop -->
+          <polyline points="590,122 590,186 132,186 132,124" class="diagram-soft" marker-end="url(#lh-ar)"/>
+          <text x="361" y="178" text-anchor="middle" class="edge-label">崩溃 / compaction 后从文件续跑，无需历史</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.4</span>长任务循环：状态活在 git + 进度文件里，不在任何单个 agent 的 context。<strong>注意</strong>：返回箭头是关键——任何一次崩溃或 compaction 之后，新进程只靠读外部文件就能续跑，所以一个 200+ 功能的项目能跨许多个上下文窗口完成，没有哪个 agent 需要看见全部历史。</figcaption>
+      </figure>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">long_horizon_agent.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-lh">复制</button>
+        </div>
+<pre id="code-lh"><code class="language-python">CONTEXT_LIMIT = 200_000
+PROGRESS = "claude-progress.txt"    # 外部，扛得住重置与 compaction
+PLAN     = "features.json"          # [{id, desc, passes:false, priority}]
+
+def long_horizon_agent():
+    while not all_done(PLAN):
+        # 1) RESUME：只从外部文件重建最小工作状态
+        ctx  = read(PROGRESS) + git_log() + read(PLAN)      # O(1) 重读
+        task = pick_highest_priority(unfinished(PLAN))
+
+        # 2) ACT：ReAct 循环——轨迹在窗口里，有界、每轮重计费
+        traj = []
+        while not task.done:
+            thought, action = llm(ctx + traj), None
+            obs = env(thought.action)
+            traj += [thought, obs]
+            if tokens(ctx + traj) &gt; 0.7 * CONTEXT_LIMIT:     # 在衰减前外化
+                append(PROGRESS, summarize(traj)); traj = traj[-KEEP:]
+
+        # 3) PERSIST：进度写到 context 之外，再让它随意 compact
+        set(PLAN, task.id, passes=True)                     # 结构化游标
+        append(PROGRESS, f"done: {task.id} — {task.summary}")
+        git_commit(f"feat: {task.id}")                      # 持久 checkpoint
+    # 任何崩溃/compaction 后：下一次运行重读 PROGRESS+PLAN，不需要历史
+</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 agent 在调试时观察到一个关键细节（某个 API 的报错码），但没把它写进进度文件。随后上下文触发了 compaction。综合环节它给出了错误结论，却没有报任何错。为什么？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>这是<strong>稀疏笔记 + 激进压缩 = 静默丢失</strong>。agent 确实看见了那个细节，但从没记下来；compaction 把承载它的原始那一轮丢弃了；综合时它只能基于"笔记 + 最近几轮读取"工作，于是结论错了——而且因为没有异常、没有报错，错误是静默的。Anthropic cookbook 的原话：笔记充分则综合可从笔记重建；笔记稀疏则综合会漏掉 agent 看过却没记下的细节。所以进度文件要在压缩阈值<strong>之前</strong>就最大化召回地写好。</p>
+        </details>
+      </div>
+
+      <h2 id="s35"><span class="num">3.5</span><span>失败日记：错题集，绝不贰过</span></h2>
+
+      <p class="one-liner">失败日记 = 反思模块 + 持久化：把失败的根因写成一条可复用的教训，存进情景记忆，下次重试前注入——这是不更新权重的"语言强化学习"。</p>
+
+      <p>§3.4 追踪"做到哪了"。这一节追踪"在哪栽过"。Reflexion 的核心是：agent <strong>不更新权重</strong>，而是把任务反馈（失败的报错、测试结果）转成一段自然语言"自我反思"，写进情景记忆缓冲，下一次带着这些反思重试。它把"学习"放进了上下文，而不是参数——HumanEval 从 GPT-4 的 80% 提到 91% pass@1。下图是这个闭环的五个阶段。</p>
+
+      <figure>
+        <svg viewBox="0 0 720 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="失败日记五阶段闭环：行动、外部 oracle 评估、反思根因、存进情景记忆、重试时注入教训">
+          <defs>
+            <marker id="fd-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="fd-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- row 1 -->
+          <line x1="192" y1="76" x2="240" y2="76" class="diagram-ink" marker-end="url(#fd-ar)"/>
+          <line x1="412" y1="76" x2="460" y2="76" class="diagram-ink" marker-end="url(#fd-ar)"/>
+
+          <rect x="44" y="50" width="148" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="118" y="74" text-anchor="middle" class="node-label">① 行动 Actor</text>
+          <text x="118" y="92" text-anchor="middle" class="edge-label">ReAct/CoT 轨迹</text>
+
+          <rect x="242" y="50" width="170" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="327" y="74" text-anchor="middle" class="node-label-accent">② 外部 oracle</text>
+          <text x="327" y="92" text-anchor="middle" class="edge-label">测试/编译/工具报错</text>
+
+          <rect x="462" y="50" width="158" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="541" y="74" text-anchor="middle" class="node-label">③ 反思</text>
+          <text x="541" y="92" text-anchor="middle" class="edge-label">根因 → 纠正规则</text>
+
+          <!-- down to store -->
+          <line x1="541" y1="102" x2="448" y2="190" class="diagram-ink" marker-end="url(#fd-ar)"/>
+
+          <rect x="356" y="190" width="170" height="54" rx="6" class="diagram-ink node-fill"/>
+          <text x="441" y="214" text-anchor="middle" class="node-label">④ 存情景记忆</text>
+          <text x="441" y="232" text-anchor="middle" class="edge-label">窗口外·可检索</text>
+
+          <!-- retry back to actor -->
+          <line x1="356" y1="218" x2="120" y2="104" class="diagram-accent" marker-end="url(#fd-ar-v)"/>
+          <text x="232" y="178" text-anchor="middle" class="branch-label">⑤ 重试：注入教训</text>
+        </svg>
+        <figcaption><span class="fig-num">图 3.5</span>失败日记闭环：行动 → 评估 → 反思 → 存储 → 重试注入。<strong>注意</strong>：第 ② 步是整个闭环的命门——它必须是<strong>外部 oracle</strong>（测试/编译/工具报错）。如果换成模型给自己打分（无外部信号），自我反思会让推理结果更差，而不是更好。</figcaption>
+      </figure>
+
+      <p><strong>底层机制（这是最反直觉的一点）</strong>：Huang 等（ICLR 2024）证明，<strong>内在自我纠正</strong>——模型在没有外部反馈下自己批判自己——往往会<strong>降低</strong>性能。原因是瓶颈在"生成可靠反馈"，而一个把答案做错的模型，通常对自己的错误也判断得同样错。所以失败日记对编码／工具使用（有客观 ground truth：失败的测试、编译报错、HTTP 错误码）强大，对开放式推理（无 ground truth）脆弱。区分失败日记和"边写边反思"（Self-Refine）的，是<strong>持久化</strong>：Self-Refine 的批评只留在当前上下文、用完即弃；失败日记把它外化存储，让一个全新的上下文窗口（compaction/reset 之后）仍然受益。</p>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">failure_diary.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-fd">复制</button>
+        </div>
+<pre id="code-fd"><code class="language-python">def failure_diary_loop(task, max_trials=3):
+    memory = store.retrieve(task, k=3)        # 拉回相似任务的过往失败
+    for trial in range(max_trials):
+        trajectory = actor.run(task, hints=memory)        # 1. 行动（ReAct/CoT）
+        signal = oracle.evaluate(trajectory)              # 2. 外部 ground truth：
+                                                          #    跑测试 / 编译 / 看工具报错
+        if signal.passed:
+            return trajectory
+        # 3. 反思：把根因 → 一条可复用的纠正规则
+        lesson = reflect_llm(trajectory, feedback=signal.error,
+                             prompt="为什么失败？给出一条避免它的具体规则。")
+        # 4. 存到 context 之外（情景记忆）
+        store.save(namespace=("failures", task.kind),
+                   value={"obs": task, "result": signal.error, "lesson": lesson})
+        memory.append(lesson)                  # 5. 下次重试前注入（有界窗口）
+    return escalate_to_human(task)             # 给上限，避免无限自愈空转
+# 关键不变式：signal 必须是外部 oracle。模型无 ground truth 自评，反思会让结果更差。
+</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 记忆虚构（memory confabulation）</span>
+        <p>失败日记会<strong>固化</strong>错误信念，而非纠正它。"Honest Lying"研究（2026）发现：反思型 agent 会写下一个自信但<strong>错误</strong>的失败归因（"带参数 Y 的 API X 总会报错"），存进记忆后永远绕开那条路径，即使环境一再提供正确解也不再去验证。更多记忆 ≠ 更正确。缓解要靠：让纠正规则可被证据推翻、给信念加衰减、必要时重新取证。</p>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把你能想到的答案写在纸上或编辑器里。写完再点开答案对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>为什么"换更大的 context window"解决不了记忆问题？用 context rot 解释。</li>
+          <li>MemGPT 的两道水位线分别在多少、各触发什么动作？</li>
+          <li>混合检索为什么不能用分数加权平均来融合 BM25 和向量？该用什么？</li>
+          <li>长任务里为什么把状态写到外部文件，而不是信任 context window？给出至少两个机制原因。</li>
+          <li>失败日记的反馈信号为什么必须来自外部 oracle，而不能是模型自评？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>窗口无状态、每次重填；且 n² 注意力让 token 越多召回越差（context rot，渐进退化非硬崖）。"塞得下"不等于"读得准"，长会话照样忘。</li>
+            <li>用满 <strong>70%</strong>：插一条系统消息预警，让 LLM 自己先把要点存进 memory_block 或 archival。用满 <strong>100%</strong>：触发 flush，按约 50% 窗口的量把最旧消息驱逐到 recall，并生成新的递归摘要。</li>
+            <li>因为 BM25 是无界正分、余弦在 [-1,1]，两者尺度不可比，加权平均会漂移失效、还要逐库调 alpha。该用 <strong>RRF</strong>（倒数排名融合），只看名次、零调参。</li>
+            <li>其一，轨迹有界且会退化（ReAct 5–7 步后开始重复 thought/action）。其二，文件是 O(1) 且能扛住 compaction 和新进程，不必每轮重计费整段历史。其三，compaction 有损，进度写在外部才不被压掉。</li>
+            <li>因为内在自我纠正（无外部反馈）往往降低性能（Huang ICLR 2024）——把答案做错的模型，对自己错误的判断通常同样错。只有外部 oracle（测试/编译/工具报错）能提供可靠的归因信号。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>设计一个不会"贰过"也不会"固化错误"的失败记忆</h3>
+        <p>§3.5 给了两个相反的失败：不记失败 → 重复犯错（贰过）；记下错误归因 → 永久固化错误信念（记忆虚构）。设计一条策略，既能让 agent 从失败学习，又能在"那条被判死刑的路径其实可行"时自我纠偏。说清你的策略会在哪一个阶段（行动/评估/反思/存储/重试）介入，以及代价是什么。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键在<strong>存储</strong>和<strong>重试</strong>两阶段。可考虑：给每条失败教训挂一个置信度与"上次验证时间"，重试时不是无条件绕开，而是按概率偶尔重新取证（把 §3.5 的纠正规则做成"可被证据推翻"而非"永久禁令"）；或者只在有外部 oracle 复核时才把一条教训升级为"硬规则"。代价是额外的探索成本——你要为"偶尔回去撞一次墙以确认墙还在"付 token。这正好呼应了 §3.5 那条不变式：信号必须可被外部世界证伪。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://arxiv.org/abs/2310.08560">MemGPT: Towards LLMs as Operating Systems</a>（虚拟上下文分页、水位线驱逐）。</li>
+          <li><a href="https://arxiv.org/abs/2309.02427">CoALA</a>（四类记忆）与 <a href="https://arxiv.org/abs/2304.03442">Generative Agents</a>（recency+importance+relevance 检索）。</li>
+          <li><a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Anthropic — Effective Context Engineering</a> 与 <a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Effective Harnesses for Long-Running Agents</a>（进度文件、compaction）。</li>
+          <li><a href="https://www.anthropic.com/news/contextual-retrieval">Anthropic — Contextual Retrieval</a> 与 <a href="https://arxiv.org/abs/2310.11511">Self-RAG（ICLR 2024）</a>。</li>
+          <li><a href="https://arxiv.org/abs/2303.11366">Reflexion</a> 与 <a href="https://arxiv.org/abs/2310.01798">Huang et al. — LLMs Cannot Self-Correct Reasoning Yet（ICLR 2024）</a>。</li>
+          <li><a href="https://factory.ai/news/evaluating-compression">Factory.ai — Evaluating Context Compression</a>（摘要保真 37% 留存）。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="01-paradigm.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">01 · 范式觉醒</span>
+        </a>
+        <a href="04-reasoning.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">04 · 推理</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s31" data-toc-target="s31">3.1 记忆导论</a></li>
+        <li><a href="#s32" data-toc-target="s32">3.2 分层保留</a></li>
+        <li><a href="#s33" data-toc-target="s33">3.3 检索增强生成</a></li>
+        <li><a href="#s34" data-toc-target="s34">3.4 进度追踪</a></li>
+        <li><a href="#s35" data-toc-target="s35">3.5 失败日记</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>

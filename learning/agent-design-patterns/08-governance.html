@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 治理 · Agent 设计模式之美</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism.min.css">
+
+<style>
+:root {
+  --bg:          #FFFFFF;
+  --bg-soft:     #FAFAFA;
+  --bg-edge:     #F4F4F4;
+  --ink:         #0A0A0A;
+  --ink-soft:    #525252;
+  --ink-faint:   #A3A3A3;
+  --rule:        #E5E5E5;
+  --vermilion:   #B73B2F;
+  --vermilion-soft: rgba(183,59,47,0.06);
+  --code-string: #2D6A4F;
+  --code-number: #8B6914;
+  --code-fn:     #2C3E50;
+  --sans:        'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono:        'JetBrains Mono', 'SF Mono', 'Menlo', monospace;
+  --measure:     880px;
+  --page-max:    1280px;
+  --line:        1.6;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--sans); font-size: 15.5px; line-height: var(--line);
+  font-feature-settings: "kern", "liga";
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+main { position: relative; }
+.progress-bar {
+  position: fixed; top: 0; left: 0; height: 2px;
+  width: 0; background: var(--vermilion); z-index: 100; transition: width 80ms linear;
+}
+.learning-path {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+}
+.learning-path > .inner {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 16px 40px 12px;
+}
+.learning-path a { color: var(--ink-faint); text-decoration: none; padding: 2px 0; margin: 0 4px; }
+.learning-path a:first-child { margin-left: 0; }
+.learning-path .sep { color: var(--ink-faint); margin: 0 2px; user-select: none; }
+.learning-path .current { color: var(--vermilion); font-weight: 700; }
+.page {
+  display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 48px;
+  max-width: var(--page-max); margin: 0 auto; padding: 24px 40px 80px;
+}
+@media (max-width: 1080px) {
+  .page { grid-template-columns: 1fr; gap: 0; padding: 16px 24px 64px; }
+  .toc-sidebar { display: none; }
+}
+article { max-width: var(--measure); min-width: 0; }
+.chapter-opener { padding: 24px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.chapter-opener .chapter-label {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 8px; font-weight: 500;
+}
+.chapter-opener h1 {
+  font-family: var(--sans); font-weight: 700; font-size: 30px; line-height: 1.2;
+  margin: 0 0 12px; letter-spacing: -0.01em; color: var(--ink);
+}
+.chapter-opener .recap { font-size: 14px; color: var(--ink-soft); margin: 0; max-width: 640px; }
+@media (max-width: 640px) { .chapter-opener h1 { font-size: 24px; } }
+.schema-panel { border-left: 2px solid var(--ink); padding: 4px 0 4px 16px; margin: 16px 0 32px; }
+.schema-panel .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); margin: 0 0 8px; font-weight: 500;
+}
+.schema-panel ul { list-style: none; padding: 0; margin: 0; }
+.schema-panel li { padding: 4px 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.schema-panel li::before { content: "—  "; color: var(--ink-faint); }
+article p, article li { font-size: 15.5px; line-height: var(--line); color: var(--ink); margin: 0.9em 0; }
+article strong { font-weight: 600; color: var(--ink); }
+article em { font-style: italic; color: var(--ink); }
+article :not(pre) > code {
+  font-family: var(--mono); font-size: 0.88em; background: var(--bg-soft);
+  padding: 1px 5px; border-radius: 2px; color: var(--vermilion); border: 1px solid var(--rule);
+}
+article a {
+  color: var(--ink); text-decoration: underline; text-decoration-color: var(--ink-faint);
+  text-underline-offset: 2px; text-decoration-thickness: 1px; transition: color 150ms, text-decoration-color 150ms;
+}
+article a:hover { color: var(--vermilion); text-decoration-color: var(--vermilion); }
+article h2 {
+  font-family: var(--sans); font-weight: 700; font-size: 22px; line-height: 1.3;
+  margin: 36px 0 8px; padding-top: 16px; border-top: 1px solid var(--rule); letter-spacing: -0.005em;
+}
+article h2 .num { font-family: var(--mono); font-weight: 500; font-size: 15px; color: var(--ink-faint); margin-right: 10px; }
+article h3 { font-family: var(--sans); font-weight: 600; font-size: 16px; margin: 20px 0 8px; color: var(--ink); }
+article .one-liner {
+  font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 500;
+  margin: 8px 0 18px; padding-left: 12px; border-left: 2px solid var(--ink-faint);
+}
+article .rationale { background: var(--bg-soft); padding: 12px 16px; border-left: 2px solid var(--ink-soft); margin: 16px 0; font-size: 14.5px; }
+article .rationale > .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin-bottom: 4px; display: block;
+}
+article .rationale p { margin: 4px 0; }
+.code-block { margin: 16px 0; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; background: var(--bg-soft); }
+.code-block .header {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 12px;
+  background: var(--bg-edge); border-bottom: 1px solid var(--rule); font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+}
+.code-block .header .filename { font-weight: 500; }
+.code-block .header .lang { color: var(--ink-faint); text-transform: uppercase; font-weight: 500; font-size: 10px; }
+.code-block .header .copy {
+  border: none; background: transparent; font-family: var(--mono); font-size: 10px; color: var(--ink-soft);
+  cursor: pointer; padding: 2px 6px; letter-spacing: 0.05em; text-transform: uppercase; transition: color 150ms;
+}
+.code-block .header .copy:hover { color: var(--vermilion); }
+.code-block .header .copy.copied { color: var(--vermilion); }
+.code-block pre { margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; color: var(--ink); background: var(--bg-soft); }
+.code-block pre code { background: none; padding: 0; color: inherit; border: none; font-weight: 400; }
+.token.keyword, .token.boolean, .token.constant { color: var(--vermilion); font-weight: 500; }
+.token.string, .token.char { color: var(--code-string); }
+.token.number { color: var(--code-number); }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--ink-faint); font-style: italic; }
+.token.function { color: var(--code-fn); font-weight: 500; }
+.token.class-name { color: var(--ink); font-weight: 700; }
+.token.operator, .token.punctuation { color: var(--ink-soft); }
+.token.builtin { color: var(--vermilion); }
+.token.property { color: var(--ink); }
+.token.tag, .token.attr-name { color: var(--code-fn); }
+.token.attr-value { color: var(--code-string); }
+.annotations { margin: 10px 0 18px; font-size: 14px; color: var(--ink-soft); }
+.annotations .line-ref {
+  font-family: var(--mono); font-size: 11px; background: var(--bg-soft); border: 1px solid var(--rule);
+  padding: 1px 6px; border-radius: 2px; margin-right: 4px; color: var(--vermilion); font-weight: 500;
+}
+.predict { margin: 16px 0; padding: 12px 16px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.predict > .question-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--vermilion); font-weight: 500; margin: 0 0 4px; display: block;
+}
+.predict p { margin: 4px 0; color: var(--ink); }
+details { margin: 10px 0 0; border-top: 1px dashed var(--rule); padding-top: 10px; }
+details > summary {
+  cursor: pointer; list-style: none; font-family: var(--mono); font-size: 11px; color: var(--ink-soft);
+  letter-spacing: 0.04em; padding: 4px 0; transition: color 150ms; user-select: none; display: flex; align-items: center; gap: 6px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; color: var(--ink-faint); transition: transform 200ms, color 150ms; font-size: 9px; }
+details[open] > summary::before { transform: rotate(90deg); color: var(--vermilion); }
+details > summary:hover { color: var(--vermilion); }
+details > summary:hover::before { color: var(--vermilion); }
+details > *:not(summary) { margin-top: 8px; padding-left: 14px; border-left: 1px solid var(--rule); }
+.callout { margin: 16px 0; padding: 10px 16px; border-left: 2px solid var(--ink-soft); background: var(--bg-soft); font-size: 14.5px; }
+.callout .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--ink-soft); margin: 0 0 4px; display: block;
+}
+.callout p { margin: 4px 0; }
+.callout.warning { border-left-color: var(--vermilion); background: var(--vermilion-soft); }
+.callout.warning .label { color: var(--vermilion); }
+.callout.tip { border-left-color: var(--ink-soft); }
+.callout.example { border-left-color: var(--ink-soft); }
+.callout.insight { border-left-color: var(--ink-soft); }
+.compare-table { margin: 20px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+.compare-table caption {
+  text-align: left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); padding: 0 0 8px; font-weight: 500;
+}
+.compare-table thead th {
+  text-align: left; font-family: var(--sans); font-weight: 600; font-size: 13px; color: var(--ink);
+  padding: 8px 10px; border-bottom: 1px solid var(--ink);
+}
+.compare-table tbody td { padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; line-height: 1.5; }
+.compare-table tbody tr.selected td { font-weight: 500; }
+.compare-table tbody tr.selected td:first-child {
+  border-left: 2px solid var(--vermilion); padding-left: 8px; color: var(--vermilion); position: relative;
+}
+figure { margin: 24px 0; }
+figure svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+figcaption { font-family: var(--sans); font-size: 13px; color: var(--ink-soft); text-align: center; margin-top: 10px; line-height: 1.5; }
+figcaption .fig-num { font-family: var(--mono); font-weight: 600; color: var(--vermilion); margin-right: 6px; font-size: 11px; letter-spacing: 0.04em; }
+.self-check { margin: 32px 0 20px; border-top: 1px solid var(--ink); padding-top: 20px; }
+.self-check h2 { border: none; padding-top: 0; margin-top: 0; font-size: 18px; }
+.self-check ol { padding-left: 22px; }
+.self-check ol li { margin: 10px 0; padding-left: 4px; }
+.self-check ol li::marker { font-family: var(--mono); color: var(--ink-faint); font-weight: 500; font-size: 13px; }
+.challenge { margin: 24px 0; padding: 14px 18px; background: var(--bg-soft); border-left: 2px solid var(--vermilion); border-radius: 2px; }
+.challenge .label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; color: var(--vermilion); margin: 0 0 8px; display: block;
+}
+.challenge h3 { margin-top: 0; font-size: 15px; }
+.references { margin: 32px 0 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
+.references h3 {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-soft); font-weight: 500; margin: 0 0 8px;
+}
+.references ul { padding-left: 16px; }
+.references li { font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+.references li a { color: var(--ink); }
+.chapter-nav { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--rule); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chapter-nav a { display: block; padding: 12px 14px; border: 1px solid var(--rule); text-decoration: none; color: var(--ink); transition: border-color 150ms; }
+.chapter-nav a:hover { border-color: var(--vermilion); }
+.chapter-nav a.next { text-align: right; }
+.chapter-nav .label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 2px; }
+.chapter-nav .title { font-weight: 500; font-size: 14px; }
+.toc-sidebar {
+  position: sticky; top: 74px; align-self: start; padding-top: 24px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.55; max-height: calc(100vh - 98px); overflow-y: auto;
+}
+.toc-sidebar .toc-label {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 500; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--rule);
+}
+.toc-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.toc-sidebar li { margin: 2px 0; }
+.toc-sidebar a {
+  display: block; padding: 3px 0 3px 10px; color: var(--ink-soft); text-decoration: none;
+  border-left: 2px solid transparent; transition: all 150ms; font-size: 11px;
+}
+.toc-sidebar a:hover { color: var(--ink); }
+.toc-sidebar a.active { color: var(--vermilion); border-left-color: var(--vermilion); font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  .chapter-opener { animation: fade-in 400ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .schema-panel { animation: fade-in 400ms 100ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+}
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.diagram-ink       { stroke: var(--ink);       fill: none; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-accent    { stroke: var(--vermilion); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.diagram-soft      { stroke: var(--ink-faint); fill: none; stroke-width: 1.1; stroke-dasharray: 3 3; }
+.node-fill         { fill: var(--bg); }
+.node-fill-accent  { fill: var(--vermilion-soft); }
+.node-label        { font-family: var(--sans); font-size: 13px; font-weight: 500; fill: var(--ink); }
+.node-label-accent { font-family: var(--sans); font-size: 13px; font-weight: 700; fill: var(--vermilion); }
+.edge-label        { font-family: var(--mono); font-size: 11px; fill: var(--ink-soft); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+.branch-label      { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--vermilion); paint-order: stroke; stroke: var(--bg); stroke-width: 4px; stroke-linejoin: round; }
+article h2, article h3, article [id] { scroll-margin-top: 64px; }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+
+<main>
+  <nav class="learning-path" aria-label="学习路径">
+   <div class="inner">
+    <a href="index.html">00 起点</a><span class="sep">—</span>
+    <a href="01-paradigm.html">01 范式觉醒</a><span class="sep">—</span>
+    <a href="02-perception.html">02 感知</a><span class="sep">—</span>
+    <a href="03-memory.html">03 记忆</a><span class="sep">—</span>
+    <a href="04-reasoning.html">04 推理</a><span class="sep">—</span>
+    <a href="05-action.html">05 行动</a><span class="sep">—</span>
+    <a href="06-reflection.html">06 反思</a><span class="sep">—</span>
+    <a href="07-collaboration.html">07 协作</a><span class="sep">—</span>
+    <a href="08-governance.html" class="current">08 治理</a><span class="sep">—</span>
+    <a href="09-composition.html">09 组合</a><span class="sep">—</span>
+    <a href="10-self-check.html">10 自测</a>
+   </div>
+  </nav>
+
+  <div class="page">
+    <article>
+
+      <header class="chapter-opener">
+        <p class="chapter-label">Chapter 08 · 治理</p>
+        <h1>治理：守正之美，给自主性装上闸</h1>
+        <p class="recap">第 07 章让系统变大——多个 agent 在执行拓扑上并行展开；治理是横切所有模块的约束层，没有规矩，自主性就是负债。这一章把自主性的成本算成乘法，再逐一立起审批门、爆炸半径、渐进承诺、可观测性这四道闸，并讲清每道闸花掉了多少自主性。</p>
+      </header>
+
+      <section class="schema-panel">
+        <p class="label">本章你将建立的 schema</p>
+        <ul>
+          <li>复合误差为什么是乘法：99%/步 × 10 步 ≈ 90%，自主长度是首要风险变量，不是单步质量。</li>
+          <li>HITL 审批门 = 一次可持久暂停（interrupt/resume）；它本质是两阶段提交，且 resume 会重跑整个 node。</li>
+          <li>爆炸半径的两把正交剪刀：sandbox 收环境、least privilege + least agency 收能力。</li>
+          <li>渐进承诺把信任做成单调阶梯（read-only → recommend → autonomous），可观测性用结构化 trace 闭环回检。</li>
+        </ul>
+      </section>
+
+      <figure>
+        <svg viewBox="0 0 740 320" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="治理四道闸横切原子循环：审批门拦不可逆动作，爆炸半径收窄能力，渐进承诺分层授权，可观测性回放回检">
+          <defs>
+            <marker id="gov-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="gov-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- forward flow: propose -> gate -> commit -->
+          <line x1="186" y1="92" x2="252" y2="92" class="diagram-ink" marker-end="url(#gov-ar)"/>
+          <line x1="408" y1="92" x2="474" y2="92" class="diagram-ink" marker-end="url(#gov-ar)"/>
+
+          <rect x="40" y="64" width="146" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="113" y="88" text-anchor="middle" class="node-label">propose 动作</text>
+          <text x="113" y="107" text-anchor="middle" class="edge-label">L36 单步·会复合</text>
+
+          <rect x="254" y="64" width="154" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="331" y="88" text-anchor="middle" class="node-label-accent">审批门 HITL</text>
+          <text x="331" y="107" text-anchor="middle" class="edge-label">L37 仅拦不可逆</text>
+
+          <rect x="476" y="64" width="146" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="549" y="88" text-anchor="middle" class="node-label">commit 副作用</text>
+          <text x="549" y="107" text-anchor="middle" class="edge-label">唯一不可逆点</text>
+
+          <!-- containment under the action -->
+          <line x1="113" y1="120" x2="113" y2="182" class="diagram-soft" marker-end="url(#gov-ar)"/>
+          <rect x="34" y="184" width="158" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="113" y="208" text-anchor="middle" class="node-label">L38 爆炸半径</text>
+          <text x="113" y="227" text-anchor="middle" class="edge-label">sandbox+最小权</text>
+
+          <!-- progressive commitment feeding the gate -->
+          <line x1="331" y1="182" x2="331" y2="122" class="diagram-accent" marker-end="url(#gov-ar-v)"/>
+          <rect x="252" y="184" width="158" height="58" rx="6" class="diagram-ink node-fill"/>
+          <text x="331" y="208" text-anchor="middle" class="node-label">L39 渐进承诺</text>
+          <text x="331" y="227" text-anchor="middle" class="edge-label">挣来的信任分层</text>
+
+          <!-- observability captures the commit -->
+          <line x1="549" y1="120" x2="549" y2="182" class="diagram-soft" marker-end="url(#gov-ar)"/>
+          <rect x="470" y="184" width="158" height="58" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="549" y="208" text-anchor="middle" class="node-label-accent">L40 可观测性</text>
+          <text x="549" y="227" text-anchor="middle" class="edge-label">trace→eval→replay</text>
+
+          <!-- feedback loop: observability back to containment/commitment -->
+          <polyline points="470,213 360,290 220,290 192,290" class="diagram-soft" marker-end="url(#gov-ar)"/>
+          <text x="356" y="284" text-anchor="middle" class="edge-label">事后回检 → 反哺护栏与 eval</text>
+        </svg>
+        <figcaption><span class="fig-num">图 08.1</span>治理四道闸都挂在第 01 章那个<strong>原子循环</strong>上：审批门切在 propose 与 commit 之间，爆炸半径与渐进承诺约束动作本身，可观测性把 commit 的结果捕获回检。<strong>注意</strong>：四道闸不是叠加冗余——L37–L39 决定 agent <strong>能做什么</strong>，L40 才回答事后<strong>它做对了没有</strong>，缺了 L40 这个闭环，前三道闸无法被验证。</figcaption>
+      </figure>
+
+      <h2 id="s081"><span class="num">08.1</span><span>治理导论：自主性的成本是乘法</span></h2>
+
+      <p class="one-liner">端到端成功率 = 每步可靠性的连乘，不是相加；治理就是把 checkpoint 重新插回这条乘法链，给误差封顶。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>面对"agent 单步准确率有 99%，够可靠了吧"，最自然的反应是把自主链放长、让它一口气多跑几步。这个反应抓错了风险变量。单步质量高不代表长链可靠——可靠性是<strong>连乘</strong>的，链越长，沉默累积的误差越多，而第 01 章那个<strong>概率节点</strong>每一步都在往链里注入一点不确定。治理不是给 agent 加负担，而是给这条乘法链装上封顶阀门。</p>
+      </div>
+
+      <p><strong>底层机制（比"模型会犯错"深一层）</strong>：Anthropic 明说"agentic 系统常用延迟和成本换更好的任务表现""agent 的自主性意味着更高成本，以及复合误差的风险"。把它算成数字：99% 准确率的步骤连跑 10 步，端到端是 0.99^10 ≈ 90%；20 步 ≈ 0.99^20 ≈ 82%；一条 95%/步的 5 步链只剩 0.95^5 ≈ 77%。两股力让它随时间更糟。其一，误差在抵达下一个 checkpoint 前是<strong>沉默</strong>的。其二，Anthropic 实测无人打断的单轮时长在一个季度内几乎翻倍（约 25→45 分钟，2025-10 至 2026-01），未设 checkpoint 的窗口——复合悄悄发生的那段——正在变长。每加一道治理控制都会花掉一些自主性、规模或延迟，所以工程动作是<strong>按用例在那条曲线上选点</strong>，而不是把自主性最大化。</p>
+
+      <table class="compare-table">
+        <caption>表 08.1 · 自主性曲线上选哪个点</caption>
+        <thead>
+          <tr><th>方案</th><th>解决什么</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>每步都让人审批（最大监督）</td><td>看上去监督最严</td><td>人会习惯化、橡皮图章——Anthropic 实测约 93% 的提示被无脑批准，监督退化成表演，延迟爆炸</td></tr>
+          <tr><td>完全自主、无任何闸（最大自主）</td><td>吞吐最高、延迟最低</td><td>复合误差无封顶，长链里沉默累积，一次不可逆动作出错就是灾难</td></tr>
+          <tr class="selected"><td>按用例在曲线上选点：仅在不可逆/高爆炸半径处插闸</td><td>把稀缺的人类注意力集中在不可逆处</td><td>选中——可逆动作放行、不可逆动作设闸，残余风险是把可逆性<strong>误判</strong>了</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">compounding.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-comp">复制</button>
+        </div>
+<pre id="code-comp"><code class="language-python"># 复合误差：端到端成功率是每步可靠性的连乘，不是平均
+def end_to_end_success(per_step_reliability, n_steps):
+    return per_step_reliability ** n_steps          # 乘法，不是加法
+
+assert round(end_to_end_success(0.99, 10), 2) == 0.90   # 99%/步 × 10 步 ≈ 90%
+assert round(end_to_end_success(0.99, 20), 2) == 0.82   # 20 步 ≈ 82%
+assert round(end_to_end_success(0.95,  5), 2) == 0.77   # 95%/步 × 5 步  ≈ 77%
+
+# 推论：自主长度是首要风险变量，不是单步质量。
+# 治理 = 在链上插 checkpoint，给「沉默累积的误差」封顶——
+# checkpoint 越靠后，能在它之前积累的 error 越多（无人打断的单轮 ~25→45 min）。
+</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队拿到一个单步准确率 99% 的模型，认定它"基本可靠"，于是放手让它跑一条 20 步的自主工作流，不插任何 checkpoint。上线后失败率远高于预期。问题出在哪？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>把单步准确率当成端到端可靠性，是复合误差盲区。0.99^20 ≈ <strong>82%</strong>——意味着每 5 次任务就有近 1 次会在某一步出错，而这些错误在抵达 checkpoint 前是<strong>沉默</strong>的。多数工程师默认"99% 准确 = 基本可靠"，但自主长度（步数）才是主导风险变量，不是单步质量。链越长，错误在被人看见前积累得越多——尤其当无人打断的单轮时长还在变长。修法不是换更准的模型，而是<strong>缩短无 checkpoint 的窗口</strong>：在不可逆动作前插审批门。</p>
+        </details>
+      </div>
+
+      <h2 id="s082"><span class="num">08.2</span><span>审批门：可持久暂停 = 两阶段提交</span></h2>
+
+      <p class="one-liner">审批门是一次可持久暂停：agent 在不可逆动作前 interrupt，把全量状态落盘交还调用方，人/策略批准后 resume 注入决策、继续同一次运行。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§08.1 算清了自主链需要 checkpoint。审批门就是那个 checkpoint 的工程实现——在敏感、不可逆的动作前停住，让一个人（或一条策略）批准/编辑/拒绝。Anthropic 的原话是"在 agent 执行不可逆动作之前，建立让它暂停接受人工复核的 checkpoint"。难点不在停，而在<strong>怎么停得安全</strong>。</p>
+      </div>
+
+      <p><strong>底层机制（比"暂停一下"深一层）</strong>：框架命中 <code>interrupt()</code>（LangGraph）或把待执行的工具调用浮现成一个 interruption（OpenAI Agents SDK），通过 checkpointer 把全量 agent 状态序列化、交还调用方；这个暂停是<strong>持久</strong>的——进程重启都活得下来，因为状态已落盘。人/策略批准后，<code>Command(resume=...)</code> 或 <code>state.approve()</code> 把决策注入、继续<strong>同一次</strong>运行。这正是<strong>两阶段提交（2PC）</strong>：把 agent 当事务协调者而非 oracle——Phase 1（prepare）暂存一个可逆改动并校验不变式，人工 interrupt 就是 prepare→commit 的屏障，Phase 2 提交或回滚，全程带审计轨迹。低一层的陷阱：resume 时 LangGraph 会从顶部<strong>重跑整个 node</strong>，不是从 <code>interrupt()</code> 的下一行续。所以放在 interrupt 之前的任何副作用（写库、发邮件、扣款）会触发<strong>两次</strong>。</p>
+
+      <figure>
+        <svg viewBox="0 0 740 270" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="审批门两阶段提交：prepare 暂存并 dry-run，interrupt 落盘暂停，人批准后 resume 重跑整个 node 再 commit，拒绝则回滚">
+          <defs>
+            <marker id="gate-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="gate-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="118" y="24" class="edge-label" font-weight="700">PHASE 1 · prepare</text>
+          <text x="600" y="24" class="edge-label" font-weight="700" text-anchor="end">PHASE 2 · commit</text>
+
+          <!-- forward -->
+          <line x1="200" y1="92" x2="266" y2="92" class="diagram-ink" marker-end="url(#gate-ar)"/>
+          <line x1="420" y1="92" x2="486" y2="92" class="diagram-accent" marker-end="url(#gate-ar-v)"/>
+
+          <rect x="40" y="64" width="160" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="120" y="88" text-anchor="middle" class="node-label">暂存 + dry-run</text>
+          <text x="120" y="107" text-anchor="middle" class="edge-label">校验不变式·无副作用</text>
+
+          <rect x="268" y="64" width="152" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="344" y="88" text-anchor="middle" class="node-label-accent">interrupt() 屏障</text>
+          <text x="344" y="107" text-anchor="middle" class="edge-label">落盘·交还调用方</text>
+
+          <rect x="488" y="64" width="160" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="568" y="88" text-anchor="middle" class="node-label">commit 副作用</text>
+          <text x="568" y="107" text-anchor="middle" class="edge-label">唯一不可逆·幂等键</text>
+
+          <!-- human decision -->
+          <line x1="344" y1="120" x2="344" y2="170" class="diagram-soft" marker-end="url(#gate-ar)"/>
+          <text x="344" y="148" text-anchor="middle" class="branch-label">人/策略：批准·编辑·拒绝</text>
+
+          <!-- resume re-runs whole node -->
+          <polyline points="344,172 120,172 120,124" class="diagram-accent" marker-end="url(#gate-ar-v)"/>
+          <text x="222" y="200" text-anchor="middle" class="branch-label">resume 重跑整个 node（非续行）</text>
+
+          <!-- reject -> rollback -->
+          <line x1="420" y1="186" x2="486" y2="186" class="diagram-soft" marker-end="url(#gate-ar)"/>
+          <text x="560" y="190" text-anchor="middle" class="edge-label">拒绝 → 回滚 abort</text>
+        </svg>
+        <figcaption><span class="fig-num">图 08.2</span>审批门就是把第 01 章的<strong>两阶段提交</strong>套在 agent 上：interrupt 是 prepare→commit 屏障。<strong>注意</strong>：那条红色回跑线是命门——resume 会从顶部重跑整个 node，<strong>不是</strong>从 interrupt 的下一行续。任何写库/发邮件/扣款若放在 interrupt 之前，就会执行两次；安全模式是把 interrupt 前置到所有副作用之前，并给 commit 挂幂等键。</figcaption>
+      </figure>
+
+      <p><strong>过度设闸为什么是真实的失败模式</strong>：审批门花掉的是延迟（人的周转）和过度设闸的诱惑。Anthropic 给出了一个可测量的理由——当 Claude Code 对<strong>每个</strong>动作都询问时，用户批准了约 <strong>93%</strong> 的提示，也就是橡皮图章：它提供了治理表演，却没有真实复核；同期改用 sandbox 把提示量砍掉约 <strong>84%</strong> 反而提升了安全。所以只对<strong>不可逆、高爆炸半径</strong>的动作设闸，把人的注意力省给可逆性救不回来的地方。</p>
+
+      <table class="compare-table">
+        <caption>表 08.2 · 痛点 → 设计回应</caption>
+        <thead>
+          <tr><th>痛点</th><th>朴素做法</th><th>设计回应 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>resume 后副作用重复执行（双写/双扣款）</td><td>把 <code>interrupt()</code> 当协程在原地 yield，写操作内联其前</td><td>整个 node 会重跑，内联写必然触发两次</td></tr>
+          <tr class="selected"><td>同上</td><td>—</td><td>选中——interrupt 前置到所有副作用之前 + node 幂等 + 副作用挂幂等键，代价是设计纪律和偶尔一次状态校验往返</td></tr>
+          <tr><td>人对每步审批疲劳、无脑批准（~93%）</td><td>每个工具调用都设闸求稳</td><td>监督退化成表演，延迟爆炸，真实复核反而下降</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">approval_gate.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-gate">复制</button>
+        </div>
+<pre id="code-gate"><code class="language-python"># LangGraph 风格审批门 = 两阶段提交。resume 会重跑整个 node，
+# 所以 interrupt() 之前不能有任何副作用。
+from langgraph.types import interrupt, Command
+
+def sensitive_node(state):
+    # Phase 1 prepare：只暂存 + 校验，绝不写真实副作用
+    plan = stage_change(state.action)           # 可逆暂存
+    preview = plan.dry_run()                     # 预演 diff，无副作用
+
+    # ---- 屏障：interrupt() 落盘全量状态，交还调用方 ----
+    # 此行之前不得有 DB 写 / 发邮件 / 扣款——node 会从顶部重跑。
+    decision = interrupt({"action": state.action,
+                          "preview": preview,
+                          "blast_radius": estimate_blast_radius(plan)})
+    if decision["reject"]:
+        return {"status": "aborted"}             # 回滚：暂存从未提交
+
+    # Phase 2 commit：唯一不可逆动作，挂幂等键防重放双写
+    result = plan.commit(idempotency_key=state.run_id)   # &gt;= 一次安全
+    return {"status": "committed", "result": result}
+
+# resume:  app -&gt; graph.invoke(Command(resume={"reject": False}), thread)
+#          → sensitive_node 整体重跑；stage/dry_run 再做一遍（无副作用），
+#            commit 因幂等键命中而 no-op，不会二次扣款。
+</code></pre>
+      </div>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · resume 重跑整个 node</span>
+        <p>几乎所有人都期望 <code>interrupt()</code>/resume 像协程一样在原地 yield、从下一行续——LangGraph 实际是<strong>重放整个 node</strong>（见 issue #6208）。朴素代码因此双重执行副作用。三条修法：把 <code>interrupt()</code> 前置到所有副作用之前；让 node 幂等；或把副作用包进带幂等键的 task。这是 durable replay 下唯一安全的写法。</p>
+      </div>
+
+      <h2 id="s083"><span class="num">08.3</span><span>爆炸半径：sandbox 收环境，least agency 收能力</span></h2>
+
+      <p class="one-liner">爆炸半径 = 一次坏动作能触达的最大破坏，由 agent 能碰到的一切的并集决定；两把正交的剪刀分别收窄环境与能力。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>审批门是<strong>预防</strong>——在动作发生前拦下。但 prompt injection 一旦得手，预防已经失效，这时决定损失大小的是<strong>动作能触达多少</strong>。Sophos/Anthropic 的框架是"当 prompt injection 成功时，爆炸半径由 agent 能触达的东西决定"。降低爆炸半径，是 assume-breach（假设已被攻破）对预防的补全。</p>
+      </div>
+
+      <p><strong>底层机制（比"加沙箱"深一层）</strong>：两把<strong>正交</strong>的剪刀。其一，<strong>sandbox 收环境</strong>——Anthropic 的三层隔离从轻到重：claude.ai 用临时的 gVisor 容器，Claude Code 用 OS 系统调用沙箱（Seatbelt / bubblewrap），Cowork 用密封 VM 带 read-only / read-write / read-write-no-delete 三种挂载模式，凭据留在宿主 keychain、绝不进入 guest。Anthropic 用血换来的教训是"你自己造的软件往往是最弱的一环"——标准 hypervisor / 系统调用过滤器胜过自制的 allowlist 代理。其二，<strong>least privilege + least agency 收能力</strong>——把每个工具收窄到任务所需的确切资源，默认只读，签发短时、按任务收窄的凭据。least agency 比 least privilege 更进一步：不只限制能<strong>触达</strong>什么资源，而是限制能<strong>表达</strong>什么动作——暴露一个参数化查询接口而非裸 SQL、一个固定 schema 的 MCP 工具而非 shell，让 agent "能完成这份工作，却无法悄悄扩大这份工作"。</p>
+
+      <figure>
+        <svg viewBox="0 0 740 300" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="爆炸半径两把剪刀：左轴 sandbox 三层从 gVisor 到密封 VM 收环境，右轴 least privilege 到 least agency 收能力">
+          <defs>
+            <marker id="blast-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="blast-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <text x="160" y="24" text-anchor="middle" class="edge-label" font-weight="700">剪刀 A · sandbox 收环境</text>
+          <text x="560" y="24" text-anchor="middle" class="edge-label" font-weight="700">剪刀 B · least agency 收能力</text>
+
+          <!-- center: blast radius -->
+          <rect x="290" y="124" width="160" height="58" rx="8" class="diagram-accent node-fill-accent" stroke-width="2"/>
+          <text x="370" y="148" text-anchor="middle" class="node-label-accent">爆炸半径</text>
+          <text x="370" y="168" text-anchor="middle" class="edge-label">注入得手后的损失</text>
+
+          <!-- left ladder: sandbox tiers -->
+          <line x1="170" y1="78" x2="290" y2="138" class="diagram-soft" marker-end="url(#blast-ar)"/>
+          <line x1="170" y1="158" x2="288" y2="158" class="diagram-soft" marker-end="url(#blast-ar)"/>
+          <line x1="170" y1="238" x2="290" y2="172" class="diagram-soft" marker-end="url(#blast-ar)"/>
+
+          <rect x="34" y="52" width="136" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="102" y="74" text-anchor="middle" class="node-label">gVisor 容器</text>
+          <text x="102" y="92" text-anchor="middle" class="edge-label">临时·claude.ai</text>
+
+          <rect x="34" y="132" width="136" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="102" y="154" text-anchor="middle" class="node-label">Seatbelt/bwrap</text>
+          <text x="102" y="172" text-anchor="middle" class="edge-label">OS 沙箱·CC</text>
+
+          <rect x="34" y="212" width="136" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="102" y="234" text-anchor="middle" class="node-label">密封 VM</text>
+          <text x="102" y="252" text-anchor="middle" class="edge-label">挂载模式·Cowork</text>
+
+          <!-- right ladder: least privilege -> least agency -->
+          <line x1="570" y1="98" x2="450" y2="142" class="diagram-accent" marker-end="url(#blast-ar-v)"/>
+          <line x1="570" y1="220" x2="452" y2="168" class="diagram-accent" marker-end="url(#blast-ar-v)"/>
+
+          <rect x="572" y="72" width="146" height="52" rx="6" class="diagram-ink node-fill"/>
+          <text x="645" y="94" text-anchor="middle" class="node-label">least privilege</text>
+          <text x="645" y="112" text-anchor="middle" class="edge-label">收窄能触达的资源</text>
+
+          <rect x="572" y="196" width="146" height="52" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="645" y="218" text-anchor="middle" class="node-label-accent">least agency</text>
+          <text x="645" y="236" text-anchor="middle" class="edge-label">收窄能表达的动作</text>
+        </svg>
+        <figcaption><span class="fig-num">图 08.3</span>两把正交剪刀同时压小爆炸半径：左轴用标准隔离把环境收窄到 gVisor / Seatbelt / 密封 VM，右轴把能力从 least privilege 推进到 least agency。<strong>注意</strong>：least privilege ≠ least agency——一个被正确收窄、却仍持有裸 SQL 的 agent，在 prompt injection 下能做<strong>范围内任意</strong>破坏；只有参数化接口让更宽的动作<strong>无法被表达</strong>，注入下的爆炸半径才真正塌缩。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 08.3 · 收窄能力，选哪条路</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>给裸 SQL/shell，靠 RBAC 限范围</td><td>灵活、改一处即可</td><td>范围内的裸 SQL 被劫持后仍可任意破坏；least privilege 不等于 least agency</td></tr>
+          <tr><td>靠 prompt 指令叮嘱"别越界"</td><td>零工程</td><td>概率节点不保证遵守，注入可直接覆盖指令，约束形同虚设</td></tr>
+          <tr><td>自制 allowlist 代理 / bespoke 系统调用过滤器</td><td>看着贴合任务</td><td>"你自己造的软件往往是最弱的一环"，自制隔离引入自身 bug</td></tr>
+          <tr class="selected"><td>标准隔离（gVisor/Seatbelt/bubblewrap/VM）+ least agency 参数化接口</td><td>隔离久经实战，更宽动作无法被表达，注入下爆炸半径塌缩</td><td>选中——代价是要设计维护窄 schema、损失一些灵活性，换远小的攻击面</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · 凭据泄进 sandbox</span>
+        <p>沙箱只在凭据<strong>不进入</strong> guest 时才真正隔离。一旦把 secret 注入 guest，沙箱就不再能遏制凭据窃取——一次注入就能把它读走外带。Cowork 的做法是凭据全程留在宿主 keychain，guest 只拿到被代理转发的、已收窄的访问。同理，自制容器是反模式：标准 hypervisor / 系统调用过滤器久经实战，自制 allowlist 代理往往是最弱的一环。</p>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>一个 agent 已经做到 least privilege：它的数据库账号只读、只能访问 <code>orders</code> 这一张表。团队认为爆炸半径已经够小。一次 prompt injection 让它"导出全部订单到外部 URL"——它照做了。最小权限为什么没拦住？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>因为最小权限收的是<strong>能触达什么资源</strong>，没收<strong>能表达什么动作</strong>。账号确实被正确收窄到只读 <code>orders</code>，但"读出整张表的全部行"恰恰在这个范围<strong>之内</strong>——裸 SQL/裸查询让 agent 能表达"<code>SELECT * FROM orders</code> 再外带"这种合法但灾难的动作。least privilege ≠ least agency。修法是 least agency：暴露一个参数化接口（如 <code>get_order(order_id)</code> 固定 schema），让"批量导出"这种更宽动作<strong>根本无法被表达</strong>，而不只是不被授权。多数威胁模型漏掉的正是这一层。</p>
+        </details>
+      </div>
+
+      <h2 id="s084"><span class="num">08.4</span><span>渐进承诺：把信任做成单调阶梯</span></h2>
+
+      <p class="one-liner">用一道单调阶梯替换二元信任决策：read-only（洞察）→ recommend-and-wait（辅助）→ act-within-guardrails（自主），信任按履历逐级挣得，不可跳级。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>"这个工具/路径能不能放手让 agent 用"不该是一次性的是非题。一次性授权要么过紧（什么都要人批，回到 §08.2 的疲劳），要么过松（一上来全开，回到 §08.1 的无封顶）。渐进承诺把这个二元决策摊成一道<strong>单调阶梯</strong>，信任从履历里逐级挣得。</p>
+      </div>
+
+      <p><strong>底层机制（比"分级授权"深一层）</strong>：三个机制叠起来。其一，<strong>read-then-write 默认</strong>——先观察读行为是否可预测，再加写权限。其二，<strong>dry-run / preview-then-commit</strong>——算出动作的 diff/plan 却不施加（借自 <code>terraform plan/apply</code>、<code>rsync --dry-run</code>），人/检查批准预览后，再把同一份 plan 提交，让不可逆操作在开火前可被检视。其三，<strong>挣来的晋升</strong>——一个运行时授权平面（ABAC/RBAC + 审批阈值）输出 ALLOW / MASK / DENY / REQUIRE_APPROVAL，信任层级从运行历史里晋升，而非一上来就授予。低一层的失败模式：<strong>信任持久化（trust persistence）</strong>——一个工具/路径一旦被批准，这份授权常常<strong>活得比当初证成它的上下文更久</strong>，而一个跑过 100 次成功的 agent 又常被当作和全新 agent 完全一样处理。没有<strong>降级</strong>机制，渐进承诺就悄悄退化成<strong>一揽子承诺（blanket commitment）</strong>。</p>
+
+      <figure>
+        <svg viewBox="0 0 740 280" xmlns="http://www.w3.org/2000/svg" role="img"
+             aria-label="渐进承诺单调阶梯：read-only 到 recommend 到 autonomous 逐级晋升，缺少降级则退化成一揽子承诺">
+          <defs>
+            <marker id="tier-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#0A0A0A"/>
+            </marker>
+            <marker id="tier-ar-v" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#B73B2F"/>
+            </marker>
+          </defs>
+
+          <!-- ascending tiers -->
+          <rect x="40" y="186" width="180" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="130" y="210" text-anchor="middle" class="node-label">① read-only</text>
+          <text x="130" y="229" text-anchor="middle" class="edge-label">洞察·只读</text>
+
+          <rect x="280" y="116" width="180" height="56" rx="6" class="diagram-ink node-fill"/>
+          <text x="370" y="140" text-anchor="middle" class="node-label">② recommend</text>
+          <text x="370" y="159" text-anchor="middle" class="edge-label">辅助·建议后等批</text>
+
+          <rect x="520" y="46" width="180" height="56" rx="6" class="diagram-accent node-fill-accent"/>
+          <text x="610" y="70" text-anchor="middle" class="node-label-accent">③ autonomous</text>
+          <text x="610" y="89" text-anchor="middle" class="edge-label">护栏内自主行动</text>
+
+          <!-- promotion arrows (earned, up) -->
+          <line x1="220" y1="200" x2="280" y2="162" class="diagram-ink" marker-end="url(#tier-ar)"/>
+          <line x1="460" y1="130" x2="520" y2="92" class="diagram-ink" marker-end="url(#tier-ar)"/>
+          <text x="246" y="168" text-anchor="middle" class="edge-label">履历挣得</text>
+          <text x="486" y="98" text-anchor="middle" class="edge-label">不可跳级</text>
+
+          <!-- demotion arrow (must exist) -->
+          <polyline points="610,102 610,254 130,254 130,244" class="diagram-accent" marker-end="url(#tier-ar-v)"/>
+          <text x="370" y="248" text-anchor="middle" class="branch-label">缺降级 → 退化成一揽子承诺</text>
+        </svg>
+        <figcaption><span class="fig-num">图 08.4</span>信任是一道单调上升的阶梯，每一级从 demonstrated track record 挣得，不可跳级。<strong>注意</strong>：那条红色降级线必须存在——若一份授权只升不降、活得比证成它的上下文更久，渐进承诺会<strong>静默</strong>退化成一揽子承诺（trust persistence）；解药是自动降级 + 过期授权（expiring grants）。</figcaption>
+      </figure>
+
+      <table class="compare-table">
+        <caption>表 08.4 · 信任怎么给</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>一上来就给完整自主权</td><td>零摩擦</td><td>无履历兜底，第一次失误就是高爆炸半径不可逆动作</td></tr>
+          <tr><td>永远停在 recommend、每次都等人批</td><td>看似最稳</td><td>退回 §08.2 的审批疲劳，自主性全部花掉</td></tr>
+          <tr class="selected"><td>单调阶梯 + dry-run 预览 + 运行时授权平面（含降级）</td><td>信任按履历挣得、不可逆动作开火前可检视、可自动降级</td><td>选中——代价是要维护授权平面与晋升/降级策略，否则 trust persistence 让它退化成一揽子承诺</td></tr>
+        </tbody>
+      </table>
+
+      <div class="callout warning">
+        <span class="label">陷阱 · trust persistence（approve once, exploit forever）</span>
+        <p>Mindgard 2026 指出：在编码 agent 里，一次批准的工具/路径/scope 常常<strong>活得比证成它的上下文更久</strong>，且没有降级——"approve once, exploit forever"。渐进承诺若只有晋升、没有降级，就静默变成一揽子承诺。两个解药：给每份授权挂<strong>过期时间</strong>（expiring grants），以及让信任层级随运行历史<strong>自动降级</strong>，而不是只升不降。</p>
+      </div>
+
+      <h2 id="s085"><span class="num">08.5</span><span>可观测性：拒绝黑盒，让运行可回放</span></h2>
+
+      <p class="one-liner">可观测性把非确定的黑盒变成可审计、可回放的工件：每次 LLM 调用、工具调用、推理步都落成结构化 span，事后能重放复现。</p>
+
+      <div class="rationale">
+        <span class="label">为什么需要它</span>
+        <p>§08.2–§08.4 决定 agent <strong>能做什么</strong>。但概率节点的输出不可复现，光有护栏不够——还要能在事后回答"它<strong>到底</strong>做了什么、为什么这么做"。可观测性就是这个事后验证层，它把 L37–L40 闭成一个环。它和 monitoring（盯已知指标）不同：monitoring 答不了"为什么这次 agent 这么干"这种<strong>未知</strong>故障，那需要可回放的逐步 trace。</p>
+      </div>
+
+      <p><strong>底层机制（比"加日志"深一层）</strong>：底座是结构化 tracing——每次 LLM 调用、工具调用、推理步都是一个 span。OpenTelemetry GenAI semantic conventions 把 span 的形状标准化、让 trace 厂商中立：<code>gen_ai.operation.name</code>（取值含 chat / invoke_agent / execute_tool / create_agent / embeddings）、<code>gen_ai.agent.name</code>、<code>gen_ai.tool.name</code>、用 <code>gen_ai.conversation.id</code> 把多轮会话缝起来、<code>gen_ai.usage.input_tokens/output_tokens</code> 算成本，以及<strong>选择性开启</strong>的内容捕获（<code>gen_ai.input.messages</code> / <code>gen_ai.output.messages</code>）——因为 prompt/输出含 PII 且存储昂贵，所以默认关闭。Span 名形如 <code>invoke_agent {name}</code>、<code>execute_tool {name}</code>。trace 之上坐着 <strong>eval</strong>（用 LLM-as-judge / code / 多轮评估器给<strong>真实生产 trace</strong>打分，而不只是离线测试集）和 <strong>replay</strong>（重跑一条捕获的 trace 以确定性复现故障）。这正好闭合治理回路。</p>
+
+      <table class="compare-table">
+        <caption>表 08.5 · tracing 底座选哪套</caption>
+        <thead>
+          <tr><th>方案</th><th>优势</th><th>为什么没选 / 选中</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>厂商私有 tracing（LangSmith / Datadog 原生）或临时日志</td><td>开箱即用、属性稳定</td><td>锁定单一后端；临时日志缺结构、无法缝多轮、难回放</td></tr>
+          <tr><td>只跑离线 benchmark / 人工抽查</td><td>回归门控清晰</td><td>抓不到生产分布漂移，等用户投诉才发现质量下降</td></tr>
+          <tr class="selected"><td>OTel GenAI semconv 做底座 + eval 跑生产 trace + replay</td><td>厂商中立可移植（Datadog/Honeycomb/New Relic/LangSmith 都能 ingest），生产 trace 实时打分抓漂移</td><td>选中——代价：semconv 截至 2026 年中仍是 Development（未稳定），属性名会变需 shim；内容捕获按隐私/成本选择性开启；judge 调用加推理成本</td></tr>
+        </tbody>
+      </table>
+
+      <div class="code-block">
+        <div class="header">
+          <span class="filename">observe.py</span>
+          <span class="lang">Python</span>
+          <button class="copy" data-copy-target="code-obs">复制</button>
+        </div>
+<pre id="code-obs"><code class="language-python"># 用 OTel GenAI semconv 把每步落成 span；trace 之上跑 eval + replay
+with tracer.start_span("invoke_agent", attrs={
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.agent.name":     agent.name,
+        "gen_ai.conversation.id": session_id}):     # 缝多轮会话
+    action = agent.propose()                         # L36：单步，误差跨步连乘
+
+    with tracer.start_span("execute_tool", attrs={
+            "gen_ai.operation.name": "execute_tool",
+            "gen_ai.tool.name":      tool.name,
+            "gen_ai.usage.input_tokens":  in_tok,    # 算成本
+            "gen_ai.usage.output_tokens": out_tok}):
+        result = tool.commit(action.args)            # 仅在审批后（L37）
+
+    # 内容捕获默认关闭：含 PII + 存储贵，按需 opt-in 并做脱敏/采样
+    if CAPTURE_CONTENT:
+        span.set_attribute("gen_ai.input.messages",  redact(messages))
+        span.set_attribute("gen_ai.output.messages", redact(result))
+
+emit_eval(trace=current_trace(), judge=llm_as_judge)   # L40：给真实生产 trace 打分
+# replay：re-run 这条 trace 即可确定性复现故障，反哺 L38/L39 的护栏与 eval。
+</code></pre>
+      </div>
+
+      <div class="predict">
+        <span class="question-label">想一想</span>
+        <p>团队声称"日志和 dashboard 都齐了，可观测性已经做好了"。一个 agent 出现了一次从未见过的诡异行为，他们盯着 dashboard 却查不出为什么。哪里出了问题？</p>
+        <details>
+          <summary>展开答案（先停 10 秒再点）</summary>
+          <p>把 observability 当成了 monitoring。Dashboard 盯的是<strong>已知</strong>指标（延迟、错误率、token 量），它答不了"为什么这次 agent 这么干"这种<strong>未知</strong>故障——那需要可<strong>回放</strong>的逐步结构化 trace，把每次 LLM 调用、工具调用、推理步重建出来。更微妙的是：OTel 的内容捕获（<code>gen_ai.input/output.messages</code>）因 PII 和存储成本默认<strong>关闭</strong>，所以信号最丰富的那层数据往往一开始就是 off 的——出事时才发现没存。修法是在生产里就开结构化 tracing（必要时按需开内容捕获并脱敏），让故障可被 replay 复现，而不是只堆 dashboard。</p>
+        </details>
+      </div>
+
+      <section class="self-check" id="self-check">
+        <h2><span class="num">§</span><span>本章 self-check</span></h2>
+        <p style="color: var(--ink-soft); font-style: italic; font-size: 15px;">先合上教程，把你能想到的答案写在纸上或编辑器里。写完再点开答案对照——直接点开等于把这一节当再读一遍。</p>
+        <ol>
+          <li>为什么 99% 单步准确率的模型跑 20 步任务并不"基本可靠"？给出端到端数字。</li>
+          <li>LangGraph 里 resume 后为什么会出现双写/双扣款？正确的写法是什么？</li>
+          <li>为什么"每步都让人审批"反而让监督更差？用 Anthropic 的实测数字说明。</li>
+          <li>least privilege 和 least agency 差在哪？举一个 least privilege 拦不住而 least agency 能拦的例子。</li>
+          <li>渐进承诺缺了哪个机制就会退化成一揽子承诺？observability 和 monitoring 的关键区别是什么？</li>
+        </ol>
+        <details>
+          <summary>答案（先做完再展开）</summary>
+          <ol>
+            <li>端到端成功率是连乘：0.99^20 ≈ <strong>82%</strong>，每 5 次约 1 次失败。自主长度（步数）才是首要风险变量，且误差在抵达 checkpoint 前是沉默的。</li>
+            <li>因为 resume 会从顶部<strong>重跑整个 node</strong>，不是从 <code>interrupt()</code> 下一行续；放在 interrupt 之前的副作用会执行两次。正确写法：把 <code>interrupt()</code> 前置到所有副作用之前 + node 幂等 + commit 挂幂等键。</li>
+            <li>人会习惯化、橡皮图章——Anthropic 实测每步询问时约 <strong>93%</strong> 的提示被无脑批准，监督退化成表演且延迟爆炸；改用 sandbox 把提示量砍掉约 <strong>84%</strong> 反而更安全。只对不可逆/高爆炸半径动作设闸。</li>
+            <li>least privilege 收"能触达什么资源"，least agency 收"能表达什么动作"。例：账号只读 <code>orders</code>（least privilege 已做到），裸 SQL 仍能 <code>SELECT *</code> 全表外带；换成参数化 <code>get_order(id)</code> 接口（least agency），批量导出这种更宽动作<strong>无法被表达</strong>。</li>
+            <li>缺<strong>降级</strong>（自动降级 + 过期授权）就退化成一揽子承诺（trust persistence）。observability 用可回放的逐步 trace 调试<strong>未知</strong>故障，monitoring 只盯<strong>已知</strong>指标，答不了"为什么这次这么干"。</li>
+          </ol>
+        </details>
+      </section>
+
+      <div class="challenge">
+        <span class="label">进阶挑战 · 刚好够不着</span>
+        <h3>设计一个会"自动降级"的渐进承诺策略</h3>
+        <p>§08.4 给了 trust persistence 这个失败模式：授权只升不降，活得比证成它的上下文更久，渐进承诺静默退化成一揽子承诺。设计一条策略，让 agent 在表现良好时晋升、在出现可疑信号时<strong>自动降级</strong>。说清你的策略在哪一层介入（运行时授权平面 / dry-run / trace），降级的触发信号从哪来（提示：呼应 §08.5 的 eval），以及代价是什么。</p>
+        <details>
+          <summary>提示（卡住再展开）</summary>
+          <p>关键在<strong>运行时授权平面</strong>和<strong>可观测性</strong>两层的耦合。可考虑：给每份授权挂 TTL（expiring grants），到期不自动续、要重新挣得；把 §08.5 的生产 trace 喂给 eval（LLM-as-judge / code 评估器），当某个工具/路径的 eval 分数掉破阈值时，授权平面把该 agent 在该 scope 上的层级从 autonomous 降回 recommend（输出从 ALLOW 变 REQUIRE_APPROVAL）。代价是额外的 judge 推理成本与误降级的摩擦——judge 本身会 flaky，把好 agent 错降会重新引入审批疲劳。这正好呼应 §08.1 的曲线：每加一道控制都在花自主性，降级阈值要按用例的可逆性来调。</p>
+        </details>
+      </div>
+
+      <footer class="references">
+        <h3>本章参考</h3>
+        <ul>
+          <li><a href="https://www.anthropic.com/research/building-effective-agents">Anthropic — Building Effective Agents</a>（护栏、sandbox、checkpoint、自主性/成本权衡、复合误差）与 <a href="https://www.anthropic.com/research/measuring-agent-autonomy">Measuring AI Agent Autonomy</a>（无人打断单轮时长翻倍）。</li>
+          <li><a href="https://www.anthropic.com/engineering/how-we-contain-claude">Anthropic Engineering — How We Contain Claude</a>（三层隔离、gVisor/Seatbelt/bubblewrap/VM、93% 批准、84% 提示削减）。</li>
+          <li><a href="https://docs.langchain.com/oss/python/langgraph/durable-execution">LangChain — Durable Execution</a>（checkpointer、replay、整 node 重跑/幂等）与 <a href="https://github.com/langchain-ai/langgraph/issues/6208">langgraph#6208</a>（resume 不重复执行的 idempotency gotcha）。</li>
+          <li><a href="https://www.marktechpost.com/2025/12/31/how-to-design-transactional-agentic-ai-systems-with-langgraph-using-two-phase-commit-human-interrupts-and-safe-rollbacks/">MarkTechPost — Transactional Agentic AI with LangGraph</a>（两阶段提交、人工 interrupt、安全回滚）与 <a href="https://developers.openai.com/api/docs/guides/agents/guardrails-approvals">OpenAI — Guardrails &amp; Approvals</a>（state.approve、从 state resume）。</li>
+          <li><a href="https://www.sophos.com/en-us/blog/inside-the-lethal-trifecta-blast-radius-reduction-in-ai-agent-deployments">Sophos — Blast Radius Reduction in AI Agent Deployments</a> 与 <a href="https://mindgard.ai/blog/approve-once-exploit-forever-the-trust-persistence-problem-in-ai-coding-agents">Mindgard — Approve Once, Exploit Forever</a>（trust persistence）。</li>
+          <li><a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/">OpenTelemetry — GenAI Agent &amp; Framework Spans</a> 与 <a href="https://www.langchain.com/blog/agent-observability-powers-agent-evaluation">LangChain — Agent Observability Powers Agent Evaluation</a>（trace → eval → replay）。</li>
+        </ul>
+      </footer>
+
+      <nav class="chapter-nav" aria-label="章节导航">
+        <a href="07-collaboration.html" class="prev">
+          <span class="label">← 上一章</span>
+          <span class="title">07 · 协作</span>
+        </a>
+        <a href="09-composition.html" class="next">
+          <span class="label">下一章 →</span>
+          <span class="title">09 · 组合</span>
+        </a>
+      </nav>
+
+    </article>
+
+    <aside class="toc-sidebar" aria-label="本章目录">
+      <p class="toc-label">本章 · TOC</p>
+      <ul>
+        <li><a href="#s081" data-toc-target="s081">08.1 治理导论</a></li>
+        <li><a href="#s082" data-toc-target="s082">08.2 审批门</a></li>
+        <li><a href="#s083" data-toc-target="s083">08.3 爆炸半径</a></li>
+        <li><a href="#s084" data-toc-target="s084">08.4 渐进承诺</a></li>
+        <li><a href="#s085" data-toc-target="s085">08.5 可观测性</a></li>
+        <li><a href="#self-check" data-toc-target="self-check">本章 self-check</a></li>
+      </ul>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+const progress = document.getElementById('progress');
+function updateProgress() {
+  const h = document.documentElement;
+  const max = h.scrollHeight - h.clientHeight;
+  const pct = max > 0 ? (h.scrollTop / max) * 100 : 0;
+  progress.style.width = pct + '%';
+}
+window.addEventListener('scroll', updateProgress, { passive: true });
+window.addEventListener('resize', updateProgress);
+updateProgress();
+
+const tocLinks = document.querySelectorAll('.toc-sidebar a[data-toc-target]');
+const tocByCid = new Map();
+tocLinks.forEach(a => tocByCid.set(a.dataset.tocTarget, a));
+const sectionEls = Array.from(tocByCid.keys()).map(id => document.getElementById(id)).filter(Boolean);
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    const link = tocByCid.get(entry.target.id);
+    if (!link) return;
+    if (entry.isIntersecting) {
+      tocLinks.forEach(a => a.classList.remove('active'));
+      link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-30% 0px -60% 0px', threshold: 0 });
+sectionEls.forEach(el => obs.observe(el));
+
+document.querySelectorAll('.code-block .copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const el = document.getElementById(btn.dataset.copyTarget);
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      const original = btn.textContent;
+      btn.textContent = '已复制'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1400);
+    } catch (e) { btn.textContent = '失败'; setTimeout(() => { btn.textContent = '复制'; }, 1400); }
+  });
+});
+</script>
+
+</body>
+</html>
